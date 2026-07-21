@@ -1204,6 +1204,14 @@ header.app-head::before,.detail-head::before{
 }
 
 /* ---------- Smooth dashboard filter transitions (avoid the abrupt blank-flash on region/branch change) ---------- */
-#dashboardArea{transition:opacity .22s ease}
-#dashboardArea.dash-updating{opacity:.28}
-#regionsArea{transition:opacity .22s ease}
+#dashboardArea{transition:opacity .15s ease}
+#dashboardArea.dash-updating{opacity:.92}
+#regionsArea{transition:opacity .15s ease}
+/* On a filter-driven refresh (not the first paint), skip the per-card
+   "rise in from nothing" entrance animation — with it enabled, every
+   chart-card/kpi-tile fading up from opacity:0 (some staggered up to
+   .7s) is what actually reads as "a whole new page loading", far more
+   than the brief opacity dip above. */
+#dashboardArea.no-card-anim .chart-card,
+#dashboardArea.no-card-anim .kpi-tile,
+#dashboardArea.no-card-anim .dash-table-wrap{animation:none!important;opacity:1!important;transform:none!important}
