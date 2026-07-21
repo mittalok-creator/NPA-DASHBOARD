@@ -1,6 +1,6 @@
 {
-  "name": "UPGB OTS Intelligence Platform",
-  "short_name": "UPGB OTS",
+  "name": "UPGB Hathras NPA Dashboard by Alok Mittal",
+  "short_name": "OTS Utility by Alok",
   "description": "NPA portfolio dashboard and OTS calculator for Uttar Pradesh Gramin Bank",
   "start_url": "./",
   "scope": "./",
