@@ -1397,9 +1397,12 @@ function toggleTheme(){
   applyTheme(document.documentElement.getAttribute('data-theme')==='light' ? 'light' : 'dark');
   on('themeToggleBtn','click',()=>toggleTheme());
   on('themeToggleBtnMobile','click',()=>toggleTheme());
-  on('updateDataBtn','click',()=>openUpdateModal());
-  on('settingsBtn','click',()=>openUpdateModal());
-  on('settingsBtnNav','click',()=>openUpdateModal());
+  const openUpdateModalAsAdmin = () => {
+    if(window.UPGBAuth) UPGBAuth.requireAdmin(openUpdateModal); else openUpdateModal();
+  };
+  on('updateDataBtn','click',openUpdateModalAsAdmin);
+  on('settingsBtn','click',openUpdateModalAsAdmin);
+  on('settingsBtnNav','click',openUpdateModalAsAdmin);
   on('cmdkBtnNav','click',()=>openCmdk());
   on('cmdkBtnNavMobile','click',()=>openCmdk());
   on('listModalCloseX','click',()=>closeListModal());
@@ -1417,7 +1420,7 @@ function toggleTheme(){
     b.addEventListener('click',()=>switchView(b.dataset.view));
   });
   document.querySelectorAll('[data-open-data]').forEach(b=>{
-    b.addEventListener('click',()=>openUpdateModal());
+    b.addEventListener('click',openUpdateModalAsAdmin);
   });
 })();
 

@@ -102,7 +102,7 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 |---|---|---|
 | M0 | Roadmap, audit, architecture decisions | ✅ Done |
 | M1 | Modularize the codebase (split HTML/CSS/JS into files, no functional change, still deployable on GitHub Pages) | ✅ Done — verified in-browser (see checklist below) |
-| M2 | GitHub Login for Admin (OAuth Device Flow), Viewer stays login-free | 🟡 In progress — architecture decided, registering the GitHub OAuth App now |
+| M2 | GitHub Login for Admin (OAuth Device Flow), Viewer stays login-free | ✅ Done — code built and locally verified; awaiting your live end-to-end test |
 | M3 | ~~Microsoft Graph OneDrive read~~ — superseded. Data entry stays the existing Settings → Upload Excel/CSV button, now gated behind Admin login | ⬜ Not started |
 | M4 | Validation engine (duplicates, blanks, bad dates, missing columns, wrong types) + validation report UI | ⬜ Not started |
 | M5 | Publish + Versioning + Rollback via a GitHub Actions workflow (Admin-triggered, repo-secret-backed commit) | ⬜ Not started |
@@ -112,9 +112,56 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | M9 | UI/UX overhaul to the target premium enterprise look (Fluent/Notion/Linear/Raycast/Apple/Material 3 inspired), dark + light | ⬜ Not started |
 | M10 | Hardening: performance test at 20k+ rows, cross-browser check, accessibility pass, plain-English admin guide | ⬜ Not started |
 
-**Completed**: M0 (audit + architecture decision), M1 (modularization).
-**Current milestone**: M2 — GitHub Login for Admin (OAuth Device Flow).
+**Completed**: M0 (audit + architecture decision), M1 (modularization),
+M2 (GitHub Login for Admin).
+**Current milestone**: awaiting your live test of M2 on the real deployed
+site (see M2 completion notes below) before moving to M4.
 **Next milestone**: M4 — Validation engine (M3 is superseded, see above).
+
+### M2 completion notes (2026-07-21)
+
+Added GitHub OAuth **Device Flow** login, restricted to a single
+Administrator GitHub account (`mittalok-creator`). No password, no client
+secret, nothing Microsoft/Azure involved.
+
+- **New file**: `js/auth.js` — handles the whole GitHub sign-in flow
+  (start device code → poll for approval → fetch profile → store
+  session) and exposes `window.UPGBAuth` (`isAdmin()`, `getCurrentUser()`,
+  `signOut()`, `requireAdmin()`).
+- **`index.html`**: added a "Sign in with GitHub" widget to the bottom of
+  the sidebar (shows avatar + username + Sign out once logged in), and a
+  new modal (`#githubAuthModalOverlay`) that displays the device code and
+  a link to `github.com/login/device`.
+- **`js/app.js`**: every entry point that used to open the "Update Data"
+  modal directly (`settingsBtn`, `settingsBtnNav`, `updateDataBtn`, the
+  mobile `[data-open-data]` button) now calls `UPGBAuth.requireAdmin(...)`
+  first. Anyone not signed in as the Admin account gets the sign-in
+  prompt instead of the upload screen; a non-admin GitHub account gets a
+  clear "not the Administrator account" message with no access.
+- GitHub OAuth App registered: name "UPGB OTS Intelligence Platform",
+  Client ID `Ov23liwGRJMlo4VZSBzn`, Device Flow enabled, no client secret
+  generated/used.
+
+**Verified locally (Playwright + Chromium) — everything that doesn't
+require reaching GitHub's live servers:**
+- [x] Sidebar shows "Sign in with GitHub" when logged out
+- [x] Clicking Settings while logged out correctly opens the sign-in
+  modal instead of the upload screen (the gate works)
+- [x] Cancel closes the sign-in modal cleanly
+- [x] Simulating a signed-in Admin session: sidebar switches to
+  avatar + `mittalok-creator · Admin` + Sign out; Settings now opens the
+  Update Data modal directly (gate correctly bypassed for the real admin)
+- [x] Zero JavaScript errors
+
+**Not verifiable from this session:** my sandboxed environment's outbound
+network is restricted and cannot reach GitHub's live OAuth endpoints
+(confirmed via a direct test — requests get intercepted before reaching
+GitHub). The device-code request, approval, and token exchange are built
+exactly to GitHub's documented Device Flow API, but **you need to do the
+real end-to-end test** on the actual deployed site once GitHub Pages
+finishes publishing this branch: click "Sign in with GitHub" in the
+sidebar, go to the code/link shown, approve it, and confirm you land back
+signed in as `mittalok-creator · Admin` with Settings unlocked.
 
 ### M1 completion notes (2026-07-21)
 
@@ -198,6 +245,9 @@ GitHub settings, etc.) so nothing is forgotten or duplicated.
   from the architecture** (see Section 2) in favor of GitHub OAuth Device
   Flow for Admin login and a GitHub Actions workflow for Publish. No Azure
   resource was left half-configured — nothing to clean up there.
-- 2026-07-21: Next external step (Milestone 2, in progress): register a
-  GitHub OAuth App at `https://github.com/settings/developers` for
-  `mittalok-creator`, with Device Flow enabled. Awaiting the Client ID.
+- 2026-07-21: GitHub OAuth App registered at
+  `https://github.com/settings/developers` for `mittalok-creator`:
+  name "UPGB OTS Intelligence Platform", Homepage/Callback URL
+  `https://npadashboard.alokmittal.net/`, Device Flow **enabled**, Client ID
+  `Ov23liwGRJMlo4VZSBzn` (public identifier, safe to keep in source). No
+  client secret was generated or is used.
