@@ -1614,10 +1614,11 @@ function renderDashboardSmooth(){
   const el = document.getElementById('dashboardArea');
   if(!el){ renderDashboard(); return; }
   el.classList.add('dash-updating');
+  el.classList.add('no-card-anim');
   setTimeout(()=>{
     renderDashboard();
     requestAnimationFrame(()=>{ el.classList.remove('dash-updating'); });
-  }, 160);
+  }, 90);
 }
 
 function drillBranch(branch){
