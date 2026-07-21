@@ -7,7 +7,7 @@
   // site's JS (no CORS), so a tiny relay (see /relay in this repo, deployed
   // on Vercel) forwards these two calls server-side. It holds no secret —
   // client_id is public and lives in relay/api/*.js.
-  const RELAY_BASE_URL = 'https://npa-dashboard-relay.vercel.app';
+  const RELAY_BASE_URL = 'https://npa-dashboard.vercel.app';
 
   let pollTimer = null;
 
