@@ -1085,6 +1085,32 @@ function updateReportDateDisplay(){
   document.querySelectorAll('.report-date-val').forEach(e=>e.textContent = fmtAsOnDisplay());
 }
 
+function csvField(v){
+  const s = String(v==null?'':v);
+  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function downloadCsvTemplate(filename, headers, exampleRow){
+  const csv = [headers.map(csvField).join(','), exampleRow.map(csvField).join(',')].join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+function downloadDailyTemplate(){
+  const headers = ['Sol','Region','Branch','Account No','Customer ID','Intt Rev','Scheme Code','Account Name','Balance Amount','Turnover','Interest Charge Amount','Continuous Excess Date','Review Date','KCC Disbursement Date/Stock Date','Due date','Demand Amount','Adjustment Amount','Reasons','Exempted','Account NPA Date','Cust NPA Date','SBA Acc/Balance','Remarks','Category','Prov Amt','CADU','Sanction Date','Limit','Disb Date','ROI','Mobile No','SMA Status','Sec Val','Sec OS','Unsec OS'];
+  const example = ['9316','HATHRAS','MAANT','160720303013711','705760143','','AG203','EXAMPLE BORROWER NAME','38155.85','','','','','','','38155.85','','CBS NPA','','30-11-2012','30-11-2012','124610100004372 -> 0','Marked in CBS','DA3','38155.85','1009','23-11-2010','40000','23-11-2011','9','9999999999','SMA0','80000','38155.85','0'];
+  downloadCsvTemplate('UPGB_Daily_NPA_Template.csv', headers, example);
+}
+function downloadMasterTemplate(){
+  const headers = ['Customer ID (CIF)','Customer Name','Address','Mobile No','Aadhar No','PAN'];
+  const example = ['705760143','EXAMPLE BORROWER NAME','VILL EXAMPLE, POST EXAMPLE, DISTRICT, UP - 000000','9999999999','123456789012','ABCDE1234F'];
+  downloadCsvTemplate('UPGB_Customer_Master_Template.csv', headers, example);
+}
+
 function downloadUpdatedApp(){
   const dataEl = document.getElementById('ots-data');
   if(dataEl) dataEl.textContent = JSON.stringify({ npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null });
@@ -1721,6 +1747,8 @@ function toggleTheme(){
   on('fileInput','change',(e)=>handleFileUpload(e));
   on('masterUploadDrop','click',()=>document.getElementById('masterFileInput').click());
   on('masterFileInput','change',(e)=>handleMasterFileUpload(e));
+  on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
+  on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('asOnDateInput','change',(e)=>{ __pendingAsOnDate = e.target.value; });
   on('updateCancelBtn','click',()=>toggleUpdateModal(false));
   on('applyDataBtn','click',()=>applyNewData());
