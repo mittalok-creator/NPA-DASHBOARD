@@ -294,6 +294,41 @@ once. Each milestone will get a concrete checklist when it starts.
 
 ---
 
+## 3a. Post-M4 additions (2026-07-21, ahead of M5-M10)
+
+Built directly on top of M4 in the same session, once real multi-region
+data (283,295 accounts, 22 regions bank-wide, not just Hathras) started
+flowing through the app:
+
+- **Region Comparison view**: a dedicated "Regions" nav item + page
+  (`viewRegions`/`renderRegionsView()`), shown only when the loaded data
+  spans more than one region. Table of every region (Accounts, Total O/S,
+  Share, High-Risk % = DA3+Loss share), sorted by outstanding; clicking a
+  row drills into that region on the main Dashboard. Originally added
+  inline on the Dashboard itself, then moved to its own view per request.
+- **Animated welcome/splash screen**: gold circular "AM" monogram (ring
+  draw-in animation) + "ALOK MITTAL", gating entry with a 4-digit PIN
+  (`0000`), unlocking once per browser session. Recreated in SVG/CSS
+  (not a static image — the pasted logo wasn't available as an actual
+  file). **Note**: this PIN is visible in page source on a static site
+  with no backend — it's a branded welcome gate, not real access control,
+  consistent with Viewers never needing real login.
+- **PWA**: `manifest.webmanifest`, a network-first `sw.js` service worker
+  (always prefers fresh network content since NPA data is embedded
+  directly in `index.html`; only serves cached content when offline),
+  and icon set generated from the bank's official logo (extracted from
+  the existing embedded favicon/sidebar logo — 300×300 source) at
+  192/512 (regular) and 192/512 (maskable, 72% safe-zone padding) plus
+  a 180×180 Apple touch icon, all in `/icons`.
+- **Smooth dashboard filter transitions**: switching Region/Branch filters
+  (or drilling in from Top Branches/Region Comparison) used to swap the
+  Dashboard's entire HTML instantly, reading as an abrupt blank flash
+  because every chart-card's entrance animation restarted at once.
+  `renderDashboardSmooth()` now dims the panel, swaps content while still
+  dimmed, then eases back in — verified via screenshots at t=100/200/600ms.
+
+---
+
 ## 4. Backlog (bugs / improvements / future ideas)
 
 ### Bugs
