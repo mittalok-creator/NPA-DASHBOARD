@@ -1352,6 +1352,56 @@ function updateDashTitle(stats, regionFilter){
   }
 }
 
+function updateRegionsNavVisibility(regionCount){
+  const show = regionCount>1;
+  const btn = document.getElementById('regionsNavBtn');
+  const btnMobile = document.getElementById('regionsNavBtnMobile');
+  if(btn) btn.style.display = show ? '' : 'none';
+  if(btnMobile) btnMobile.style.display = show ? '' : 'none';
+  if(!show){
+    const activeView = document.querySelector('.view.active');
+    if(activeView && activeView.dataset.view==='regions') switchView('dashboard');
+  }
+}
+
+function renderRegionsView(){
+  const el = document.getElementById('regionsArea');
+  if(!el) return;
+  const s = computeDashboardStats(null, null);
+  const regionRows = [...s.regionMap.entries()].sort((a,b)=>b[1].os-a[1].os)
+    .map(([region,v])=>{
+      const highRiskOs = (v.assetMix.DA3?v.assetMix.DA3.os:0) + (v.assetMix.LOSS?v.assetMix.LOSS.os:0);
+      const highRiskPct = v.os ? (highRiskOs/v.os*100) : 0;
+      return { region, count:v.count, os:v.os, share: s.totalOS?(v.os/s.totalOS*100):0, highRiskPct };
+    });
+  el.innerHTML = `
+    <div class="kpi-grid">
+      ${kpiTile('Regions', regionRows.length.toLocaleString('en-IN'), '')}
+      ${kpiTile('Total Outstanding', fmtCr(s.totalOS), s.totalAccounts.toLocaleString('en-IN')+' account(s)')}
+    </div>
+    <div class="section-label">Region Comparison<span class="chart-sub">${regionRows.length} region(s) · sorted by outstanding · tap a row to open that region on the Dashboard</span></div>
+    <div class="dash-table-wrap">
+      <table class="dash-table">
+        <thead><tr>
+          <th class="tal">Region</th><th>Accounts</th><th>Total O/S</th><th>Share</th><th>High-Risk (DA3+Loss)</th>
+        </tr></thead>
+        <tbody>${regionRows.map(r=>`
+          <tr class="clickable" onclick="drillRegionFromRegionsView('${jsq(r.region)}')">
+            <td class="tal">${esc(titleCase(r.region))}</td>
+            <td>${r.count.toLocaleString('en-IN')}</td>
+            <td>${fmtCr(r.os)}</td>
+            <td>${r.share.toFixed(1)}%</td>
+            <td>${r.highRiskPct.toFixed(1)}%</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+function drillRegionFromRegionsView(region){
+  switchView('dashboard');
+  drillRegion(region);
+}
+
 function svgDonut(segments, size){
   size = size || 130;
   const strokeW = 18;
@@ -1594,6 +1644,7 @@ function showHighValueCustList(){
 }
 window.drillBranch = drillBranch;
 window.drillRegion = drillRegion;
+window.drillRegionFromRegionsView = drillRegionFromRegionsView;
 window.showAssetList = showAssetList;
 window.showBucketList = showBucketList;
 window.showSchemeList = showSchemeList;
@@ -1612,6 +1663,7 @@ function renderDashboard(){
   populateRegionFilter(s.allRegions);
   populateBranchFilter(s.allBranches, s.branchToRegion, regionFilter || null);
   updateDashTitle(s, regionFilter || null);
+  updateRegionsNavVisibility(s.allRegions.length);
 
   const assetItems = ASSET_ORDER.filter(k=>s.assetMix[k]).map(k=>({
     label: assetLabel(k)+' ('+k+')', value:s.assetMix[k].os, color:ASSET_SEV_COLOR[k],
@@ -1628,13 +1680,6 @@ function renderDashboard(){
     .map(([branch,v])=>({label:branch, value:v.os, color:'var(--accent)',
       valueLabel:`${v.count.toLocaleString('en-IN')} · ${fmtCr(v.os)} · ${(s.totalOS?(v.os/s.totalOS*100):0).toFixed(2)}%`,
       onclick:`drillBranch('${jsq(branch)}')`}));
-
-  const regionRows = [...s.regionMap.entries()].sort((a,b)=>b[1].os-a[1].os)
-    .map(([region,v])=>{
-      const highRiskOs = (v.assetMix.DA3?v.assetMix.DA3.os:0) + (v.assetMix.LOSS?v.assetMix.LOSS.os:0);
-      const highRiskPct = v.os ? (highRiskOs/v.os*100) : 0;
-      return { region, count:v.count, os:v.os, share: s.totalOS?(v.os/s.totalOS*100):0, highRiskPct };
-    });
 
   const agingItems = s.buckets.map(b=>({label:b.label, value:b.os, color:'var(--accent-2)',
     valueLabel:`${b.count.toLocaleString('en-IN')} · ${fmtCr(b.os)}`,
@@ -1706,25 +1751,6 @@ function renderDashboard(){
       </div>`}
     </div>
 
-    ${(s.allRegions.length>1 && !regionFilter) ? `
-    <div class="section-label">Region Comparison<span class="chart-sub">${regionRows.length} region(s) · tap a row to drill in</span></div>
-    <div class="dash-table-wrap">
-      <table class="dash-table">
-        <thead><tr>
-          <th class="tal">Region</th><th>Accounts</th><th>Total O/S</th><th>Share</th><th>High-Risk (DA3+Loss)</th>
-        </tr></thead>
-        <tbody>${regionRows.map(r=>`
-          <tr class="clickable" onclick="drillRegion('${jsq(r.region)}')">
-            <td class="tal">${esc(titleCase(r.region))}</td>
-            <td>${r.count.toLocaleString('en-IN')}</td>
-            <td>${fmtCr(r.os)}</td>
-            <td>${r.share.toFixed(1)}%</td>
-            <td>${r.highRiskPct.toFixed(1)}%</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>` : ''}
-
     <div class="section-label">Customer-Wise Outstanding</div>
     <div class="kpi-grid">
       ${kpiTile('Total Unique Customers', s.custCount.toLocaleString('en-IN'), fmtCr(s.totalOS)+' combined outstanding')}
@@ -1753,6 +1779,7 @@ function switchView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.dataset.view===view));
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   if(view==='dashboard') renderDashboard();
+  if(view==='regions') renderRegionsView();
   const mainCol = document.getElementById('mainCol');
   if(mainCol) mainCol.scrollTop = 0;
 }
