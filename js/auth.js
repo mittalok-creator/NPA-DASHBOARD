@@ -1,10 +1,13 @@
 /* GitHub OAuth Device Flow login, gating Admin-only features (Settings / Update Data / future Publish).
    No client secret is used or needed — Device Flow is a public-client flow by design. */
 (function () {
-  const GITHUB_CLIENT_ID = 'Ov23liwGRJMlo4VZSBzn';
-  const GITHUB_SCOPES = 'repo';
   const ADMIN_GITHUB_LOGIN = 'mittalok-creator';
   const STORAGE_KEY = 'upgb-gh-auth';
+  // GitHub's login endpoints block direct cross-site fetch from a static
+  // site's JS (no CORS), so a tiny relay (see /relay in this repo, deployed
+  // on Vercel) forwards these two calls server-side. It holds no secret —
+  // client_id is public and lives in relay/api/*.js.
+  const RELAY_BASE_URL = 'https://npa-dashboard-relay.vercel.app';
 
   let pollTimer = null;
 
@@ -25,11 +28,7 @@
   }
 
   async function startDeviceFlow() {
-    const res = await fetch('https://github.com/login/device/code', {
-      method: 'POST',
-      headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ client_id: GITHUB_CLIENT_ID, scope: GITHUB_SCOPES })
-    });
+    const res = await fetch(RELAY_BASE_URL + '/api/device-start', { method: 'POST' });
     if (!res.ok) throw new Error('start_failed_' + res.status);
     return res.json();
   }
@@ -40,14 +39,10 @@
       async function tick() {
         if (Date.now() > expiresAt) { reject(new Error('expired')); return; }
         try {
-          const res = await fetch('https://github.com/login/oauth/access_token', {
+          const res = await fetch(RELAY_BASE_URL + '/api/device-poll', {
             method: 'POST',
-            headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              client_id: GITHUB_CLIENT_ID,
-              device_code: deviceCode,
-              grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_code: deviceCode })
           });
           const data = await res.json();
           if (data.access_token) { resolve(data.access_token); return; }

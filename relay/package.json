@@ -1,0 +1,7 @@
+{
+  "name": "npa-dashboard-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CORS relay for GitHub OAuth Device Flow used by the UPGB OTS Intelligence Platform"
+}
