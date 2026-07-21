@@ -1203,6 +1203,7 @@ function computeDashboardStats(branchFilter, regionFilter){
   const today = new Date();
   const assetMix = {};
   const branchMap = new Map();
+  const regionMap = new Map();
   const allBranches = new Set();
   const allRegions = new Set();
   const branchToRegion = new Map();
@@ -1245,6 +1246,13 @@ function computeDashboardStats(branchFilter, regionFilter){
 
     if(!branchMap.has(branch)) branchMap.set(branch,{count:0,os:0});
     const b=branchMap.get(branch); b.count++; b.os+=os;
+
+    if(region){
+      if(!regionMap.has(region)) regionMap.set(region,{count:0,os:0,assetMix:{}});
+      const rg=regionMap.get(region); rg.count++; rg.os+=os;
+      if(!rg.assetMix[asset]) rg.assetMix[asset]={count:0,os:0};
+      rg.assetMix[asset].count++; rg.assetMix[asset].os+=os;
+    }
 
     const scheme = r[C.SCHEME]||'';
     const schemeKey = scheme==='CC004' ? 'KCC' : 'NONKCC';
@@ -1292,7 +1300,7 @@ function computeDashboardStats(branchFilter, regionFilter){
     totalAccounts:matchedAccounts, totalOS, totalNetOS, totalProvision, totalBookValue,
     eligibleCount, notEligibleCount, assetMix, branchMap, buckets, oldOtsCount, oldOtsSum,
     branchCount: branchMap.size, allBranches: [...allBranches].sort((a,b)=>a.localeCompare(b)),
-    allRegions: [...allRegions].sort((a,b)=>a.localeCompare(b)), branchToRegion,
+    allRegions: [...allRegions].sort((a,b)=>a.localeCompare(b)), branchToRegion, regionMap,
     schemeMix, slabs, custCount: custList.length,
     highValueCustCount: highValueCust.length, highValueOS, highValueCustList,
     acctList, allAcctSorted,
@@ -1330,10 +1338,12 @@ function populateBranchFilterForRegion(){
   const regionFilter = regionSel ? regionSel.value : '';
   populateBranchFilter(currentDashStats.allBranches, currentDashStats.branchToRegion, regionFilter);
 }
-function updateDashTitle(stats){
+function updateDashTitle(stats, regionFilter){
   const el = document.getElementById('dashTitle');
   if(!el) return;
-  if(stats.allRegions.length===1){
+  if(regionFilter){
+    el.textContent = `UPGB ${titleCase(regionFilter)} region NPA Portfolio`;
+  } else if(stats.allRegions.length===1){
     el.textContent = `UPGB ${titleCase(stats.allRegions[0])} region NPA Portfolio`;
   } else if(stats.allRegions.length>1){
     el.textContent = `UPGB NPA Portfolio — ${stats.allRegions.length} regions`;
@@ -1549,6 +1559,14 @@ function drillBranch(branch){
   const sel = document.getElementById('dashBranchFilter');
   if(sel){ sel.value = branch; renderDashboard(); }
 }
+function drillRegion(region){
+  const regionSel = document.getElementById('dashRegionFilter');
+  const branchSel = document.getElementById('dashBranchFilter');
+  if(regionSel) regionSel.value = region;
+  if(branchSel) branchSel.value = '';
+  populateBranchFilterForRegion();
+  renderDashboard();
+}
 function showAssetList(code){
   if(!currentDashStats) return;
   const list = currentDashStats.acctList.filter(a=>a.asset===code).sort((a,b)=>b.os-a.os);
@@ -1575,6 +1593,7 @@ function showHighValueCustList(){
   showCustListModal('Customers ≥ ₹10 Lakh O/S', currentDashStats.highValueCustList.length.toLocaleString('en-IN')+' customer(s), high → low', currentDashStats.highValueCustList);
 }
 window.drillBranch = drillBranch;
+window.drillRegion = drillRegion;
 window.showAssetList = showAssetList;
 window.showBucketList = showBucketList;
 window.showSchemeList = showSchemeList;
@@ -1592,7 +1611,7 @@ function renderDashboard(){
   currentDashStats = s;
   populateRegionFilter(s.allRegions);
   populateBranchFilter(s.allBranches, s.branchToRegion, regionFilter || null);
-  updateDashTitle(s);
+  updateDashTitle(s, regionFilter || null);
 
   const assetItems = ASSET_ORDER.filter(k=>s.assetMix[k]).map(k=>({
     label: assetLabel(k)+' ('+k+')', value:s.assetMix[k].os, color:ASSET_SEV_COLOR[k],
@@ -1609,6 +1628,13 @@ function renderDashboard(){
     .map(([branch,v])=>({label:branch, value:v.os, color:'var(--accent)',
       valueLabel:`${v.count.toLocaleString('en-IN')} · ${fmtCr(v.os)} · ${(s.totalOS?(v.os/s.totalOS*100):0).toFixed(2)}%`,
       onclick:`drillBranch('${jsq(branch)}')`}));
+
+  const regionRows = [...s.regionMap.entries()].sort((a,b)=>b[1].os-a[1].os)
+    .map(([region,v])=>{
+      const highRiskOs = (v.assetMix.DA3?v.assetMix.DA3.os:0) + (v.assetMix.LOSS?v.assetMix.LOSS.os:0);
+      const highRiskPct = v.os ? (highRiskOs/v.os*100) : 0;
+      return { region, count:v.count, os:v.os, share: s.totalOS?(v.os/s.totalOS*100):0, highRiskPct };
+    });
 
   const agingItems = s.buckets.map(b=>({label:b.label, value:b.os, color:'var(--accent-2)',
     valueLabel:`${b.count.toLocaleString('en-IN')} · ${fmtCr(b.os)}`,
@@ -1679,6 +1705,25 @@ function renderDashboard(){
         <div class="bar-list">${barRows(branchTop)}</div>
       </div>`}
     </div>
+
+    ${(s.allRegions.length>1 && !regionFilter) ? `
+    <div class="section-label">Region Comparison<span class="chart-sub">${regionRows.length} region(s) · tap a row to drill in</span></div>
+    <div class="dash-table-wrap">
+      <table class="dash-table">
+        <thead><tr>
+          <th class="tal">Region</th><th>Accounts</th><th>Total O/S</th><th>Share</th><th>High-Risk (DA3+Loss)</th>
+        </tr></thead>
+        <tbody>${regionRows.map(r=>`
+          <tr class="clickable" onclick="drillRegion('${jsq(r.region)}')">
+            <td class="tal">${esc(titleCase(r.region))}</td>
+            <td>${r.count.toLocaleString('en-IN')}</td>
+            <td>${fmtCr(r.os)}</td>
+            <td>${r.share.toFixed(1)}%</td>
+            <td>${r.highRiskPct.toFixed(1)}%</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}
 
     <div class="section-label">Customer-Wise Outstanding</div>
     <div class="kpi-grid">
