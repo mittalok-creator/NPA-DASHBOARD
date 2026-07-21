@@ -82,7 +82,7 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | # | Milestone | Status |
 |---|---|---|
 | M0 | Roadmap, audit, architecture decisions | ✅ Done — publish architecture decided: Azure Function broker |
-| M1 | Modularize the codebase (split HTML/CSS/JS into files, no functional change, still deployable on GitHub Pages) | ⬜ Not started |
+| M1 | Modularize the codebase (split HTML/CSS/JS into files, no functional change, still deployable on GitHub Pages) | ✅ Done — verified in-browser (see checklist below) |
 | M2 | Microsoft Login for Admin (Azure AD app registration + MSAL.js), Viewer stays login-free | ⬜ Not started |
 | M3 | Microsoft Graph: read `MASTER_DATABASE.xlsx` from OneDrive into the app | ⬜ Not started |
 | M4 | Validation engine (duplicates, blanks, bad dates, missing columns, wrong types) + validation report UI | ⬜ Not started |
@@ -93,11 +93,45 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | M9 | UI/UX overhaul to the target premium enterprise look (Fluent/Notion/Linear/Raycast/Apple/Material 3 inspired), dark + light | ⬜ Not started |
 | M10 | Hardening: performance test at 20k+ rows, cross-browser check, accessibility pass, plain-English admin guide | ⬜ Not started |
 
-**Completed**: M0 — audit + architecture decision (Azure Function broker for
-Publish).
-**Current milestone**: M1 — Modularize the codebase.
-**Next milestone**: M2 — Microsoft Login for Admin (needs an Azure AD app
-registration — you'll be walked through this step by step when M1 is done).
+**Completed**: M0 (audit + architecture decision), M1 (modularization).
+**Current milestone**: M2 — Microsoft Login for Admin.
+**Next milestone**: M3 — Microsoft Graph: read the Excel from OneDrive.
+
+### M1 completion notes (2026-07-21)
+
+`ALOK_UPGB_OTS_CALCULATOR.html` (5.9 MB, everything inline) was split into:
+
+- `index.html` — page shell + markup (still contains the inline NPA data
+  JSON for now; that goes away in M6)
+- `css/styles.css` — all styling, unchanged, concatenated in original order
+- `js/vendor/xlsx.full.min.js` — the third-party SheetJS library, unchanged
+- `js/app.js` — all app logic (dashboard, search/calculator, theme, Excel
+  upload), unchanged
+
+The original single file was removed from the repo (still fully recoverable
+from git history — commit before this one — nothing is lost). No line of
+CSS/JS logic was rewritten; this was a pure "cut into files" operation.
+
+**Verified in a real browser (Playwright + Chromium) before removing the
+original file:**
+- [x] Page loads with zero console errors
+- [x] Dashboard renders real data (13,817 accounts, ₹128.85 Cr, KCC/Non-KCC
+  split, slabs, asset-mix — matched the original)
+- [x] Nav switch to Search & Settlement works
+- [x] Account-number search returns the correct borrower (tested account
+  `150130100001068` → GOPAL OILS MILLS PACHON, correct O/S and P&L figures)
+- [x] Theme toggle (dark → light) works, same as before
+- [x] Settings modal (Update Data / Excel upload / "Download Updated App")
+  opens and renders correctly
+
+### Note for later milestones
+
+The Settings modal's current "Update Data" flow lets you upload a new
+Excel/CSV and then **download a regenerated single HTML file** to
+re-upload by hand — that is today's whole publish mechanism, and it is
+what M4 (validation) / M5 (publish+versioning) / M6 (data-layer refactor)
+replace with the OneDrive → Graph → Admin login → validate → publish flow
+you asked for. Nothing about this flow was touched in M1.
 **Estimated effort**: sizes are relative (this is AI-assisted dev, not a
 human-hours estimate) — M1/M2/M7 are Small, M3/M4/M9/M10 are Medium, M5/M6/M8
 are Large because they touch security, data integrity, or many screens at
