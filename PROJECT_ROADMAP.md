@@ -326,6 +326,27 @@ flowing through the app:
   because every chart-card's entrance animation restarted at once.
   `renderDashboardSmooth()` now dims the panel, swaps content while still
   dimmed, then eases back in — verified via screenshots at t=100/200/600ms.
+  **Follow-up fix (same day)**: the first pass still felt like a full page
+  reload on the real device — traced to two separate causes stacked on top
+  of each other. (1) The dim itself was too strong (`opacity:.28`, 220ms) —
+  lightened to `.92`/150ms. (2) The real culprit: every `.chart-card` and
+  `.kpi-tile` replays its `riseIn` entrance animation (fade + rise,
+  staggered up to 0.3s) on **every** re-render, not just on first paint —
+  that "cards flying in from nothing" is what actually reads as a new page
+  loading. Fixed with a persistent `.no-card-anim` class added by
+  `renderDashboardSmooth()` that disables the entrance animation
+  (`animation:none!important`) on filter-driven refreshes, leaving it
+  intact only for the very first `renderDashboard()` call on page load.
+  Verified via Playwright screenshots at t=100/200/600ms against the real
+  283,295-row, 22-region file: fully settled by ~200ms, no dim spike, no
+  card fly-in. Shipped as PR #15, live on `npadashboard.alokmittal.net`
+  (asset version `20260721b`).
+- **App renamed**: "UPGB OTS Intelligence Platform" → **"UPGB Hathras NPA
+  Dashboard by Alok Mittal"** (page title, sidebar brand text). PWA install
+  name (what shows on a phone's home screen) set separately to **"OTS
+  Utility by Alok"** (`short_name` in `manifest.webmanifest` +
+  `apple-mobile-web-app-title`), since the full name is too long for a
+  home-screen icon label.
 
 ---
 
