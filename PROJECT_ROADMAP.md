@@ -163,3 +163,12 @@ GitHub settings, etc.) so nothing is forgotten or duplicated.
   the GitHub write credential; verifies the Admin's Microsoft login before
   acting). Azure subscription + Function App creation is still **pending**
   — will be set up before Milestone 5, with full instructions provided then.
+- 2026-07-21: Custom domain chosen for the live site:
+  **`npadashboard.alokmittal.net`** (DNS: CNAME record on Squarespace,
+  `NPADASHBOARD` → `mittalok-creator.github.io`). Repo now carries a
+  `CNAME` file with this domain so GitHub Pages serves it. GitHub Pages
+  source branch is currently `claude/upgb-ots-platform-setup-14ehm0`
+  (pending — will move to `main` once M1 work is merged). This domain is
+  the exact Redirect URI that will be registered in Azure AD for
+  Microsoft Login (M2) — **final URL: `https://npadashboard.alokmittal.net/`**.
+  DNS/HTTPS activation on GitHub's side can take minutes to a few hours.
