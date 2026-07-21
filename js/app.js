@@ -1605,9 +1605,24 @@ function kpiTile(label, value, sub, onclick){
 
 let currentDashStats = null;
 const BUCKET_LABELS = {ne:'Not yet eligible (≤ 6 months)', y1:'6 months – 1 year', y13:'1 – 3 years', y3p:'3+ years'};
+
+/* Filter changes (region/branch) call this instead of renderDashboard()
+   directly, so the swap reads as a soft cross-fade — dim briefly, replace
+   the numbers/charts while still dimmed, then ease back in — instead of
+   the whole panel abruptly flashing blank. */
+function renderDashboardSmooth(){
+  const el = document.getElementById('dashboardArea');
+  if(!el){ renderDashboard(); return; }
+  el.classList.add('dash-updating');
+  setTimeout(()=>{
+    renderDashboard();
+    requestAnimationFrame(()=>{ el.classList.remove('dash-updating'); });
+  }, 160);
+}
+
 function drillBranch(branch){
   const sel = document.getElementById('dashBranchFilter');
-  if(sel){ sel.value = branch; renderDashboard(); }
+  if(sel){ sel.value = branch; renderDashboardSmooth(); }
 }
 function drillRegion(region){
   const regionSel = document.getElementById('dashRegionFilter');
@@ -1615,7 +1630,7 @@ function drillRegion(region){
   if(regionSel) regionSel.value = region;
   if(branchSel) branchSel.value = '';
   populateBranchFilterForRegion();
-  renderDashboard();
+  renderDashboardSmooth();
 }
 function showAssetList(code){
   if(!currentDashStats) return;
@@ -1826,8 +1841,8 @@ function toggleTheme(){
   on('applyDataBtn','click',()=>applyNewData());
   on('downloadAppBtn','click',()=>downloadUpdatedApp());
   on('eligibleBanner','click',()=>document.getElementById('eligibleBanner').classList.remove('show'));
-  on('dashRegionFilter','change',()=>{ populateBranchFilterForRegion(); renderDashboard(); });
-  on('dashBranchFilter','change',()=>renderDashboard());
+  on('dashRegionFilter','change',()=>{ populateBranchFilterForRegion(); renderDashboardSmooth(); });
+  on('dashBranchFilter','change',()=>renderDashboardSmooth());
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{
     b.addEventListener('click',()=>switchView(b.dataset.view));
   });
