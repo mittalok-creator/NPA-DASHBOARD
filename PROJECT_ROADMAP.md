@@ -102,7 +102,7 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 |---|---|---|
 | M0 | Roadmap, audit, architecture decisions | ✅ Done |
 | M1 | Modularize the codebase (split HTML/CSS/JS into files, no functional change, still deployable on GitHub Pages) | ✅ Done — verified in-browser (see checklist below) |
-| M2 | GitHub Login for Admin (OAuth Device Flow), Viewer stays login-free | ✅ Done — code built and locally verified; awaiting your live end-to-end test |
+| M2 | GitHub Login for Admin (OAuth Device Flow), Viewer stays login-free | ✅ Done — verified live end-to-end on the deployed site |
 | M3 | ~~Microsoft Graph OneDrive read~~ — superseded. Data entry stays the existing Settings → Upload Excel/CSV button, now gated behind Admin login | ⬜ Not started |
 | M4 | Validation engine (duplicates, blanks, bad dates, missing columns, wrong types) + validation report UI | ⬜ Not started |
 | M5 | Publish + Versioning + Rollback via a GitHub Actions workflow (Admin-triggered, repo-secret-backed commit) | ⬜ Not started |
@@ -113,9 +113,8 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | M10 | Hardening: performance test at 20k+ rows, cross-browser check, accessibility pass, plain-English admin guide | ⬜ Not started |
 
 **Completed**: M0 (audit + architecture decision), M1 (modularization),
-M2 (GitHub Login for Admin).
-**Current milestone**: awaiting your live test of M2 on the real deployed
-site (see M2 completion notes below) before moving to M4.
+M2 (GitHub Login for Admin — live end-to-end test passed).
+**Current milestone**: none — ready to start M4.
 **Next milestone**: M4 — Validation engine (M3 is superseded, see above).
 
 ### M2 completion notes (2026-07-21)
@@ -153,15 +152,35 @@ require reaching GitHub's live servers:**
   Update Data modal directly (gate correctly bypassed for the real admin)
 - [x] Zero JavaScript errors
 
-**Not verifiable from this session:** my sandboxed environment's outbound
-network is restricted and cannot reach GitHub's live OAuth endpoints
-(confirmed via a direct test — requests get intercepted before reaching
-GitHub). The device-code request, approval, and token exchange are built
-exactly to GitHub's documented Device Flow API, but **you need to do the
-real end-to-end test** on the actual deployed site once GitHub Pages
-finishes publishing this branch: click "Sign in with GitHub" in the
-sidebar, go to the code/link shown, approve it, and confirm you land back
-signed in as `mittalok-creator · Admin` with Settings unlocked.
+**Live end-to-end test: PASSED (2026-07-21).** Real-world testing surfaced
+one thing local testing couldn't: GitHub's login endpoints reject direct
+cross-site `fetch()` from a static site (no CORS on those endpoints). Fixed
+by adding a tiny relay — see "Relay for GitHub sign-in" below — after which
+the real sign-in flow on `https://npadashboard.alokmittal.net/` worked:
+code shown → approved on `github.com/login/device` → returned signed in as
+`mittalok-creator · Admin` → Settings unlocked directly.
+
+### Relay for GitHub sign-in (added 2026-07-21)
+
+- **New folder**: `relay/api/device-start.js` and `relay/api/device-poll.js`
+  — tiny serverless functions, no client secret (only the public
+  `client_id`), that forward the two Device Flow calls server-side and add
+  CORS headers for `https://npadashboard.alokmittal.net`. They exist solely
+  to route around GitHub's lack of CORS on those endpoints — nothing
+  sensitive is held there.
+- **Deployed on Vercel** (chosen for one-click "Continue with GitHub"
+  sign-up, free tier, no card): project `npa-dashboard` under account
+  `alokmittal`, Root Directory set to `relay`. Live URL:
+  `https://npa-dashboard.vercel.app`.
+- `js/auth.js`'s `RELAY_BASE_URL` points at that URL.
+- Also added `.nojekyll` at repo root so GitHub Pages serves files as-is.
+
+**Lesson learned, logged for future milestones**: any direct
+`fetch()`/XHR from the static site to `github.com` (not `api.github.com`)
+needs to go through this relay, since `github.com`'s login/session
+endpoints don't support cross-origin browser requests. `api.github.com`
+(used for reading the signed-in user's profile) does support CORS and is
+called directly — this was verified working during the same live test.
 
 ### M1 completion notes (2026-07-21)
 
@@ -252,11 +271,22 @@ GitHub settings, etc.) so nothing is forgotten or duplicated.
   `Ov23liwGRJMlo4VZSBzn` (public identifier, safe to keep in source). No
   client secret was generated or is used.
 - 2026-07-21: Merged PR #1 (`claude/upgb-ots-platform-setup-14ehm0` →
-  `main`) — M0, M1, M2 are now on `main`. **Action still needed on your
-  side**: open `https://github.com/mittalok-creator/NPA-DASHBOARD/settings/pages`
-  and make sure **Source** is set to "Deploy from a branch" → **`main`** →
-  **/ (root)**. If it's still pointed at the old feature branch or was
-  never configured, switch it to `main` and Save so the live site always
-  reflects whatever is merged, going forward. (No tool available to this
-  session can change that Pages setting directly — it's a repo-settings
-  page, not something the GitHub API access here exposes.)
+  `main`) — M0, M1, M2 first landed on `main`. **Done**: GitHub Pages
+  Source confirmed set to "Deploy from a branch" → `main` → `/ (root)`,
+  Custom domain `npadashboard.alokmittal.net` shows "DNS check successful".
+- 2026-07-21: GitHub Pages initially 404'd on the custom domain after
+  enabling it — fixed by adding `.nojekyll` (PR #2, merged) and waiting
+  out first-deploy propagation (a couple of minutes). Confirmed live
+  afterward.
+- 2026-07-21: Vercel account created at `https://vercel.com` via
+  "Continue with GitHub" (team name/slug: `alokmittal`, Hobby/free plan,
+  no card). Project `npa-dashboard` imported from this repo with **Root
+  Directory set to `relay`** — deploys only `relay/api/*.js`, not the main
+  site. Production URL: `https://npa-dashboard.vercel.app`. This exists
+  solely to relay the two GitHub Device Flow calls around a CORS
+  restriction (see Section 3, M2 notes) — it holds no secret.
+- 2026-07-21: PR #2 (`.nojekyll` + relay code, pointing at a placeholder
+  relay URL) and PR #3 (corrected the URL to the real deployed
+  `https://npa-dashboard.vercel.app`) both merged to `main`. **M2 fully
+  verified live**: real GitHub sign-in on `https://npadashboard.alokmittal.net/`
+  works end-to-end.
