@@ -46,31 +46,50 @@ The target flow decouples the **app shell** (HTML/CSS/JS, rarely changes)
 from the **data** (changes daily):
 
 ```
-OneDrive (MASTER_DATABASE.xlsx)
-        │  Microsoft Graph API (read-only, Admin's Microsoft login)
+Admin exports/saves MASTER_DATABASE.xlsx (or the daily CBS CSV export)
+        │  Admin logs in with GitHub (Device Flow — no password, no Azure)
         ▼
-   Admin browser: validate + preview
+   Admin browser: upload file via Settings → validate + preview
         │  on "Publish"
         ▼
-  Versioned JSON published to the repo (e.g. /data/vNN.json + /data/latest.json)
+  GitHub Actions workflow commits versioned JSON to the repo
+  (e.g. /data/vNN.json + /data/latest.json), using a repo secret
+  the browser never sees
         │  GitHub Pages serves it as a static asset
         ▼
    Viewers' browsers fetch /data/latest.json (cached, lazy-loaded,
-   virtualized tables) — no Microsoft login required for Viewers
+   virtualized tables) — no login required for Viewers
 ```
 
-**Decision (2026-07-21): Azure Function as broker.** A small serverless Azure
-Function will hold the GitHub write credential server-side. Flow for
-Publish: Admin logs in with Microsoft (M2) → Admin's browser calls the
-Azure Function with their Microsoft ID token → Function verifies it's really
-the Admin → Function calls Microsoft Graph to read the Excel from OneDrive →
-Function (or the browser, after the Function hands back verified data) runs
-validation → on confirmed publish, the Function commits the new versioned
-JSON to the GitHub repo using a repo-scoped token stored only in Azure
-Function's application settings (never sent to the browser). This needs an
-Azure subscription and one Function App (consumption/free tier is enough at
-this data size) — full click-by-click setup steps will be provided when we
-reach Milestone 5, and logged in Section 5 below as they're completed.
+**Architecture pivot (2026-07-21): dropped Microsoft/Azure entirely.**
+The original plan (Microsoft Login + Microsoft Graph auto-pull from OneDrive
++ an Azure Function broker) hit a wall during Milestone 2 setup: your
+personal Microsoft account has no Entra ID directory of its own, the free
+Microsoft 365 Developer Program sandbox route did not qualify this account,
+and the Azure Free Account signup was where we paused. Rather than force
+through more Azure friction, we agreed to swap out every Microsoft-dependent
+piece:
+
+- **Admin login** → **GitHub OAuth (Device Flow)** instead of Microsoft
+  Login. You already have a fully-working GitHub account with zero
+  tenant/directory issues (it's the same account this repo lives in).
+  Device Flow needs only a public Client ID — no client secret, no backend,
+  nothing to expose in a static site.
+- **Getting the data in** → keep the app's existing "Settings → Upload
+  Data" button (already built, already tested in M1) instead of an
+  automatic Microsoft Graph pull from OneDrive. You save/export
+  `MASTER_DATABASE.xlsx` (or the daily CBS CSV) and upload it yourself when
+  you're ready to publish — same manual step as today, nothing new to learn.
+- **Publish** → a **GitHub Actions workflow**, triggered by the
+  Admin-logged-in browser, does the actual commit of the new versioned data
+  file using a repository secret. This replaces the Azure Function broker
+  decision from earlier — same safety property (the privileged credential
+  never touches the browser), zero external cloud provider, everything
+  stays inside GitHub, which you already use successfully.
+
+Net effect: **no Azure, no Microsoft Graph, no OneDrive dependency
+anywhere in the build.** Validation, versioning, rollback, Reports,
+Analytics, and every other requirement are unaffected by this change.
 
 ---
 
@@ -81,12 +100,12 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 
 | # | Milestone | Status |
 |---|---|---|
-| M0 | Roadmap, audit, architecture decisions | ✅ Done — publish architecture decided: Azure Function broker |
+| M0 | Roadmap, audit, architecture decisions | ✅ Done |
 | M1 | Modularize the codebase (split HTML/CSS/JS into files, no functional change, still deployable on GitHub Pages) | ✅ Done — verified in-browser (see checklist below) |
-| M2 | Microsoft Login for Admin (Azure AD app registration + MSAL.js), Viewer stays login-free | ⬜ Not started |
-| M3 | Microsoft Graph: read `MASTER_DATABASE.xlsx` from OneDrive into the app | ⬜ Not started |
+| M2 | GitHub Login for Admin (OAuth Device Flow), Viewer stays login-free | 🟡 In progress — architecture decided, registering the GitHub OAuth App now |
+| M3 | ~~Microsoft Graph OneDrive read~~ — superseded. Data entry stays the existing Settings → Upload Excel/CSV button, now gated behind Admin login | ⬜ Not started |
 | M4 | Validation engine (duplicates, blanks, bad dates, missing columns, wrong types) + validation report UI | ⬜ Not started |
-| M5 | Publish + Versioning + Rollback (depends on the architecture decision above) | ⬜ Not started |
+| M5 | Publish + Versioning + Rollback via a GitHub Actions workflow (Admin-triggered, repo-secret-backed commit) | ⬜ Not started |
 | M6 | Data-layer refactor: stop baking data into HTML, fetch published JSON at runtime, add lazy loading / virtualization / caching for 20k+ rows | ⬜ Not started |
 | M7 | Fast search (Account No., Customer, Branch, CIF, Mobile, Status) | ⬜ Not started |
 | M8 | New modules: Reports, Analytics, Settings, Admin Panel (status/history/logs/rollback UI), Logs, Backup | ⬜ Not started |
@@ -94,8 +113,8 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | M10 | Hardening: performance test at 20k+ rows, cross-browser check, accessibility pass, plain-English admin guide | ⬜ Not started |
 
 **Completed**: M0 (audit + architecture decision), M1 (modularization).
-**Current milestone**: M2 — Microsoft Login for Admin.
-**Next milestone**: M3 — Microsoft Graph: read the Excel from OneDrive.
+**Current milestone**: M2 — GitHub Login for Admin (OAuth Device Flow).
+**Next milestone**: M4 — Validation engine (M3 is superseded, see above).
 
 ### M1 completion notes (2026-07-21)
 
@@ -159,16 +178,26 @@ _Nothing logged yet — this section fills in as we find things._
 Tracks every setup step done outside this repo (Azure, Microsoft Graph,
 GitHub settings, etc.) so nothing is forgotten or duplicated.
 
-- 2026-07-21: Decided Publish will be brokered by an Azure Function (holds
-  the GitHub write credential; verifies the Admin's Microsoft login before
-  acting). Azure subscription + Function App creation is still **pending**
-  — will be set up before Milestone 5, with full instructions provided then.
 - 2026-07-21: Custom domain chosen for the live site:
   **`npadashboard.alokmittal.net`** (DNS: CNAME record on Squarespace,
   `NPADASHBOARD` → `mittalok-creator.github.io`). Repo now carries a
   `CNAME` file with this domain so GitHub Pages serves it. GitHub Pages
   source branch is currently `claude/upgb-ots-platform-setup-14ehm0`
-  (pending — will move to `main` once M1 work is merged). This domain is
-  the exact Redirect URI that will be registered in Azure AD for
-  Microsoft Login (M2) — **final URL: `https://npadashboard.alokmittal.net/`**.
-  DNS/HTTPS activation on GitHub's side can take minutes to a few hours.
+  (pending — will move to `main` once M1 work is merged). **Final live URL:
+  `https://npadashboard.alokmittal.net/`** — this is the exact address
+  registered anywhere a redirect/callback URL is needed.
+- 2026-07-21: **Abandoned** the Azure AD app registration attempt for
+  `alokmittal2016@outlook.com` after repeated blockers: (1) browser/tenant
+  routing kept misdirecting sign-in into unrelated tenants ("UPGB",
+  "Microsoft Services") — resolved each time via incognito + full session
+  logout, but recurring; (2) the account does not have its own Entra ID
+  directory; (3) free Microsoft 365 Developer Program sandbox — account
+  did not qualify; (4) Azure Free Account signup — paused before
+  completion (needs card + phone verification) when we decided to pivot
+  away from Azure entirely instead. **Decision: drop Microsoft/Azure/Graph
+  from the architecture** (see Section 2) in favor of GitHub OAuth Device
+  Flow for Admin login and a GitHub Actions workflow for Publish. No Azure
+  resource was left half-configured — nothing to clean up there.
+- 2026-07-21: Next external step (Milestone 2, in progress): register a
+  GitHub OAuth App at `https://github.com/settings/developers` for
+  `mittalok-creator`, with Device Flow enabled. Awaiting the Client ID.
