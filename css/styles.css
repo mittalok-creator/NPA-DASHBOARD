@@ -646,6 +646,8 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 .validation-report.err h4{color:var(--red)}
 .validation-report ul{margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:var(--ink)}
 .validation-report .vr-count{font-weight:800}
+.template-download-link{display:block;width:100%;text-align:center;background:none;border:none;color:var(--accent);font-size:11.5px;font-weight:700;padding:6px 0 12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.template-download-link:hover{color:var(--accent-2)}
 .upload-summary .box .v{font-size:16.5px;font-weight:800;color:var(--ink);margin-top:2px}
 .modal-btn-row{display:flex;gap:10px;margin-top:6px}
 .modal-btn-row button{flex:1;padding:13px;border-radius:var(--radius-md);border:none;font-weight:800;font-size:13px;transition:background .18s var(--ease),filter .18s var(--ease),transform .1s var(--ease)}
