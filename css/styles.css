@@ -1173,3 +1173,32 @@ header.app-head::before,.detail-head::before{
 .dash-table-wrap.acct-list-scroll{max-height:560px;overflow-y:auto}
 .dash-table-wrap.acct-list-scroll thead th{position:sticky;top:0;background:var(--table-head);z-index:1}
 
+
+/* ---------- Splash / welcome screen ---------- */
+.splash-screen{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;background:radial-gradient(ellipse at 50% 42%,#1c1c22 0%,#0a0a0d 62%,#050506 100%);transition:opacity .6s ease,visibility .6s ease}
+.splash-screen.unlocked{opacity:0;visibility:hidden;pointer-events:none}
+.splash-screen.skip{transition:none;opacity:0;visibility:hidden;pointer-events:none}
+.splash-glow{position:absolute;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(201,162,103,.16) 0%,rgba(201,162,103,0) 70%);animation:splashGlowPulse 4s ease-in-out infinite}
+.splash-logo{position:relative;width:180px;height:180px;display:flex;align-items:center;justify-content:center}
+.splash-ring{position:absolute;inset:0;transform:rotate(-90deg)}
+.splash-ring circle{stroke-dasharray:540.35;stroke-dashoffset:540.35;animation:splashRingDraw 1.4s cubic-bezier(.65,0,.35,1) .2s forwards}
+.splash-monogram{position:relative;font-family:var(--font-display);font-size:44px;font-weight:600;letter-spacing:2px;color:#C9A267;opacity:0;transform:scale(.7);animation:splashMonoIn .8s cubic-bezier(.34,1.56,.64,1) 1s forwards}
+.splash-name{font-family:var(--font-display);font-size:22px;font-weight:500;letter-spacing:9px;color:#F2EDE4;opacity:0;transform:translateY(14px);animation:splashFadeUp .8s ease 1.6s forwards}
+.splash-pin-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;opacity:0;transform:translateY(10px);animation:splashFadeUp .7s ease 2.3s forwards}
+.splash-pin-label{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:rgba(242,237,228,.55);font-weight:700}
+.splash-pin-boxes{display:flex;gap:12px}
+.pin-box{width:44px;height:52px;text-align:center;font-size:22px;font-weight:700;background:rgba(255,255,255,.04);border:1.5px solid rgba(201,162,103,.35);border-radius:10px;color:#F2EDE4;font-family:var(--font-mono);transition:border-color .18s ease,background .18s ease}
+.pin-box:focus{outline:none;border-color:#C9A267;background:rgba(201,162,103,.08)}
+.splash-pin-wrap.shake{animation:splashShake .4s ease}
+.splash-pin-error{font-size:11.5px;color:#e5484d;font-weight:700;min-height:14px}
+@keyframes splashGlowPulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
+@keyframes splashRingDraw{to{stroke-dashoffset:0}}
+@keyframes splashMonoIn{to{opacity:1;transform:scale(1)}}
+@keyframes splashFadeUp{to{opacity:1;transform:translateY(0)}}
+@keyframes splashShake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}100%{transform:translateX(0)}}
+@media (prefers-reduced-motion: reduce){
+  .splash-glow{animation:none}
+  .splash-ring circle{animation:none;stroke-dashoffset:0}
+  .splash-monogram,.splash-name,.splash-pin-wrap{animation:none;opacity:1;transform:none}
+  .splash-pin-wrap.shake{animation:none}
+}
