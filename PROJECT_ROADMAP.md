@@ -59,11 +59,18 @@ OneDrive (MASTER_DATABASE.xlsx)
    virtualized tables) — no Microsoft login required for Viewers
 ```
 
-**Open decision — how "Publish" safely writes to GitHub**: GitHub Pages has
-no server of its own, so the browser needs *some* credential to commit the
-new data file. This is a security-sensitive choice for a banking app and
-needs your sign-off before Milestone 5 is built. Options are presented to
-you in chat the same turn this file is added.
+**Decision (2026-07-21): Azure Function as broker.** A small serverless Azure
+Function will hold the GitHub write credential server-side. Flow for
+Publish: Admin logs in with Microsoft (M2) → Admin's browser calls the
+Azure Function with their Microsoft ID token → Function verifies it's really
+the Admin → Function calls Microsoft Graph to read the Excel from OneDrive →
+Function (or the browser, after the Function hands back verified data) runs
+validation → on confirmed publish, the Function commits the new versioned
+JSON to the GitHub repo using a repo-scoped token stored only in Azure
+Function's application settings (never sent to the browser). This needs an
+Azure subscription and one Function App (consumption/free tier is enough at
+this data size) — full click-by-click setup steps will be provided when we
+reach Milestone 5, and logged in Section 5 below as they're completed.
 
 ---
 
@@ -74,7 +81,7 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 
 | # | Milestone | Status |
 |---|---|---|
-| M0 | Roadmap, audit, architecture decisions | ✅ In progress (this session) |
+| M0 | Roadmap, audit, architecture decisions | ✅ Done — publish architecture decided: Azure Function broker |
 | M1 | Modularize the codebase (split HTML/CSS/JS into files, no functional change, still deployable on GitHub Pages) | ⬜ Not started |
 | M2 | Microsoft Login for Admin (Azure AD app registration + MSAL.js), Viewer stays login-free | ⬜ Not started |
 | M3 | Microsoft Graph: read `MASTER_DATABASE.xlsx` from OneDrive into the app | ⬜ Not started |
@@ -86,9 +93,11 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | M9 | UI/UX overhaul to the target premium enterprise look (Fluent/Notion/Linear/Raycast/Apple/Material 3 inspired), dark + light | ⬜ Not started |
 | M10 | Hardening: performance test at 20k+ rows, cross-browser check, accessibility pass, plain-English admin guide | ⬜ Not started |
 
-**Completed**: None yet (M0 in progress).
-**Current milestone**: M0 — Roadmap + architecture decision.
-**Next milestone**: M1 — Modularize the codebase.
+**Completed**: M0 — audit + architecture decision (Azure Function broker for
+Publish).
+**Current milestone**: M1 — Modularize the codebase.
+**Next milestone**: M2 — Microsoft Login for Admin (needs an Azure AD app
+registration — you'll be walked through this step by step when M1 is done).
 **Estimated effort**: sizes are relative (this is AI-assisted dev, not a
 human-hours estimate) — M1/M2/M7 are Small, M3/M4/M9/M10 are Medium, M5/M6/M8
 are Large because they touch security, data integrity, or many screens at
@@ -116,4 +125,7 @@ _Nothing logged yet — this section fills in as we find things._
 Tracks every setup step done outside this repo (Azure, Microsoft Graph,
 GitHub settings, etc.) so nothing is forgotten or duplicated.
 
-- (none yet)
+- 2026-07-21: Decided Publish will be brokered by an Azure Function (holds
+  the GitHub write credential; verifies the Admin's Microsoft login before
+  acting). Azure subscription + Function App creation is still **pending**
+  — will be set up before Milestone 5, with full instructions provided then.
