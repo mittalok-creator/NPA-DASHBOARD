@@ -104,7 +104,7 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | M1 | Modularize the codebase (split HTML/CSS/JS into files, no functional change, still deployable on GitHub Pages) | ✅ Done — verified in-browser (see checklist below) |
 | M2 | GitHub Login for Admin (OAuth Device Flow), Viewer stays login-free | ✅ Done — verified live end-to-end on the deployed site |
 | M3 | ~~Microsoft Graph OneDrive read~~ — superseded. Data entry stays the existing Settings → Upload Excel/CSV button, now gated behind Admin login | ⬜ Not started |
-| M4 | Validation engine (duplicates, blanks, bad dates, missing columns, wrong types) + validation report UI | ⬜ Not started |
+| M4 | Data import & validation: merge the daily HO NPA export + the Customer Master (Address/Aadhar/PAN) by Customer ID, remap HO's raw column names to the app's schema, auto-read the "as on" date from the filename (editable), then validate (duplicates, blanks, bad dates, missing columns, wrong types) with a report UI | ⬜ Not started |
 | M5 | Publish + Versioning + Rollback via a GitHub Actions workflow (Admin-triggered, repo-secret-backed commit) | ⬜ Not started |
 | M6 | Data-layer refactor: stop baking data into HTML, fetch published JSON at runtime, add lazy loading / virtualization / caching for 20k+ rows | ⬜ Not started |
 | M7 | Fast search (Account No., Customer, Branch, CIF, Mobile, Status) | ⬜ Not started |
@@ -226,8 +226,6 @@ once. Each milestone will get a concrete checklist when it starts.
 
 ## 4. Backlog (bugs / improvements / future ideas)
 
-_Nothing logged yet — this section fills in as we find things._
-
 ### Bugs
 - (none logged)
 
@@ -235,7 +233,52 @@ _Nothing logged yet — this section fills in as we find things._
 - (none logged)
 
 ### Future ideas
-- (none logged)
+- The daily HO NPA file carries several fields the app doesn't use yet:
+  ROI, SMA Status, Security Value, Secured/Unsecured O/S split, Due Date,
+  Demand Amount, Turnover. Good raw material for the future Reports /
+  Analytics modules (M8) — no need to source anything extra, it's already
+  arriving daily.
+
+### Real-world data schema audit (2026-07-21)
+
+You uploaded a real Head Office daily export (`npa_as_on_20072026.xlsx`,
+34,552 NPA accounts, 55 branches, Hathras region only — larger than the
+13,817 baked into the current `index.html`, meaning that embedded snapshot
+was stale; M6 replaces it with fetched data anyway). Full comparison
+against every field `js/app.js` actually reads is in the delivered
+workbook `UPGB_Field_Reference_and_Customer_Master_Template.xlsx` (not
+committed to the repo — it's a reference document for you, not app data).
+Key findings, for whoever builds M4:
+
+- **19 of the app's 26 internal fields come straight from the daily HO
+  file**, just under different column names (e.g. `Sol`→branch code,
+  `Category`→asset class, `Account No`→account number). A full old-name →
+  new-name mapping table is in that workbook's "Field Reference" sheet.
+- **NPA Date = MIN(`Account NPA Date`, `Cust NPA Date`)** from the HO file
+  — not a direct column, a computed value.
+- **`SBA Acc/Balance`** in the HO file is one combined text field (e.g.
+  `151710101006588 -> 0`, or `-` if none) — needs splitting into SB
+  Account + SB Balance during import.
+- **`HELPER`** (format `custId:slotNumber`, slots 1-4) is 100%
+  app-generated — groups a customer's multiple NPA loans for the combined
+  OTS calculator. Never source this from any file.
+- **Only 3 fields are genuinely missing from the daily file**: Address,
+  Aadhar No., PAN. These come from a separate **Customer Master** file
+  (~80,000 rows, all customers bank-wide, refreshed every 6-8 months),
+  joined by Customer ID. Blank template with exactly these columns
+  (Customer ID, Name, Address, Mobile, Aadhar, PAN) was delivered to the
+  user directly.
+- Several HO columns exist but nothing in the current code reads them
+  (Provision Amount, Multiple Loan flag, Account Opening Date, Uncharged
+  Interest Total, System sub-classification) — safe to ignore for M4
+  unless a future milestone needs them.
+- **As-on date**: the HO filename itself embeds it
+  (`npa_as_on_20072026` = 20-07-2026). M4 should auto-parse this from the
+  uploaded filename and show it to the Admin as an editable/confirmable
+  field, rather than requiring manual entry every time — addresses the
+  user's "you'll ask me every time" expectation with less daily friction.
+  Dashboard should display this as-on date prominently (already has a
+  "Report Date" field in the current UI — reuse that).
 
 ---
 
