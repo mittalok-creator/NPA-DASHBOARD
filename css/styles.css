@@ -1202,3 +1202,8 @@ header.app-head::before,.detail-head::before{
   .splash-monogram,.splash-name,.splash-pin-wrap{animation:none;opacity:1;transform:none}
   .splash-pin-wrap.shake{animation:none}
 }
+
+/* ---------- Smooth dashboard filter transitions (avoid the abrupt blank-flash on region/branch change) ---------- */
+#dashboardArea{transition:opacity .22s ease}
+#dashboardArea.dash-updating{opacity:.28}
+#regionsArea{transition:opacity .22s ease}
