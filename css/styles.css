@@ -626,6 +626,26 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 .upload-summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
 .upload-summary .box{background:var(--bg);border-radius:11px;padding:11px 13px;border:1px solid var(--line)}
 .upload-summary .box .k{font-size:9.5px;text-transform:uppercase;color:var(--sub);font-weight:700;letter-spacing:.5px}
+
+.upload-drop.small{padding:16px}
+.as-on-row{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:10px 13px;margin-bottom:12px;flex-wrap:wrap}
+.as-on-row label{font-size:12px;font-weight:700;color:var(--ink)}
+.as-on-row input[type="date"]{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12.5px;font-family:inherit}
+.as-on-row .as-on-hint{font-size:11px;color:var(--sub);font-weight:600}
+.master-upload-details{margin-bottom:12px;border:1px solid var(--line);border-radius:14px;padding:2px 14px}
+.master-upload-details summary{cursor:pointer;padding:12px 0;font-size:12.5px;font-weight:700;color:var(--ink);list-style:none}
+.master-upload-details summary::-webkit-details-marker{display:none}
+.master-upload-details summary::before{content:'▸ ';color:var(--accent)}
+.master-upload-details[open] summary::before{content:'▾ '}
+.master-upload-details summary span{color:var(--sub);font-weight:600}
+.validation-report{border-radius:14px;padding:14px;margin-bottom:12px;border:1.5px solid var(--line)}
+.validation-report.ok{border-color:var(--green);background:var(--green-soft)}
+.validation-report.err{border-color:var(--red);background:var(--red-soft)}
+.validation-report h4{margin:0 0 8px;font-size:12.5px;font-weight:800;letter-spacing:.2px}
+.validation-report.ok h4{color:var(--green)}
+.validation-report.err h4{color:var(--red)}
+.validation-report ul{margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:var(--ink)}
+.validation-report .vr-count{font-weight:800}
 .upload-summary .box .v{font-size:16.5px;font-weight:800;color:var(--ink);margin-top:2px}
 .modal-btn-row{display:flex;gap:10px;margin-top:6px}
 .modal-btn-row button{flex:1;padding:13px;border-radius:var(--radius-md);border:none;font-weight:800;font-size:13px;transition:background .18s var(--ease),filter .18s var(--ease),transform .1s var(--ease)}

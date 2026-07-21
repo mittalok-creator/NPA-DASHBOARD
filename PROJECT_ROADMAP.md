@@ -104,7 +104,7 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | M1 | Modularize the codebase (split HTML/CSS/JS into files, no functional change, still deployable on GitHub Pages) | ✅ Done — verified in-browser (see checklist below) |
 | M2 | GitHub Login for Admin (OAuth Device Flow), Viewer stays login-free | ✅ Done — verified live end-to-end on the deployed site |
 | M3 | ~~Microsoft Graph OneDrive read~~ — superseded. Data entry stays the existing Settings → Upload Excel/CSV button, now gated behind Admin login | ⬜ Not started |
-| M4 | Data import & validation: merge the daily HO NPA export + the Customer Master (Address/Aadhar/PAN) by Customer ID, remap HO's raw column names to the app's schema, auto-read the "as on" date from the filename (editable), then validate (duplicates, blanks, bad dates, missing columns, wrong types) with a report UI | ⬜ Not started |
+| M4 | Data import & validation: merge the daily HO NPA export + the Customer Master (Address/Aadhar/PAN) by Customer ID, remap HO's raw column names to the app's schema, auto-read the "as on" date from the filename (editable), multi-region support (Region+Branch filter, dynamic title), then validate (duplicates, blanks, bad dates, missing columns, wrong types) with a report UI | ✅ Done — verified against real Head Office files (see notes below) |
 | M5 | Publish + Versioning + Rollback via a GitHub Actions workflow (Admin-triggered, repo-secret-backed commit) | ⬜ Not started |
 | M6 | Data-layer refactor: stop baking data into HTML, fetch published JSON at runtime, add lazy loading / virtualization / caching for 20k+ rows | ⬜ Not started |
 | M7 | Fast search (Account No., Customer, Branch, CIF, Mobile, Status) | ⬜ Not started |
@@ -113,9 +113,12 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | M10 | Hardening: performance test at 20k+ rows, cross-browser check, accessibility pass, plain-English admin guide | ⬜ Not started |
 
 **Completed**: M0 (audit + architecture decision), M1 (modularization),
-M2 (GitHub Login for Admin — live end-to-end test passed).
-**Current milestone**: none — ready to start M4.
-**Next milestone**: M4 — Validation engine (M3 is superseded, see above).
+M2 (GitHub Login for Admin — live end-to-end test passed), M4 (data import,
+Customer Master merge, multi-region, validation — verified against real
+Head Office files).
+**Current milestone**: none — ready to start M5.
+**Next milestone**: M5 — Publish + Versioning + Rollback via GitHub Actions
+(M3 is superseded, see Section 2).
 
 ### M2 completion notes (2026-07-21)
 
@@ -182,6 +185,73 @@ endpoints don't support cross-origin browser requests. `api.github.com`
 (used for reading the signed-in user's profile) does support CORS and is
 called directly — this was verified working during the same live test.
 
+### M4 completion notes (2026-07-21)
+
+Built the real import pipeline against three actual files from the user
+(not synthetic test data): the single-region daily HO export (34,552
+rows), the Customer Master they filled in (77,983 rows, 74,815 unique
+Customer IDs after dedup), and a multi-region sample CSV (Aligarh/Agra/
+Hathras).
+
+- **`js/app.js`**: added `mapHoRowsToNpa()` (replaces the old CSV-only
+  `mapDailyCsvToNpa`) — works for both `.csv` and `.xlsx`/`.xlsb` uploads
+  carrying the HO's real column names, detected by header signature
+  (`detectHoHeader`); falls back to the legacy fixed-position "NPA sheet"
+  format if headers don't match. Reads the new `Region` column (schema
+  extended to 27 columns, `NPA_COLUMN_COUNT`), computes NPA Date as
+  MIN(Account NPA Date, Cust NPA Date), splits `SBA Acc/Balance` into SB
+  Account + SB Balance.
+- **Customer Master merge**: `buildCustomerMasterMap()` +
+  `mergeCustomerDetails()` join by Customer ID, filling Address/Aadhar/PAN.
+  `cleanMobile()`/`cleanPan()`/`cleanAadhar()` implement the exact rules
+  confirmed against real data (mobile: 10 digits starting 6-9, or 12
+  digits with a leading "91" whose last 10 do the same, else "N/A"; PAN:
+  `^[A-Z]{5}[0-9]{4}[A-Z]$` else "N/A" — catches real `FORM60`/`FORM61`
+  declarations; Aadhar: exactly 12 digits else "N/A"). Verified against a
+  real duplicate Customer ID in the master file (same person, two spelling
+  variants, same address/mobile/PAN) — merge picked up the right values.
+- **Carry-forward, not re-upload**: the Customer Master only needs
+  uploading when it actually changes (every 6-8 months). On every other
+  daily update, `carryForwardMapFromCurrentData()` reads Address/Aadhar/
+  PAN out of the currently-loaded data before the new daily file overwrites
+  it, so those fields persist forward automatically. Verified: applied
+  once with the master, then re-applied the daily file alone (no master
+  re-upload) — Address/Aadhar/PAN were still correct on the second apply.
+- **Multi-region**: `Region` flows through the whole stack. Dashboard
+  title is dynamic (single region → "UPGB {Region} region NPA Portfolio";
+  multiple → "UPGB NPA Portfolio — N regions"). A Region filter appears
+  next to the existing Branch filter **only when more than one region is
+  present** in the loaded data — stays out of the way for the common
+  single-region case. Selecting a region narrows the Branch dropdown to
+  that region's branches. Verified with the real multi-region sample:
+  3 regions detected, Aligarh's 15 branches correctly isolated when
+  selected, stats correctly recomputed per filter.
+- **Validation engine**: blocks "Apply Update" on duplicate Account No.,
+  blank Branch, blank Customer ID (rows with no Customer ID are excluded
+  from the upload entirely — flagged, not silently dropped), missing/
+  non-numeric Balance Amount, and unreadable NPA/Sanction dates. Verified
+  both ways: the real 34,552-row file passes cleanly; three synthetic
+  "broken" files (duplicate account, blank branch, blank customer, bad
+  balance) each correctly failed validation and disabled Apply.
+- **As-on date**: parsed from the uploaded filename (`npa_as_on_20072026.xlsx`
+  → 20-07-2026; `AB_NPA_AC_WISE_20.07.2026.csv` → same) into an editable
+  date field the Admin confirms before Apply. Stored on `DATA.asOnDate`,
+  shown on the Dashboard's "Data as on" line, and now correctly persisted
+  through the download/redeploy cycle (see the bug fix below).
+- Also added `.xlsb` to the file input's accepted extensions — the real
+  daily export from Head Office turned out to be Excel Binary format, not
+  `.xlsx`.
+
+**Verified locally (Playwright + Chromium) against the three real files
+plus synthetic bad-data files** — zero console errors throughout, all
+scenarios above confirmed with actual output, not assumptions.
+
+**Not yet verified**: the real `.xlsb` file itself wasn't available to test
+directly (only confirmed via a screenshot of the user's own upload attempt
+on the old code) — the bundled SheetJS build should read it since
+`XLSX.read()` detects format from file content, not extension, but the
+user should confirm on the real deployed site.
+
 ### M1 completion notes (2026-07-21)
 
 `ALOK_UPGB_OTS_CALCULATOR.html` (5.9 MB, everything inline) was split into:
@@ -227,7 +297,13 @@ once. Each milestone will get a concrete checklist when it starts.
 ## 4. Backlog (bugs / improvements / future ideas)
 
 ### Bugs
-- (none logged)
+- **Fixed (2026-07-21)**: `downloadUpdatedApp()` captured `document.documentElement.outerHTML`
+  without ever updating the `#ots-data` script tag's text — so the "Download
+  Updated App" button silently shipped the *original* embedded data every
+  time, regardless of what was applied in the session. Fixed by writing
+  `JSON.stringify({npa, oldots, asOnDate})` into that element right before
+  serializing. Verified: downloaded file now contains the actual applied
+  row count and as-on date.
 
 ### Improvements
 - (none logged)
