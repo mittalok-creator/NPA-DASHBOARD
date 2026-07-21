@@ -5,8 +5,9 @@ const C = {
   HELPER:0, PROVISION:1, MULTI:2, SOL_ID:3, SOL_DESC:4, CUST_ID:5, ACCT_NO:6,
   NAME:7, ADDR:8, PHONE:9, AADHAR:10, PAN:11, OPN_DT:12, SCHEME:13, SANCT_DT:14,
   SANCT_LIM:15, OUTBAL:16, UNCHG:17, URI:18, ASSET:19, USER_CLASS_DT:20,
-  SYS_SUBCLASS:21, SYS_CLASS_DT:22, NPA_DT:23, SB_ACCT:24, SB_BAL:25
+  SYS_SUBCLASS:21, SYS_CLASS_DT:22, NPA_DT:23, SB_ACCT:24, SB_BAL:25, REGION:26
 };
+const NPA_COLUMN_COUNT = 27;
 const PROV_RATES = {SUB_STD:.10, DA1:.20, DA2:.30, DA3:1, LOSS:1};
 
 /* ---------- Build indexes once ---------- */
@@ -53,8 +54,9 @@ function fmtCr(n){
 function esc(s){ return (s===null||s===undefined)?'':String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 const ASSET_LABELS = {SUB_STD:'Substandard asset', DA1:'Doubtful — up to 1 year', DA2:'Doubtful — 1 to 3 years', DA3:'Doubtful — more than 3 years', LOSS:'Loss asset'};
 function assetLabel(code){ return ASSET_LABELS[code] || code; }
+function titleCase(s){ return String(s||'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()); }
 
-document.querySelectorAll('.report-date-val').forEach(e=>e.textContent = fmtDate(new Date()));
+updateReportDateDisplay();
 
 /* ---------- Core formula engine (1:1 with the OTS sheet) ---------- */
 function computeUCI(os, npaDateRaw, scheme, rate){
@@ -600,12 +602,22 @@ function toggleUpdateModal(show){
     document.getElementById('uploadSummary').innerHTML='';
     document.getElementById('applyDataBtn').disabled = true;
     document.getElementById('fileInput').value = '';
-    document.getElementById('uploadDropLabel').textContent = 'Tap to choose an Excel file';
+    document.getElementById('uploadDropLabel').textContent = 'Tap to choose the daily NPA file';
+    renderValidationReport(null);
+    const asOnRow = document.getElementById('asOnDateRow');
+    if(asOnRow) asOnRow.style.display = 'none';
+    __pendingData = null;
+    __pendingAsOnDate = null;
+    __lastValidation = null;
   }
 }
 function openUpdateModal(){ toggleUpdateModal(true); }
 
 let __pendingData = null;
+let __pendingMaster = null;
+let __masterFileName = null;
+let __pendingAsOnDate = null;
+let __lastValidation = null;
 
 function xlsxDateToDMY(d){
   return String(d.getUTCDate()).padStart(2,'0')+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+d.getUTCFullYear();
@@ -646,52 +658,306 @@ function normHeader(h){ return String(h||'').toLowerCase().replace(/[^a-z0-9]/g,
 function looksScientific(s){ return /^[0-9]+(\.[0-9]+)?e\+?\d+$/i.test(String(s).trim()); }
 function expandSci(s){ const n = Number(s); if(!isFinite(n)) return String(s).trim(); return BigInt(Math.round(n)).toString(); }
 
-/* Maps the daily "e-AB NPA AC WISE" CBS export (one row per loan account) into the
-   internal 26-column NPA layout, grouping each customer's accounts into slots 1..N. */
-function mapDailyCsvToNpa(csvRows){
-  const header = csvRows[0].map(normHeader);
-  const idx = (name) => header.indexOf(normHeader(name));
-  const iSol=idx('sol'), iBranch=idx('branch'), iAcct=idx('accountno'), iCust=idx('customerid'),
-    iScheme=idx('schemecode'), iName=idx('accountname'), iBal=idx('balanceamount'),
-    iNpaDate=idx('accountnpadate'), iSba=idx('sbaaccbalance'), iCategory=idx('category'),
-    iSanctDt=idx('sanctiondate'), iLimit=idx('limit'), iMobile=idx('mobileno'), iInttRev=idx('inttrev');
-  if(iAcct<0 || iCust<0 || iCategory<0){
-    throw new Error('Unrecognized CSV layout — expected columns like "Account No", "Customer ID", "Category".');
+/* ---------- Cleaning rules for mobile / PAN / Aadhar (confirmed against real HO data) ---------- */
+function cleanMobile(raw){
+  const digits = String(raw==null?'':raw).replace(/\D/g,'');
+  let ten = null;
+  if(digits.length===10) ten = digits;
+  else if(digits.length===12 && digits.slice(0,2)==='91') ten = digits.slice(-10);
+  if(ten && /^[6-9]/.test(ten)) return ten;
+  return 'N/A';
+}
+function cleanPan(raw){
+  const s = String(raw==null?'':raw).trim().toUpperCase();
+  return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(s) ? s : 'N/A';
+}
+function cleanAadhar(raw){
+  const digits = String(raw==null?'':raw).replace(/\D/g,'');
+  return /^\d{12}$/.test(digits) ? digits : 'N/A';
+}
+
+/* ---------- As-on date, parsed from the uploaded filename, Admin confirms/edits it ---------- */
+function parseAsOnDateFromFilename(filename){
+  const name = String(filename||'');
+  let m = name.match(/as[_\s]?on[_\s]?(\d{2})(\d{2})(\d{4})/i);
+  if(m) return new Date(+m[3], +m[2]-1, +m[1]);
+  m = name.match(/(\d{2})[.\-](\d{2})[.\-](\d{4})/);
+  if(m) return new Date(+m[3], +m[2]-1, +m[1]);
+  return null;
+}
+function dateToInputValue(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+/* ---------- HO daily file mapping (works for both .csv and .xlsx, multi-region aware) ----------
+   Maps the daily "e-AB NPA AC WISE" CBS export (one row per loan account) into the
+   internal NPA_COLUMN_COUNT-wide layout, grouping each customer's accounts into slots 1..N. */
+function detectHoHeader(headerCells){
+  const header = headerCells.map(normHeader);
+  return header.indexOf('accountno')>=0 && header.indexOf('customerid')>=0 && header.indexOf('category')>=0;
+}
+function parseHoDate(v){
+  if(v instanceof Date) return v;
+  if(typeof v==='number') return excelSerialToDate(v);
+  if(typeof v==='string' && v.trim()){
+    let p = v.trim().split('-');
+    if(p.length===3 && p[2].length===4) return new Date(+p[2], +p[1]-1, +p[0]);
+    p = v.trim().split('.');
+    if(p.length===3 && p[2].length===4) return new Date(+p[2], +p[1]-1, +p[0]);
   }
+  return null;
+}
+function earlierRaw(rawA, rawB){
+  const dA = parseHoDate(rawA), dB = parseHoDate(rawB);
+  if(dA && dB) return dA<=dB ? normalizeCell(rawA) : normalizeCell(rawB);
+  if(dA) return normalizeCell(rawA);
+  if(dB) return normalizeCell(rawB);
+  return '';
+}
+function cellStr(row, i){ return i>=0 ? String(row[i]==null?'':row[i]).trim() : ''; }
+
+function mapHoRowsToNpa(headerCells, dataRows){
+  const header = headerCells.map(normHeader);
+  const idx = (name) => header.indexOf(normHeader(name));
+  const iSol=idx('sol'), iRegion=idx('region'), iBranch=idx('branch'), iAcct=idx('accountno'),
+    iCust=idx('customerid'), iScheme=idx('schemecode'), iName=idx('accountname'), iBal=idx('balanceamount'),
+    iNpaDate=idx('accountnpadate'), iCustNpaDate=idx('custnpadate'), iSba=idx('sbaaccbalance'),
+    iCategory=idx('category'), iSanctDt=idx('sanctiondate'), iLimit=idx('limit'),
+    iMobile=idx('mobileno'), iInttRev=idx('inttrev');
+
+  const missing = [];
+  if(iAcct<0) missing.push('Account No');
+  if(iCust<0) missing.push('Customer ID');
+  if(iCategory<0) missing.push('Category');
+  if(iBal<0) missing.push('Balance Amount');
+  if(iBranch<0) missing.push('Branch');
+  if(missing.length){
+    throw new Error('Missing required column(s): '+missing.join(', ')+'. Check this file matches the HO "e-AB NPA AC WISE" export layout.');
+  }
+
   let sciCount = 0;
+  let badBalCount = 0;
+  let blankCustCount = 0;
   const slotCounter = new Map();
   const outRows = [];
-  for(let r=1;r<csvRows.length;r++){
-    const row = csvRows[r];
+  const regionsSeen = new Set();
+  for(const row of dataRows){
     if(!row || row.length<3) continue;
-    const acctRaw = (row[iAcct]||'').trim();
+    const acctRaw = cellStr(row, iAcct);
     if(!acctRaw) continue;
     let acctNo = acctRaw;
     if(looksScientific(acctRaw)){ acctNo = expandSci(acctRaw); sciCount++; }
-    const custId = (row[iCust]||'').trim();
+    const custId = cellStr(row, iCust);
+    if(!custId){ blankCustCount++; continue; }
     const slot = (slotCounter.get(custId)||0) + 1;
     slotCounter.set(custId, slot);
+
+    const balRaw = row[iBal];
+    if(balRaw==null || balRaw==='' || isNaN(parseFloat(balRaw))) badBalCount++;
+    const branchRaw = cellStr(row, iBranch);
+
     let sbAcct='', sbBal='';
-    const sbaRaw = row[iSba]||'';
+    const sbaRaw = cellStr(row, iSba);
     if(sbaRaw.includes('->')){
       const parts = sbaRaw.split('->');
       sbAcct = parts[0].trim();
       sbBal = parseFloat(parts[1]) || 0;
     }
-    const cat = (row[iCategory]||'').trim();
-    const npaDate = (row[iNpaDate]||'').trim();
-    const out = new Array(26).fill('');
-    out[0] = custId+':'+slot; out[2] = slot; out[3] = (row[iSol]||'').trim(); out[4] = (row[iBranch]||'').trim();
-    out[5] = custId; out[6] = acctNo; out[7] = (row[iName]||'').trim();
-    out[9] = (row[iMobile]||'').trim();
-    out[13] = (row[iScheme]||'').trim(); out[14] = (row[iSanctDt]||'').trim();
+    const cat = cellStr(row, iCategory);
+    const region = cellStr(row, iRegion);
+    if(region) regionsSeen.add(region);
+    const npaDate = earlierRaw(iNpaDate>=0?row[iNpaDate]:'', iCustNpaDate>=0?row[iCustNpaDate]:'');
+
+    const out = new Array(NPA_COLUMN_COUNT).fill('');
+    out[0] = custId+':'+slot; out[2] = slot; out[3] = cellStr(row,iSol); out[4] = branchRaw;
+    out[5] = custId; out[6] = acctNo; out[7] = cellStr(row,iName);
+    out[9] = cellStr(row,iMobile);
+    out[13] = cellStr(row,iScheme); out[14] = normalizeCell(iSanctDt>=0?row[iSanctDt]:'');
     out[15] = parseFloat(row[iLimit])||0; out[16] = parseFloat(row[iBal])||0;
-    out[18] = (iInttRev>=0 && row[iInttRev]!=='' && row[iInttRev]!==undefined) ? (parseFloat(row[iInttRev])||0) : '';
+    out[18] = (iInttRev>=0 && row[iInttRev]!=='' && row[iInttRev]!=null) ? (parseFloat(row[iInttRev])||0) : '';
     out[19] = cat; out[20] = npaDate; out[21] = cat; out[22] = npaDate; out[23] = npaDate;
-    out[24] = sbAcct; out[25] = sbBal;
+    out[24] = sbAcct; out[25] = sbBal; out[26] = region;
     outRows.push(out);
   }
-  return { rows: outRows, sciCount };
+  return { rows: outRows, sciCount, regions: regionsSeen, badBalCount, blankCustCount };
+}
+
+/* ---------- Customer Master parsing + merge (Address / Aadhar / PAN, ~80k rows, refreshed rarely) ---------- */
+/* Scans the first few rows for the real header (skips title/instruction rows some
+   templates — including ours — put above the actual column headers). */
+function findHeaderRowIndex(allRows, mustContainAnyNormalized){
+  for(let i=0;i<Math.min(10, allRows.length);i++){
+    const normed = (allRows[i]||[]).map(normHeader);
+    if(mustContainAnyNormalized.some(w=>normed.includes(w))) return i;
+  }
+  return 0;
+}
+function buildCustomerMasterMap(headerCells, dataRows){
+  const header = headerCells.map(normHeader);
+  const idx = (...names) => { for(const n of names){ const i = header.indexOf(normHeader(n)); if(i>=0) return i; } return -1; };
+  const iCust = idx('customeridcif','customerid','cif');
+  const iAddr = idx('address');
+  const iMobile = idx('mobileno','mobile');
+  const iAadhar = idx('aadharno','aadhar');
+  const iPan = idx('pan');
+  if(iCust<0) throw new Error('Customer Master file needs a "Customer ID" column.');
+  const map = new Map();
+  for(const row of dataRows){
+    const cid = cellStr(row, iCust);
+    if(!cid || map.has(cid)) continue;
+    map.set(cid, {
+      address: cellStr(row, iAddr),
+      mobile: cleanMobile(row[iMobile]),
+      aadhar: cleanAadhar(row[iAadhar]),
+      pan: cleanPan(row[iPan]),
+    });
+  }
+  return map;
+}
+function carryForwardMapFromCurrentData(){
+  const map = new Map();
+  DATA.npa.rows.forEach(r=>{
+    const cid = String(r[C.CUST_ID]||'');
+    if(!cid || map.has(cid)) return;
+    map.set(cid, { address:r[C.ADDR]||'', mobile:r[C.PHONE]||'', aadhar:r[C.AADHAR]||'', pan:r[C.PAN]||'' });
+  });
+  return map;
+}
+function mergeCustomerDetails(npaRows, masterMap, carryForwardMap){
+  npaRows.forEach(r=>{
+    const cid = String(r[C.CUST_ID]||'');
+    const fresh = masterMap ? masterMap.get(cid) : null;
+    const prior = carryForwardMap ? carryForwardMap.get(cid) : null;
+    const src = fresh || prior;
+    r[C.ADDR] = src ? src.address : '';
+    r[C.AADHAR] = src ? src.aadhar : 'N/A';
+    r[C.PAN] = src ? src.pan : 'N/A';
+    const dailyMobileClean = cleanMobile(r[C.PHONE]);
+    r[C.PHONE] = dailyMobileClean!=='N/A' ? dailyMobileClean : ((src && src.mobile && src.mobile!=='N/A') ? src.mobile : 'N/A');
+  });
+}
+
+/* ---------- Validation engine: run before "Apply Update" is enabled ---------- */
+function validateNpaRows(rows){
+  const errors = [], warnings = [];
+  const acctSeen = new Set();
+  let dupCount=0, blankBranch=0, blankCust=0, badBal=0, badNpaDate=0, badSanctDate=0;
+  rows.forEach(r=>{
+    const acct = String(r[C.ACCT_NO]||'');
+    if(acct){ if(acctSeen.has(acct)) dupCount++; else acctSeen.add(acct); }
+    if(!r[C.SOL_DESC]) blankBranch++;
+    if(!r[C.CUST_ID]) blankCust++;
+    if(r[C.OUTBAL]===''||r[C.OUTBAL]==null||isNaN(r[C.OUTBAL])) badBal++;
+    if(r[C.NPA_DT] && !toDate(r[C.NPA_DT])) badNpaDate++;
+    if(r[C.SANCT_DT] && !toDate(r[C.SANCT_DT])) badSanctDate++;
+  });
+  if(dupCount>0) errors.push(`${dupCount.toLocaleString('en-IN')} duplicate Account No. found.`);
+  if(blankBranch>0) errors.push(`${blankBranch.toLocaleString('en-IN')} row(s) have a blank Branch.`);
+  if(blankCust>0) errors.push(`${blankCust.toLocaleString('en-IN')} row(s) have a blank Customer ID.`);
+  if(badBal>0) errors.push(`${badBal.toLocaleString('en-IN')} row(s) have a missing/non-numeric Balance Amount.`);
+  if(badNpaDate>0) warnings.push(`${badNpaDate.toLocaleString('en-IN')} row(s) have an NPA date that couldn't be read.`);
+  if(badSanctDate>0) warnings.push(`${badSanctDate.toLocaleString('en-IN')} row(s) have a Sanction date that couldn't be read.`);
+  return { ok: errors.length===0, errors, warnings, totalRows: rows.length };
+}
+function renderValidationReport(result){
+  const el = document.getElementById('validationReport');
+  if(!el) return;
+  if(!result){ el.innerHTML=''; return; }
+  const cls = result.ok ? 'ok' : 'err';
+  const title = result.ok ? '✔ Validation passed' : '⚠ Validation failed — fix the file before applying';
+  let html = `<div class="validation-report ${cls}"><h4>${title}</h4>`;
+  if(result.errors.length){
+    html += `<ul>${result.errors.map(e=>`<li>${esc(e)}</li>`).join('')}</ul>`;
+  } else {
+    html += `<div style="font-size:12px">${result.totalRows.toLocaleString('en-IN')} rows checked — no duplicate accounts, blank branch/customer/amount, or unreadable dates.</div>`;
+  }
+  if(result.warnings.length){
+    html += `<div style="margin-top:8px;font-size:11.5px;color:var(--sub)">Warnings (won't block Apply):<ul>${result.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></div>`;
+  }
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function processDailyParsed(parsed, filename, statusEl, summaryEl){
+  if(parsed.isHoFormat){
+    const {rows, sciCount, regions, badBalCount, blankCustCount} = mapHoRowsToNpa(parsed.header, parsed.rows);
+    if(!rows.length) throw new Error('No account rows found in this file.');
+    const carryForward = carryForwardMapFromCurrentData();
+    mergeCustomerDetails(rows, __pendingMaster, carryForward);
+    const validation = validateNpaRows(rows);
+    if(blankCustCount>0) validation.errors.unshift(`${blankCustCount.toLocaleString('en-IN')} row(s) had a blank Customer ID and were excluded from the upload entirely.`);
+    if(badBalCount>0) validation.errors.unshift(`${badBalCount.toLocaleString('en-IN')} row(s) have a missing/non-numeric Balance Amount.`);
+    validation.ok = validation.errors.length===0;
+    __lastValidation = validation;
+    __pendingData = { npa: {headers: DATA.npa.headers, rows}, oldots: DATA.oldots };
+    renderValidationReport(validation);
+
+    const sciPct = rows.length ? sciCount/rows.length : 0;
+    if(sciPct > 0.3){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ ${sciCount.toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')} account numbers in this file are stored in scientific notation (e.g. 1.51E+14) — the CBS export truncates them, so Account No. search/display will be unreliable after applying. Customer ID and Mobile No. search still work fine. Ask for the "Account No" column to be exported as plain text/number to fix this at the source.</div>`;
+    } else {
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed successfully${regions.size>1?` — ${regions.size} regions detected`:''}. Review below, then Apply.</div>` +
+        (sciCount ? `<div class="upload-status err" style="margin-top:8px">⚠ ${sciCount.toLocaleString('en-IN')} account number(s) were stored in scientific notation and may be missing trailing digits.</div>` : '');
+    }
+    summaryEl.innerHTML = `
+      <div class="upload-summary">
+        <div class="box"><div class="k">Loan accounts found</div><div class="v">${rows.length.toLocaleString('en-IN')}</div></div>
+        <div class="box"><div class="k">Regions detected</div><div class="v">${regions.size || 1}</div></div>
+      </div>`;
+    document.getElementById('applyDataBtn').disabled = !validation.ok;
+
+    const guessed = parseAsOnDateFromFilename(filename);
+    const row = document.getElementById('asOnDateRow');
+    const input = document.getElementById('asOnDateInput');
+    const hint = document.getElementById('asOnDateHint');
+    if(row && input){
+      row.style.display = 'flex';
+      if(guessed){
+        input.value = dateToInputValue(guessed);
+        hint.textContent = '(read from the filename — adjust if this looks wrong)';
+      } else if(!input.value){
+        input.value = dateToInputValue(new Date());
+        hint.textContent = "(couldn't read a date from the filename — please set it)";
+      }
+      __pendingAsOnDate = input.value;
+    }
+  } else {
+    const wb = parsed.wb;
+    const npaSheetName = findSheet(wb, ['npa']);
+    if(!npaSheetName){
+      throw new Error('This doesn\'t match the daily HO export layout, and no sheet named "NPA" was found for the legacy format either.');
+    }
+    const npaWs = wb.Sheets[npaSheetName];
+    const npaRaw = XLSX.utils.sheet_to_json(npaWs, {header:1, raw:true, defval:''});
+    const npaHeaders = (npaRaw[0]||[]).slice(0,NPA_COLUMN_COUNT).map(h=>String(h||''));
+    const npaRows = npaRaw.slice(1)
+      .filter(r=>r[6]!=='' && r[6]!==undefined && r[6]!==null)
+      .map(r=>{ const row=[]; for(let i=0;i<NPA_COLUMN_COUNT;i++) row.push(normalizeCell(r[i])); return row; });
+
+    let oldOtsRows = [];
+    const oldOtsSheetName = findSheet(wb, ['oldots']);
+    if(oldOtsSheetName){
+      const oldWs = wb.Sheets[oldOtsSheetName];
+      const oldRaw = XLSX.utils.sheet_to_json(oldWs, {header:1, raw:true, defval:''});
+      oldOtsRows = oldRaw.slice(1)
+        .filter(r=>r[0]!=='' && r[0]!==undefined && r[0]!==null)
+        .map(r=>[normalizeCell(r[0]), normalizeCell(r[1]), normalizeCell(r[2])]);
+    }
+    const validation = validateNpaRows(npaRows);
+    __lastValidation = validation;
+    __pendingData = { npa: {headers: npaHeaders, rows: npaRows}, oldots: {headers:['Account Number','Date','Amount'], rows: oldOtsRows} };
+    renderValidationReport(validation);
+    statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed successfully (legacy workbook format). Review below, then Apply.</div>`;
+    summaryEl.innerHTML = `
+      <div class="upload-summary">
+        <div class="box"><div class="k">NPA rows found</div><div class="v">${npaRows.length.toLocaleString('en-IN')}</div></div>
+        <div class="box"><div class="k">OLD OTS rows found</div><div class="v">${oldOtsRows.length.toLocaleString('en-IN')}</div></div>
+      </div>`;
+    document.getElementById('applyDataBtn').disabled = !validation.ok;
+    const row = document.getElementById('asOnDateRow');
+    if(row) row.style.display = 'none';
+    __pendingAsOnDate = null;
+  }
 }
 
 function handleFileUpload(evt){
@@ -701,98 +967,81 @@ function handleFileUpload(evt){
   const statusEl = document.getElementById('uploadStatus');
   const summaryEl = document.getElementById('uploadSummary');
   summaryEl.innerHTML = '';
+  renderValidationReport(null);
   document.getElementById('applyDataBtn').disabled = true;
   const isCsv = /\.csv$/i.test(file.name);
-
-  if(isCsv){
-    statusEl.innerHTML = `<div class="upload-status info">Reading daily CBS export…</div>`;
-    const reader = new FileReader();
-    reader.onload = function(e){
-      try{
-        const csvRows = parseCSV(String(e.target.result));
-        const {rows, sciCount} = mapDailyCsvToNpa(csvRows);
-        if(!rows.length) throw new Error('No account rows found in this file.');
-        __pendingData = { npa: {headers: DATA.npa.headers, rows}, oldots: null };
-        const sciPct = rows.length ? sciCount/rows.length : 0;
-        if(sciPct > 0.3){
-          statusEl.innerHTML = `<div class="upload-status err">⚠ ${sciCount.toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')} account numbers in this CSV are stored in scientific notation (e.g. 1.51E+14) — the CBS export truncates them, so Account No. search/display will be unreliable after applying. Customer ID and Mobile No. search still work fine. Ask for the "Account No" column to be exported as plain text/number to fix this at the source.</div>`;
-        } else {
-          statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed successfully. Review below, then Apply.</div>` +
-            (sciCount ? `<div class="upload-status err" style="margin-top:8px">⚠ ${sciCount.toLocaleString('en-IN')} account number(s) were stored in scientific notation and may be missing trailing digits.</div>` : '');
-        }
-        summaryEl.innerHTML = `
-          <div class="upload-summary">
-            <div class="box"><div class="k">Loan accounts found</div><div class="v">${rows.length.toLocaleString('en-IN')}</div></div>
-            <div class="box"><div class="k">OLD OTS records</div><div class="v">kept as-is</div></div>
-          </div>`;
-        document.getElementById('applyDataBtn').disabled = false;
-      } catch(err){
-        statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
-      }
-    };
-    reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
-    reader.readAsText(file);
-    return;
-  }
-
-  statusEl.innerHTML = `<div class="upload-status info">Reading workbook…</div>`;
+  statusEl.innerHTML = `<div class="upload-status info">Reading file…</div>`;
   const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
   reader.onload = function(e){
     try{
-      const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, {type:'array', cellDates:true});
-
-      const npaSheetName = findSheet(wb, ['npa']);
-      if(!npaSheetName){
-        statusEl.innerHTML = `<div class="upload-status err">⚠ No sheet named "NPA" found in this workbook. Rename the master sheet to "NPA" and try again.</div>`;
-        return;
+      let parsed;
+      if(isCsv){
+        const csvRows = parseCSV(String(e.target.result));
+        parsed = { header: csvRows[0]||[], rows: csvRows.slice(1), isHoFormat: true };
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        const firstRaw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+        const header = firstRaw[0]||[];
+        parsed = { header, rows: firstRaw.slice(1), isHoFormat: detectHoHeader(header), wb };
       }
-      const npaWs = wb.Sheets[npaSheetName];
-      const npaRaw = XLSX.utils.sheet_to_json(npaWs, {header:1, raw:true, defval:''});
-      const npaHeaders = (npaRaw[0]||[]).slice(0,26).map(h=>String(h||''));
-      const npaRows = npaRaw.slice(1)
-        .filter(r=>r[6]!=='' && r[6]!==undefined && r[6]!==null)
-        .map(r=>{
-          const row = [];
-          for(let i=0;i<26;i++) row.push(normalizeCell(r[i]));
-          return row;
-        });
-
-      let oldOtsRows = [];
-      const oldOtsSheetName = findSheet(wb, ['oldots']);
-      if(oldOtsSheetName){
-        const oldWs = wb.Sheets[oldOtsSheetName];
-        const oldRaw = XLSX.utils.sheet_to_json(oldWs, {header:1, raw:true, defval:''});
-        oldOtsRows = oldRaw.slice(1)
-          .filter(r=>r[0]!=='' && r[0]!==undefined && r[0]!==null)
-          .map(r=>[normalizeCell(r[0]), normalizeCell(r[1]), normalizeCell(r[2])]);
-      }
-
-      __pendingData = {
-        npa: {headers: npaHeaders, rows: npaRows},
-        oldots: {headers:['Account Number','Date','Amount'], rows: oldOtsRows}
-      };
-
-      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed successfully. Review below, then Apply.</div>`;
-      summaryEl.innerHTML = `
-        <div class="upload-summary">
-          <div class="box"><div class="k">NPA rows found</div><div class="v">${npaRows.length.toLocaleString('en-IN')}</div></div>
-          <div class="box"><div class="k">OLD OTS rows found</div><div class="v">${oldOtsRows.length.toLocaleString('en-IN')}</div></div>
-        </div>`;
-      document.getElementById('applyDataBtn').disabled = false;
+      processDailyParsed(parsed, file.name, statusEl, summaryEl);
     } catch(err){
       statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
     }
   };
-  reader.onerror = function(){
-    statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`;
-  };
-  reader.readAsArrayBuffer(file);
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
 }
 
+function handleMasterFileUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const labelEl = document.getElementById('masterUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('masterUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Customer Master…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      const headerHints = ['customeridcif','customerid','cif'];
+      let header, rows;
+      if(isCsv){
+        const csvRows = parseCSV(String(e.target.result));
+        const hIdx = findHeaderRowIndex(csvRows, headerHints);
+        header = csvRows[hIdx]||[]; rows = csvRows.slice(hIdx+1);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        const sheetName = wb.SheetNames.find(n=>!/field\s*reference/i.test(n)) || wb.SheetNames[0];
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+        const hIdx = findHeaderRowIndex(raw, headerHints);
+        header = raw[hIdx]||[]; rows = raw.slice(hIdx+1);
+      }
+      __pendingMaster = buildCustomerMasterMap(header, rows);
+      __masterFileName = file.name;
+      const label = document.getElementById('masterStatusLabel');
+      if(label) label.textContent = `${__pendingMaster.size.toLocaleString('en-IN')} customers loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${__pendingMaster.size.toLocaleString('en-IN')} customer record(s) parsed.</div>`;
+      if(__pendingData){
+        const carryForward = carryForwardMapFromCurrentData();
+        mergeCustomerDetails(__pendingData.npa.rows, __pendingMaster, carryForward);
+        const validation = validateNpaRows(__pendingData.npa.rows);
+        __lastValidation = validation;
+        renderValidationReport(validation);
+        document.getElementById('applyDataBtn').disabled = !validation.ok;
+      }
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
 
 function applyNewData(){
-  if(!__pendingData) return;
+  if(!__pendingData || (__lastValidation && !__lastValidation.ok)) return;
   const applyBtn = document.getElementById('applyDataBtn');
   applyBtn.classList.add('is-loading');
   applyBtn.disabled = true;
@@ -801,6 +1050,7 @@ function applyNewData(){
 function applyNewDataNow(){
   DATA.npa = __pendingData.npa;
   if(__pendingData.oldots) DATA.oldots = __pendingData.oldots;
+  if(__pendingAsOnDate) DATA.asOnDate = __pendingAsOnDate;
 
   npaByAcct.clear(); npaByHelper.clear(); byCustId.clear(); oldOtsByAcct.clear();
   DATA.npa.rows.forEach(r=>{
@@ -814,15 +1064,30 @@ function applyNewDataNow(){
   });
 
   otsAmounts = {}; frozen = {};
+  updateReportDateDisplay();
   document.getElementById('uploadStatus').innerHTML = `<div class="upload-status ok">✔ Data updated — ${DATA.npa.rows.length.toLocaleString('en-IN')} NPA rows now active.</div>`;
   document.getElementById('downloadAppBtn').disabled = false;
   document.getElementById('searchHeader').style.display='';
   renderEmpty();
   renderDashboard();
   __pendingData = null;
+  __pendingAsOnDate = null;
+}
+
+function fmtAsOnDisplay(){
+  if(DATA.asOnDate){
+    const parts = DATA.asOnDate.split('-');
+    if(parts.length===3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return fmtDate(new Date());
+}
+function updateReportDateDisplay(){
+  document.querySelectorAll('.report-date-val').forEach(e=>e.textContent = fmtAsOnDisplay());
 }
 
 function downloadUpdatedApp(){
+  const dataEl = document.getElementById('ots-data');
+  if(dataEl) dataEl.textContent = JSON.stringify({ npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null });
   const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
   const blob = new Blob([html], {type:'text/html'});
   const url = URL.createObjectURL(blob);
@@ -907,12 +1172,14 @@ const SLAB_DEFS = [
 ];
 const HIGH_VALUE_CUST_THRESHOLD = 1000000; // ₹10 Lakh
 
-function computeDashboardStats(branchFilter){
+function computeDashboardStats(branchFilter, regionFilter){
   const rows = DATA.npa.rows;
   const today = new Date();
   const assetMix = {};
   const branchMap = new Map();
   const allBranches = new Set();
+  const allRegions = new Set();
+  const branchToRegion = new Map();
   const buckets = [
     {id:'ne', label:'Not yet eligible (≤ 6 months)', count:0, os:0},
     {id:'y1', label:'6 months – 1 year', count:0, os:0},
@@ -929,9 +1196,12 @@ function computeDashboardStats(branchFilter){
   for(const r of rows){
     const acct = String(r[C.ACCT_NO]);
     const branch = r[C.SOL_DESC] || 'Unassigned';
-    if(branch) allBranches.add(branch);
+    const region = r[C.REGION] || '';
+    if(branch){ allBranches.add(branch); if(region && !branchToRegion.has(branch)) branchToRegion.set(branch, region); }
+    if(region) allRegions.add(region);
     if(acct==='' || seen.has(acct)) continue;
     seen.add(acct);
+    if(regionFilter && region!==regionFilter) continue;
     if(branchFilter && branch!==branchFilter) continue;
     matchedAccounts++;
     const asset = r[C.ASSET]||'(unclassified)';
@@ -996,6 +1266,7 @@ function computeDashboardStats(branchFilter){
     totalAccounts:matchedAccounts, totalOS, totalNetOS, totalProvision, totalBookValue,
     eligibleCount, notEligibleCount, assetMix, branchMap, buckets, oldOtsCount, oldOtsSum,
     branchCount: branchMap.size, allBranches: [...allBranches].sort((a,b)=>a.localeCompare(b)),
+    allRegions: [...allRegions].sort((a,b)=>a.localeCompare(b)), branchToRegion,
     schemeMix, slabs, custCount: custList.length,
     highValueCustCount: highValueCust.length, highValueOS, highValueCustList,
     acctList, allAcctSorted,
@@ -1004,12 +1275,45 @@ function computeDashboardStats(branchFilter){
 
 function fmtINR2(n){ if(n===''||n===null||n===undefined||isNaN(n)) return '—'; return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
-function populateBranchFilter(branches){
+function populateRegionFilter(regions){
+  const sel = document.getElementById('dashRegionFilter');
+  const label = document.getElementById('dashRegionLabel');
+  if(!sel) return;
+  if(regions.length<=1){
+    sel.style.display='none';
+    if(label) label.style.display='none';
+    return;
+  }
+  sel.style.display='';
+  if(label) label.style.display='';
+  const current = sel.value;
+  sel.innerHTML = `<option value="">All Regions</option>` + regions.map(r=>`<option value="${esc(r)}">${esc(titleCase(r))}</option>`).join('');
+  if(regions.includes(current)) sel.value = current;
+}
+function populateBranchFilter(branches, branchToRegion, regionFilter){
   const sel = document.getElementById('dashBranchFilter');
   if(!sel) return;
   const current = sel.value;
-  sel.innerHTML = `<option value="">Regional Office</option>` + branches.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
-  if(branches.includes(current)) sel.value = current;
+  const filtered = (regionFilter && branchToRegion) ? branches.filter(b=>branchToRegion.get(b)===regionFilter) : branches;
+  sel.innerHTML = `<option value="">Regional Office</option>` + filtered.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
+  sel.value = filtered.includes(current) ? current : '';
+}
+function populateBranchFilterForRegion(){
+  if(!currentDashStats) return;
+  const regionSel = document.getElementById('dashRegionFilter');
+  const regionFilter = regionSel ? regionSel.value : '';
+  populateBranchFilter(currentDashStats.allBranches, currentDashStats.branchToRegion, regionFilter);
+}
+function updateDashTitle(stats){
+  const el = document.getElementById('dashTitle');
+  if(!el) return;
+  if(stats.allRegions.length===1){
+    el.textContent = `UPGB ${titleCase(stats.allRegions[0])} region NPA Portfolio`;
+  } else if(stats.allRegions.length>1){
+    el.textContent = `UPGB NPA Portfolio — ${stats.allRegions.length} regions`;
+  } else {
+    el.textContent = 'UPGB NPA Portfolio';
+  }
 }
 
 function svgDonut(segments, size){
@@ -1256,9 +1560,13 @@ function renderDashboard(){
   if(!el) return;
   const filterSel = document.getElementById('dashBranchFilter');
   const branchFilter = filterSel ? filterSel.value : '';
-  const s = computeDashboardStats(branchFilter || null);
+  const regionSel = document.getElementById('dashRegionFilter');
+  const regionFilter = regionSel ? regionSel.value : '';
+  const s = computeDashboardStats(branchFilter || null, regionFilter || null);
   currentDashStats = s;
-  populateBranchFilter(s.allBranches);
+  populateRegionFilter(s.allRegions);
+  populateBranchFilter(s.allBranches, s.branchToRegion, regionFilter || null);
+  updateDashTitle(s);
 
   const assetItems = ASSET_ORDER.filter(k=>s.assetMix[k]).map(k=>({
     label: assetLabel(k)+' ('+k+')', value:s.assetMix[k].os, color:ASSET_SEV_COLOR[k],
@@ -1411,10 +1719,14 @@ function toggleTheme(){
   on('searchGoBtn','click',()=>runSearch());
   on('uploadDrop','click',()=>document.getElementById('fileInput').click());
   on('fileInput','change',(e)=>handleFileUpload(e));
+  on('masterUploadDrop','click',()=>document.getElementById('masterFileInput').click());
+  on('masterFileInput','change',(e)=>handleMasterFileUpload(e));
+  on('asOnDateInput','change',(e)=>{ __pendingAsOnDate = e.target.value; });
   on('updateCancelBtn','click',()=>toggleUpdateModal(false));
   on('applyDataBtn','click',()=>applyNewData());
   on('downloadAppBtn','click',()=>downloadUpdatedApp());
   on('eligibleBanner','click',()=>document.getElementById('eligibleBanner').classList.remove('show'));
+  on('dashRegionFilter','change',()=>{ populateBranchFilterForRegion(); renderDashboard(); });
   on('dashBranchFilter','change',()=>renderDashboard());
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{
     b.addEventListener('click',()=>switchView(b.dataset.view));
