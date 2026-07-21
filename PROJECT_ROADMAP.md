@@ -251,3 +251,12 @@ GitHub settings, etc.) so nothing is forgotten or duplicated.
   `https://npadashboard.alokmittal.net/`, Device Flow **enabled**, Client ID
   `Ov23liwGRJMlo4VZSBzn` (public identifier, safe to keep in source). No
   client secret was generated or is used.
+- 2026-07-21: Merged PR #1 (`claude/upgb-ots-platform-setup-14ehm0` →
+  `main`) — M0, M1, M2 are now on `main`. **Action still needed on your
+  side**: open `https://github.com/mittalok-creator/NPA-DASHBOARD/settings/pages`
+  and make sure **Source** is set to "Deploy from a branch" → **`main`** →
+  **/ (root)**. If it's still pointed at the old feature branch or was
+  never configured, switch it to `main` and Save so the live site always
+  reflects whatever is merged, going forward. (No tool available to this
+  session can change that Pages setting directly — it's a repo-settings
+  page, not something the GitHub API access here exposes.)
