@@ -68,7 +68,8 @@
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || (`Chunk ${i + 1}/${totalChunks} upload failed: ${res.status}`));
+        const msg = [errBody.error, errBody.detail].filter(Boolean).join(': ');
+        throw new Error(msg || `Chunk ${i + 1}/${totalChunks} upload failed: ${res.status}`);
       }
     }
 
@@ -79,7 +80,10 @@
       body: JSON.stringify({ uploadId }),
     });
     const result = await finalRes.json().catch(() => ({}));
-    if (!finalRes.ok) throw new Error(result.error || ('Server returned ' + finalRes.status));
+    if (!finalRes.ok) {
+      const msg = [result.error, result.detail].filter(Boolean).join(': ');
+      throw new Error(msg || ('Server returned ' + finalRes.status));
+    }
 
     progress('Published.');
     return { versionId: result.id, publishedAt: result.publishedAt };
@@ -103,7 +107,10 @@
       body: JSON.stringify({ versionId }),
     });
     const result = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(result.error || ('Server returned ' + res.status));
+    if (!res.ok) {
+      const msg = [result.error, result.detail].filter(Boolean).join(': ');
+      throw new Error(msg || ('Server returned ' + res.status));
+    }
 
     progress('Rolled back.');
     return { versionId: result.id, publishedAt: result.publishedAt };
