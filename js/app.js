@@ -1461,6 +1461,13 @@ function svgDonut(segments, size){
   </svg>`;
 }
 
+function donutCard(segments, size, centerValue, centerLabel){
+  return `<div class="donut-wrap">
+    ${svgDonut(segments, size)}
+    <div class="donut-center"><div class="donut-center-value">${esc(centerValue)}</div><div class="donut-center-label">${esc(centerLabel)}</div></div>
+  </div>`;
+}
+
 function donutLegend(segments){
   return segments.map(s=>`<div class="legend-row${s.onclick?' clickable':''}"${s.onclick?` onclick="${s.onclick}"`:''}><span class="legend-dot" style="background:${s.color}"></span>${esc(s.label)}<span class="legend-val">${s.valueLabel}</span></div>`).join('');
 }
@@ -1641,6 +1648,26 @@ function kpiTile(label, value, sub, onclick){
   </div>`;
 }
 
+/* Lucide-style icons (rounded, 2px stroke, 24x24 viewBox) for the hero KPI
+   row and insight strip -- hand-drawn to match the icon convention already
+   used throughout the app (stroke="currentColor" so each card tints its own
+   icon via CSS). */
+const ICON_BANKNOTE = '<rect x="2" y="6" width="20" height="12" rx="3"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>';
+const ICON_USERS = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>';
+const ICON_ALERT_TRIANGLE = '<path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>';
+const ICON_TICKET = '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 11v2M13 17v2"/>';
+const ICON_ALERT_CIRCLE = '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>';
+function svgIcon(pathData){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathData}</svg>`; }
+
+function heroKpiCard(opts){
+  return `<div class="hero-kpi-card${opts.onclick?' clickable':''}"${opts.onclick?` onclick="${opts.onclick}"`:''} style="--hero-tint:${opts.tint};--hero-color:${opts.color}">
+    <div class="hero-kpi-icon">${svgIcon(opts.icon)}</div>
+    <div class="hero-kpi-label">${esc(opts.label)}</div>
+    <div class="hero-kpi-value" id="${opts.id}">${opts.fallback||'—'}</div>
+    <div class="hero-kpi-sub">${opts.sub}</div>
+  </div>`;
+}
+
 let currentDashStats = null;
 const BUCKET_LABELS = {ne:'Not yet eligible (≤ 6 months)', y1:'6 months – 1 year', y13:'1 – 3 years', y3p:'3+ years'};
 
@@ -1741,7 +1768,35 @@ function renderDashboard(){
     valueLabel:`${sl.count.toLocaleString('en-IN')} A/C · ${fmtCr(sl.os)}`,
     onclick:`showSlabList('${sl.id}')`}));
 
+  const highRiskOS = (s.assetMix.DA3?s.assetMix.DA3.os:0) + (s.assetMix.LOSS?s.assetMix.LOSS.os:0);
+  const highRiskPct = s.totalOS ? (highRiskOS/s.totalOS*100) : 0;
+  const avgTicket = s.totalAccounts ? s.totalOS/s.totalAccounts : 0;
+
+  /* "What should happen next" -- the single largest concentration of aged,
+     actionable exposure (excludes the "not yet eligible" bucket, since that
+     one isn't actionable yet), computed fresh from real data every render
+     rather than a fixed/fabricated callout. */
+  const actionableBuckets = s.buckets.filter(b=>b.id!=='ne' && b.os>0);
+  const topBucket = actionableBuckets.length ? actionableBuckets.reduce((max,b)=>b.os>max.os?b:max) : null;
+
   el.innerHTML = `
+    <div class="hero-kpi-row">
+      ${heroKpiCard({id:'heroTotalOs', label:'Total Outstanding', fallback:fmtCr(s.totalOS), sub:s.totalAccounts.toLocaleString('en-IN')+' accounts', icon:ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)'})}
+      ${heroKpiCard({id:'heroTotalAccts', label:'Total Accounts', fallback:s.totalAccounts.toLocaleString('en-IN'), sub:s.custCount.toLocaleString('en-IN')+' unique customers', icon:ICON_USERS, tint:'var(--gauge-track)', color:'var(--accent-2)'})}
+      ${heroKpiCard({id:'heroHighRisk', label:'High-Risk Exposure', fallback:fmtCr(highRiskOS), sub:'DA3 + Loss · '+highRiskPct.toFixed(1)+'% of book', icon:ICON_ALERT_TRIANGLE, tint:'var(--red-soft)', color:'var(--red)', onclick:(s.assetMix.LOSS||s.assetMix.DA3)?`showAssetList('${s.assetMix.LOSS?'LOSS':'DA3'}')`:''})}
+      ${heroKpiCard({id:'heroAvgTicket', label:'Average Ticket Size', fallback:fmtINR2(avgTicket), sub:'per account, this book', icon:ICON_TICKET, tint:'var(--amber-soft)', color:'var(--amber)'})}
+    </div>
+
+    ${topBucket ? `
+    <div class="insight-strip clickable" onclick="showBucketList('${topBucket.id}')">
+      <div class="insight-icon">${svgIcon(ICON_ALERT_CIRCLE)}</div>
+      <div class="insight-body">
+        <div class="insight-title">Recovery focus: ${esc(BUCKET_LABELS[topBucket.id]||topBucket.label)}</div>
+        <div class="insight-text">${fmtCr(topBucket.os)} across ${topBucket.count.toLocaleString('en-IN')} account(s) — the largest concentration of aged exposure in this book.</div>
+      </div>
+      <div class="insight-cta">View list →</div>
+    </div>` : ''}
+
     <div class="chart-grid">
       <div class="chart-card">
         <div class="chart-title">Total Outstanding — KCC vs Non-KCC<span class="chart-sub">scheme CC004 = KCC · every other scheme = Non-KCC</span></div>
@@ -1750,7 +1805,7 @@ function renderDashboard(){
           <div><div class="lbl">Total Accounts</div><div class="val">${s.totalAccounts.toLocaleString('en-IN')}</div></div>
         </div>
         <div class="donut-flex">
-          ${svgDonut(kccSeg)}
+          ${donutCard(kccSeg, undefined, fmtCr(s.totalOS), 'Total O/S')}
           <div class="donut-legend">${donutLegend(kccSeg)}</div>
         </div>
         <div class="split-stat-grid">
@@ -1770,7 +1825,7 @@ function renderDashboard(){
       <div class="chart-card">
         <div class="chart-title">Outstanding by Amount Slab<span class="chart-sub">account-wise O/S buckets</span></div>
         <div class="donut-flex">
-          ${svgDonut(slabSeg)}
+          ${donutCard(slabSeg, undefined, fmtCr(s.totalOS), 'Total O/S')}
           <div class="donut-legend">${donutLegend(slabSeg)}</div>
         </div>
       </div>
@@ -1813,6 +1868,15 @@ function renderDashboard(){
     </div>
   `;
   initAcctListScroll(s.allAcctSorted);
+
+  const heroOs = document.getElementById('heroTotalOs');
+  if(heroOs) animateNumber(heroOs, 0, s.totalOS, fmtCr, 900);
+  const heroAccts = document.getElementById('heroTotalAccts');
+  if(heroAccts) animateNumber(heroAccts, 0, s.totalAccounts, n=>Math.round(n).toLocaleString('en-IN'), 900);
+  const heroRisk = document.getElementById('heroHighRisk');
+  if(heroRisk) animateNumber(heroRisk, 0, highRiskOS, fmtCr, 900);
+  const heroTicket = document.getElementById('heroAvgTicket');
+  if(heroTicket) animateNumber(heroTicket, 0, avgTicket, fmtINR2, 900);
 }
 
 /* ---------- Nav / view switching ---------- */

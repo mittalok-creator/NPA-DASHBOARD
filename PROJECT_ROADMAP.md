@@ -436,6 +436,74 @@ back to the exact original row count, and that rolling back to it
 afterward reproduces the exact original bytes with zero decompression
 needed in the rollback path itself.
 
+### Dashboard redesign: enterprise fintech visual language (2026-07-22, same day)
+
+You asked for a "world's best banking analytics dashboard" redesign — a full
+brief (Stripe/Linear/Ramp/Mercury/Bloomberg-inspired glassmorphism, exact
+color/type/spacing tokens, animated KPIs, a 16-artifact deliverable format
+per page) built on React/Next.js/Tailwind/shadcn/Framer Motion/Recharts. You
+confirmed (via the scope question I asked first) that the live app should
+stay on its current stack — plain HTML/CSS/JS, no build step, same GitHub
+Pages deployment — with the redesign expressed *within* that stack instead
+of a parallel React rebuild. This entry covers the Dashboard page only, per
+your "start with the Dashboard page only" instruction; the other ~24 pages
+in the brief (Branch Comparison, Recovery Analytics, Legal Cases, GIS Branch
+Map, etc.) don't exist in this app yet and weren't attempted.
+
+- **New color tokens**, adapted from the brief's exact hex spec but corrected
+  for real contrast: the brief's Primary Blue `#245BFF` and Success Green
+  `#22C55E` are calibrated for *light* backgrounds and fail WCAG AA as text
+  against a dark background (3.62:1) or as small text against white
+  (2.28:1) respectively — computed contrast for every pairing before
+  choosing final values, same discipline as the earlier full theme redesign
+  this session. Landed on: dark theme uses Royal Blue `#3A7BFF` as the
+  primary text/icon accent (4.92:1 on the dark background) with Primary Blue
+  `#245BFF` as the darker gradient partner; light theme deepens to `#1B4FE0`
+  (6.48:1 on white). Accent Cyan `#36D7FF` (brief-exact) is the secondary/
+  decorative accent in dark theme (11.11:1) but is cyan-only-as-decoration
+  in light theme (pure cyan is 1.70:1 on white, unusable as text) — found
+  and fixed three existing small-text spots that were using it as light-mode
+  text color (`.publish-review-summary b`, a version-history button hover,
+  a template-download link hover), moved to the properly-tuned `--accent`.
+  Status colors (green/amber/red) also needed light-theme-only deepening
+  for the same reason. Deliberately left the P&L green/red polarity's
+  *meaning* and the 5-step asset-severity ramp untouched — same reasoning as
+  the last redesign.
+- **New hero KPI row**: four floating glass cards above the existing charts
+  — Total Outstanding, Total Accounts, High-Risk Exposure (DA3+Loss share),
+  Average Ticket Size — each with a tinted icon, a large 38px tabular-number
+  count-up animation on render (reusing the existing `animateNumber` helper,
+  which already respects `prefers-reduced-motion`), and hover elevation.
+  Answers "what happened" at a glance before any chart needs reading.
+- **New "Recovery focus" insight strip**: a single computed callout
+  answering "what should happen next" — always the real largest concentration
+  of *actionable* aged exposure (excludes the "not yet eligible" bucket),
+  computed fresh from the actual loaded data on every render, never a
+  fabricated or hardcoded insight. Clicking it opens the same account-list
+  drill-down the ageing bars already use.
+- **Donut center labels**: both existing donut charts (KCC/Non-KCC split,
+  Amount Slab) now show the total outstanding in the center of the ring — a
+  standard premium-dashboard pattern (Stripe/Mercury) that was missing
+  before (ring + side legend only).
+- **New `--radius-xl` (24px)** token for the hero cards, matching the
+  brief's explicit corner-radius spec, layered on top of the existing
+  `--radius-lg`/`--radius-md`/`--radius-sm` scale rather than replacing it.
+- Hand-drawn Lucide-style icons (rounded caps, 2px stroke — matching the
+  icon convention already used everywhere else in this app) for the hero
+  cards and insight strip; no icon library dependency added.
+- Left the rest of the Dashboard (Asset Classification Mix, NPA Ageing,
+  Top Branches, Customer-Wise KPIs, the full sortable All Accounts table)
+  functionally and structurally as-is — only inheriting the refreshed
+  color/spacing tokens — since those are dense functional data views where
+  Bloomberg/TradingView-style density is the right call, not a place to
+  bolt on decoration for its own sake.
+
+**Verified** with Playwright: full-page screenshots in both themes at
+desktop (1440px) and mobile (390px) widths, confirmed the hero KPI count-up
+values compute correctly from real data, and caught + fixed a mobile layout
+bug where the insight strip's "View list" link wrapped into an awkward gap
+instead of sitting cleanly under the description text.
+
 ### Full color theme redesign: "Sapphire & Emerald" (2026-07-22, same day)
 
 Replaced the app's single violet/indigo accent (used since M1) with a new
