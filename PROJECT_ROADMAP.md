@@ -496,6 +496,37 @@ the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
 
+### One-time direct publish of real branch advance data (2026-07-22, same day)
+
+You uploaded your real `Daily_NPA_Projection_5033856.xlsx` and asked for the
+Sol ID + Advance columns from its "Daily Follow-up Sheet" to populate the
+feature above. After it shipped, you said "But ye show to hua nhi" — turned
+out you hadn't tried the Upload UI yet, and asked me to just publish the
+data directly myself instead: "Maine abhi nhi ki. Abhi tum bhi push kr do
+ise data se."
+
+- Since data now lives as a plain committed file (`data/latest.json`, per
+  the architecture-reversal above) rather than a separate database, I had
+  direct repo write access to do this without needing your GitHub sign-in.
+- Re-ran the exact same parsing logic from `buildBranchAdvanceMap()` in
+  `js/app.js`, in Python, against your real file, to avoid any
+  drift between "what the button would have done" and what got published:
+  56 Sol ID → Advance (₹ Lakhs → rupees) pairs extracted.
+- Verified the local `data/latest.json` was byte-for-byte identical to the
+  live site's served copy first, so this one-time direct edit couldn't
+  clobber anything else that may have changed on the live site meanwhile.
+- Merged the 56 advances into `data/latest.json`, and replicated the exact
+  side effects the real Publish button produces so Version History/Rollback
+  stays consistent: a new full-content snapshot at
+  `data/history/2026-07-22-1784739013210.json`, plus a matching entry
+  prepended to `data/history/index.json` (`publishedBy:
+  "mittalok-creator"`, `isRollback: false`).
+- This was a **one-time bootstrap only**, done because this was the first
+  time this data existed anywhere. Going forward, you'll upload your daily
+  Daily NPA Projection file yourself through the Update Data modal's
+  "Branch-wise Total Advance" section, same as any other daily update — no
+  further direct-git-publish action is expected or planned.
+
 ### Dashboard redesign: enterprise fintech visual language (2026-07-22, same day)
 
 You asked for a "world's best banking analytics dashboard" redesign — a full
