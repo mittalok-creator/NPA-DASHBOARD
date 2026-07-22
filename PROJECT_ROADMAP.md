@@ -251,9 +251,9 @@ all of that at once and makes each future module mostly "define its schema
   what Viewers see. A rollback is just a normal publish whose content is
   copied from an older row — never a destructive rewrite — so it shows up
   in history like any other publish, and old rows are never mutated.
-- **New API routes** (`relay/api/`): `GET /api/data/latest` (public,
-  gzip-compressed response), `GET /api/data/history` (public, lightweight
-  metadata list), `POST /api/publish` and `POST /api/data/rollback`
+- **New API routes** (`relay/api/`): `GET /api/data-latest` (public,
+  gzip-compressed response), `GET /api/data-history` (public, lightweight
+  metadata list), `POST /api/publish` and `POST /api/data-rollback`
   (Admin-only). Admin-ness is verified **server-side** now — the route
   calls `api.github.com/user` with the Bearer token the browser sends and
   checks the real login is `mittalok-creator`, rather than trusting a
@@ -265,7 +265,7 @@ all of that at once and makes each future module mostly "define its schema
   The browser now **gzip-compresses** the JSON payload
   (`CompressionStream('gzip')`) before POSTing to `/api/publish`
   (`Content-Encoding: gzip`), and the server does the same in reverse for
-  `/api/data/latest` — verified end-to-end that a browser-produced gzip
+  `/api/data-latest` — verified end-to-end that a browser-produced gzip
   blob is byte-compatible with Node's `zlib.gunzipSync` and vice versa.
   This buys real headroom (5-10x smaller on the wire) for realistic
   per-region uploads; a genuine single-shot *entire-bank* upload could
@@ -273,9 +273,9 @@ all of that at once and makes each future module mostly "define its schema
   speculatively, since the real day-to-day workflow is per-region files.
 - **Client changes**: `js/publish.js` rewritten to call the new API
   instead of GitHub's Git Data API — much simpler, since rollback is now
-  a single server-side call (`POST /api/data/rollback` with just a
+  a single server-side call (`POST /api/data-rollback` with just a
   version id) instead of the old fetch-content-then-republish dance.
-  `js/app.js`'s boot sequence now fetches `GET /api/data/latest` first,
+  `js/app.js`'s boot sequence now fetches `GET /api/data-latest` first,
   falling back to the static `data/latest.json` snapshot already in the
   repo only if the backend is unreachable (safety net during migration,
   and a soft offline/outage fallback).
@@ -299,6 +299,37 @@ all of that at once and makes each future module mostly "define its schema
   existing `data/latest.json` / `data/history/` files stay in the repo
   as the fallback path described above, not because the git-commit design
   is still in use.
+
+### Bug fix: frontend called the wrong URLs for the new backend (2026-07-22, same day)
+
+Right after you enabled Postgres storage and redeployed, the new routes
+returned 404 even on the confirmed latest/current deployment — while the
+old `/api/device-start` route kept working fine. Root cause: the new
+serverless functions are files named `data-history.js`, `data-latest.js`,
+`data-rollback.js` (hyphens, since that's the actual filename), which
+Vercel maps to `/api/data-history`, `/api/data-latest`, `/api/data-rollback`
+— but `js/publish.js` and `js/app.js`'s boot fetch were calling
+`/api/data/history`, `/api/data/latest`, `/api/data/rollback` (slashes,
+as if `data` were a subfolder). This slipped past testing because the
+Playwright mock tests used the same (wrong) URLs the client code called,
+so they matched each other without ever hitting the real deployed routes.
+
+Caught by testing directly against the live backend with `curl` rather
+than trusting the mocked tests alone: `/api/publish` and `/api/data-rollback`
+(hyphenated, matching the client's one correct guess) returned 405 on a
+GET request — proving those specific routes *did* exist and were reachable
+— which is what exposed the slash-vs-hyphen mismatch on the others. Fixed
+all three URLs in `js/publish.js` / `js/app.js`; re-verified with `curl`
+directly against production (`/api/data-history` → `200 []`,
+`/api/data-latest` → `404 {"error":"no_data_published_yet"}`, both correct
+since nothing has been published yet) and confirmed `/api/publish` and
+`/api/data-rollback` correctly reject a missing/invalid token with 401 —
+proving the live Neon connection, schema creation, and Admin verification
+are all genuinely working end-to-end. **Lesson for future backend work**:
+mocked tests validate internal logic consistency, not the real contract
+between two independently-written pieces of code — always confirm the
+actual deployed URL shape with a real request before considering a new
+API integration done.
 
 ### M2 completion notes (2026-07-21)
 
