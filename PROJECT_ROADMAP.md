@@ -436,6 +436,56 @@ back to the exact original row count, and that rolling back to it
 afterward reproduces the exact original bytes with zero decompression
 needed in the rollback path itself.
 
+### UI cleanup + mobile legibility + premium palette + data-load resilience (2026-07-22, same day)
+
+Three smaller fixes shipped together once the backend crisis above was resolved:
+
+- **Removed redundant Update Data/Settings icons from the Search view's own
+  header.** They called the exact same `openUpdateModalAsAdmin()` handler as
+  the sidebar's `settingsBtnNav` (already visible on every view, dedicated
+  entry point) — duplicating it in the Search header's `.head-icons` block
+  served no purpose. Hidden via `display:none` rather than deleted, in case a
+  future view-specific action needs that slot back.
+- **Mobile legibility bug**: reported as "dark mode looks great on mobile,
+  but light mode shows almost nothing." Root cause, confirmed by comparing
+  real-device screenshots against `getComputedStyle()` output (ruling out a
+  simple color-variable bug — computed text color was identical in both
+  themes): `header.app-head`/`.detail-head`, `#bottomTabs` (mobile bottom
+  nav), and `.mobile-sig` all relied on a translucent `rgba(...)` background
+  plus `backdrop-filter: blur()+saturate()` to *look* dark, by blurring
+  whatever page content scrolled underneath. That's fragile in light theme
+  (the content behind is pale, so the blurred chrome reads pale too) and
+  across devices with inconsistent `backdrop-filter` support. Fixed by
+  making all three chrome surfaces a near-opaque `rgba(9,9,15,.9-.97)` in
+  both themes — legibility no longer depends on blur working or on the
+  content behind being dark.
+- **Light theme redesigned for a richer, less "feeka" (washed-out) feel**
+  (also requested this same round): pastel-strength accent/status colors
+  that read fine against the near-black dark theme looked weak against a
+  pale background. Deepened `--bg` (`#F4F3F8`→`#EEF0F6`, more presence for
+  card-elevation contrast), `--accent`/`--gold` (`#6A57E8`→`#5B3DF0`, richer
+  indigo), `--accent-2` (`#0FA895`→`#0C9488`, deeper jewel-tone teal), and
+  the status colors `--green`/`--amber`/`--red` (and matching `--pos`/`--neg`
+  and all `-soft` variants, recalculated to match) to more saturated
+  jewel-tones; slightly increased card shadow opacities for more visible
+  elevation. Verified via Playwright screenshots at a real mobile viewport
+  (390×844) in both themes, before/after.
+- **Data-load resilience**: unrelated to the above, you separately hit
+  "Could not load NPA data. Check your internet connection and reload the
+  page." on a real device. Checked the live backend directly at that
+  moment — `/api/data-latest` was serving correctly (200, real 3,61,870-row
+  data, CORS preflight correct) — so this was a transient blip (e.g. phone
+  switching networks), not a real outage, but the app had no resilience for
+  that at all: one failed request on both the backend and the static
+  fallback and it gave up immediately. Added: (1) one automatic silent
+  retry 2 seconds after the first failure, so a brief connectivity blip
+  never surfaces an error at all; (2) if that also fails, a **Retry**
+  button on the error screen instead of forcing a full page reload.
+  Verified with Playwright by deliberately blocking both the backend and
+  the static fallback routes — confirms the retry button appears, and that
+  clicking it (after unblocking) successfully recovers and loads the
+  dashboard.
+
 ### M2 completion notes (2026-07-21)
 
 Added GitHub OAuth **Device Flow** login, restricted to a single
