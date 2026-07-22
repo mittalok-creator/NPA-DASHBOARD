@@ -436,6 +436,43 @@ back to the exact original row count, and that rolling back to it
 afterward reproduces the exact original bytes with zero decompression
 needed in the rollback path itself.
 
+### Locked OTS amounts now persist for every viewer, across data updates (2026-07-22, same day)
+
+Previously, freezing (locking) a settlement amount on an account was purely a
+per-browser-session scratch value — `otsAmounts`/`frozen` lived only in memory,
+were never part of the published `data/latest.json`, and were wiped completely
+every time `applyNewDataNow()` ran (i.e. every daily data update). So a
+negotiated OTS figure you locked in while working an account would vanish the
+next time you uploaded the daily file, and nobody else viewing the dashboard
+would ever have seen it in the first place.
+
+Added a persisted `DATA.lockedOts` (acctNo → amount), separate from the
+existing per-session `otsAmounts`/`frozen` (which still exist, for amounts
+still being worked out and not yet locked):
+- **Freezing** an amount now also writes it into `DATA.lockedOts`;
+  **unfreezing** removes it from there.
+- **`applyNewDataNow()`** no longer wipes locked amounts — it carries them
+  forward, matched by account number, and drops only the ones whose account
+  no longer exists in the new file (same rule already used for the NPA rows
+  themselves when an account is regularized/closed).
+- **Publishing** now includes `lockedOts` in the data sent to
+  `js/publish.js` (part of `data/latest.json`), so once you hit Publish, every
+  viewer who loads the dashboard sees that account's OTS input pre-filled and
+  disabled automatically — no action needed on their end. Rollback carries
+  whatever `lockedOts` existed in that historical version, since rollback
+  just re-publishes the old file's full content as-is.
+- Only the Admin can actually make a lock visible to others (Publish is
+  Admin-only); a regular viewer can still freeze an amount for their own
+  session's calculation, same as before, it just doesn't propagate anywhere
+  without a Publish.
+
+**Verified** with Playwright: (1) crafted a `data/latest.json` response with
+a `lockedOts` entry and confirmed a completely fresh page load shows that
+account's OTS input pre-filled and disabled, with zero action taken by that
+viewer; (2) confirmed clicking the freeze icon on that pre-locked input
+unlocks it (re-enables editing); (3) confirmed freezing a fresh amount and
+navigating away and back within the same session keeps it locked.
+
 ### Manual refresh button on the Dashboard (2026-07-22, same day)
 
 Added a small circular refresh icon next to the Dashboard title (`#refreshDataBtn`,

@@ -220,6 +220,14 @@ function renderResults(matches, mode){
 /* ---------- Detail view ---------- */
 let otsAmounts = {}; // key: acctNo -> value
 let frozen = {}; // key: acctNo -> bool
+/* Locked OTS amounts are also persisted on DATA.lockedOts (part of the
+   published data/latest.json, carried forward across daily data updates and
+   included whenever Publish is next clicked) so a negotiated settlement
+   figure shows to every viewer, not just whoever locked it in their own
+   browser -- unlike otsAmounts/frozen above, which are per-session scratch
+   state for amounts still being worked out. */
+DATA.lockedOts = DATA.lockedOts || {};
+Object.keys(DATA.lockedOts).forEach(acct => { otsAmounts[acct] = DATA.lockedOts[acct]; frozen[acct] = true; });
 
 function openDetail(custId, jumpAcct){
   const custRow = byCustId.get(custId);
@@ -402,6 +410,7 @@ function toggleFreeze(i, acctNo){
   const v = otsAmounts[acctNo];
   if(!isFrozen && (v===undefined || v==='' || isNaN(parseFloat(v)))) return;
   frozen[acctNo] = !isFrozen;
+  if(frozen[acctNo]) DATA.lockedOts[acctNo] = v; else delete DATA.lockedOts[acctNo];
   const btn = document.getElementById('freezeBtn-'+i);
   const input = document.getElementById('otsInput-'+i);
   if(!input) return;
@@ -1068,7 +1077,12 @@ function applyNewDataNow(){
     if(r[0]!=='' && !oldOtsByAcct.has(String(r[0]))) oldOtsByAcct.set(String(r[0]), {date:r[1], amount:r[2]});
   });
 
+  // Locked OTS amounts carry forward across a data update -- only drop the
+  // ones whose account no longer exists (regularized/closed), same rule as
+  // the NPA rows themselves.
+  Object.keys(DATA.lockedOts).forEach(acct => { if(!newAcctSet.has(acct)) delete DATA.lockedOts[acct]; });
   otsAmounts = {}; frozen = {};
+  Object.keys(DATA.lockedOts).forEach(acct => { otsAmounts[acct] = DATA.lockedOts[acct]; frozen[acct] = true; });
   updateReportDateDisplay();
   const staleMsg = staleRemovedCount>0 ? ` (${staleRemovedCount.toLocaleString('en-IN')} account(s) from the previous data no longer appear — regularized/closed accounts removed.)` : '';
   document.getElementById('uploadStatus').innerHTML = `<div class="upload-status ok">✔ Data updated — ${DATA.npa.rows.length.toLocaleString('en-IN')} NPA rows now active.${staleMsg}</div>`;
@@ -1164,7 +1178,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, lockedOts: DATA.lockedOts||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
