@@ -15,7 +15,7 @@ export async function ensureSchema() {
   await sql`
     CREATE TABLE IF NOT EXISTS npa_versions (
       id SERIAL PRIMARY KEY,
-      data JSONB NOT NULL,
+      data_gzip_b64 TEXT,
       as_on_date TEXT,
       row_count INTEGER,
       regions TEXT[],
@@ -25,6 +25,19 @@ export async function ensureSchema() {
       is_current BOOLEAN NOT NULL DEFAULT false
     )
   `;
+  // Migration from the first (never-successfully-used) design: a genuine
+  // full-bank publish's decompressed JSON, embedded directly in an INSERT,
+  // hit Neon's own 64MiB per-request limit on the query itself -- a
+  // different ceiling than Vercel's ~4.5MB request-body limit the chunked
+  // upload already solves. Storing the data pre-compressed (already gzip
+  // bytes from chunk reassembly, base64-encoded) avoids the blow-up
+  // entirely instead of decompressing then re-embedding the full JSON.
+  // CREATE TABLE IF NOT EXISTS only applies to brand-new installs -- it does
+  // NOT add columns to an already-existing table, so the new column needs
+  // its own explicit ADD COLUMN (caught by testing this exact migration
+  // path against a real Postgres before shipping).
+  await sql`ALTER TABLE npa_versions ADD COLUMN IF NOT EXISTS data_gzip_b64 TEXT`;
+  await sql`ALTER TABLE npa_versions DROP COLUMN IF EXISTS data`;
   // Temporary holding table for chunked uploads -- a genuine bank-wide
   // multi-region publish can exceed Vercel's per-request payload ceiling
   // (empirically ~4.5MB) even after gzip, so large payloads are split into
@@ -78,12 +91,17 @@ export async function deleteChunks(uploadId) {
   await sql`DELETE FROM upload_chunks WHERE upload_id = ${uploadId}`;
 }
 
+// Returns { dataGzipB64, asOnDate } for the live dataset, or null if
+// nothing has ever been published. The caller decides whether to
+// decompress (data-latest.js doesn't need to -- it ships the compressed
+// bytes straight to the browser, which decompresses on the wire).
 export async function getCurrentVersion() {
   await ensureSchema();
   const rows = await sql`
-    SELECT data, as_on_date FROM npa_versions WHERE is_current = true LIMIT 1
+    SELECT data_gzip_b64, as_on_date FROM npa_versions WHERE is_current = true LIMIT 1
   `;
-  return rows[0] || null;
+  if (!rows[0]) return null;
+  return { dataGzipB64: rows[0].data_gzip_b64, asOnDate: rows[0].as_on_date };
 }
 
 export async function getHistory() {
@@ -97,10 +115,22 @@ export async function getHistory() {
   return rows;
 }
 
+// Returns everything needed to republish an older version as the new
+// current one, without ever decompressing/re-parsing the data blob --
+// row_count/regions are already known from when this version was first
+// published, so rollback is a pure copy, not a re-derivation.
 export async function getVersionData(id) {
   await ensureSchema();
-  const rows = await sql`SELECT data, as_on_date FROM npa_versions WHERE id = ${id} LIMIT 1`;
-  return rows[0] || null;
+  const rows = await sql`
+    SELECT data_gzip_b64, as_on_date, row_count, regions FROM npa_versions WHERE id = ${id} LIMIT 1
+  `;
+  if (!rows[0]) return null;
+  return {
+    dataGzipB64: rows[0].data_gzip_b64,
+    asOnDate: rows[0].as_on_date,
+    rowCount: rows[0].row_count,
+    regions: rows[0].regions,
+  };
 }
 
 // Publishes a new version as the current live dataset (a rollback is just a
@@ -108,14 +138,17 @@ export async function getVersionData(id) {
 // never a destructive rewrite, so it shows up in history like any other
 // publish). All three statements run as one atomic batch via
 // sql.transaction() since the one-shot `sql` client can't share a session
-// across separate calls.
-export async function publishVersion({ data, asOnDate, rowCount, regions, publishedBy, isRollback }) {
+// across separate calls. `dataGzipB64` is already gzip-compressed +
+// base64-encoded by the caller -- never decompressed here, so a genuine
+// full-bank payload never blows past Neon's own per-request size limit
+// the way embedding the raw JSON directly once did.
+export async function publishVersion({ dataGzipB64, asOnDate, rowCount, regions, publishedBy, isRollback }) {
   await ensureSchema();
   const results = await sql.transaction([
     sql`UPDATE npa_versions SET is_current = false WHERE is_current = true`,
     sql`
-      INSERT INTO npa_versions (data, as_on_date, row_count, regions, published_by, is_rollback, is_current)
-      VALUES (${JSON.stringify(data)}::jsonb, ${asOnDate}, ${rowCount}, ${regions}, ${publishedBy}, ${!!isRollback}, true)
+      INSERT INTO npa_versions (data_gzip_b64, as_on_date, row_count, regions, published_by, is_rollback, is_current)
+      VALUES (${dataGzipB64}, ${asOnDate}, ${rowCount}, ${regions}, ${publishedBy}, ${!!isRollback}, true)
       RETURNING id, published_at
     `,
     sql`

@@ -24,15 +24,15 @@ export default async function handler(req, res) {
     const version = await getVersionData(versionId);
     if (!version) { res.status(404).json({ error: 'version_not_found' }); return; }
 
-    const data = version.data;
-    const rows = (data && data.npa && data.npa.rows) || [];
-    const regions = Array.from(new Set(rows.map(r => String(r[26] || '')).filter(Boolean)));
-
+    // No decompression/re-parsing needed at all -- row_count/regions were
+    // already recorded when this version was first published, and the
+    // compressed blob is copied through as-is (a rollback publishes the
+    // *same* bytes again as a new row, never re-derives them).
     const result = await publishVersion({
-      data,
-      asOnDate: version.as_on_date,
-      rowCount: rows.length,
-      regions,
+      dataGzipB64: version.dataGzipB64,
+      asOnDate: version.asOnDate,
+      rowCount: version.rowCount,
+      regions: version.regions,
       publishedBy: admin.login,
       isRollback: true,
     });

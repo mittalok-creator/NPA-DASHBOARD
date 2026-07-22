@@ -25,6 +25,11 @@ export default async function handler(req, res) {
     const compressedBuf = await assembleChunks(uploadId, admin.login);
     if (!compressedBuf) { res.status(404).json({ error: 'upload_not_found_or_incomplete' }); return; }
 
+    // Only decompressed transiently to validate structure and fall back on
+    // rowCount/regions if the client didn't send them -- never re-embedded
+    // in a query. What actually gets stored is the original compressed
+    // buffer as base64, so a genuine full-bank payload never blows past
+    // Neon's own per-request size limit the way the raw JSON once did.
     const jsonText = zlib.gunzipSync(compressedBuf).toString('utf-8');
     const payload = JSON.parse(jsonText);
     const { data, meta } = payload || {};
@@ -34,7 +39,7 @@ export default async function handler(req, res) {
     }
 
     const result = await publishVersion({
-      data,
+      dataGzipB64: compressedBuf.toString('base64'),
       asOnDate: (meta && meta.asOnDate) || null,
       rowCount: (meta && meta.rowCount) || data.npa.rows.length,
       regions: (meta && meta.regions) || [],
