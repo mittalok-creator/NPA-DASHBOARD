@@ -331,6 +331,45 @@ between two independently-written pieces of code — always confirm the
 actual deployed URL shape with a real request before considering a new
 API integration done.
 
+### Bug fix: real full-bank publish hit Vercel's payload size ceiling (2026-07-22, same day)
+
+Your first real Publish attempt — the actual full bank, 3,61,870 accounts
+across all 22 regions — failed with "Failed to fetch." Reproduced directly:
+that dataset compresses to ~5.6 MB gzipped, and Vercel's Serverless
+Functions reject any request body past ~4.5 MB with `413
+FUNCTION_PAYLOAD_TOO_LARGE` (confirmed the exact boundary with `curl`: 4 MB
+passes, 4.5 MB is rejected). This is exactly the known limit flagged when
+the Postgres backend was first built ("logged as a known limit, not solved
+speculatively") — it just became real the first time you actually tried
+the full-bank case rather than a single region.
+
+Fixed with **chunked upload**: the browser now always splits the
+gzip-compressed payload into 3 MB raw-byte chunks (comfortably under the
+~4.5 MB ceiling) and uploads them sequentially to a new
+`POST /api/publish-chunk` (tagged by an upload id + chunk index/total via
+headers), storing each as base64 text in a temporary `upload_chunks`
+table. Once every chunk has arrived, `POST /api/publish-finalize`
+reassembles them in order, gunzips, and publishes exactly like the
+original single-request `/api/publish` did. Abandoned/incomplete uploads
+(client closed the tab mid-upload, etc.) are pruned automatically after 2
+hours rather than needing a separate cleanup job. A small upload that fits
+in one chunk still goes through the same chunk-then-finalize path — one
+upload mechanism instead of two branches to maintain.
+
+**Verified**: found the exact Vercel payload ceiling empirically via
+`curl` (4 MB ok, 4.5 MB rejected) rather than guessing a "safe" chunk size;
+the chunk-storage/reassembly SQL was verified against a real local
+Postgres with a genuinely multi-chunk payload (200,000 rows, 2 real
+chunks) — confirmed the reassembled bytes are byte-for-byte identical to
+the original compressed data, decompression and row count match, the
+per-uploader ownership check correctly rejects a mismatched requester, and
+cleanup removes the chunks afterward. The client-side chunking math
+(chunk boundaries, shared upload id, sequential indices, progress
+messages) was verified with Playwright using a 120,000-row synthetic
+payload built from randomized (poorly-compressible) strings to force 3
+real chunks rather than collapsing to 1 the way realistic repeated test
+data tends to.
+
 ### M2 completion notes (2026-07-21)
 
 Added GitHub OAuth **Device Flow** login, restricted to a single

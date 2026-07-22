@@ -25,6 +25,57 @@ export async function ensureSchema() {
       is_current BOOLEAN NOT NULL DEFAULT false
     )
   `;
+  // Temporary holding table for chunked uploads -- a genuine bank-wide
+  // multi-region publish can exceed Vercel's per-request payload ceiling
+  // (empirically ~4.5MB) even after gzip, so large payloads are split into
+  // raw-byte chunks client-side and reassembled here before publishing.
+  // Stored as base64 TEXT rather than BYTEA to avoid any ambiguity in how
+  // Neon's HTTP-based driver round-trips binary column types.
+  await sql`
+    CREATE TABLE IF NOT EXISTS upload_chunks (
+      upload_id TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      total_chunks INTEGER NOT NULL,
+      data_b64 TEXT NOT NULL,
+      uploaded_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (upload_id, chunk_index)
+    )
+  `;
+}
+
+export async function storeChunk(uploadId, chunkIndex, totalChunks, base64Data, uploadedBy) {
+  await ensureSchema();
+  await sql`
+    INSERT INTO upload_chunks (upload_id, chunk_index, total_chunks, data_b64, uploaded_by)
+    VALUES (${uploadId}, ${chunkIndex}, ${totalChunks}, ${base64Data}, ${uploadedBy})
+    ON CONFLICT (upload_id, chunk_index) DO UPDATE SET data_b64 = EXCLUDED.data_b64
+  `;
+  // Best-effort cleanup of abandoned uploads (client failed partway, never
+  // finalized) -- avoids needing a separate cron job for this small table.
+  await sql`DELETE FROM upload_chunks WHERE created_at < now() - interval '2 hours'`;
+}
+
+// Returns the reassembled compressed buffer once every chunk for this
+// upload has arrived, or null if incomplete/not found. `requestedBy` is a
+// defense-in-depth check -- only the admin who uploaded the chunks can
+// finalize them.
+export async function assembleChunks(uploadId, requestedBy) {
+  await ensureSchema();
+  const rows = await sql`
+    SELECT chunk_index, total_chunks, data_b64, uploaded_by FROM upload_chunks
+    WHERE upload_id = ${uploadId} ORDER BY chunk_index ASC
+  `;
+  if (!rows.length) return null;
+  const totalChunks = rows[0].total_chunks;
+  if (rows.length !== totalChunks) return null;
+  if (rows.some(r => r.uploaded_by !== requestedBy)) return null;
+  const buffers = rows.map(r => Buffer.from(r.data_b64, 'base64'));
+  return Buffer.concat(buffers);
+}
+
+export async function deleteChunks(uploadId) {
+  await sql`DELETE FROM upload_chunks WHERE upload_id = ${uploadId}`;
 }
 
 export async function getCurrentVersion() {
