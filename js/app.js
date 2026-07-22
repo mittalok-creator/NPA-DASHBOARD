@@ -2040,23 +2040,36 @@ window.onOtsInput = onOtsInput;
    Reads from the real backend (Postgres, via /relay) first; falls back to
    the static data/latest.json snapshot committed in this repo only if the
    backend is unreachable (e.g. mid-migration, or a transient outage). */
-const RELAY_DATA_URL = 'https://npa-dashboard.vercel.app/api/data-latest?t=' + Date.now();
-const FALLBACK_DATA_URL = 'data/latest.json?t=' + Date.now();
 function fetchJson(url){
   return fetch(url).then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
 }
-fetchJson(RELAY_DATA_URL)
-  .catch(err => { console.warn('Backend data fetch failed, falling back to static snapshot', err); return fetchJson(FALLBACK_DATA_URL); })
-  .then(data => {
-    const overlay = document.getElementById('dataLoadingOverlay');
-    if(overlay) overlay.classList.add('hidden');
-    initApp(data);
-  })
-  .catch(err => {
-    const overlay = document.getElementById('dataLoadingOverlay');
-    if(overlay){
-      overlay.classList.remove('hidden');
-      overlay.innerHTML = '<div class="data-loading-text err">Could not load NPA data. Check your internet connection and reload the page.</div>';
-    }
-    console.error('Failed to load NPA data from backend or fallback', err);
-  });
+function fetchNpaData(){
+  return fetchJson('https://npa-dashboard.vercel.app/api/data-latest?t=' + Date.now())
+    .catch(err => { console.warn('Backend data fetch failed, falling back to static snapshot', err); return fetchJson('data/latest.json?t=' + Date.now()); });
+}
+function loadNpaData(isRetry){
+  fetchNpaData()
+    .then(data => {
+      const overlay = document.getElementById('dataLoadingOverlay');
+      if(overlay) overlay.classList.add('hidden');
+      initApp(data);
+    })
+    .catch(err => {
+      // A single blip (phone switching towers/wifi) shouldn't scare a non-technical
+      // user with an error screen -- retry once automatically before giving up.
+      if(!isRetry){ setTimeout(() => loadNpaData(true), 2000); return; }
+      const overlay = document.getElementById('dataLoadingOverlay');
+      if(overlay){
+        overlay.classList.remove('hidden');
+        overlay.innerHTML = '<div class="data-loading-text err">Could not load NPA data. Check your internet connection.</div>'
+          + '<button type="button" class="data-loading-retry-btn" id="dataLoadingRetryBtn">Retry</button>';
+        const btn = document.getElementById('dataLoadingRetryBtn');
+        if(btn) btn.onclick = () => {
+          overlay.innerHTML = '<div class="data-loading-spinner" aria-hidden="true"></div><div class="data-loading-text">Loading NPA data…</div>';
+          loadNpaData(false);
+        };
+      }
+      console.error('Failed to load NPA data from backend or fallback', err);
+    });
+}
+loadNpaData(false);
