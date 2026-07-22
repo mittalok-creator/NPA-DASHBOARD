@@ -1059,7 +1059,15 @@ function applyNewDataNow(){
   const oldRowsInTouchedRegions = (DATA.npa.rows||[]).filter(r=>touchedRegions.has(String(r[C.REGION]||'')));
   const newAcctSet = new Set(newRows.map(r=>String(r[C.ACCT_NO]||'')));
   const staleRemovedCount = oldRowsInTouchedRegions.filter(r=>!newAcctSet.has(String(r[C.ACCT_NO]||''))).length;
-  const keptOldRows = (DATA.npa.rows||[]).filter(r=>!touchedRegions.has(String(r[C.REGION]||'')));
+  /* Any old row with no Region at all is pre-migration/legacy data (a real
+     HO daily export always carries a Region column) — it can never be
+     refreshed by a region-scoped upload since blank never matches a real
+     region name, so it must be dropped unconditionally rather than kept
+     "untouched" forever. */
+  const keptOldRows = (DATA.npa.rows||[]).filter(r=>{
+    const reg = String(r[C.REGION]||'');
+    return reg!=='' && !touchedRegions.has(reg);
+  });
 
   DATA.npa = { headers: __pendingData.npa.headers, rows: keptOldRows.concat(newRows) };
   if(__pendingData.oldots) DATA.oldots = __pendingData.oldots;
