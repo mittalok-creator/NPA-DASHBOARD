@@ -365,6 +365,40 @@ flowing through the app:
   (simulating regularized/closed) — Aligarh correctly dropped to 53 with
   exactly those 10 account numbers gone, Agra and Hathras untouched at 17
   and 2.
+- **Bug found + fixed: stale legacy seed data was never actually being
+  published (2026-07-22)**. You reported that after applying a new
+  update, "Rinkesh Kumar Meena" still topped the ₹10 Lakh+ list even
+  though that account was long since regularized/closed and absent from
+  your new file. Root cause: the live, committed `index.html` had never
+  actually been refreshed with any of your real daily uploads — "Update
+  Data → Apply" only updates the data in your browser's own memory for
+  that session; the actual publish step (downloading the regenerated app
+  and getting it committed to the repo) had never happened, so every
+  fresh visit kept loading the **original 13,817-row seed dataset** baked
+  in since before M1 — real historical Hathras data from months ago, but
+  stale, with no `Region` field at all (pre-dates the 27-column schema).
+  Two things were fixed:
+  1. `applyNewDataNow()` now also unconditionally drops any old NPA row
+     with a blank/missing Region on every apply (a real HO daily export
+     always carries a Region column, so blank region is unambiguously
+     dead pre-migration data that a region-scoped upload could otherwise
+     never touch or refresh).
+  2. Manually applied your real `npa.xlsx` (14,000 Hathras rows, as-on
+     22-07-2026) through the actual import pipeline via Playwright,
+     confirmed Address/Aadhar/PAN correctly carried forward by Customer
+     ID from the old seed data before it was purged (proving that old
+     data was genuinely real historical KYC info, not throwaway demo
+     data), then spliced the resulting clean data JSON into the current
+     `index.html` and committed it — **this is the first time the live
+     site has ever carried real production data** instead of the
+     original seed dataset. Verified end-to-end: fresh splash → PIN →
+     dashboard shows 14,000 accounts / ₹128.82 Cr, ₹10 Lakh+ slab now
+     correctly topped by Prem Bihari Chatarji (₹16.77L), zero trace of
+     Rinkesh Meena anywhere, zero console errors.
+  **Until M5 (real publish pipeline) is built, every real data update
+  still needs this same manual "send the file, get it applied + spliced
+  into `index.html` + committed" cycle — Update Data → Apply in the
+  browser alone does not make new data live for anyone else.**
 
 ---
 
