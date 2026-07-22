@@ -436,6 +436,45 @@ back to the exact original row count, and that rolling back to it
 afterward reproduces the exact original bytes with zero decompression
 needed in the rollback path itself.
 
+### Full color theme redesign: "Sapphire & Emerald" (2026-07-22, same day)
+
+Replaced the app's single violet/indigo accent (used since M1) with a new
+two-hue identity, in both dark and light theme:
+- **Sapphire blue** (`--accent`/`--gold` family) as the primary accent —
+  dark theme `#4C8DFF`, light theme `#2F5FE0` (deeper, since the same
+  brightness reads pastel on a pale background rather than a near-black one).
+- **Emerald** (`--accent-2`) as the secondary accent (gauge ring, active nav
+  indicator, sortable-column highlight) — dark `#17B897`, light `#0C9F70`.
+- **Ceremonial gold** (`--seal` family, used for the OTS freeze/lock icon and
+  the splash screen's "AM" monogram — a different, unrelated color role) was
+  refreshed to a richer antique gold (`#D4A544`/`#EDCF8C`/`#B3812A`) that
+  pairs better with the new blue/emerald pair than it did with the old violet.
+- Retinted the near-black dark-theme surfaces (page background, cards, header
+  gradient) from a violet-black undertone to a blue-slate one, and gave the
+  light theme's page background the same subtle cool retint, so the accent
+  change reads as a coherent new identity rather than a color swapped onto an
+  unchanged backdrop.
+- **Deliberately left untouched**: the P&L green/red polarity colors and the
+  5-step asset-severity ramp (Substandard → Loss, driving the colored badges
+  and Asset Classification Mix bars) — these are functional data
+  classification colors tied to real RBI IRAC categories, not decorative
+  theme choices, and restyling them risks confusing a user who's learned to
+  read those colors at a glance.
+- Found and fixed two small pre-existing bugs while auditing every accent
+  color reference for this change: a stale hardcoded `.view-title` gradient
+  color in the light theme (`#5343C4`, left over from an earlier revision
+  that had already moved `--gold-d` on without updating this one hardcoded
+  spot) and a similarly-stale comment referencing colors from two redesigns
+  ago.
+
+**Verified**: computed WCAG contrast ratios for every new accent-on-background
+pairing before shipping (all ≥ 4.4:1 except the pre-existing, unchanged
+tradeoff of white button-label text sitting across a light-to-dark gradient,
+which was already below AA before this change and isn't meaningfully worse
+now); Playwright screenshots across Dashboard, Search, and the account Detail
+view, in both themes, confirmed the new palette reads as cohesive and legible
+throughout, not just in isolated variable definitions.
+
 ### Locked OTS amounts now persist for every viewer, across data updates (2026-07-22, same day)
 
 Previously, freezing (locking) a settlement amount on an account was purely a
