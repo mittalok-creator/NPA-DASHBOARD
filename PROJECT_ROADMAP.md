@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 ---
 
@@ -105,8 +105,8 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | M2 | GitHub Login for Admin (OAuth Device Flow), Viewer stays login-free | ✅ Done — verified live end-to-end on the deployed site |
 | M3 | ~~Microsoft Graph OneDrive read~~ — superseded. Data entry stays the existing Settings → Upload Excel/CSV button, now gated behind Admin login | ⬜ Not started |
 | M4 | Data import & validation: merge the daily HO NPA export + the Customer Master (Address/Aadhar/PAN) by Customer ID, remap HO's raw column names to the app's schema, auto-read the "as on" date from the filename (editable), multi-region support (Region+Branch filter, dynamic title), then validate (duplicates, blanks, bad dates, missing columns, wrong types) with a report UI | ✅ Done — verified against real Head Office files (see notes below) |
-| M5 | Publish + Versioning + Rollback via a GitHub Actions workflow (Admin-triggered, repo-secret-backed commit) | ⬜ Not started |
-| M6 | Data-layer refactor: stop baking data into HTML, fetch published JSON at runtime, add lazy loading / virtualization / caching for 20k+ rows | ⬜ Not started |
+| M5 | Publish + Versioning + Rollback (Admin-triggered, direct commit via GitHub's Git Data API using the Admin's own repo-scoped OAuth token) | ✅ Done — see notes below |
+| M6 | Data-layer refactor: stop baking data into HTML, fetch published JSON at runtime | ✅ Done (as part of M5, see notes below) — lazy loading/virtualization for 20k+ rows still not done |
 | M7 | Fast search (Account No., Customer, Branch, CIF, Mobile, Status) | ⬜ Not started |
 | M8 | New modules: Reports, Analytics, Settings, Admin Panel (status/history/logs/rollback UI), Logs, Backup | ⬜ Not started |
 | M9 | UI/UX overhaul to the target premium enterprise look (Fluent/Notion/Linear/Raycast/Apple/Material 3 inspired), dark + light | ⬜ Not started |
@@ -115,10 +115,82 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 **Completed**: M0 (audit + architecture decision), M1 (modularization),
 M2 (GitHub Login for Admin — live end-to-end test passed), M4 (data import,
 Customer Master merge, multi-region, validation — verified against real
-Head Office files).
-**Current milestone**: none — ready to start M5.
-**Next milestone**: M5 — Publish + Versioning + Rollback via GitHub Actions
-(M3 is superseded, see Section 2).
+Head Office files), M5 + M6 (real one-click publish, direct-commit via
+GitHub's Git Data API, data split out of `index.html`).
+**Current milestone**: none — ready to start M7 (fast search) or M9 (UI/UX
+overhaul), whichever you want next.
+(M3 is superseded, see Section 2.)
+
+### M5 + M6 completion notes (2026-07-22) — real one-click Publish
+
+Until now, "Update Data → Apply" only updated the data in the Admin's own
+browser session — nothing became live for other viewers unless someone
+manually downloaded a regenerated file and got it committed. That gap is
+what caused the Rinkesh Meena stale-data incident earlier this same day.
+This milestone closes it for good.
+
+- **Data-layer split (M6)**: the NPA dataset no longer lives inline in
+  `index.html`. It's now `data/latest.json`, fetched by `js/app.js` at
+  page load (`fetch('data/latest.json?t='+Date.now())`, cache-busted via
+  timestamp since this is live banking data). `index.html` dropped from
+  ~4.5 MB to ~315 KB. A `#dataLoadingOverlay` (spinner) shows during the
+  fetch, underneath the splash/PIN screen, and hides once data is ready.
+  History snapshots live in `data/history/<date>-<timestamp>.json`, with
+  `data/history/index.json` as the manifest (date, row count, regions,
+  publishedAt, publishedBy, isRollback) driving the Version History list.
+- **New file `js/publish.js`**: commits straight to the live repo using
+  GitHub's **Git Data API** (get ref → get commit for tree sha → create
+  blob(s) → create tree → create commit → update `refs/heads/main`) via
+  the Admin's own GitHub OAuth token — no new permission grant needed,
+  since the Device Flow login was already requesting `repo` scope from
+  the start (`relay/api/device-start.js`). Only the final ref-update step
+  actually changes what's live; anything that fails before that leaves
+  production completely untouched (orphaned blobs/trees/commits are just
+  garbage-collected by GitHub). Old history files that age out past 60
+  entries are actually deleted from the tree (`sha:null` on that path),
+  not just dropped from the index, so `data/history/` doesn't grow
+  unbounded across months of daily publishes.
+- **Publish review + confirm UI**: a new "⬆ Publish to Live Site" button
+  in the Update Data modal (enabled after Apply, same gate as the
+  existing data-backup download) opens a review panel — as-on date,
+  total accounts, all regions in the dataset, which region(s) this
+  upload touched, how many stale accounts were removed, who's publishing
+  — with an explicit **Confirm & Publish** step before anything is
+  actually committed. This was a deliberate choice, not an oversight:
+  since the Admin's token can push straight to the live dashboard the
+  moment Publish is clicked, a silent one-click commit was judged too
+  risky for a banking data tool — one stray click should never be able
+  to push bad data live without a review screen in between.
+- **Version History + Rollback**: a collapsible "Version History"
+  section (same modal) lists every past publish from
+  `data/history/index.json`, each with a "Rollback to this" button.
+  Rollback fetches that version's historical JSON, shows the same kind
+  of review/confirm screen, then **publishes the old content again as a
+  new commit** — never a destructive git history rewrite — so the
+  rollback itself is fully audited in the same version history.
+- **`downloadUpdatedApp()` repurposed**: the old "Download Updated App
+  (.html)" button (which relied on the now-removed inline `#ots-data`
+  tag and would have silently produced a broken file) is now "⬇ Download
+  Data Backup (.json)" — a plain JSON export of the currently-applied
+  data, kept as a manual safety net independent of GitHub.
+- **Known limit, logged rather than silently ignored**: GitHub's Git
+  Data API blob endpoint is comfortable for a single region's daily file
+  (~4 MB) but a genuine single upload covering the *entire* bank
+  (283k+ accounts, ~80-100 MB as JSON) would sit right at or over
+  practical request-size limits. Not solved here since the real
+  day-to-day workflow is per-region daily files — revisit (e.g.
+  gzip-compress before base64 encoding) only if a true full-bank single
+  upload actually becomes routine.
+- **Testing**: the real GitHub commit flow can't be driven by an
+  automated headless test (Device Flow login needs a human to approve
+  the code on github.com), so the Git Data API call sequence, tree
+  construction, and review/rollback UI were verified with Playwright
+  against a **mocked** `api.github.com` — confirmed the exact right
+  6-call sequence, correct tree paths, correct commit messages, and
+  correct button/state transitions for both a normal publish and a
+  rollback. **The actual first real end-to-end Publish click still
+  needs to be done by you** — only your browser holds your real GitHub
+  token.
 
 ### M2 completion notes (2026-07-21)
 

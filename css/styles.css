@@ -646,6 +646,19 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 .validation-report.err h4{color:var(--red)}
 .validation-report ul{margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:var(--ink)}
 .validation-report .vr-count{font-weight:800}
+.publish-review-panel{margin-top:12px;border:1.5px solid var(--accent);border-radius:14px;padding:14px;background:var(--card)}
+.publish-review-summary{font-size:12.5px;line-height:1.8;color:var(--ink)}
+.publish-review-summary b{color:var(--accent-2)}
+.publish-review-summary .pr-warn{color:var(--red);font-weight:700}
+#publishStatus .upload-status{margin-top:10px}
+#versionHistoryList{font-size:12px}
+.version-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.version-row:last-child{border-bottom:none}
+.version-row .vr-meta{color:var(--ink);font-weight:600}
+.version-row .vr-sub{color:var(--sub);font-size:11px;display:block;margin-top:2px}
+.version-row button{flex-shrink:0;padding:6px 12px;border-radius:8px;border:1.5px solid var(--line);background:transparent;color:var(--ink);font-weight:700;font-size:11px;cursor:pointer}
+.version-row button:hover{border-color:var(--accent);color:var(--accent-2)}
+.version-row.current .vr-meta::after{content:' (current)';color:var(--green);font-weight:700}
 .template-download-link{display:block;width:100%;text-align:center;background:none;border:none;color:var(--accent);font-size:11.5px;font-weight:700;padding:6px 0 12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .template-download-link:hover{color:var(--accent-2)}
 .upload-summary .box .v{font-size:16.5px;font-weight:800;color:var(--ink);margin-top:2px}
@@ -1201,6 +1214,17 @@ header.app-head::before,.detail-head::before{
   .splash-ring circle{animation:none;stroke-dashoffset:0}
   .splash-monogram,.splash-name,.splash-pin-wrap{animation:none;opacity:1;transform:none}
   .splash-pin-wrap.shake{animation:none}
+}
+
+/* ---------- Data-loading overlay (data/latest.json fetch on boot) ---------- */
+.data-loading-overlay{position:fixed;inset:0;z-index:9998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--bg,#0C0C13);transition:opacity .3s ease,visibility .3s ease}
+.data-loading-overlay.hidden{opacity:0;visibility:hidden;pointer-events:none}
+.data-loading-spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(201,162,103,.25);border-top-color:#C9A267;animation:dataLoadingSpin .8s linear infinite}
+.data-loading-text{font-size:13px;color:rgba(242,237,228,.7);letter-spacing:.3px}
+.data-loading-text.err{color:#e5484d;max-width:320px;text-align:center;line-height:1.5}
+@keyframes dataLoadingSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){
+  .data-loading-spinner{animation:none}
 }
 
 /* ---------- Smooth dashboard filter transitions (avoid the abrupt blank-flash on region/branch change) ---------- */
