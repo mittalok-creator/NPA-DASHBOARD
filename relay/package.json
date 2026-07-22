@@ -3,8 +3,5 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "CORS relay for GitHub OAuth Device Flow + NPA data backend (Postgres) for the UPGB NPA Dashboard",
-  "dependencies": {
-    "@neondatabase/serverless": "^1.1.0"
-  }
+  "description": "CORS relay for GitHub OAuth Device Flow (GitHub's device-code endpoints don't support CORS, so the browser can't call them directly)"
 }

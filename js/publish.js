@@ -1,18 +1,19 @@
-/* Real one-click publish: sends the Admin's applied data to our own small
-   backend (Vercel serverless functions + Postgres, see /relay), which
-   verifies the Admin's GitHub token server-side before writing. This
-   replaced an earlier design that committed data straight to the GitHub
-   repo via the Git Data API -- that hit real per-file size ceilings once
-   genuine bank-wide multi-region uploads were tried, and gets worse as
-   more Excel-based modules are added. A real database has no such ceiling.
-
-   The JSON payload is gzip-compressed in the browser before sending
-   (Content-Encoding: gzip) -- Vercel's Serverless Functions enforce a
-   request body size ceiling, and compression buys real headroom over it
-   for realistic per-region upload sizes. */
+/* Real one-click publish: commits the Admin's applied data straight to the
+   live repo using GitHub's Git Data API, via the Admin's own GitHub OAuth
+   token (already granted "repo" scope at sign-in -- see js/auth.js). Only
+   the final ref-update step actually changes what's live; every step
+   before it can fail with zero visible impact on the deployed site, since
+   blobs/trees/commits created but never attached to a ref are just
+   orphaned objects GitHub garbage-collects. No separate backend/database
+   is involved -- data/latest.json and data/history/ in this same repo are
+   the only place NPA data lives. */
 (function () {
-  const RELAY_BASE_URL = 'https://npa-dashboard.vercel.app';
+  const REPO_OWNER = 'mittalok-creator';
+  const REPO_NAME = 'NPA-DASHBOARD';
+  const REPO_BRANCH = 'main';
+  const API_BASE = 'https://api.github.com';
   const AUTH_STORAGE_KEY = 'upgb-gh-auth';
+  const MAX_HISTORY_ENTRIES = 60;
 
   function getToken() {
     try {
@@ -21,99 +22,149 @@
     } catch (e) { return null; }
   }
 
-  async function compressToGzip(text) {
-    const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
-    return await new Response(stream).arrayBuffer();
-  }
-
-  // Vercel's request payload ceiling is empirically ~4.5MB, and a genuine
-  // bank-wide multi-region upload can exceed that even after gzip. The
-  // compressed payload is always split into raw-byte chunks safely under
-  // that ceiling and uploaded sequentially, then reassembled server-side --
-  // simpler to always chunk (even a 1-chunk "small" upload) than to branch
-  // between two different upload paths.
-  const CHUNK_SIZE = 3 * 1024 * 1024; // 3MB, comfortably under the ~4.5MB ceiling
-
-  function makeUploadId() {
-    return 'up_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-  }
-
-  /* meta: { asOnDate, rowCount, regions, publishedBy(ignored, server derives it), isRollback } */
-  async function publishData(dataObj, meta, onProgress) {
-    meta = meta || {};
-    const progress = (msg) => { if (onProgress) onProgress(msg); };
+  async function ghApi(path, options) {
+    options = options || {};
     const token = getToken();
     if (!token) throw new Error('Not signed in as Admin -- sign in with GitHub first.');
-
-    progress('Compressing data…');
-    const payloadText = JSON.stringify({ data: dataObj, meta });
-    const compressed = await compressToGzip(payloadText);
-    const bytes = new Uint8Array(compressed);
-    const totalChunks = Math.max(1, Math.ceil(bytes.length / CHUNK_SIZE));
-    const uploadId = makeUploadId();
-
-    for (let i = 0; i < totalChunks; i++) {
-      progress(`Uploading (${i + 1}/${totalChunks})…`);
-      const chunk = bytes.subarray(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, bytes.length));
-      const res = await fetch(RELAY_BASE_URL + '/api/publish-chunk', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'Content-Type': 'application/octet-stream',
-          'X-Upload-Id': uploadId,
-          'X-Chunk-Index': String(i),
-          'X-Total-Chunks': String(totalChunks),
-        },
-        body: chunk,
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        const msg = [errBody.error, errBody.detail].filter(Boolean).join(': ');
-        throw new Error(msg || `Chunk ${i + 1}/${totalChunks} upload failed: ${res.status}`);
-      }
-    }
-
-    progress('Finalizing…');
-    const finalRes = await fetch(RELAY_BASE_URL + '/api/publish-finalize', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uploadId }),
+    const headers = {
+      'Authorization': 'Bearer ' + token,
+      'Accept': 'application/vnd.github+json',
+    };
+    if (options.body) headers['Content-Type'] = 'application/json';
+    const res = await fetch(API_BASE + path, {
+      method: options.method || 'GET',
+      headers: headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
     });
-    const result = await finalRes.json().catch(() => ({}));
-    if (!finalRes.ok) {
-      const msg = [result.error, result.detail].filter(Boolean).join(': ');
-      throw new Error(msg || ('Server returned ' + finalRes.status));
+    if (!res.ok) {
+      let detail = '';
+      try { const j = await res.json(); detail = j.message || ''; } catch (e) {}
+      throw new Error(`GitHub API ${res.status} on ${path}${detail ? ': ' + detail : ''}`);
     }
-
-    progress('Published.');
-    return { versionId: result.id, publishedAt: result.publishedAt };
-  }
-
-  async function getHistoryIndex() {
-    const res = await fetch(RELAY_BASE_URL + '/api/data-history');
-    if (!res.ok) return [];
     return res.json();
   }
 
-  async function rollbackToVersion(versionId, onProgress) {
-    const progress = (msg) => { if (onProgress) onProgress(msg); };
-    const token = getToken();
-    if (!token) throw new Error('Not signed in as Admin -- sign in with GitHub first.');
-
-    progress('Rolling back…');
-    const res = await fetch(RELAY_BASE_URL + '/api/data-rollback', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ versionId }),
-    });
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const msg = [result.error, result.detail].filter(Boolean).join(': ');
-      throw new Error(msg || ('Server returned ' + res.status));
+  // TextEncoder + chunked String.fromCharCode avoids both mangling non-ASCII
+  // characters (plain btoa() only handles Latin1) and "Maximum call stack
+  // size exceeded" on very large payloads.
+  function utf8ToBase64(str) {
+    const bytes = new TextEncoder().encode(str);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
     }
+    return btoa(binary);
+  }
+  function base64ToUtf8(b64) {
+    const binary = atob(b64.replace(/\n/g, ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
 
-    progress('Rolled back.');
-    return { versionId: result.id, publishedAt: result.publishedAt };
+  async function getHistoryIndex() {
+    try {
+      const res = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/contents/data/history/index.json?ref=${REPO_BRANCH}`);
+      return JSON.parse(base64ToUtf8(res.content));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function getHistoryFileContent(fileName) {
+    const res = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/contents/data/${fileName}?ref=${REPO_BRANCH}`);
+    return base64ToUtf8(res.content);
+  }
+
+  /* meta: { asOnDate, rowCount, commitMessage, publishedBy, isRollback } */
+  async function publishData(dataObj, meta, onProgress) {
+    meta = meta || {};
+    const progress = (msg) => { if (onProgress) onProgress(msg); };
+    const dataJsonString = JSON.stringify(dataObj);
+
+    progress('Reading current live version…');
+    const ref = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/ref/heads/${REPO_BRANCH}`);
+    const baseCommitSha = ref.object.sha;
+    const baseCommit = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/commits/${baseCommitSha}`);
+    const baseTreeSha = baseCommit.tree.sha;
+
+    progress('Reading version history…');
+    let historyIndex = await getHistoryIndex();
+
+    progress('Uploading new data…');
+    const dataBlob = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
+      method: 'POST',
+      body: { content: utf8ToBase64(dataJsonString), encoding: 'base64' },
+    });
+
+    const safeDate = (meta.asOnDate || 'unknown').replace(/[^0-9-]/g, '');
+    const historyFileName = `history/${safeDate}-${Date.now()}.json`;
+    historyIndex.unshift({
+      date: meta.asOnDate || null,
+      file: historyFileName,
+      rowCount: meta.rowCount || null,
+      publishedAt: new Date().toISOString(),
+      publishedBy: meta.publishedBy || null,
+      isRollback: !!meta.isRollback,
+    });
+    // Evicted entries must also be removed from the tree itself (sha:null
+    // deletes a path in the Git Trees API), not just dropped from the index
+    // list -- otherwise data/history/ grows unbounded forever across months
+    // of daily publishes.
+    let evicted = [];
+    if (historyIndex.length > MAX_HISTORY_ENTRIES) {
+      evicted = historyIndex.slice(MAX_HISTORY_ENTRIES);
+      historyIndex = historyIndex.slice(0, MAX_HISTORY_ENTRIES);
+    }
+    const historyIndexBlob = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
+      method: 'POST',
+      body: { content: utf8ToBase64(JSON.stringify(historyIndex, null, 2)), encoding: 'base64' },
+    });
+
+    progress('Building commit…');
+    const treeEntries = [
+      { path: 'data/latest.json', mode: '100644', type: 'blob', sha: dataBlob.sha },
+      { path: `data/${historyFileName}`, mode: '100644', type: 'blob', sha: dataBlob.sha },
+      { path: 'data/history/index.json', mode: '100644', type: 'blob', sha: historyIndexBlob.sha },
+    ];
+    evicted.forEach(e => { if (e.file) treeEntries.push({ path: `data/${e.file}`, mode: '100644', type: 'blob', sha: null }); });
+    const tree = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/trees`, {
+      method: 'POST',
+      body: { base_tree: baseTreeSha, tree: treeEntries },
+    });
+
+    const newCommit = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/commits`, {
+      method: 'POST',
+      body: {
+        message: meta.commitMessage || 'Publish NPA data update',
+        tree: tree.sha,
+        parents: [baseCommitSha],
+      },
+    });
+
+    progress('Going live…');
+    await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/refs/heads/${REPO_BRANCH}`, {
+      method: 'PATCH',
+      body: { sha: newCommit.sha, force: false },
+    });
+
+    progress('Published.');
+    return { commitSha: newCommit.sha, historyFile: historyFileName, versionId: historyFileName };
+  }
+
+  async function rollbackToVersion(fileName, onProgress) {
+    const progress = (msg) => { if (onProgress) onProgress(msg); };
+    progress('Reading that version…');
+    const content = await getHistoryFileContent(fileName);
+    const parsed = JSON.parse(content);
+    const rowCount = parsed.npa && parsed.npa.rows ? parsed.npa.rows.length : 0;
+    return publishData(parsed, {
+      asOnDate: parsed.asOnDate || null,
+      rowCount,
+      commitMessage: `Rollback NPA data to version ${fileName}`,
+      isRollback: true,
+    }, onProgress);
   }
 
   window.UPGBPublish = { publishData, getHistoryIndex, rollbackToVersion };

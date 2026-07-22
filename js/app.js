@@ -741,7 +741,6 @@ function mapHoRowsToNpa(headerCells, dataRows){
   let blankCustCount = 0;
   const slotCounter = new Map();
   const outRows = [];
-  const regionsSeen = new Set();
   for(const row of dataRows){
     if(!row || row.length<3) continue;
     const acctRaw = cellStr(row, iAcct);
@@ -766,7 +765,6 @@ function mapHoRowsToNpa(headerCells, dataRows){
     }
     const cat = cellStr(row, iCategory);
     const region = cellStr(row, iRegion);
-    if(region) regionsSeen.add(region);
     const npaDate = earlierRaw(iNpaDate>=0?row[iNpaDate]:'', iCustNpaDate>=0?row[iCustNpaDate]:'');
 
     const out = new Array(NPA_COLUMN_COUNT).fill('');
@@ -780,7 +778,7 @@ function mapHoRowsToNpa(headerCells, dataRows){
     out[24] = sbAcct; out[25] = sbBal; out[26] = region;
     outRows.push(out);
   }
-  return { rows: outRows, sciCount, regions: regionsSeen, badBalCount, blankCustCount };
+  return { rows: outRows, sciCount, badBalCount, blankCustCount };
 }
 
 /* ---------- Customer Master parsing + merge (Address / Aadhar / PAN, ~80k rows, refreshed rarely) ---------- */
@@ -881,20 +879,7 @@ function renderValidationReport(result){
 
 function processDailyParsed(parsed, filename, statusEl, summaryEl){
   if(parsed.isHoFormat){
-    /* Each sheet is mapped independently (using its own header for column
-       lookup) rather than assuming every sheet shares identical column
-       order, then the already-normalized rows are merged -- safe even if a
-       per-region sheet's columns are laid out differently from another. */
-    let rows = [], sciCount = 0, badBalCount = 0, blankCustCount = 0;
-    const regions = new Set();
-    for(const sheet of parsed.hoSheets){
-      const result = mapHoRowsToNpa(sheet.header, sheet.rows);
-      rows = rows.concat(result.rows);
-      sciCount += result.sciCount;
-      badBalCount += result.badBalCount;
-      blankCustCount += result.blankCustCount;
-      result.regions.forEach(r=>regions.add(r));
-    }
+    const {rows, sciCount, badBalCount, blankCustCount} = mapHoRowsToNpa(parsed.header, parsed.rows);
     if(!rows.length) throw new Error('No account rows found in this file.');
     const carryForward = carryForwardMapFromCurrentData();
     mergeCustomerDetails(rows, __pendingMaster, carryForward);
@@ -906,18 +891,16 @@ function processDailyParsed(parsed, filename, statusEl, summaryEl){
     __pendingData = { npa: {headers: DATA.npa.headers, rows}, oldots: DATA.oldots };
     renderValidationReport(validation);
 
-    const sheetTag = parsed.hoSheets.length>1 ? ` (${parsed.hoSheets.length} sheets combined)` : '';
     const sciPct = rows.length ? sciCount/rows.length : 0;
     if(sciPct > 0.3){
       statusEl.innerHTML = `<div class="upload-status err">⚠ ${sciCount.toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')} account numbers in this file are stored in scientific notation (e.g. 1.51E+14) — the CBS export truncates them, so Account No. search/display will be unreliable after applying. Customer ID and Mobile No. search still work fine. Ask for the "Account No" column to be exported as plain text/number to fix this at the source.</div>`;
     } else {
-      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed successfully${sheetTag}${regions.size>1?` — ${regions.size} regions detected`:''}. Review below, then Apply.</div>` +
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed successfully. Review below, then Apply.</div>` +
         (sciCount ? `<div class="upload-status err" style="margin-top:8px">⚠ ${sciCount.toLocaleString('en-IN')} account number(s) were stored in scientific notation and may be missing trailing digits.</div>` : '');
     }
     summaryEl.innerHTML = `
       <div class="upload-summary">
         <div class="box"><div class="k">Loan accounts found</div><div class="v">${rows.length.toLocaleString('en-IN')}</div></div>
-        <div class="box"><div class="k">Regions detected</div><div class="v">${regions.size || 1}</div></div>
       </div>`;
     document.getElementById('applyDataBtn').disabled = !validation.ok;
 
@@ -993,26 +976,13 @@ function handleFileUpload(evt){
       let parsed;
       if(isCsv){
         const csvRows = parseCSV(String(e.target.result));
-        parsed = { isHoFormat: true, hoSheets: [{ sheetName: file.name, header: csvRows[0]||[], rows: csvRows.slice(1) }] };
+        parsed = { header: csvRows[0]||[], rows: csvRows.slice(1), isHoFormat: true };
       } else {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, {type:'array', cellDates:true});
-        /* A bank-wide export can arrive either as one sheet with every region
-           in a Region column, or as one sheet PER region (region name as the
-           sheet name) -- reading only wb.SheetNames[0] silently dropped every
-           other region in the second layout. Scan every sheet and keep
-           whichever ones match the HO header signature. */
-        const hoSheets = [];
-        for(const sheetName of wb.SheetNames){
-          const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
-          const header = raw[0]||[];
-          if(detectHoHeader(header)) hoSheets.push({ sheetName, header, rows: raw.slice(1) });
-        }
-        if(hoSheets.length){
-          parsed = { isHoFormat: true, hoSheets, wb };
-        } else {
-          parsed = { isHoFormat: false, wb };
-        }
+        const firstRaw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+        const header = firstRaw[0]||[];
+        parsed = { header, rows: firstRaw.slice(1), isHoFormat: detectHoHeader(header), wb };
       }
       processDailyParsed(parsed, file.name, statusEl, summaryEl);
     } catch(err){
@@ -1077,27 +1047,13 @@ function applyNewData(){
 }
 function applyNewDataNow(){
   const newRows = __pendingData.npa.rows;
-  /* A daily upload only ever covers the region(s) present in that file — for
-     those regions we fully drop the old rows (any account no longer in the
-     new file has regularized/closed and should disappear), but any other
-     region not touched by this upload is left exactly as it was from its
-     own last upload, so a single-region file can never wipe out the rest
-     of the bank's data. */
-  const touchedRegions = new Set(newRows.map(r=>String(r[C.REGION]||'')));
-  const oldRowsInTouchedRegions = (DATA.npa.rows||[]).filter(r=>touchedRegions.has(String(r[C.REGION]||'')));
+  /* A daily upload is the full current state of the book -- any account no
+     longer present has regularized/closed and should disappear, so the
+     new file always fully replaces the old data rather than merging. */
   const newAcctSet = new Set(newRows.map(r=>String(r[C.ACCT_NO]||'')));
-  const staleRemovedCount = oldRowsInTouchedRegions.filter(r=>!newAcctSet.has(String(r[C.ACCT_NO]||''))).length;
-  /* Any old row with no Region at all is pre-migration/legacy data (a real
-     HO daily export always carries a Region column) — it can never be
-     refreshed by a region-scoped upload since blank never matches a real
-     region name, so it must be dropped unconditionally rather than kept
-     "untouched" forever. */
-  const keptOldRows = (DATA.npa.rows||[]).filter(r=>{
-    const reg = String(r[C.REGION]||'');
-    return reg!=='' && !touchedRegions.has(reg);
-  });
+  const staleRemovedCount = (DATA.npa.rows||[]).filter(r=>!newAcctSet.has(String(r[C.ACCT_NO]||''))).length;
 
-  DATA.npa = { headers: __pendingData.npa.headers, rows: keptOldRows.concat(newRows) };
+  DATA.npa = { headers: __pendingData.npa.headers, rows: newRows };
   if(__pendingData.oldots) DATA.oldots = __pendingData.oldots;
   if(__pendingAsOnDate) DATA.asOnDate = __pendingAsOnDate;
 
@@ -1114,13 +1070,12 @@ function applyNewDataNow(){
 
   otsAmounts = {}; frozen = {};
   updateReportDateDisplay();
-  const staleMsg = staleRemovedCount>0 ? ` (${staleRemovedCount.toLocaleString('en-IN')} account(s) from the previous data for this region no longer appear — regularized/closed accounts removed.)` : '';
+  const staleMsg = staleRemovedCount>0 ? ` (${staleRemovedCount.toLocaleString('en-IN')} account(s) from the previous data no longer appear — regularized/closed accounts removed.)` : '';
   document.getElementById('uploadStatus').innerHTML = `<div class="upload-status ok">✔ Data updated — ${DATA.npa.rows.length.toLocaleString('en-IN')} NPA rows now active.${staleMsg}</div>`;
   document.getElementById('downloadAppBtn').disabled = false;
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;
   __lastApplyMeta = {
-    touchedRegions: Array.from(touchedRegions).sort(),
     staleRemovedCount,
     newRowCount: newRows.length,
   };
@@ -1183,32 +1138,27 @@ function downloadUpdatedApp(){
   setTimeout(()=>URL.revokeObjectURL(url), 60000);
 }
 
-/* ---------- Publish to live site (sends data to the Postgres backend via
-   /relay, see js/publish.js -- verified server-side against the Admin's
-   GitHub token, not committed to the repo) ---------- */
+/* ---------- Publish to live site (commits data/latest.json straight to
+   this repo via GitHub's Git Data API, using the Admin's own already-repo-
+   scoped OAuth token -- see js/publish.js). Only the final ref-update step
+   changes what's live; anything that fails before that leaves production
+   untouched. ---------- */
 let __pendingPublish = null; // { type: 'publish'|'rollback', dataObj, meta, versionId } staged for confirmPublish()
 let __lastHistoryList = []; // last-loaded version history, so rollback review can show metadata without a separate fetch
 
 function computeCurrentDataSummary(){
-  const regions = new Set();
-  DATA.npa.rows.forEach(r=>{ const reg = String(r[C.REGION]||''); if(reg) regions.add(reg); });
-  return { rowCount: DATA.npa.rows.length, regions: Array.from(regions).sort(), asOnDate: DATA.asOnDate||null };
+  return { rowCount: DATA.npa.rows.length, asOnDate: DATA.asOnDate||null };
 }
 function openPublishReview(){
   const summary = computeCurrentDataSummary();
   const meta = __lastApplyMeta || {};
   const user = (window.UPGBAuth && window.UPGBAuth.getCurrentUser()) || {};
   const staleLine = meta.staleRemovedCount>0
-    ? `<div class="pr-warn">${meta.staleRemovedCount.toLocaleString('en-IN')} account(s) removed as regularized/closed for the region(s) you just updated.</div>`
-    : '';
-  const regionsLine = meta.touchedRegions && meta.touchedRegions.length
-    ? `<div>Region(s) updated this time: <b>${esc(meta.touchedRegions.join(', '))}</b></div>`
+    ? `<div class="pr-warn">${meta.staleRemovedCount.toLocaleString('en-IN')} account(s) removed as regularized/closed.</div>`
     : '';
   document.getElementById('publishReviewSummary').innerHTML = `
     <div>Data as on: <b>${esc(fmtAsOnDisplay())}</b></div>
     <div>Total accounts live after publish: <b>${summary.rowCount.toLocaleString('en-IN')}</b></div>
-    <div>All regions in this dataset: <b>${esc(summary.regions.join(', ') || '—')}</b></div>
-    ${regionsLine}
     ${staleLine}
     <div style="margin-top:8px;color:var(--sub)">Publishing as <b>${esc(user.login||'unknown')}</b>. Goes live on npadashboard.alokmittal.net within about a minute.</div>
   `;
@@ -1218,7 +1168,8 @@ function openPublishReview(){
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
-      regions: summary.regions,
+      commitMessage: `Publish NPA data: ${summary.rowCount.toLocaleString('en-IN')} accounts, as on ${summary.asOnDate||'unknown'}`,
+      publishedBy: user.login || null,
       isRollback: false,
     },
   };
@@ -1243,7 +1194,7 @@ async function confirmPublish(){
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
       : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress);
-    statusEl.innerHTML = `<div class="upload-status ok">✔ Published — live at npadashboard.alokmittal.net within ~30-60s (version #${esc(String(result.versionId))}).</div>`;
+    statusEl.innerHTML = `<div class="upload-status ok">✔ Published — live at npadashboard.alokmittal.net within ~30-60s (commit ${esc(result.commitSha.slice(0,7))}).</div>`;
     document.getElementById('publishBtn').disabled = true;
     closePublishReview();
     loadVersionHistory();
@@ -1264,30 +1215,29 @@ async function loadVersionHistory(){
     __lastHistoryList = history;
     if(countEl) countEl.textContent = history.length ? `(${history.length})` : '';
     if(!history.length){ listEl.innerHTML = '<div style="padding:8px 0;color:var(--sub);font-size:11.5px">No published versions yet.</div>'; return; }
-    listEl.innerHTML = history.map(v=>`
-      <div class="version-row${v.is_current?' current':''}">
+    listEl.innerHTML = history.map((v,i)=>`
+      <div class="version-row${i===0?' current':''}">
         <div>
-          <span class="vr-meta">${esc(v.as_on_date||'Unknown date')} — ${(v.row_count||0).toLocaleString('en-IN')} accounts</span>
-          <span class="vr-sub">${esc((v.regions||[]).join(', '))}${v.is_rollback?' · rollback':''} · published ${v.published_at?new Date(v.published_at).toLocaleString('en-IN'):''}${v.published_by?' by '+esc(v.published_by):''}</span>
+          <span class="vr-meta">${esc(v.date||'Unknown date')} — ${(v.rowCount||0).toLocaleString('en-IN')} accounts</span>
+          <span class="vr-sub">${v.isRollback?'rollback · ':''}published ${v.publishedAt?new Date(v.publishedAt).toLocaleString('en-IN'):''}${v.publishedBy?' by '+esc(v.publishedBy):''}</span>
         </div>
-        ${v.is_current?'':`<button type="button" onclick="openRollbackReview(${Number(v.id)})">Rollback to this</button>`}
+        ${i===0?'':`<button type="button" onclick="openRollbackReview('${esc(v.file)}')">Rollback to this</button>`}
       </div>
     `).join('');
   } catch(err){
     listEl.innerHTML = `<div style="padding:8px 0;color:var(--red);font-size:11.5px">Could not load version history: ${esc(err.message||err)}</div>`;
   }
 }
-function openRollbackReview(versionId){
-  const version = __lastHistoryList.find(v=>Number(v.id)===Number(versionId));
+function openRollbackReview(fileName){
+  const version = __lastHistoryList.find(v=>v.file===fileName);
   if(!version) return;
   document.getElementById('publishReviewSummary').innerHTML = `
     <div class="pr-warn">You are about to roll back the LIVE site to an older version.</div>
-    <div>Version date: <b>${esc(version.as_on_date||'unknown')}</b></div>
-    <div>Accounts in this version: <b>${(version.row_count||0).toLocaleString('en-IN')}</b></div>
-    <div>Regions: <b>${esc((version.regions||[]).join(', ')||'—')}</b></div>
+    <div>Version date: <b>${esc(version.date||'unknown')}</b></div>
+    <div>Accounts in this version: <b>${(version.rowCount||0).toLocaleString('en-IN')}</b></div>
     <div style="margin-top:8px;color:var(--sub)">This publishes the old version again as the new current version — nothing in your current session's applied data is used.</div>
   `;
-  __pendingPublish = { type: 'rollback', versionId };
+  __pendingPublish = { type: 'rollback', versionId: fileName };
   document.getElementById('publishConfirmBtn').textContent = 'Confirm Rollback';
   document.getElementById('publishReviewPanel').style.display = 'block';
   document.getElementById('publishStatus').innerHTML = '';
@@ -1365,15 +1315,12 @@ const SLAB_DEFS = [
 ];
 const HIGH_VALUE_CUST_THRESHOLD = 1000000; // ₹10 Lakh
 
-function computeDashboardStats(branchFilter, regionFilter){
+function computeDashboardStats(branchFilter){
   const rows = DATA.npa.rows;
   const today = new Date();
   const assetMix = {};
   const branchMap = new Map();
-  const regionMap = new Map();
   const allBranches = new Set();
-  const allRegions = new Set();
-  const branchToRegion = new Map();
   const buckets = [
     {id:'ne', label:'Not yet eligible (≤ 6 months)', count:0, os:0},
     {id:'y1', label:'6 months – 1 year', count:0, os:0},
@@ -1390,12 +1337,9 @@ function computeDashboardStats(branchFilter, regionFilter){
   for(const r of rows){
     const acct = String(r[C.ACCT_NO]);
     const branch = r[C.SOL_DESC] || 'Unassigned';
-    const region = r[C.REGION] || '';
-    if(branch){ allBranches.add(branch); if(region && !branchToRegion.has(branch)) branchToRegion.set(branch, region); }
-    if(region) allRegions.add(region);
+    if(branch) allBranches.add(branch);
     if(acct==='' || seen.has(acct)) continue;
     seen.add(acct);
-    if(regionFilter && region!==regionFilter) continue;
     if(branchFilter && branch!==branchFilter) continue;
     matchedAccounts++;
     const asset = r[C.ASSET]||'(unclassified)';
@@ -1413,13 +1357,6 @@ function computeDashboardStats(branchFilter, regionFilter){
 
     if(!branchMap.has(branch)) branchMap.set(branch,{count:0,os:0});
     const b=branchMap.get(branch); b.count++; b.os+=os;
-
-    if(region){
-      if(!regionMap.has(region)) regionMap.set(region,{count:0,os:0,assetMix:{}});
-      const rg=regionMap.get(region); rg.count++; rg.os+=os;
-      if(!rg.assetMix[asset]) rg.assetMix[asset]={count:0,os:0};
-      rg.assetMix[asset].count++; rg.assetMix[asset].os+=os;
-    }
 
     const scheme = r[C.SCHEME]||'';
     const schemeKey = scheme==='CC004' ? 'KCC' : 'NONKCC';
@@ -1467,7 +1404,6 @@ function computeDashboardStats(branchFilter, regionFilter){
     totalAccounts:matchedAccounts, totalOS, totalNetOS, totalProvision, totalBookValue,
     eligibleCount, notEligibleCount, assetMix, branchMap, buckets, oldOtsCount, oldOtsSum,
     branchCount: branchMap.size, allBranches: [...allBranches].sort((a,b)=>a.localeCompare(b)),
-    allRegions: [...allRegions].sort((a,b)=>a.localeCompare(b)), branchToRegion, regionMap,
     schemeMix, slabs, custCount: custList.length,
     highValueCustCount: highValueCust.length, highValueOS, highValueCustList,
     acctList, allAcctSorted,
@@ -1476,97 +1412,18 @@ function computeDashboardStats(branchFilter, regionFilter){
 
 function fmtINR2(n){ if(n===''||n===null||n===undefined||isNaN(n)) return '—'; return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
-function populateRegionFilter(regions){
-  const sel = document.getElementById('dashRegionFilter');
-  const label = document.getElementById('dashRegionLabel');
-  if(!sel) return;
-  if(regions.length<=1){
-    sel.style.display='none';
-    if(label) label.style.display='none';
-    return;
-  }
-  sel.style.display='';
-  if(label) label.style.display='';
-  const current = sel.value;
-  sel.innerHTML = `<option value="">All Regions</option>` + regions.map(r=>`<option value="${esc(r)}">${esc(titleCase(r))}</option>`).join('');
-  if(regions.includes(current)) sel.value = current;
-}
-function populateBranchFilter(branches, branchToRegion, regionFilter){
+function populateBranchFilter(branches){
   const sel = document.getElementById('dashBranchFilter');
   if(!sel) return;
   const current = sel.value;
-  const filtered = (regionFilter && branchToRegion) ? branches.filter(b=>branchToRegion.get(b)===regionFilter) : branches;
-  sel.innerHTML = `<option value="">Regional Office</option>` + filtered.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
-  sel.value = filtered.includes(current) ? current : '';
+  sel.innerHTML = `<option value="">Regional Office</option>` + branches.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
+  sel.value = branches.includes(current) ? current : '';
 }
-function populateBranchFilterForRegion(){
-  if(!currentDashStats) return;
-  const regionSel = document.getElementById('dashRegionFilter');
-  const regionFilter = regionSel ? regionSel.value : '';
-  populateBranchFilter(currentDashStats.allBranches, currentDashStats.branchToRegion, regionFilter);
-}
-function updateDashTitle(stats, regionFilter){
+function updateDashTitle(){
   const el = document.getElementById('dashTitle');
   if(!el) return;
-  if(regionFilter){
-    el.textContent = `UPGB ${titleCase(regionFilter)} region NPA Portfolio`;
-  } else if(stats.allRegions.length===1){
-    el.textContent = `UPGB ${titleCase(stats.allRegions[0])} region NPA Portfolio`;
-  } else if(stats.allRegions.length>1){
-    el.textContent = `UPGB NPA Portfolio — ${stats.allRegions.length} regions`;
-  } else {
-    el.textContent = 'UPGB NPA Portfolio';
-  }
-}
-
-function updateRegionsNavVisibility(regionCount){
-  const show = regionCount>1;
-  const btn = document.getElementById('regionsNavBtn');
-  const btnMobile = document.getElementById('regionsNavBtnMobile');
-  if(btn) btn.style.display = show ? '' : 'none';
-  if(btnMobile) btnMobile.style.display = show ? '' : 'none';
-  if(!show){
-    const activeView = document.querySelector('.view.active');
-    if(activeView && activeView.dataset.view==='regions') switchView('dashboard');
-  }
-}
-
-function renderRegionsView(){
-  const el = document.getElementById('regionsArea');
-  if(!el) return;
-  const s = computeDashboardStats(null, null);
-  const regionRows = [...s.regionMap.entries()].sort((a,b)=>b[1].os-a[1].os)
-    .map(([region,v])=>{
-      const highRiskOs = (v.assetMix.DA3?v.assetMix.DA3.os:0) + (v.assetMix.LOSS?v.assetMix.LOSS.os:0);
-      const highRiskPct = v.os ? (highRiskOs/v.os*100) : 0;
-      return { region, count:v.count, os:v.os, share: s.totalOS?(v.os/s.totalOS*100):0, highRiskPct };
-    });
-  el.innerHTML = `
-    <div class="kpi-grid">
-      ${kpiTile('Regions', regionRows.length.toLocaleString('en-IN'), '')}
-      ${kpiTile('Total Outstanding', fmtCr(s.totalOS), s.totalAccounts.toLocaleString('en-IN')+' account(s)')}
-    </div>
-    <div class="section-label">Region Comparison<span class="chart-sub">${regionRows.length} region(s) · sorted by outstanding · tap a row to open that region on the Dashboard</span></div>
-    <div class="dash-table-wrap">
-      <table class="dash-table">
-        <thead><tr>
-          <th class="tal">Region</th><th>Accounts</th><th>Total O/S</th><th>Share</th><th>High-Risk (DA3+Loss)</th>
-        </tr></thead>
-        <tbody>${regionRows.map(r=>`
-          <tr class="clickable" onclick="drillRegionFromRegionsView('${jsq(r.region)}')">
-            <td class="tal">${esc(titleCase(r.region))}</td>
-            <td>${r.count.toLocaleString('en-IN')}</td>
-            <td>${fmtCr(r.os)}</td>
-            <td>${r.share.toFixed(1)}%</td>
-            <td>${r.highRiskPct.toFixed(1)}%</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>`;
-}
-function drillRegionFromRegionsView(region){
-  switchView('dashboard');
-  drillRegion(region);
+  const first = DATA.npa.rows.find(r=>r[C.REGION]);
+  el.textContent = first ? `UPGB ${titleCase(String(first[C.REGION]))} region NPA Portfolio` : 'UPGB NPA Portfolio';
 }
 
 function svgDonut(segments, size){
@@ -1792,14 +1649,6 @@ function drillBranch(branch){
   const sel = document.getElementById('dashBranchFilter');
   if(sel){ sel.value = branch; renderDashboardSmooth(); }
 }
-function drillRegion(region){
-  const regionSel = document.getElementById('dashRegionFilter');
-  const branchSel = document.getElementById('dashBranchFilter');
-  if(regionSel) regionSel.value = region;
-  if(branchSel) branchSel.value = '';
-  populateBranchFilterForRegion();
-  renderDashboardSmooth();
-}
 function showAssetList(code){
   if(!currentDashStats) return;
   const list = currentDashStats.acctList.filter(a=>a.asset===code).sort((a,b)=>b.os-a.os);
@@ -1826,9 +1675,7 @@ function showHighValueCustList(){
   showCustListModal('Customers ≥ ₹10 Lakh O/S', currentDashStats.highValueCustList.length.toLocaleString('en-IN')+' customer(s), high → low', currentDashStats.highValueCustList);
 }
 window.drillBranch = drillBranch;
-window.drillRegion = drillRegion;
 window.openRollbackReview = openRollbackReview;
-window.drillRegionFromRegionsView = drillRegionFromRegionsView;
 window.showAssetList = showAssetList;
 window.showBucketList = showBucketList;
 window.showSchemeList = showSchemeList;
@@ -1840,14 +1687,10 @@ function renderDashboard(){
   if(!el) return;
   const filterSel = document.getElementById('dashBranchFilter');
   const branchFilter = filterSel ? filterSel.value : '';
-  const regionSel = document.getElementById('dashRegionFilter');
-  const regionFilter = regionSel ? regionSel.value : '';
-  const s = computeDashboardStats(branchFilter || null, regionFilter || null);
+  const s = computeDashboardStats(branchFilter || null);
   currentDashStats = s;
-  populateRegionFilter(s.allRegions);
-  populateBranchFilter(s.allBranches, s.branchToRegion, regionFilter || null);
-  updateDashTitle(s, regionFilter || null);
-  updateRegionsNavVisibility(s.allRegions.length);
+  populateBranchFilter(s.allBranches);
+  updateDashTitle();
 
   const assetItems = ASSET_ORDER.filter(k=>s.assetMix[k]).map(k=>({
     label: assetLabel(k)+' ('+k+')', value:s.assetMix[k].os, color:ASSET_SEV_COLOR[k],
@@ -1963,7 +1806,6 @@ function switchView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.dataset.view===view));
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   if(view==='dashboard') renderDashboard();
-  if(view==='regions') renderRegionsView();
   const mainCol = document.getElementById('mainCol');
   if(mainCol) mainCol.scrollTop = 0;
 }
@@ -2013,7 +1855,6 @@ function toggleTheme(){
   on('publishCancelBtn','click',()=>closePublishReview());
   on('publishConfirmBtn','click',()=>confirmPublish());
   on('eligibleBanner','click',()=>document.getElementById('eligibleBanner').classList.remove('show'));
-  on('dashRegionFilter','change',()=>{ populateBranchFilterForRegion(); renderDashboardSmooth(); });
   on('dashBranchFilter','change',()=>renderDashboardSmooth());
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{
     b.addEventListener('click',()=>switchView(b.dataset.view));
@@ -2032,23 +1873,16 @@ window.toggleFreeze = toggleFreeze;
 window.onOtsInput = onOtsInput;
 }
 
-/* Data now lives in data/latest.json (not baked into index.html) so a daily
-   publish only ever commits a small data file, never the whole app shell.
-   The timestamp query param bypasses HTTP/CDN caching -- this is live
-   banking data and must never be served stale while a real connection is
-   available (same reasoning as the service worker's network-first fetch).
-   Reads from the real backend (Postgres, via /relay) first; falls back to
-   the static data/latest.json snapshot committed in this repo only if the
-   backend is unreachable (e.g. mid-migration, or a transient outage). */
+/* Data lives in data/latest.json, committed straight to this repo by
+   js/publish.js -- no separate backend/database. The timestamp query param
+   bypasses HTTP/CDN caching -- this is live banking data and must never be
+   served stale while a real connection is available (same reasoning as the
+   service worker's network-first fetch). */
 function fetchJson(url){
   return fetch(url).then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
 }
-function fetchNpaData(){
-  return fetchJson('https://npa-dashboard.vercel.app/api/data-latest?t=' + Date.now())
-    .catch(err => { console.warn('Backend data fetch failed, falling back to static snapshot', err); return fetchJson('data/latest.json?t=' + Date.now()); });
-}
 function loadNpaData(isRetry){
-  fetchNpaData()
+  fetchJson('data/latest.json?t=' + Date.now())
     .then(data => {
       const overlay = document.getElementById('dataLoadingOverlay');
       if(overlay) overlay.classList.add('hidden');
@@ -2069,7 +1903,7 @@ function loadNpaData(isRetry){
           loadNpaData(false);
         };
       }
-      console.error('Failed to load NPA data from backend or fallback', err);
+      console.error('Failed to load NPA data', err);
     });
 }
 loadNpaData(false);
