@@ -1048,7 +1048,20 @@ function applyNewData(){
   setTimeout(()=>{ applyNewDataNow(); applyBtn.classList.remove('is-loading'); }, 10);
 }
 function applyNewDataNow(){
-  DATA.npa = __pendingData.npa;
+  const newRows = __pendingData.npa.rows;
+  /* A daily upload only ever covers the region(s) present in that file — for
+     those regions we fully drop the old rows (any account no longer in the
+     new file has regularized/closed and should disappear), but any other
+     region not touched by this upload is left exactly as it was from its
+     own last upload, so a single-region file can never wipe out the rest
+     of the bank's data. */
+  const touchedRegions = new Set(newRows.map(r=>String(r[C.REGION]||'')));
+  const oldRowsInTouchedRegions = (DATA.npa.rows||[]).filter(r=>touchedRegions.has(String(r[C.REGION]||'')));
+  const newAcctSet = new Set(newRows.map(r=>String(r[C.ACCT_NO]||'')));
+  const staleRemovedCount = oldRowsInTouchedRegions.filter(r=>!newAcctSet.has(String(r[C.ACCT_NO]||''))).length;
+  const keptOldRows = (DATA.npa.rows||[]).filter(r=>!touchedRegions.has(String(r[C.REGION]||'')));
+
+  DATA.npa = { headers: __pendingData.npa.headers, rows: keptOldRows.concat(newRows) };
   if(__pendingData.oldots) DATA.oldots = __pendingData.oldots;
   if(__pendingAsOnDate) DATA.asOnDate = __pendingAsOnDate;
 
@@ -1065,7 +1078,8 @@ function applyNewDataNow(){
 
   otsAmounts = {}; frozen = {};
   updateReportDateDisplay();
-  document.getElementById('uploadStatus').innerHTML = `<div class="upload-status ok">✔ Data updated — ${DATA.npa.rows.length.toLocaleString('en-IN')} NPA rows now active.</div>`;
+  const staleMsg = staleRemovedCount>0 ? ` (${staleRemovedCount.toLocaleString('en-IN')} account(s) from the previous data for this region no longer appear — regularized/closed accounts removed.)` : '';
+  document.getElementById('uploadStatus').innerHTML = `<div class="upload-status ok">✔ Data updated — ${DATA.npa.rows.length.toLocaleString('en-IN')} NPA rows now active.${staleMsg}</div>`;
   document.getElementById('downloadAppBtn').disabled = false;
   document.getElementById('searchHeader').style.display='';
   renderEmpty();

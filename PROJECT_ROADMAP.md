@@ -347,6 +347,24 @@ flowing through the app:
   Utility by Alok"** (`short_name` in `manifest.webmanifest` +
   `apple-mobile-web-app-title`), since the full name is too long for a
   home-screen icon label.
+- **Region-scoped data replace on Apply (2026-07-22)**: previously, applying
+  a new upload did a full wholesale replace of the whole NPA dataset with
+  only the rows in that file — correct when the whole bank is uploaded in
+  one file (any account missing from the new file, i.e. regularized/closed,
+  correctly disappears), but unsafe for a single-region daily upload: it
+  would have wiped out every *other* region's data too, not just refreshed
+  the one region actually uploaded. `applyNewDataNow()` now scopes the wipe
+  to only the region(s) present in the newly uploaded file — old rows for
+  those regions are dropped (so regularized/closed accounts vanish, as
+  intended), while any region not touched by this upload is carried forward
+  untouched from its own last upload. The "Data updated" success message
+  now also reports how many accounts from the previous data for that region
+  no longer appear. **Verified** with Playwright against the real
+  multi-region sample (Aligarh 63 / Agra 17 / Hathras 2 accounts): applied
+  the full file, then a reduced Aligarh-only file with 10 accounts removed
+  (simulating regularized/closed) — Aligarh correctly dropped to 53 with
+  exactly those 10 account numbers gone, Agra and Hathras untouched at 17
+  and 2.
 
 ---
 
