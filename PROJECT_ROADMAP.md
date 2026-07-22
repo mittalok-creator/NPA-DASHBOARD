@@ -436,6 +436,66 @@ back to the exact original row count, and that rolling back to it
 afterward reproduces the exact original bytes with zero decompression
 needed in the rollback path itself.
 
+### Branch-wise NPA % (2026-07-22, same day)
+
+You asked to show NPA % (NPA outstanding ÷ total advance) per branch, and
+per Regional Office, prominently — placed next to the amounts that already
+exist rather than as a whole new dedicated section.
+
+- **New "Branch-wise Total Advance" upload** in the Update Data modal
+  (collapsible, matching the existing Customer Master upload's pattern).
+  Applies immediately on upload (no separate Apply step, since there's no
+  account-data risk, only a stale NPA% until re-uploaded) and goes live to
+  every viewer the next time Publish is clicked.
+- **Reads your real Daily NPA Projection workbook directly** — you sent a
+  sample and asked for "Sol ID and Advance" from its "Daily Follow-up
+  Sheet". That sheet's actual layout: a header row with plain "Sol ID"/
+  "Branch Name" columns, but the Advance column's own header cell just says
+  generic "AMT" — its real label ("Advances 31-03-2026") lives in a merged
+  cell 1-3 rows above, and the date in it changes every time the file is
+  refreshed. The parser checks the header row first (for a plain manually-
+  filled fallback template) then falls back to scanning the few rows above
+  it for a cell matching `/^advances?\b/i`, so the exact date never needs
+  to match anything. Also auto-detects the "Daily Follow-up Sheet" by name
+  when the full multi-sheet workbook is uploaded as-is (the same one also
+  contains "GAP", "NPA LIST", and "Holiday List" sheets — skipped).
+- **Matches branches by Sol ID, not name.** The real file's branch names
+  ("M.G.Hathras") don't match the existing NPA data's own branch names
+  ("MURSAN GATE") — confirmed by testing with your actual file. Sol ID is
+  already a column in the daily NPA data (`C.SOL_ID`) and is the one
+  reliable join key across differently-formatted HO reports, so
+  `computeDashboardStats()` now also tracks each branch's Sol ID
+  (`branchMap`'s per-branch value gained a `solId` field), and the advance
+  map is keyed by Sol ID.
+- **Units**: advances are entered/read in ₹ Lakhs (matching how UPGB's own
+  reports already state them) and converted to plain rupees internally to
+  match the NPA data's units — verified against your real file: summed all
+  55 real branch advances (145,145.86 Lakhs = ₹1,451.46 Cr) against the
+  live book's real total NPA (₹128.82 Cr) → 8.9% aggregate NPA ratio, a
+  realistic figure for context, and exactly what the shipped feature
+  computes and displays.
+- **Display**: the existing "Total Outstanding" hero KPI card now carries a
+  colored NPA % badge (green &lt;5%, amber 5-10%, red &ge;10% — illustrative
+  bands, not a claim of official RBI thresholds) showing whichever
+  region/branch is currently filtered — Regional Office by default, or a
+  single branch's own ratio once one is picked from the filter, since the
+  same underlying `branchMap` already reflects that filter. The existing
+  "Top Branches by Exposure" list gained the same big, color-coded % on
+  each row. Only aggregates over branches that actually have an uploaded
+  advance figure, so an incomplete advance file never silently understates
+  the ratio by dividing by a smaller, partial total.
+
+**Verified end-to-end against your real uploaded workbook** (not a
+synthetic test file): 56 Sol ID/Advance rows parsed correctly, the
+Regional Office aggregate computed to 8.9% (matching the manual sanity
+check above), individual branch badges ranged sensibly from 9.8% to 21.2%,
+and filtering the Dashboard down to a single real branch (MURSAN GATE)
+correctly showed that branch's own specific ratio (3.8%) rather than the
+regional aggregate. Checked in both themes and at a mobile viewport, where
+the branch rows reflow into a stacked layout (label + big % on top, bar
+below, detail stats below that) rather than cramming a 4-column row into a
+narrow screen.
+
 ### Dashboard redesign: enterprise fintech visual language (2026-07-22, same day)
 
 You asked for a "world's best banking analytics dashboard" redesign — a full

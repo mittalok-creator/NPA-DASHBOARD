@@ -23,6 +23,12 @@ const oldOtsByAcct = new Map();
 DATA.oldots.rows.forEach(r=>{
   if(r[0]!=='' && !oldOtsByAcct.has(String(r[0]))) oldOtsByAcct.set(String(r[0]), {date:r[1], amount:r[2]});
 });
+/* Branch-wise total advance, uploaded separately from the daily NPA file
+   (see handleBranchAdvUpload) -- lets the Dashboard show NPA % (NPA
+   outstanding / total advance) per branch. Persisted through Publish like
+   lockedOts, but not reset/carried-forward on a daily NPA update since it
+   changes on its own, much slower schedule. */
+DATA.branchAdvances = DATA.branchAdvances || {};
 
 /* ---------- Date helpers (NPA dates are raw Excel serials) ---------- */
 const XL_EPOCH = new Date(1899,11,30);
@@ -51,6 +57,14 @@ function fmtCr(n){
   return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function esc(s){ return (s===null||s===undefined)?'':String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/* Illustrative severity bands for NPA % (NPA outstanding / total advance),
+   not a claim of official RBI benchmark thresholds -- just enough to spot
+   a high-NPA branch/region at a glance. */
+function npaPctSeverity(pct){
+  if(pct>=10) return {color:'var(--red)', soft:'var(--red-soft)'};
+  if(pct>=5) return {color:'var(--amber)', soft:'var(--amber-soft)'};
+  return {color:'var(--green)', soft:'var(--green-soft)'};
+}
 const ASSET_LABELS = {SUB_STD:'Substandard asset', DA1:'Doubtful — up to 1 year', DA2:'Doubtful — 1 to 3 years', DA3:'Doubtful — more than 3 years', LOSS:'Loss asset'};
 function assetLabel(code){ return ASSET_LABELS[code] || code; }
 function titleCase(s){ return String(s||'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()); }
@@ -822,6 +836,43 @@ function buildCustomerMasterMap(headerCells, dataRows){
   }
   return map;
 }
+/* Matches the real HO "Daily Follow-up Sheet" layout: a header row with
+   plain "Sol ID"/"Branch Name" columns, but the Advance column's own header
+   cell just says generic "AMT" -- its real label ("Advances <as-on-date>")
+   lives in a merged cell 1-3 rows above, since the date changes every time
+   this file is refreshed. Falls back to a plain "Total Advance" column
+   directly in the header row for a manually-filled template. Matches
+   branches by Sol ID (a stable numeric code), not branch name, since the
+   same branch can appear under different name spellings/abbreviations
+   across different HO reports (e.g. "MURSAN GATE" vs "M.G.Hathras") --
+   Sol ID is the one thing guaranteed to match the NPA data's own Sol ID
+   column. Advance figures are entered in the same unit UPGB already
+   reports them in, Lakhs, and converted to plain rupees here to match the
+   NPA data's units. */
+function buildBranchAdvanceMap(allRows, hIdx){
+  const header = (allRows[hIdx]||[]).map(normHeader);
+  const idx = (...names) => { for(const n of names){ const i = header.indexOf(normHeader(n)); if(i>=0) return i; } return -1; };
+  const iSol = idx('solid','sol');
+  if(iSol<0) throw new Error('Could not find a "Sol ID" column -- branches are matched by Sol ID, not name, since branch names vary between reports.');
+  let iAdv = idx('totaladvance','advance','advancelakhs','totaladvancelakhs');
+  if(iAdv<0){
+    for(let r=Math.max(0,hIdx-3); r<hIdx && iAdv<0; r++){
+      const row = allRows[r]||[];
+      for(let c=0;c<row.length;c++){
+        if(/^advances?\b/i.test(String(row[c]||'').trim())){ iAdv = c; break; }
+      }
+    }
+  }
+  if(iAdv<0) throw new Error('Could not find an "Advances" column (checked the header row and the few rows above it).');
+  const map = {};
+  for(const row of allRows.slice(hIdx+1)){
+    const sol = cellStr(row, iSol);
+    if(!sol) continue;
+    const lakhs = parseFloat(String(row[iAdv]==null?'':row[iAdv]).replace(/[^0-9.\-]/g,''));
+    if(!isNaN(lakhs) && lakhs>0) map[sol] = lakhs*100000;
+  }
+  return map;
+}
 function carryForwardMapFromCurrentData(){
   const map = new Map();
   DATA.npa.rows.forEach(r=>{
@@ -1047,6 +1098,55 @@ function handleMasterFileUpload(evt){
   if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
 }
 
+/* Total advance is a much slower-moving figure than daily NPA data, so this
+   upload applies immediately (no separate Apply step) rather than staging
+   alongside the NPA file -- there's no risk of it corrupting account data,
+   only of a bad NPA% showing until the next Publish. Uploading always fully
+   replaces the previous figures (a stale branch just silently loses its %
+   until re-uploaded, rather than guessing which branches carry forward). */
+function handleBranchAdvUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const labelEl = document.getElementById('branchAdvUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('branchAdvUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Branch Advance file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      const headerHints = ['solid','sol'];
+      let allRows, hIdx;
+      if(isCsv){
+        allRows = parseCSV(String(e.target.result));
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        const sheetName = wb.SheetNames.find(n=>/daily\s*follow[\s-]*up/i.test(n))
+          || wb.SheetNames.find(n=>!/field\s*reference|npa\s*list|holiday|gap/i.test(n))
+          || wb.SheetNames[0];
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      }
+      const map = buildBranchAdvanceMap(allRows, hIdx);
+      const count = Object.keys(map).length;
+      if(!count) throw new Error('No valid Sol ID/Advance rows found.');
+      DATA.branchAdvances = map;
+      const label = document.getElementById('branchAdvStatusLabel');
+      if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es) loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch advance figure(s) parsed. NPA % is now shown on the Dashboard.</div>`;
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.querySelector('.view.active')?.dataset.view==='dashboard') renderDashboard();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
 function applyNewData(){
   if(!__pendingData || (__lastValidation && !__lastValidation.ok)) return;
   const applyBtn = document.getElementById('applyDataBtn');
@@ -1137,6 +1237,11 @@ function downloadMasterTemplate(){
   const example = ['705760143','EXAMPLE BORROWER NAME','VILL EXAMPLE, POST EXAMPLE, DISTRICT, UP - 000000','9999999999','123456789012','ABCDE1234F'];
   downloadCsvTemplate('UPGB_Customer_Master_Template.csv', headers, example);
 }
+function downloadBranchAdvTemplate(){
+  const headers = ['Sol ID','Branch Name','Advance (₹ Lakhs)'];
+  const example = ['9282','M.G.Hathras','1877.53'];
+  downloadCsvTemplate('UPGB_Branch_Advance_Template.csv', headers, example);
+}
 
 function downloadUpdatedApp(){
   const json = JSON.stringify({ npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null });
@@ -1178,7 +1283,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, lockedOts: DATA.lockedOts||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, lockedOts: DATA.lockedOts||{}, branchAdvances: DATA.branchAdvances||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -1369,7 +1474,7 @@ function computeDashboardStats(branchFilter){
     if(!assetMix[asset]) assetMix[asset]={count:0,os:0};
     assetMix[asset].count++; assetMix[asset].os+=os;
 
-    if(!branchMap.has(branch)) branchMap.set(branch,{count:0,os:0});
+    if(!branchMap.has(branch)) branchMap.set(branch,{count:0,os:0,solId:String(r[C.SOL_ID]||'')});
     const b=branchMap.get(branch); b.count++; b.os+=os;
 
     const scheme = r[C.SCHEME]||'';
@@ -1630,12 +1735,14 @@ function jsq(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").repl
 
 function barRows(items){
   const max = Math.max(1, ...items.map(i=>i.value));
+  const anyBadge = items.some(i=>i.badge);
   return items.map(it=>{
     const pct = Math.max(2, (it.value/max*100));
-    return `<div class="bar-row${it.onclick?' clickable':''}"${it.onclick?` onclick="${it.onclick}"`:''}>
+    return `<div class="bar-row${anyBadge?' has-npa':''}${it.onclick?' clickable':''}"${it.onclick?` onclick="${it.onclick}"`:''}>
       <div class="bar-label" title="${esc(it.label)}">${esc(it.label)}</div>
       <div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(1)}%;background:${it.color||'var(--accent)'};color:${it.color||'var(--accent)'}"></div></div>
       <div class="bar-value">${it.valueLabel}</div>
+      ${anyBadge?`<div class="bar-npa-badge" style="color:${it.badge?(it.badgeColor||'var(--ink)'):'var(--ink-mute)'}">${it.badge?esc(it.badge)+'<span class=\"bar-npa-tag\">NPA</span>':'—'}</div>`:''}
     </div>`;
   }).join('');
 }
@@ -1661,6 +1768,7 @@ function svgIcon(pathData){ return `<svg viewBox="0 0 24 24" fill="none" stroke=
 
 function heroKpiCard(opts){
   return `<div class="hero-kpi-card${opts.onclick?' clickable':''}"${opts.onclick?` onclick="${opts.onclick}"`:''} style="--hero-tint:${opts.tint};--hero-color:${opts.color}">
+    ${opts.badge||''}
     <div class="hero-kpi-icon">${svgIcon(opts.icon)}</div>
     <div class="hero-kpi-label">${esc(opts.label)}</div>
     <div class="hero-kpi-value" id="${opts.id}">${opts.fallback||'—'}</div>
@@ -1745,9 +1853,15 @@ function renderDashboard(){
   }));
 
   const branchTop = [...s.branchMap.entries()].sort((a,b)=>b[1].os-a[1].os).slice(0,10)
-    .map(([branch,v])=>({label:branch, value:v.os, color:'var(--accent)',
-      valueLabel:`${v.count.toLocaleString('en-IN')} · ${fmtCr(v.os)} · ${(s.totalOS?(v.os/s.totalOS*100):0).toFixed(2)}%`,
-      onclick:`drillBranch('${jsq(branch)}')`}));
+    .map(([branch,v])=>{
+      const adv = DATA.branchAdvances[v.solId];
+      const npaPct = adv>0 ? (v.os/adv*100) : null;
+      return {label:branch, value:v.os, color:'var(--accent)',
+        valueLabel:`${v.count.toLocaleString('en-IN')} · ${fmtCr(v.os)} · ${(s.totalOS?(v.os/s.totalOS*100):0).toFixed(2)}%`,
+        badge: npaPct!==null ? npaPct.toFixed(1)+'%' : null,
+        badgeColor: npaPct!==null ? npaPctSeverity(npaPct).color : null,
+        onclick:`drillBranch('${jsq(branch)}')`};
+    });
 
   const agingItems = s.buckets.map(b=>({label:b.label, value:b.os, color:'var(--accent-2)',
     valueLabel:`${b.count.toLocaleString('en-IN')} · ${fmtCr(b.os)}`,
@@ -1772,6 +1886,24 @@ function renderDashboard(){
   const highRiskPct = s.totalOS ? (highRiskOS/s.totalOS*100) : 0;
   const avgTicket = s.totalAccounts ? s.totalOS/s.totalAccounts : 0;
 
+  /* NPA % (NPA outstanding ÷ total advance) for whatever's currently in
+     view -- the whole book when "Regional Office" is selected, or just that
+     branch when one is picked from the filter, since s.branchMap already
+     reflects that filter. Only aggregates over branches with an uploaded
+     advance figure, so a partially-uploaded advance file never silently
+     understates the ratio by dividing by a smaller, incomplete total. */
+  let advOsSum=0, advSum=0, advBranchCount=0;
+  s.branchMap.forEach((v)=>{
+    const adv = DATA.branchAdvances[v.solId];
+    if(adv>0){ advOsSum+=v.os; advSum+=adv; advBranchCount++; }
+  });
+  const aggNpaPct = advSum>0 ? (advOsSum/advSum*100) : null;
+  let heroNpaBadge = '';
+  if(aggNpaPct!==null){
+    const sev = npaPctSeverity(aggNpaPct);
+    heroNpaBadge = `<div class="hero-kpi-badge" style="background:${sev.soft};color:${sev.color}">${aggNpaPct.toFixed(1)}% NPA</div>`;
+  }
+
   /* "What should happen next" -- the single largest concentration of aged,
      actionable exposure (excludes the "not yet eligible" bucket, since that
      one isn't actionable yet), computed fresh from real data every render
@@ -1781,7 +1913,7 @@ function renderDashboard(){
 
   el.innerHTML = `
     <div class="hero-kpi-row">
-      ${heroKpiCard({id:'heroTotalOs', label:'Total Outstanding', fallback:fmtCr(s.totalOS), sub:s.totalAccounts.toLocaleString('en-IN')+' accounts', icon:ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)'})}
+      ${heroKpiCard({id:'heroTotalOs', label:'Total Outstanding', fallback:fmtCr(s.totalOS), sub:s.totalAccounts.toLocaleString('en-IN')+' accounts', icon:ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', badge:heroNpaBadge})}
       ${heroKpiCard({id:'heroTotalAccts', label:'Total Accounts', fallback:s.totalAccounts.toLocaleString('en-IN'), sub:s.custCount.toLocaleString('en-IN')+' unique customers', icon:ICON_USERS, tint:'var(--gauge-track)', color:'var(--accent-2)'})}
       ${heroKpiCard({id:'heroHighRisk', label:'High-Risk Exposure', fallback:fmtCr(highRiskOS), sub:'DA3 + Loss · '+highRiskPct.toFixed(1)+'% of book', icon:ICON_ALERT_TRIANGLE, tint:'var(--red-soft)', color:'var(--red)', onclick:(s.assetMix.LOSS||s.assetMix.DA3)?`showAssetList('${s.assetMix.LOSS?'LOSS':'DA3'}')`:''})}
       ${heroKpiCard({id:'heroAvgTicket', label:'Average Ticket Size', fallback:fmtINR2(avgTicket), sub:'per account, this book', icon:ICON_TICKET, tint:'var(--amber-soft)', color:'var(--amber)'})}
@@ -1923,8 +2055,11 @@ function toggleTheme(){
   on('fileInput','change',(e)=>handleFileUpload(e));
   on('masterUploadDrop','click',()=>document.getElementById('masterFileInput').click());
   on('masterFileInput','change',(e)=>handleMasterFileUpload(e));
+  on('branchAdvUploadDrop','click',()=>document.getElementById('branchAdvFileInput').click());
+  on('branchAdvFileInput','change',(e)=>handleBranchAdvUpload(e));
   on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
+  on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
   on('asOnDateInput','change',(e)=>{ __pendingAsOnDate = e.target.value; });
   on('updateCancelBtn','click',()=>toggleUpdateModal(false));
   on('applyDataBtn','click',()=>applyNewData());
