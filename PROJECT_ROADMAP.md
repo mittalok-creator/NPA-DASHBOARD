@@ -192,6 +192,41 @@ This milestone closes it for good.
   needs to be done by you** — only your browser holds your real GitHub
   token.
 
+### Bug fix: multi-sheet bank-wide workbooks only read the first sheet (2026-07-22)
+
+You reported that a genuine 55 MB bank-wide `.xlsb` export either failed
+outright ("doesn't match the daily HO export layout, and no sheet named
+'NPA' was found either") or silently only picked up your own region.
+Root cause, confirmed in code: `handleFileUpload()` read
+**`wb.Sheets[wb.SheetNames[0]]`** — only ever the *first* sheet in the
+workbook. Every daily file tested so far (single-region, or a combined
+multi-region CSV/sheet with one Region column) happens to keep everything
+on one sheet, so this never surfaced. But the true bank-wide `.xlsb`
+export is laid out as **one sheet per region** (region name as the sheet
+tab). Reading only sheet 0 meant: if your own region's tab happened to be
+first, only that region got processed and every other region silently
+vanished; if a non-matching tab (e.g. a summary/cover sheet) was first,
+the whole file was rejected outright.
+
+Fixed: every sheet in the workbook is now scanned; whichever ones match
+the HO header signature are each mapped independently (using that
+sheet's own header for column lookup, not a shared/assumed column order)
+and the results are merged. Sheets that don't match (summary/cover
+sheets, a legacy `Field Reference` sheet, etc.) are silently skipped, not
+treated as a failure, as long as at least one sheet matches. The upload
+status now says "(N sheets combined)" when more than one sheet
+contributed, so it's visible that all regions were actually picked up.
+CSV uploads are unaffected (always single-sheet by nature).
+
+**Verified with synthetic multi-sheet `.xlsx` files** (the real 55 MB
+file couldn't be sent directly — file-attachment size limit on this side
+is 30 MB): (1) three region-named sheets (Hathras/Aligarh/Agra) — all 3
+regions and all 4 accounts correctly combined; (2) a non-matching
+"Summary" sheet placed *first*, exactly reproducing the reported failure
+— correctly skipped, both real region sheets behind it still picked up
+successfully. Existing single-sheet real-data upload (14,000-row Hathras
+file) and the full publish flow both re-verified unaffected.
+
 ### M2 completion notes (2026-07-21)
 
 Added GitHub OAuth **Device Flow** login, restricted to a single
