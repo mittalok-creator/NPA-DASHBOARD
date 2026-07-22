@@ -1185,11 +1185,9 @@ function downloadUpdatedApp(){
 
 /* ---------- Publish to live site (commits data/latest.json via GitHub's
    Git Data API, using the Admin's own already-repo-scoped OAuth token) ---------- */
-let __pendingPublish = null; // { jsonString, meta } staged for confirmPublish()
+let __pendingPublish = null; // { type: 'publish'|'rollback', dataObj, meta, versionId } staged for confirmPublish()
+let __lastHistoryList = []; // last-loaded version history, so rollback review can show metadata without a separate fetch
 
-function serializeCurrentData(){
-  return JSON.stringify({ npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null });
-}
 function computeCurrentDataSummary(){
   const regions = new Set();
   DATA.npa.rows.forEach(r=>{ const reg = String(r[C.REGION]||''); if(reg) regions.add(reg); });
@@ -1214,13 +1212,12 @@ function openPublishReview(){
     <div style="margin-top:8px;color:var(--sub)">Publishing as <b>${esc(user.login||'unknown')}</b>. Goes live on npadashboard.alokmittal.net within about a minute.</div>
   `;
   __pendingPublish = {
-    jsonString: serializeCurrentData(),
+    type: 'publish',
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
       regions: summary.regions,
-      commitMessage: `Publish NPA data: ${summary.rowCount.toLocaleString('en-IN')} accounts, as on ${summary.asOnDate||'unknown'}${meta.touchedRegions && meta.touchedRegions.length ? ' ('+meta.touchedRegions.join(', ')+')' : ''}`,
-      publishedBy: user.login || null,
       isRollback: false,
     },
   };
@@ -1240,11 +1237,12 @@ async function confirmPublish(){
   const statusEl = document.getElementById('publishStatus');
   confirmBtn.disabled = true; cancelBtn.disabled = true;
   confirmBtn.classList.add('is-loading');
+  const onProgress = (msg) => { statusEl.innerHTML = `<div class="upload-status ok">⏳ ${esc(msg)}</div>`; };
   try{
-    const result = await window.UPGBPublish.publishData(__pendingPublish.jsonString, __pendingPublish.meta, (msg)=>{
-      statusEl.innerHTML = `<div class="upload-status ok">⏳ ${esc(msg)}</div>`;
-    });
-    statusEl.innerHTML = `<div class="upload-status ok">✔ Published. Live at npadashboard.alokmittal.net within ~30-60s (commit ${esc(result.commitSha.slice(0,7))}).</div>`;
+    const result = __pendingPublish.type === 'rollback'
+      ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
+      : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress);
+    statusEl.innerHTML = `<div class="upload-status ok">✔ Published — live at npadashboard.alokmittal.net within ~30-60s (version #${esc(String(result.versionId))}).</div>`;
     document.getElementById('publishBtn').disabled = true;
     closePublishReview();
     loadVersionHistory();
@@ -1262,55 +1260,36 @@ async function loadVersionHistory(){
   listEl.innerHTML = '<div style="padding:8px 0;color:var(--sub);font-size:11.5px">Loading…</div>';
   try{
     const history = await window.UPGBPublish.getHistoryIndex();
+    __lastHistoryList = history;
     if(countEl) countEl.textContent = history.length ? `(${history.length})` : '';
     if(!history.length){ listEl.innerHTML = '<div style="padding:8px 0;color:var(--sub);font-size:11.5px">No published versions yet.</div>'; return; }
-    listEl.innerHTML = history.map((v,i)=>`
-      <div class="version-row${i===0?' current':''}">
+    listEl.innerHTML = history.map(v=>`
+      <div class="version-row${v.is_current?' current':''}">
         <div>
-          <span class="vr-meta">${esc(v.date||'Unknown date')} — ${(v.rowCount||0).toLocaleString('en-IN')} accounts</span>
-          <span class="vr-sub">${esc((v.regions||[]).join(', '))}${v.isRollback?' · rollback':''} · published ${v.publishedAt?new Date(v.publishedAt).toLocaleString('en-IN'):''}${v.publishedBy?' by '+esc(v.publishedBy):''}</span>
+          <span class="vr-meta">${esc(v.as_on_date||'Unknown date')} — ${(v.row_count||0).toLocaleString('en-IN')} accounts</span>
+          <span class="vr-sub">${esc((v.regions||[]).join(', '))}${v.is_rollback?' · rollback':''} · published ${v.published_at?new Date(v.published_at).toLocaleString('en-IN'):''}${v.published_by?' by '+esc(v.published_by):''}</span>
         </div>
-        ${i===0?'':`<button type="button" onclick="rollbackToVersion('${esc(v.file)}','${esc(v.date||'')}')">Rollback to this</button>`}
+        ${v.is_current?'':`<button type="button" onclick="openRollbackReview(${Number(v.id)})">Rollback to this</button>`}
       </div>
     `).join('');
   } catch(err){
     listEl.innerHTML = `<div style="padding:8px 0;color:var(--red);font-size:11.5px">Could not load version history: ${esc(err.message||err)}</div>`;
   }
 }
-async function rollbackToVersion(fileName, dateLabel){
-  if(!window.UPGBPublish) return;
-  const listEl = document.getElementById('versionHistoryList');
-  try{
-    const content = await window.UPGBPublish.getHistoryFileContent(fileName);
-    const parsed = JSON.parse(content);
-    const rowCount = parsed.npa && parsed.npa.rows ? parsed.npa.rows.length : 0;
-    const regions = new Set();
-    if(parsed.npa && parsed.npa.rows) parsed.npa.rows.forEach(r=>{ const reg=String(r[26]||''); if(reg) regions.add(reg); });
-    const user = (window.UPGBAuth && window.UPGBAuth.getCurrentUser()) || {};
-    document.getElementById('publishReviewSummary').innerHTML = `
-      <div class="pr-warn">You are about to roll back the LIVE site to an older version.</div>
-      <div>Version date: <b>${esc(dateLabel||'unknown')}</b></div>
-      <div>Accounts in this version: <b>${rowCount.toLocaleString('en-IN')}</b></div>
-      <div>Regions: <b>${esc(Array.from(regions).sort().join(', ')||'—')}</b></div>
-      <div style="margin-top:8px;color:var(--sub)">This publishes the old version again as the new current version — nothing in your current session's applied data is used.</div>
-    `;
-    __pendingPublish = {
-      jsonString: content,
-      meta: {
-        asOnDate: parsed.asOnDate || null,
-        rowCount,
-        regions: Array.from(regions).sort(),
-        commitMessage: `Rollback NPA data to version ${dateLabel||fileName}`,
-        publishedBy: user.login || null,
-        isRollback: true,
-      },
-    };
-    document.getElementById('publishConfirmBtn').textContent = 'Confirm Rollback';
-    document.getElementById('publishReviewPanel').style.display = 'block';
-    document.getElementById('publishStatus').innerHTML = '';
-  } catch(err){
-    if(listEl) listEl.insertAdjacentHTML('beforeend', `<div style="color:var(--red);font-size:11.5px">Could not load that version: ${esc(err.message||err)}</div>`);
-  }
+function openRollbackReview(versionId){
+  const version = __lastHistoryList.find(v=>Number(v.id)===Number(versionId));
+  if(!version) return;
+  document.getElementById('publishReviewSummary').innerHTML = `
+    <div class="pr-warn">You are about to roll back the LIVE site to an older version.</div>
+    <div>Version date: <b>${esc(version.as_on_date||'unknown')}</b></div>
+    <div>Accounts in this version: <b>${(version.row_count||0).toLocaleString('en-IN')}</b></div>
+    <div>Regions: <b>${esc((version.regions||[]).join(', ')||'—')}</b></div>
+    <div style="margin-top:8px;color:var(--sub)">This publishes the old version again as the new current version — nothing in your current session's applied data is used.</div>
+  `;
+  __pendingPublish = { type: 'rollback', versionId };
+  document.getElementById('publishConfirmBtn').textContent = 'Confirm Rollback';
+  document.getElementById('publishReviewPanel').style.display = 'block';
+  document.getElementById('publishStatus').innerHTML = '';
 }
 
 /* ---------- Cmd+K quick search palette ---------- */
@@ -1847,7 +1826,7 @@ function showHighValueCustList(){
 }
 window.drillBranch = drillBranch;
 window.drillRegion = drillRegion;
-window.rollbackToVersion = rollbackToVersion;
+window.openRollbackReview = openRollbackReview;
 window.drillRegionFromRegionsView = drillRegionFromRegionsView;
 window.showAssetList = showAssetList;
 window.showBucketList = showBucketList;
@@ -2056,9 +2035,17 @@ window.onOtsInput = onOtsInput;
    publish only ever commits a small data file, never the whole app shell.
    The timestamp query param bypasses HTTP/CDN caching -- this is live
    banking data and must never be served stale while a real connection is
-   available (same reasoning as the service worker's network-first fetch). */
-fetch('data/latest.json?t=' + Date.now())
-  .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+   available (same reasoning as the service worker's network-first fetch).
+   Reads from the real backend (Postgres, via /relay) first; falls back to
+   the static data/latest.json snapshot committed in this repo only if the
+   backend is unreachable (e.g. mid-migration, or a transient outage). */
+const RELAY_DATA_URL = 'https://npa-dashboard.vercel.app/api/data/latest?t=' + Date.now();
+const FALLBACK_DATA_URL = 'data/latest.json?t=' + Date.now();
+function fetchJson(url){
+  return fetch(url).then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+}
+fetchJson(RELAY_DATA_URL)
+  .catch(err => { console.warn('Backend data fetch failed, falling back to static snapshot', err); return fetchJson(FALLBACK_DATA_URL); })
   .then(data => {
     const overlay = document.getElementById('dataLoadingOverlay');
     if(overlay) overlay.classList.add('hidden');
@@ -2070,5 +2057,5 @@ fetch('data/latest.json?t=' + Date.now())
       overlay.classList.remove('hidden');
       overlay.innerHTML = '<div class="data-loading-text err">Could not load NPA data. Check your internet connection and reload the page.</div>';
     }
-    console.error('Failed to load data/latest.json', err);
+    console.error('Failed to load NPA data from backend or fallback', err);
   });
