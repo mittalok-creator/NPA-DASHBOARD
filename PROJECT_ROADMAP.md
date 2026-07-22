@@ -436,6 +436,39 @@ back to the exact original row count, and that rolling back to it
 afterward reproduces the exact original bytes with zero decompression
 needed in the rollback path itself.
 
+### Bug fix: "Crafted by Alok Mittal" signature overlapping the OTS totals bar on mobile (2026-07-22, same day)
+
+You reported the account detail view's bottom "Total OTS/Net O/S/P&L/Sacrifice/Impact"
+summary bar had the mobile signature text rendered on top of the "Total Net
+O/S" figure, making it unreadable — happened on a real device, in both
+themes. Root cause, confirmed by reproducing it locally and inspecting the
+actual DOM ancestry (not just the CSS on paper): `#app` (the top-level app
+wrapper) has its own `z-index:1` (needed so it paints above the decorative
+`#bgFx` background layer, `z-index:0`) — this makes `#app` a stacking
+context, which traps every z-index *inside* it (including `#detailPane`'s
+`z-index:95`) so those values only ever compete against each other, never
+against elements *outside* `#app`. The `.mobile-sig` div happened to live
+as a sibling of `#app` (outside it) rather than inside it, so its much
+lower `z-index:89` was still being compared directly against `#app`'s own
+`z-index:1` in the root stacking context — and 89 beats 1, so the signature
+painted over the *entire* `#app` subtree, detail pane included, regardless
+of the detail pane's own (internally much higher) z-index. `#bottomTabs`
+happens to already live inside `#app`, which is why it correctly stayed
+hidden behind the detail pane and only `.mobile-sig` showed the bug.
+
+Fixed by moving the `.mobile-sig` div to be a child of `#app` (right after
+`#bottomTabs`, still outside `#shell`) instead of a body-level sibling —
+now it's trapped in the same stacking context as `#bottomTabs` and
+`#detailPane`, so the detail pane's higher z-index correctly wins and
+covers it when open, while it still renders above ordinary page content on
+every other view exactly as before. No CSS change was needed, only the
+DOM position of that one div. **Verified** by reproducing the exact bug
+first (real Cust ID 700180058, both themes, matching your screenshot
+precisely — signature overlapping the totals bar) via Playwright at a
+mobile viewport, then confirming it was gone after the fix, and re-checked
+the Dashboard/Search views in both themes to confirm the signature still
+renders correctly there.
+
 ### UI cleanup + mobile legibility + premium palette + data-load resilience (2026-07-22, same day)
 
 Three smaller fixes shipped together once the backend crisis above was resolved:
