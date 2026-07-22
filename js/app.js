@@ -881,7 +881,20 @@ function renderValidationReport(result){
 
 function processDailyParsed(parsed, filename, statusEl, summaryEl){
   if(parsed.isHoFormat){
-    const {rows, sciCount, regions, badBalCount, blankCustCount} = mapHoRowsToNpa(parsed.header, parsed.rows);
+    /* Each sheet is mapped independently (using its own header for column
+       lookup) rather than assuming every sheet shares identical column
+       order, then the already-normalized rows are merged -- safe even if a
+       per-region sheet's columns are laid out differently from another. */
+    let rows = [], sciCount = 0, badBalCount = 0, blankCustCount = 0;
+    const regions = new Set();
+    for(const sheet of parsed.hoSheets){
+      const result = mapHoRowsToNpa(sheet.header, sheet.rows);
+      rows = rows.concat(result.rows);
+      sciCount += result.sciCount;
+      badBalCount += result.badBalCount;
+      blankCustCount += result.blankCustCount;
+      result.regions.forEach(r=>regions.add(r));
+    }
     if(!rows.length) throw new Error('No account rows found in this file.');
     const carryForward = carryForwardMapFromCurrentData();
     mergeCustomerDetails(rows, __pendingMaster, carryForward);
@@ -893,11 +906,12 @@ function processDailyParsed(parsed, filename, statusEl, summaryEl){
     __pendingData = { npa: {headers: DATA.npa.headers, rows}, oldots: DATA.oldots };
     renderValidationReport(validation);
 
+    const sheetTag = parsed.hoSheets.length>1 ? ` (${parsed.hoSheets.length} sheets combined)` : '';
     const sciPct = rows.length ? sciCount/rows.length : 0;
     if(sciPct > 0.3){
       statusEl.innerHTML = `<div class="upload-status err">⚠ ${sciCount.toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')} account numbers in this file are stored in scientific notation (e.g. 1.51E+14) — the CBS export truncates them, so Account No. search/display will be unreliable after applying. Customer ID and Mobile No. search still work fine. Ask for the "Account No" column to be exported as plain text/number to fix this at the source.</div>`;
     } else {
-      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed successfully${regions.size>1?` — ${regions.size} regions detected`:''}. Review below, then Apply.</div>` +
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed successfully${sheetTag}${regions.size>1?` — ${regions.size} regions detected`:''}. Review below, then Apply.</div>` +
         (sciCount ? `<div class="upload-status err" style="margin-top:8px">⚠ ${sciCount.toLocaleString('en-IN')} account number(s) were stored in scientific notation and may be missing trailing digits.</div>` : '');
     }
     summaryEl.innerHTML = `
@@ -979,13 +993,26 @@ function handleFileUpload(evt){
       let parsed;
       if(isCsv){
         const csvRows = parseCSV(String(e.target.result));
-        parsed = { header: csvRows[0]||[], rows: csvRows.slice(1), isHoFormat: true };
+        parsed = { isHoFormat: true, hoSheets: [{ sheetName: file.name, header: csvRows[0]||[], rows: csvRows.slice(1) }] };
       } else {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, {type:'array', cellDates:true});
-        const firstRaw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
-        const header = firstRaw[0]||[];
-        parsed = { header, rows: firstRaw.slice(1), isHoFormat: detectHoHeader(header), wb };
+        /* A bank-wide export can arrive either as one sheet with every region
+           in a Region column, or as one sheet PER region (region name as the
+           sheet name) -- reading only wb.SheetNames[0] silently dropped every
+           other region in the second layout. Scan every sheet and keep
+           whichever ones match the HO header signature. */
+        const hoSheets = [];
+        for(const sheetName of wb.SheetNames){
+          const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+          const header = raw[0]||[];
+          if(detectHoHeader(header)) hoSheets.push({ sheetName, header, rows: raw.slice(1) });
+        }
+        if(hoSheets.length){
+          parsed = { isHoFormat: true, hoSheets, wb };
+        } else {
+          parsed = { isHoFormat: false, wb };
+        }
       }
       processDailyParsed(parsed, file.name, statusEl, summaryEl);
     } catch(err){
