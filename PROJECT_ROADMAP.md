@@ -254,7 +254,12 @@ all of that at once and makes each future module mostly "define its schema
 - **New API routes** (`relay/api/`): `GET /api/data-latest` (public,
   gzip-compressed response), `GET /api/data-history` (public, lightweight
   metadata list), `POST /api/publish` and `POST /api/data-rollback`
-  (Admin-only). Admin-ness is verified **server-side** now — the route
+  (Admin-only). **`POST /api/publish` was superseded the same day** by the
+  chunked upload flow (`POST /api/publish-chunk` + `POST
+  /api/publish-finalize`, see further down) once a genuine full-bank
+  upload exceeded Vercel's payload ceiling even after gzip; the file was
+  removed entirely rather than left as unused/misleading dead code.
+  Admin-ness is verified **server-side** now — the route
   calls `api.github.com/user` with the Bearer token the browser sends and
   checks the real login is `mittalok-creator`, rather than trusting a
   client-supplied claim. This is a genuine security improvement over the

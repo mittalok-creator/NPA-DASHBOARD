@@ -1183,8 +1183,9 @@ function downloadUpdatedApp(){
   setTimeout(()=>URL.revokeObjectURL(url), 60000);
 }
 
-/* ---------- Publish to live site (commits data/latest.json via GitHub's
-   Git Data API, using the Admin's own already-repo-scoped OAuth token) ---------- */
+/* ---------- Publish to live site (sends data to the Postgres backend via
+   /relay, see js/publish.js -- verified server-side against the Admin's
+   GitHub token, not committed to the repo) ---------- */
 let __pendingPublish = null; // { type: 'publish'|'rollback', dataObj, meta, versionId } staged for confirmPublish()
 let __lastHistoryList = []; // last-loaded version history, so rollback review can show metadata without a separate fetch
 
