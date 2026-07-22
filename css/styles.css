@@ -937,8 +937,9 @@ body{overscroll-behavior:none}
 .hero-kpi-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--sub);position:relative}
 .hero-kpi-value{font-size:38px;font-weight:800;color:var(--ink);margin-top:6px;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1.1;position:relative}
 .hero-kpi-sub{font-size:12.5px;color:var(--ink-mute);margin-top:8px;font-weight:600;position:relative}
+.hero-kpi-badge{position:absolute;top:22px;right:22px;padding:6px 12px;border-radius:10px;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.3px;z-index:1}
 @media (max-width:1023px){ .hero-kpi-row{grid-template-columns:repeat(2,1fr)} }
-@media (max-width:599px){ .hero-kpi-row{grid-template-columns:1fr} .hero-kpi-value{font-size:32px} }
+@media (max-width:599px){ .hero-kpi-row{grid-template-columns:1fr} .hero-kpi-value{font-size:32px} .hero-kpi-badge{position:static;display:inline-block;margin-bottom:10px} }
 
 /* ---------- Dashboard: insight / attention strip ---------- */
 .insight-strip{
@@ -992,6 +993,19 @@ body{overscroll-behavior:none}
   background-image:linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,.05) 46%,rgba(0,0,0,.10))!important;
   box-shadow:0 0 10px -3px currentColor,inset 0 0 0 1px rgba(255,255,255,.10)}
 .bar-value{font-size:12px;font-weight:800;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right;min-width:90px}
+/* NPA % column -- only appears on rows that carry it (Top Branches, once a
+   Branch Advance file is uploaded); other bar-list uses (Asset Mix, Ageing)
+   never set .has-npa, so they keep the plain 3-column layout untouched. */
+.bar-row.has-npa{grid-template-columns:minmax(96px,150px) 1fr auto auto}
+.bar-npa-badge{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right;min-width:60px;letter-spacing:-.3px}
+.bar-npa-tag{display:block;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-mute);margin-top:1px}
+@media (max-width:659px){
+  .bar-row.has-npa{grid-template-columns:minmax(80px,1fr) auto;grid-template-areas:"label npa" "track track" "value value";row-gap:4px}
+  .bar-row.has-npa .bar-label{grid-area:label}
+  .bar-row.has-npa .bar-npa-badge{grid-area:npa}
+  .bar-row.has-npa .bar-track{grid-area:track}
+  .bar-row.has-npa .bar-value{grid-area:value;text-align:left}
+}
 
 /* ---------- Dashboard: branch filter toolbar ---------- */
 .dash-toolbar{display:flex;align-items:center;gap:10px;margin:-8px 0 22px;flex-wrap:wrap}
