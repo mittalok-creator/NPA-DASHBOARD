@@ -105,7 +105,7 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 | M2 | GitHub Login for Admin (OAuth Device Flow), Viewer stays login-free | ✅ Done — verified live end-to-end on the deployed site |
 | M3 | ~~Microsoft Graph OneDrive read~~ — superseded. Data entry stays the existing Settings → Upload Excel/CSV button, now gated behind Admin login | ⬜ Not started |
 | M4 | Data import & validation: merge the daily HO NPA export + the Customer Master (Address/Aadhar/PAN) by Customer ID, remap HO's raw column names to the app's schema, auto-read the "as on" date from the filename (editable), multi-region support (Region+Branch filter, dynamic title), then validate (duplicates, blanks, bad dates, missing columns, wrong types) with a report UI | ✅ Done — verified against real Head Office files (see notes below) |
-| M5 | Publish + Versioning + Rollback (Admin-triggered, direct commit via GitHub's Git Data API using the Admin's own repo-scoped OAuth token) | ✅ Done — see notes below |
+| M5 | Publish + Versioning + Rollback | ✅ Done, on its **second design** — first shipped as a direct GitHub Git Data API commit, then replaced same-day by a real Postgres backend once GitHub's per-file size ceiling became a real problem for genuine bank-wide uploads (see notes below) |
 | M6 | Data-layer refactor: stop baking data into HTML, fetch published JSON at runtime | ✅ Done (as part of M5, see notes below) — lazy loading/virtualization for 20k+ rows still not done |
 | M7 | Fast search (Account No., Customer, Branch, CIF, Mobile, Status) | ⬜ Not started |
 | M8 | New modules: Reports, Analytics, Settings, Admin Panel (status/history/logs/rollback UI), Logs, Backup | ⬜ Not started |
@@ -115,8 +115,10 @@ Each milestone ships as a fully working, tested increment. Nothing moves to
 **Completed**: M0 (audit + architecture decision), M1 (modularization),
 M2 (GitHub Login for Admin — live end-to-end test passed), M4 (data import,
 Customer Master merge, multi-region, validation — verified against real
-Head Office files), M5 + M6 (real one-click publish, direct-commit via
-GitHub's Git Data API, data split out of `index.html`).
+Head Office files), M5 + M6 (real one-click publish + version history,
+now backed by a real Postgres database via the same Vercel project used
+for GitHub sign-in — **not yet live, needs Postgres storage enabled on
+Vercel first**, see notes below).
 **Current milestone**: none — ready to start M7 (fast search) or M9 (UI/UX
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
@@ -226,6 +228,77 @@ regions and all 4 accounts correctly combined; (2) a non-matching
 — correctly skipped, both real region sheets behind it still picked up
 successfully. Existing single-sheet real-data upload (14,000-row Hathras
 file) and the full publish flow both re-verified unaffected.
+
+### Architecture pivot: real backend + Postgres, replacing the GitHub-commit publish pipeline (2026-07-22)
+
+Right after the multi-sheet fix, you asked to move off using GitHub commits
+as the data store entirely, since you're planning to add more tabs/modules
+with their own Excel files going forward — every one of those would have
+compounded the same problems (GitHub's per-file size ceiling, growing repo
+history, the Git Data API's blob/tree/commit dance). A real backend removes
+all of that at once and makes each future module mostly "define its schema
++ upload/parse/publish flow," reusing everything else.
+
+- **Backend**: extended the *same* Vercel project already used for the
+  GitHub OAuth relay (`relay/`, deployed at `npa-dashboard.vercel.app`) —
+  no new account. Added a Postgres database (via Vercel's Storage tab,
+  which now provisions through **Neon** — `@vercel/postgres` is
+  deprecated, so this uses `@neondatabase/serverless` directly, per
+  Neon's own migration guidance).
+- **Schema**: one table, `npa_versions` (id, data JSONB, as_on_date,
+  row_count, regions, published_at, published_by, is_rollback,
+  is_current). Exactly one row has `is_current = true` at a time — that's
+  what Viewers see. A rollback is just a normal publish whose content is
+  copied from an older row — never a destructive rewrite — so it shows up
+  in history like any other publish, and old rows are never mutated.
+- **New API routes** (`relay/api/`): `GET /api/data/latest` (public,
+  gzip-compressed response), `GET /api/data/history` (public, lightweight
+  metadata list), `POST /api/publish` and `POST /api/data/rollback`
+  (Admin-only). Admin-ness is verified **server-side** now — the route
+  calls `api.github.com/user` with the Bearer token the browser sends and
+  checks the real login is `mittalok-creator`, rather than trusting a
+  client-supplied claim. This is a genuine security improvement over the
+  GitHub-commit design, where "admin-ness" was enforced only by whatever
+  permissions the token itself carried.
+- **Size limit fix, the actual trigger for this pivot**: Vercel Serverless
+  Functions cap request bodies at a few MB regardless of backend choice.
+  The browser now **gzip-compresses** the JSON payload
+  (`CompressionStream('gzip')`) before POSTing to `/api/publish`
+  (`Content-Encoding: gzip`), and the server does the same in reverse for
+  `/api/data/latest` — verified end-to-end that a browser-produced gzip
+  blob is byte-compatible with Node's `zlib.gunzipSync` and vice versa.
+  This buys real headroom (5-10x smaller on the wire) for realistic
+  per-region uploads; a genuine single-shot *entire-bank* upload could
+  still be tight even compressed — logged as a known limit, not solved
+  speculatively, since the real day-to-day workflow is per-region files.
+- **Client changes**: `js/publish.js` rewritten to call the new API
+  instead of GitHub's Git Data API — much simpler, since rollback is now
+  a single server-side call (`POST /api/data/rollback` with just a
+  version id) instead of the old fetch-content-then-republish dance.
+  `js/app.js`'s boot sequence now fetches `GET /api/data/latest` first,
+  falling back to the static `data/latest.json` snapshot already in the
+  repo only if the backend is unreachable (safety net during migration,
+  and a soft offline/outage fallback).
+- **Testing**: the actual Postgres/Neon queries were verified against a
+  **real local Postgres instance** (not just syntax-checked) — schema
+  creation, publish (including the is_current flip + 60-entry prune),
+  get-current, get-history, and rollback all confirmed behaving exactly
+  as designed. The client-side publish/rollback/history UI was verified
+  with Playwright against a **mocked** `npa-dashboard.vercel.app`,
+  including capturing and gunzipping the actual request body to confirm
+  the compressed payload round-trips correctly. **What's not yet
+  verified**: the real deployed Neon connection itself (Neon's HTTP wire
+  protocol only speaks to Neon's own infrastructure, so a local Postgres
+  stand-in can validate the SQL logic but not the live network path) —
+  that needs the Postgres storage enabled on Vercel and a real deploy,
+  same category of "can't test outside its real environment" as the
+  original GitHub Device Flow login.
+- **Not done yet**: you still need to enable Postgres storage on the
+  `npa-dashboard` Vercel project (Storage tab, a few clicks) before any
+  of this goes live — nothing publishes anywhere until that's done. The
+  existing `data/latest.json` / `data/history/` files stay in the repo
+  as the fallback path described above, not because the git-commit design
+  is still in use.
 
 ### M2 completion notes (2026-07-21)
 
