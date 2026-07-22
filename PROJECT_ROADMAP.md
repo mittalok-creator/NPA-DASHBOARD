@@ -486,6 +486,80 @@ Three smaller fixes shipped together once the backend crisis above was resolved:
   clicking it (after unblocking) successfully recovers and loads the
   dashboard.
 
+### Architecture reversal: dropped the Postgres backend, back to direct GitHub-commit publishing; removed multi-region support (2026-07-22)
+
+After the Postgres backend (M5+M6, further down this doc) was fully working
+end-to-end — chunked upload, CORS fixed, Neon's 64MB limit fixed, a real
+361,870-row publish confirmed live — you decided to reverse course: drop the
+Postgres/Neon backend entirely and go back to committing `data/latest.json`
+straight into this repo via GitHub's Git Data API (the original M5+M6
+design, before the pivot). Multi-region support (Region filter, Region
+Comparison view, per-region-sheet upload merging, region-scoped data wipe on
+apply) was removed at the same time, since the real day-to-day use is a
+single admin (Hathras) publishing a single-region file.
+
+- **Removed**: `relay/lib/db.js`, `relay/lib/cors.js`, `relay/lib/verify-admin.js`,
+  and the API routes `relay/api/data-latest.js`, `data-history.js`,
+  `data-rollback.js`, `publish-chunk.js`, `publish-finalize.js`. The
+  `@neondatabase/serverless` dependency was dropped from `relay/package.json`
+  (now dependency-free). The GitHub OAuth Device Flow relay (`device-start.js`,
+  `device-poll.js`) is **untouched** — that's a separate concern (GitHub's
+  device-code endpoints don't support CORS from a static site) and has
+  nothing to do with Postgres.
+- **`js/publish.js` rewritten** back to the pre-pivot design: commits
+  `data/latest.json` directly via the Git Data API (get ref → get base tree
+  → create data blob → create/update `data/history/index.json` blob →
+  create tree → create commit → update `refs/heads/main`), using the
+  Admin's own already-`repo`-scoped OAuth token — no server-side database,
+  no admin-verification endpoint (the token itself is the authorization, same
+  trust model as before the Postgres detour). Rollback fetches the old
+  version's file content via the Contents API and republishes it as a new
+  commit (never a destructive history rewrite), same as the original design.
+  History entries are capped at 60, with evicted files actually deleted from
+  the tree (`sha:null`), not just dropped from the index.
+- **`js/app.js`'s boot sequence** simplified back to a single
+  `fetch('data/latest.json?t='+Date.now())` — no backend URL, no fallback
+  chain. The auto-retry-then-Retry-button resilience added earlier this same
+  day (previous entry above) was kept, since a plain static-file fetch can
+  still hit a transient mobile-network blip.
+- **Multi-region UI removed**: Region filter dropdown, "Regions" nav item,
+  and the Region Comparison view are gone from `index.html`/`js/app.js`
+  (`populateRegionFilter`, `updateRegionsNavVisibility`, `renderRegionsView`,
+  `drillRegion`, `drillRegionFromRegionsView`, and the `regionMap`/`allRegions`
+  tracking inside `computeDashboardStats` all removed). Upload handling
+  reverted to single-sheet-only (`wb.Sheets[wb.SheetNames[0]]`) — the
+  per-sheet-per-region scanning added for the bank-wide `.xlsb` case (M5+M6
+  notes further down) no longer applies now that uploads are always a single
+  region's own file. `applyNewDataNow()` reverted to a plain full-replace
+  (new file's rows fully replace the old ones; any account missing from the
+  new file is treated as regularized/closed) instead of the region-scoped
+  partial wipe.
+  **Note**: the `Region` column itself (column 26 of the 27-column schema)
+  was deliberately **kept** in the data model — `mapHoRowsToNpa()` still
+  reads and stores it, and the CSV template still has a `Region` column,
+  since the real HO daily file always carries one and stripping it would
+  touch far more code (column indices, CSV template, validation) for no
+  actual benefit now that nothing reads it for filtering. It's simply unused
+  by the UI.
+- **Verified**: full syntax check on both changed JS files; a real headless
+  Chromium smoke test confirmed the dashboard renders correctly with no
+  region UI present and zero console errors; a Playwright test against a
+  **mocked** `api.github.com` (real device-flow login can't be automated,
+  same limitation as the original M5+M6 build) exercised the complete cycle
+  — upload → apply (confirmed full-replace correctly drops a removed
+  account and keeps others) → publish → a second publish → Version History
+  list (correctly shows both versions, newest first, no rollback button on
+  the current one) → rollback to the older version → re-publish — all 8
+  GitHub API calls fired in the right sequence each time, with zero errors.
+- **Not yet done**: the Postgres/Neon storage provisioned on the
+  `npa-dashboard` Vercel project (via the Storage tab) is now unused. It
+  costs nothing extra on the free tier and does no harm left as-is, but if
+  you want to remove it: Vercel dashboard → `npa-dashboard` project →
+  Storage tab → the Neon database → Settings → Disconnect/Delete. Not done
+  automatically since deleting a provisioned resource is exactly the kind of
+  action that should be your call, not an automatic side effect of a code
+  change.
+
 ### M2 completion notes (2026-07-21)
 
 Added GitHub OAuth **Device Flow** login, restricted to a single
