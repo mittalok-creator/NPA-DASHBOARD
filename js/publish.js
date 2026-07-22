@@ -26,6 +26,18 @@
     return await new Response(stream).arrayBuffer();
   }
 
+  // Vercel's request payload ceiling is empirically ~4.5MB, and a genuine
+  // bank-wide multi-region upload can exceed that even after gzip. The
+  // compressed payload is always split into raw-byte chunks safely under
+  // that ceiling and uploaded sequentially, then reassembled server-side --
+  // simpler to always chunk (even a 1-chunk "small" upload) than to branch
+  // between two different upload paths.
+  const CHUNK_SIZE = 3 * 1024 * 1024; // 3MB, comfortably under the ~4.5MB ceiling
+
+  function makeUploadId() {
+    return 'up_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+  }
+
   /* meta: { asOnDate, rowCount, regions, publishedBy(ignored, server derives it), isRollback } */
   async function publishData(dataObj, meta, onProgress) {
     meta = meta || {};
@@ -36,19 +48,38 @@
     progress('Compressing data…');
     const payloadText = JSON.stringify({ data: dataObj, meta });
     const compressed = await compressToGzip(payloadText);
+    const bytes = new Uint8Array(compressed);
+    const totalChunks = Math.max(1, Math.ceil(bytes.length / CHUNK_SIZE));
+    const uploadId = makeUploadId();
 
-    progress('Uploading to server…');
-    const res = await fetch(RELAY_BASE_URL + '/api/publish', {
+    for (let i = 0; i < totalChunks; i++) {
+      progress(`Uploading (${i + 1}/${totalChunks})…`);
+      const chunk = bytes.subarray(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, bytes.length));
+      const res = await fetch(RELAY_BASE_URL + '/api/publish-chunk', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/octet-stream',
+          'X-Upload-Id': uploadId,
+          'X-Chunk-Index': String(i),
+          'X-Total-Chunks': String(totalChunks),
+        },
+        body: chunk,
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || (`Chunk ${i + 1}/${totalChunks} upload failed: ${res.status}`));
+      }
+    }
+
+    progress('Finalizing…');
+    const finalRes = await fetch(RELAY_BASE_URL + '/api/publish-finalize', {
       method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + token,
-        'Content-Type': 'application/json',
-        'Content-Encoding': 'gzip',
-      },
-      body: compressed,
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uploadId }),
     });
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(result.error || ('Server returned ' + res.status));
+    const result = await finalRes.json().catch(() => ({}));
+    if (!finalRes.ok) throw new Error(result.error || ('Server returned ' + finalRes.status));
 
     progress('Published.');
     return { versionId: result.id, publishedAt: result.publishedAt };
