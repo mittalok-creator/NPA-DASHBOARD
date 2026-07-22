@@ -1,9 +1,9 @@
-// Public, no login needed (Viewers never authenticate). Response is
-// gzip-compressed server-side -- browsers decompress Content-Encoding: gzip
-// transparently, so js/app.js's plain fetch(...).then(r=>r.json()) needs no
-// change, but the actual bytes crossing the wire (and counted against any
-// platform response-size limit) are a fraction of the raw JSON size.
-import zlib from 'zlib';
+// Public, no login needed (Viewers never authenticate). The stored data is
+// already gzip-compressed (see db.js), so this just decodes the base64 and
+// ships the compressed bytes straight through with Content-Encoding: gzip
+// -- browsers decompress that transparently, so js/app.js's plain
+// fetch(...).then(r=>r.json()) needs no change, and no re-compression work
+// happens on every request.
 import { setCors, handlePreflight } from '../lib/cors.js';
 import { getCurrentVersion } from '../lib/db.js';
 
@@ -14,8 +14,8 @@ export default async function handler(req, res) {
 
   try {
     const current = await getCurrentVersion();
-    if (!current) { res.status(404).json({ error: 'no_data_published_yet' }); return; }
-    const gzipped = zlib.gzipSync(JSON.stringify(current.data));
+    if (!current || !current.dataGzipB64) { res.status(404).json({ error: 'no_data_published_yet' }); return; }
+    const gzipped = Buffer.from(current.dataGzipB64, 'base64');
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Encoding', 'gzip');
     res.setHeader('Cache-Control', 'no-store');

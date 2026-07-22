@@ -375,6 +375,67 @@ payload built from randomized (poorly-compressible) strings to force 3
 real chunks rather than collapsing to 1 the way realistic repeated test
 data tends to.
 
+### Bug fix: CORS preflight blocked the chunked upload's custom headers (2026-07-22, same day)
+
+The chunked upload shipped above still failed with a generic "Failed to
+fetch" on your first retry. Root cause: `publish-chunk.js` reads
+`X-Upload-Id`/`X-Chunk-Index`/`X-Total-Chunks` request headers, but
+`cors.js`'s `Access-Control-Allow-Headers` never listed them — a browser's
+CORS preflight silently rejects the actual request if a custom header
+isn't explicitly allowed, which is invisible to `curl` (it doesn't enforce
+CORS at all) and to the earlier Playwright tests (mocked responses bypass
+real CORS enforcement entirely). Added the three headers to the allow-list
+and confirmed via a real `OPTIONS` preflight request that the corrected
+header list is actually being served.
+
+### Audit pass + one more real bug: Neon's own 64MiB query limit (2026-07-22, same day)
+
+Asked to audit the backend code before the next retry. Found and fixed:
+a dead, superseded `relay/api/publish.js` (still carrying the old 4.5MB
+single-request ceiling, removed entirely rather than left as misleading
+unused code), and a stale code comment still describing the old
+GitHub-commit design. Also fixed `js/publish.js` silently discarding the
+server's `detail` field on error, showing only a generic code like
+"finalize_failed" — needed to actually diagnose the next failure rather
+than guess.
+
+That diagnostic fix immediately paid off: your next retry (the real
+full-bank file, 3,61,870 accounts / 22 regions, needing 7 upload chunks)
+failed with a fully visible error this time — **`request is too large (max
+is 67108864 bytes)`**, a **Neon-specific 64 MiB limit on the query itself**,
+completely different from Vercel's ~4.5MB request-body ceiling the chunked
+upload already solved. Root cause: `publishVersion()` was decompressing
+the reassembled chunks back to the full raw JSON (~87MB for the real file)
+and embedding that directly in the `INSERT` as a JSONB parameter — the
+chunking fix solved getting data *into* the function, but not this second,
+separate ceiling on the query *out* to the database.
+
+Fixed by never decompressing before storage: `npa_versions.data` (JSONB)
+was replaced with `data_gzip_b64` (TEXT) — the *already-compressed* bytes
+from chunk reassembly, base64-encoded, stored as-is. For the real file
+this is ~20MB base64, comfortably under Neon's 64MB limit. Knock-on
+simplifications: `/api/data-latest` no longer re-compresses on every
+request (the stored bytes already are gzip, just decode-and-send);
+rollback no longer decompresses/re-parses the blob at all (`row_count` and
+`regions` were already recorded as separate plain columns when the version
+was first published, so rollback is a pure metadata + blob copy).
+
+**Verified before shipping**, having been burned by shipping-then-finding-out
+four times in one day already: (1) the schema migration specifically —
+simulated the *actual* production table (already created with the old
+`data JSONB` column) and confirmed the new code correctly adds
+`data_gzip_b64` and drops the old column. This caught a real bug in the
+first draft of the migration: `CREATE TABLE IF NOT EXISTS` does **not**
+add new columns to an already-existing table, so the first version of this
+fix would have silently failed to create `data_gzip_b64` at all, causing a
+fifth failure. (2) A full publish → rollback cycle against a real local
+Postgres using a 361,870-row payload of genuinely randomized (poorly
+compressible) data sized to match the real failure (87MB raw, 15MB gzip,
+20MB base64) — confirmed the large version publishes correctly, decompresses
+back to the exact original row count, and that rolling back to it
+afterward reproduces the exact original bytes with zero decompression
+needed in the rollback path itself.
+
 ### M2 completion notes (2026-07-21)
 
 Added GitHub OAuth **Device Flow** login, restricted to a single
