@@ -1,4 +1,3 @@
-const __otsData = JSON.parse(document.getElementById('ots-data').textContent);
 function initApp(DATA){
 /* ---------- NPA column map ---------- */
 const C = {
@@ -597,6 +596,8 @@ function renderPrintView(){
 
 function toggleUpdateModal(show){
   document.getElementById('updateModalOverlay').classList.toggle('show', show);
+  closePublishReview();
+  if(show) loadVersionHistory();
   if(!show){
     document.getElementById('uploadStatus').innerHTML='';
     document.getElementById('uploadSummary').innerHTML='';
@@ -1089,12 +1090,20 @@ function applyNewDataNow(){
   const staleMsg = staleRemovedCount>0 ? ` (${staleRemovedCount.toLocaleString('en-IN')} account(s) from the previous data for this region no longer appear — regularized/closed accounts removed.)` : '';
   document.getElementById('uploadStatus').innerHTML = `<div class="upload-status ok">✔ Data updated — ${DATA.npa.rows.length.toLocaleString('en-IN')} NPA rows now active.${staleMsg}</div>`;
   document.getElementById('downloadAppBtn').disabled = false;
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+  __lastApplyMeta = {
+    touchedRegions: Array.from(touchedRegions).sort(),
+    staleRemovedCount,
+    newRowCount: newRows.length,
+  };
   document.getElementById('searchHeader').style.display='';
   renderEmpty();
   renderDashboard();
   __pendingData = null;
   __pendingAsOnDate = null;
 }
+let __lastApplyMeta = null;
 
 function fmtAsOnDisplay(){
   if(DATA.asOnDate){
@@ -1134,18 +1143,147 @@ function downloadMasterTemplate(){
 }
 
 function downloadUpdatedApp(){
-  const dataEl = document.getElementById('ots-data');
-  if(dataEl) dataEl.textContent = JSON.stringify({ npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null });
-  const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-  const blob = new Blob([html], {type:'text/html'});
+  const json = JSON.stringify({ npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null });
+  const blob = new Blob([json], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
+  const dateTag = (DATA.asOnDate||'').replace(/[^0-9]/g,'') || 'backup';
   a.href = url;
-  a.download = 'UPGB_OTS_Intelligence_Platform_updated.html';
+  a.download = `UPGB_NPA_data_backup_${dateTag}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url), 60000);
+}
+
+/* ---------- Publish to live site (commits data/latest.json via GitHub's
+   Git Data API, using the Admin's own already-repo-scoped OAuth token) ---------- */
+let __pendingPublish = null; // { jsonString, meta } staged for confirmPublish()
+
+function serializeCurrentData(){
+  return JSON.stringify({ npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null });
+}
+function computeCurrentDataSummary(){
+  const regions = new Set();
+  DATA.npa.rows.forEach(r=>{ const reg = String(r[C.REGION]||''); if(reg) regions.add(reg); });
+  return { rowCount: DATA.npa.rows.length, regions: Array.from(regions).sort(), asOnDate: DATA.asOnDate||null };
+}
+function openPublishReview(){
+  const summary = computeCurrentDataSummary();
+  const meta = __lastApplyMeta || {};
+  const user = (window.UPGBAuth && window.UPGBAuth.getCurrentUser()) || {};
+  const staleLine = meta.staleRemovedCount>0
+    ? `<div class="pr-warn">${meta.staleRemovedCount.toLocaleString('en-IN')} account(s) removed as regularized/closed for the region(s) you just updated.</div>`
+    : '';
+  const regionsLine = meta.touchedRegions && meta.touchedRegions.length
+    ? `<div>Region(s) updated this time: <b>${esc(meta.touchedRegions.join(', '))}</b></div>`
+    : '';
+  document.getElementById('publishReviewSummary').innerHTML = `
+    <div>Data as on: <b>${esc(fmtAsOnDisplay())}</b></div>
+    <div>Total accounts live after publish: <b>${summary.rowCount.toLocaleString('en-IN')}</b></div>
+    <div>All regions in this dataset: <b>${esc(summary.regions.join(', ') || '—')}</b></div>
+    ${regionsLine}
+    ${staleLine}
+    <div style="margin-top:8px;color:var(--sub)">Publishing as <b>${esc(user.login||'unknown')}</b>. Goes live on npadashboard.alokmittal.net within about a minute.</div>
+  `;
+  __pendingPublish = {
+    jsonString: serializeCurrentData(),
+    meta: {
+      asOnDate: summary.asOnDate,
+      rowCount: summary.rowCount,
+      regions: summary.regions,
+      commitMessage: `Publish NPA data: ${summary.rowCount.toLocaleString('en-IN')} accounts, as on ${summary.asOnDate||'unknown'}${meta.touchedRegions && meta.touchedRegions.length ? ' ('+meta.touchedRegions.join(', ')+')' : ''}`,
+      publishedBy: user.login || null,
+      isRollback: false,
+    },
+  };
+  document.getElementById('publishConfirmBtn').textContent = 'Confirm & Publish';
+  document.getElementById('publishReviewPanel').style.display = 'block';
+  document.getElementById('publishStatus').innerHTML = '';
+}
+function closePublishReview(){
+  const panel = document.getElementById('publishReviewPanel');
+  if(panel) panel.style.display = 'none';
+  __pendingPublish = null;
+}
+async function confirmPublish(){
+  if(!__pendingPublish || !window.UPGBPublish) return;
+  const confirmBtn = document.getElementById('publishConfirmBtn');
+  const cancelBtn = document.getElementById('publishCancelBtn');
+  const statusEl = document.getElementById('publishStatus');
+  confirmBtn.disabled = true; cancelBtn.disabled = true;
+  confirmBtn.classList.add('is-loading');
+  try{
+    const result = await window.UPGBPublish.publishData(__pendingPublish.jsonString, __pendingPublish.meta, (msg)=>{
+      statusEl.innerHTML = `<div class="upload-status ok">⏳ ${esc(msg)}</div>`;
+    });
+    statusEl.innerHTML = `<div class="upload-status ok">✔ Published. Live at npadashboard.alokmittal.net within ~30-60s (commit ${esc(result.commitSha.slice(0,7))}).</div>`;
+    document.getElementById('publishBtn').disabled = true;
+    closePublishReview();
+    loadVersionHistory();
+  } catch(err){
+    statusEl.innerHTML = `<div class="upload-status err">⚠ Publish failed: ${esc(err.message||err)}. Nothing changed on the live site — safe to retry.</div>`;
+  } finally {
+    confirmBtn.disabled = false; cancelBtn.disabled = false;
+    confirmBtn.classList.remove('is-loading');
+  }
+}
+async function loadVersionHistory(){
+  const listEl = document.getElementById('versionHistoryList');
+  const countEl = document.getElementById('versionHistoryCount');
+  if(!listEl || !window.UPGBPublish) return;
+  listEl.innerHTML = '<div style="padding:8px 0;color:var(--sub);font-size:11.5px">Loading…</div>';
+  try{
+    const history = await window.UPGBPublish.getHistoryIndex();
+    if(countEl) countEl.textContent = history.length ? `(${history.length})` : '';
+    if(!history.length){ listEl.innerHTML = '<div style="padding:8px 0;color:var(--sub);font-size:11.5px">No published versions yet.</div>'; return; }
+    listEl.innerHTML = history.map((v,i)=>`
+      <div class="version-row${i===0?' current':''}">
+        <div>
+          <span class="vr-meta">${esc(v.date||'Unknown date')} — ${(v.rowCount||0).toLocaleString('en-IN')} accounts</span>
+          <span class="vr-sub">${esc((v.regions||[]).join(', '))}${v.isRollback?' · rollback':''} · published ${v.publishedAt?new Date(v.publishedAt).toLocaleString('en-IN'):''}${v.publishedBy?' by '+esc(v.publishedBy):''}</span>
+        </div>
+        ${i===0?'':`<button type="button" onclick="rollbackToVersion('${esc(v.file)}','${esc(v.date||'')}')">Rollback to this</button>`}
+      </div>
+    `).join('');
+  } catch(err){
+    listEl.innerHTML = `<div style="padding:8px 0;color:var(--red);font-size:11.5px">Could not load version history: ${esc(err.message||err)}</div>`;
+  }
+}
+async function rollbackToVersion(fileName, dateLabel){
+  if(!window.UPGBPublish) return;
+  const listEl = document.getElementById('versionHistoryList');
+  try{
+    const content = await window.UPGBPublish.getHistoryFileContent(fileName);
+    const parsed = JSON.parse(content);
+    const rowCount = parsed.npa && parsed.npa.rows ? parsed.npa.rows.length : 0;
+    const regions = new Set();
+    if(parsed.npa && parsed.npa.rows) parsed.npa.rows.forEach(r=>{ const reg=String(r[26]||''); if(reg) regions.add(reg); });
+    const user = (window.UPGBAuth && window.UPGBAuth.getCurrentUser()) || {};
+    document.getElementById('publishReviewSummary').innerHTML = `
+      <div class="pr-warn">You are about to roll back the LIVE site to an older version.</div>
+      <div>Version date: <b>${esc(dateLabel||'unknown')}</b></div>
+      <div>Accounts in this version: <b>${rowCount.toLocaleString('en-IN')}</b></div>
+      <div>Regions: <b>${esc(Array.from(regions).sort().join(', ')||'—')}</b></div>
+      <div style="margin-top:8px;color:var(--sub)">This publishes the old version again as the new current version — nothing in your current session's applied data is used.</div>
+    `;
+    __pendingPublish = {
+      jsonString: content,
+      meta: {
+        asOnDate: parsed.asOnDate || null,
+        rowCount,
+        regions: Array.from(regions).sort(),
+        commitMessage: `Rollback NPA data to version ${dateLabel||fileName}`,
+        publishedBy: user.login || null,
+        isRollback: true,
+      },
+    };
+    document.getElementById('publishConfirmBtn').textContent = 'Confirm Rollback';
+    document.getElementById('publishReviewPanel').style.display = 'block';
+    document.getElementById('publishStatus').innerHTML = '';
+  } catch(err){
+    if(listEl) listEl.insertAdjacentHTML('beforeend', `<div style="color:var(--red);font-size:11.5px">Could not load that version: ${esc(err.message||err)}</div>`);
+  }
 }
 
 /* ---------- Cmd+K quick search palette ---------- */
@@ -1682,6 +1820,7 @@ function showHighValueCustList(){
 }
 window.drillBranch = drillBranch;
 window.drillRegion = drillRegion;
+window.rollbackToVersion = rollbackToVersion;
 window.drillRegionFromRegionsView = drillRegionFromRegionsView;
 window.showAssetList = showAssetList;
 window.showBucketList = showBucketList;
@@ -1863,6 +2002,9 @@ function toggleTheme(){
   on('updateCancelBtn','click',()=>toggleUpdateModal(false));
   on('applyDataBtn','click',()=>applyNewData());
   on('downloadAppBtn','click',()=>downloadUpdatedApp());
+  on('publishBtn','click',()=>openPublishReview());
+  on('publishCancelBtn','click',()=>closePublishReview());
+  on('publishConfirmBtn','click',()=>confirmPublish());
   on('eligibleBanner','click',()=>document.getElementById('eligibleBanner').classList.remove('show'));
   on('dashRegionFilter','change',()=>{ populateBranchFilterForRegion(); renderDashboardSmooth(); });
   on('dashBranchFilter','change',()=>renderDashboardSmooth());
@@ -1883,4 +2025,23 @@ window.toggleFreeze = toggleFreeze;
 window.onOtsInput = onOtsInput;
 }
 
-initApp(__otsData);
+/* Data now lives in data/latest.json (not baked into index.html) so a daily
+   publish only ever commits a small data file, never the whole app shell.
+   The timestamp query param bypasses HTTP/CDN caching -- this is live
+   banking data and must never be served stale while a real connection is
+   available (same reasoning as the service worker's network-first fetch). */
+fetch('data/latest.json?t=' + Date.now())
+  .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+  .then(data => {
+    const overlay = document.getElementById('dataLoadingOverlay');
+    if(overlay) overlay.classList.add('hidden');
+    initApp(data);
+  })
+  .catch(err => {
+    const overlay = document.getElementById('dataLoadingOverlay');
+    if(overlay){
+      overlay.classList.remove('hidden');
+      overlay.innerHTML = '<div class="data-loading-text err">Could not load NPA data. Check your internet connection and reload the page.</div>';
+    }
+    console.error('Failed to load data/latest.json', err);
+  });
