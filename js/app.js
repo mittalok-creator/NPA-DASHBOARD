@@ -2039,7 +2039,7 @@ window.onOtsInput = onOtsInput;
    Reads from the real backend (Postgres, via /relay) first; falls back to
    the static data/latest.json snapshot committed in this repo only if the
    backend is unreachable (e.g. mid-migration, or a transient outage). */
-const RELAY_DATA_URL = 'https://npa-dashboard.vercel.app/api/data/latest?t=' + Date.now();
+const RELAY_DATA_URL = 'https://npa-dashboard.vercel.app/api/data-latest?t=' + Date.now();
 const FALLBACK_DATA_URL = 'data/latest.json?t=' + Date.now();
 function fetchJson(url){
   return fetch(url).then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });

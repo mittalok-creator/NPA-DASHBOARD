@@ -55,7 +55,7 @@
   }
 
   async function getHistoryIndex() {
-    const res = await fetch(RELAY_BASE_URL + '/api/data/history');
+    const res = await fetch(RELAY_BASE_URL + '/api/data-history');
     if (!res.ok) return [];
     return res.json();
   }
@@ -66,7 +66,7 @@
     if (!token) throw new Error('Not signed in as Admin -- sign in with GitHub first.');
 
     progress('Rolling back…');
-    const res = await fetch(RELAY_BASE_URL + '/api/data/rollback', {
+    const res = await fetch(RELAY_BASE_URL + '/api/data-rollback', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ versionId }),
