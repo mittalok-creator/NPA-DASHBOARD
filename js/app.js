@@ -1856,6 +1856,15 @@ function toggleTheme(){
   on('publishConfirmBtn','click',()=>confirmPublish());
   on('eligibleBanner','click',()=>document.getElementById('eligibleBanner').classList.remove('show'));
   on('dashBranchFilter','change',()=>renderDashboardSmooth());
+  on('refreshDataBtn','click',(e)=>{
+    // A full reload (not just re-fetching data/latest.json) also picks up
+    // any newly published app-shell code, and the service worker's
+    // network-first fetch (sw.js) means this always gets whatever is
+    // actually live, never a stale cached copy, as long as there's a
+    // connection.
+    e.currentTarget.classList.add('is-spinning');
+    location.reload();
+  });
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{
     b.addEventListener('click',()=>switchView(b.dataset.view));
   });

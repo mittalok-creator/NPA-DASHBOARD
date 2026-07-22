@@ -436,6 +436,20 @@ back to the exact original row count, and that rolling back to it
 afterward reproduces the exact original bytes with zero decompression
 needed in the rollback path itself.
 
+### Manual refresh button on the Dashboard (2026-07-22, same day)
+
+Added a small circular refresh icon next to the Dashboard title (`#refreshDataBtn`,
+reuses the same icon already used for "Data" in the mobile bottom nav, for visual
+consistency). Every viewer — not just the Admin — sees it. Clicking it does a full
+page reload rather than just re-fetching `data/latest.json`, so it also picks up
+any newly published app-shell code, not only new data. This is safe and always
+gets whatever is actually live: `sw.js`'s service worker is network-first (tries
+the network before ever falling back to its cache), so a reload is never served a
+stale cached copy while there's a real connection. This closes a real gap for
+anyone who keeps the PWA open for a while (installed to a phone's home screen, no
+visible browser reload button) and has no other way to know new data has been
+published without fully closing and reopening the app.
+
 ### Bug fix: "Crafted by Alok Mittal" signature overlapping the OTS totals bar on mobile (2026-07-22, same day)
 
 You reported the account detail view's bottom "Total OTS/Net O/S/P&L/Sacrifice/Impact"
