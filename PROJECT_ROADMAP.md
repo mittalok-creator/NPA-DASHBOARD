@@ -527,6 +527,53 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### New "KCC Overdue" tab: Hathras-only, 3 schemes, rich filters (2026-07-23, same day)
+
+You uploaded `KCC_OVERDUE_22072026.xlsx` — a Hathras-only, already-
+classified-NPA export limited to exactly 3 schemes (KCC/CC004,
+KCC Animal Husbandry/CC043, OD-023 Tatkal) — and asked for a new tab
+designed like the Dashboard, with heavy filtering: F.Y.-wise, Cust NPA
+Date (month-wise or between two custom dates), and scheme-wise, plus the
+usual daily-upload-via-Settings flow.
+
+- **New, fourth independent dataset** (`data/kcc-overdue.json`), separate
+  from `data/latest.json`, `data/bank-npa.json`, and `data/pnpa.json`.
+  Unlike PNPA, this source file is already Hathras-scoped (verified: all
+  9,744 rows were `Region=HATHRAS`) — the parser still defensively drops
+  any stray non-Hathras row in case a future export widens scope, but no
+  active whole-bank filtering was needed this time.
+- Only the 3 named scheme codes are kept; there's no "Other" catch-all
+  bucket here (unlike PNPA's 4th bucket) — anything else is simply
+  dropped, since Alok only asked for these 3.
+- **Bug fix, found while building this**: `toDate()` had no case for a
+  native JS `Date` object — when SheetJS parses a file with
+  `cellDates:true` (which every client-side upload here uses), date cells
+  arrive as real `Date` instances, not Excel serial numbers or strings.
+  `toDate()` silently returned `null` for those, meaning **Review Date on
+  the PNPA tab has likely been coming back blank for real browser
+  uploads** even though the one-off Python-regenerated data looked fine.
+  Fixed by adding a `v instanceof Date` branch; benefits both this new tab
+  (Cust NPA Date filtering depends on it working) and PNPA retroactively.
+- **F.Y. column quirk**: the source cell's actual text is `"MAR-27"`
+  (with literal double-quote characters baked into the string) — almost
+  certainly HO's own guard against Excel auto-parsing "MAR-27" as a date.
+  Stripped before display/filtering/dropdown-population.
+- Filters, all combinable: **Branch/Regional Office** dropdown (same
+  pattern just built for PNPA, on top); **F.Y.** dropdown (today's data:
+  MAR-27, MAR-28); **Cust NPA Date**, switchable between a month picker
+  and a from/to custom date-range picker via a small tab toggle. All
+  filters apply live to both the 3 scheme hero cards' totals and the
+  branch-wise summary beneath them (matching the "blocks reflect the
+  filter" behavior just fixed on PNPA).
+- Account drill-down list (tap any branch row): Account No, Name, O/S,
+  CADU, Limit, Cust NPA Date, F.Y., Category, SMA Status — sortable,
+  reusing the same generic list-modal component as the other tabs.
+- New upload section in Update Data (separate file input, same
+  immediate-apply + Publish `extraFiles` pattern as PNPA/Bank PDF).
+- Published today's real file: 9,744 accounts as on 22-07-2026 — KCC
+  8,738 (₹219.07 Cr, 55 branches), KCC-AH 884 (₹10.81 Cr, 48 branches),
+  OD-023 122 (₹1.13 Cr, 20 branches).
+
 ### Daily PNPA: dropdown moved above the bucket blocks, blocks now scope to the selected branch (2026-07-23, same day)
 
 Two follow-up asks: put the Branch dropdown on top, and make the

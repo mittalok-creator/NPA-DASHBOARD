@@ -35,6 +35,7 @@ const XL_EPOCH = new Date(1899,11,30);
 function excelSerialToDate(n){ return new Date(XL_EPOCH.getTime() + n*86400000); }
 function toDate(v){
   if(v===''||v===null||v===undefined) return null;
+  if(v instanceof Date) return isNaN(v.getTime()) ? null : v;
   if(typeof v==='number') return excelSerialToDate(v);
   if(typeof v==='string'){
     const m = v.split('-');
@@ -1425,6 +1426,9 @@ async function confirmPublish(){
     if(__pendingPublish.type!=='rollback' && __pendingPnpaData){
       extraFiles = (extraFiles||[]).concat([{ path:'data/pnpa.json', content: __pendingPnpaData }]);
     }
+    if(__pendingPublish.type!=='rollback' && __pendingKccOverdueData){
+      extraFiles = (extraFiles||[]).concat([{ path:'data/kcc-overdue.json', content: __pendingKccOverdueData }]);
+    }
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
       : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress, extraFiles);
@@ -1432,6 +1436,7 @@ async function confirmPublish(){
     document.getElementById('publishBtn').disabled = true;
     __pendingBankData = null;
     __pendingPnpaData = null;
+    __pendingKccOverdueData = null;
     closePublishReview();
     loadVersionHistory();
   } catch(err){
@@ -1815,6 +1820,7 @@ function renderListModalBody(resetScroll){
   updateSortIcons('listModalHead', listModalState.sort);
   if(listModalState.type==='cust'){ body.innerHTML = custRows(sorted); }
   else if(listModalState.type==='pnpa'){ body.innerHTML = pnpaAcctRows(sorted); }
+  else if(listModalState.type==='kccov'){ body.innerHTML = kccovAcctRows(sorted); }
   else{
     body.innerHTML = '';
     const shownRef = {n:0};
@@ -2718,6 +2724,306 @@ function pnpaShowBranchAccounts(bucket, branch){
 }
 window.pnpaShowBranchAccounts = pnpaShowBranchAccounts;
 
+/* ---------- KCC Overdue -- Hathras-only, restricted to 3 schemes, rich filters ----------
+   Unlike PNPA, the source "KCC Overdue" file is already Hathras-scoped (confirmed
+   against a real file: all rows were Region=HATHRAS), so no whole-bank filtering is
+   needed -- but the parser still defensively drops any stray non-Hathras row in
+   case a future export widens scope. Only rows matching one of the 3 known scheme
+   codes are kept; there is no "Other" catch-all bucket here (unlike PNPA). */
+const KC = {BRANCH:0, SCHEME:1, ACCT:2, NAME:3, OS:4, CADU:5, LIMIT:6, REVIEW:7, CUSTNPADATE:8, FY:9, CATEGORY:10, SMA:11, REASON:12};
+const KCC_OVERDUE_SCHEMES = [
+  {key:'kcc', code:'CC004', label:'KCC'},
+  {key:'kccah', code:'CC043', label:'KCC — Animal Husbandry'},
+  {key:'od023', code:'OD023', label:'OD-023 (Tatkal)'},
+];
+function kccOverdueBucketOf(scheme){
+  const m = KCC_OVERDUE_SCHEMES.find(s=>s.code===scheme);
+  return m ? m.key : null;
+}
+/* The source file's F.Y. column stores its value with literal double-quote
+   characters around it (e.g. the cell's actual text is ["MAR-27"], not just
+   MAR-27) -- almost certainly the HO export's own guard against Excel trying
+   to auto-parse "MAR-27" as a date. Stripped for display/filtering. */
+function stripQuoteChars(s){ return String(s||'').replace(/^"+|"+$/g,'').trim(); }
+function parseKccOverdueRows(headerCells, dataRows){
+  const header = headerCells.map(normHeader);
+  const idx = (name) => header.indexOf(normHeader(name));
+  const idxPrefix = (name) => header.findIndex(h=>h.startsWith(normHeader(name)));
+  const iRegion=idx('region'), iBranch=idx('branch'), iAcct=idx('accountno'), iScheme=idx('schemecode'),
+    iName=idx('accountname'), iBal=idxPrefix('balanceamount'), iCadu=idx('cadu'), iLimit=idx('limit'),
+    iReview=idx('reviewdate'), iCustNpa=idx('custnpadate'), iFy=idx('fy'), iCategory=idx('category'),
+    iSma=idx('smastatus'), iReason=idx('reasons');
+  const missing = [];
+  if(iAcct<0) missing.push('Account No');
+  if(iBranch<0) missing.push('Branch');
+  if(iScheme<0) missing.push('Scheme Code');
+  if(iBal<0) missing.push('Balance Amount');
+  if(iCustNpa<0) missing.push('Cust NPA Date');
+  if(missing.length) throw new Error('Missing required column(s): '+missing.join(', ')+'. Check this file matches the "KCC Overdue" export layout.');
+  const rows = [];
+  for(const row of dataRows){
+    if(!row || row.length<3) continue;
+    if(iRegion>=0){ const region = cellStr(row, iRegion); if(region && region.toUpperCase()!=='HATHRAS') continue; }
+    const scheme = cellStr(row, iScheme);
+    if(!kccOverdueBucketOf(scheme)) continue;
+    const acctRaw = cellStr(row, iAcct);
+    if(!acctRaw) continue;
+    let acctNo = acctRaw;
+    if(looksScientific(acctRaw)) acctNo = expandSci(acctRaw);
+    const reviewDt = toDate(iReview>=0?row[iReview]:'');
+    const custNpaDt = toDate(row[iCustNpa]);
+    rows.push([
+      cellStr(row, iBranch), scheme, acctNo, cellStr(row, iName),
+      parseFloat(row[iBal])||0, iCadu>=0?(parseFloat(row[iCadu])||0):0,
+      iLimit>=0?(parseFloat(row[iLimit])||0):0,
+      reviewDt ? fmtDate(reviewDt) : '',
+      custNpaDt ? fmtDate(custNpaDt) : '',
+      iFy>=0 ? stripQuoteChars(cellStr(row, iFy)) : '',
+      iCategory>=0 ? cellStr(row, iCategory) : '',
+      iSma>=0 ? cellStr(row, iSma) : '',
+      iReason>=0 ? cellStr(row, iReason) : '',
+    ]);
+  }
+  return rows;
+}
+let KCC_OVERDUE_DATA = null;
+let __pendingKccOverdueData = null;
+let kccovSchemeTab = 'kcc';
+let kccovBranchFilter = '';
+let kccovFyFilter = '';
+let kccovDateMode = 'month';
+let kccovMonthFilter = '';
+let kccovDateFrom = '';
+let kccovDateTo = '';
+function setKccovSchemeTab(tab){ kccovSchemeTab = tab; renderKccOverdueBody(); }
+window.setKccovSchemeTab = setKccovSchemeTab;
+function setKccovDateMode(mode){ kccovDateMode = mode; renderKccOverdueBody(); }
+window.setKccovDateMode = setKccovDateMode;
+
+function handleKccOverdueUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const labelEl = document.getElementById('kccOverdueUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('kccOverdueUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading KCC Overdue file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      let header, dataRows;
+      if(isCsv){
+        const allRows = parseCSV(String(e.target.result));
+        header = allRows[0]||[]; dataRows = allRows.slice(1);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        const sheetName = wb.SheetNames.find(n=>/kcc|overdue/i.test(n)) || wb.SheetNames[0];
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+        header = raw[0]||[]; dataRows = raw.slice(1);
+      }
+      const rows = parseKccOverdueRows(header, dataRows);
+      if(!rows.length) throw new Error('No account rows found in this file.');
+      const guessed = parseAsOnDateFromFilename(file.name);
+      const asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
+      __pendingKccOverdueData = { asOnDate, rows };
+      KCC_OVERDUE_DATA = __pendingKccOverdueData;
+      const label = document.getElementById('kccovStatusLabel');
+      if(label) label.textContent = `${rows.length.toLocaleString('en-IN')} accounts loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${rows.length.toLocaleString('en-IN')} accounts, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.</div>`;
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.querySelector('.view.active')?.dataset.view==='kccov') renderKccOverdueBody();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
+function renderKccOverdue(){
+  const el = document.getElementById('kccOverdueArea');
+  if(!el) return;
+  if(KCC_OVERDUE_DATA){ renderKccOverdueBody(); return; }
+  el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading KCC Overdue data…</p></div>`;
+  fetchJson('data/kcc-overdue.json?t=' + Date.now())
+    .then(d => { KCC_OVERDUE_DATA = d; renderKccOverdueBody(); })
+    .catch(() => {
+      el.innerHTML = `<div class="empty-state"><h2>Could not load KCC Overdue data</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
+    });
+}
+function refreshKccOverdue(){ KCC_OVERDUE_DATA = null; renderKccOverdue(); }
+
+function kccovFilteredRows(d){
+  let rows = d.rows;
+  if(kccovBranchFilter) rows = rows.filter(r=>r[KC.BRANCH]===kccovBranchFilter);
+  if(kccovFyFilter) rows = rows.filter(r=>r[KC.FY]===kccovFyFilter);
+  if(kccovDateMode==='month' && kccovMonthFilter){
+    const [y,m] = kccovMonthFilter.split('-').map(Number);
+    rows = rows.filter(r=>{ const dt = toDate(r[KC.CUSTNPADATE]); return dt && dt.getFullYear()===y && (dt.getMonth()+1)===m; });
+  } else if(kccovDateMode==='range' && (kccovDateFrom || kccovDateTo)){
+    const from = kccovDateFrom ? new Date(kccovDateFrom+'T00:00:00') : null;
+    const to = kccovDateTo ? new Date(kccovDateTo+'T23:59:59') : null;
+    rows = rows.filter(r=>{
+      const dt = toDate(r[KC.CUSTNPADATE]);
+      if(!dt) return false;
+      if(from && dt < from) return false;
+      if(to && dt > to) return false;
+      return true;
+    });
+  }
+  return rows;
+}
+function kccovBranchAgg(rows, bucket){
+  const map = new Map();
+  for(const r of rows){
+    if(kccOverdueBucketOf(r[KC.SCHEME])!==bucket) continue;
+    const key = r[KC.BRANCH];
+    let e = map.get(key);
+    if(!e){ e = {branch:r[KC.BRANCH], count:0, os:0}; map.set(key,e); }
+    e.count++; e.os += r[KC.OS];
+  }
+  return [...map.values()].sort((a,b)=>b.os-a.os);
+}
+
+function renderKccOverdueBody(){
+  const el = document.getElementById('kccOverdueArea');
+  const d = KCC_OVERDUE_DATA;
+  if(!el) return;
+  if(!d || !d.rows){ el.innerHTML = `<div class="empty-state"><h2>No KCC Overdue data yet</h2><p>Upload the KCC Overdue file from Update Data to populate this tab.</p></div>`; return; }
+
+  document.querySelectorAll('.kccov-report-date-val').forEach(e=>{
+    const parts = (d.asOnDate||'').split('-');
+    e.textContent = parts.length===3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : (d.asOnDate||'—');
+  });
+
+  const allBranches = [...new Set(d.rows.map(r=>r[KC.BRANCH]))].sort((a,b)=>a.localeCompare(b));
+  const allFy = [...new Set(d.rows.map(r=>r[KC.FY]).filter(Boolean))].sort();
+  const branchFilterOptions = `<option value="">Regional Office</option>` +
+    allBranches.map(b=>`<option value="${esc(b)}"${kccovBranchFilter===b?' selected':''}>${esc(b)}</option>`).join('');
+  const fyFilterOptions = `<option value="">All F.Y.</option>` +
+    allFy.map(f=>`<option value="${esc(f)}"${kccovFyFilter===f?' selected':''}>${esc(f)}</option>`).join('');
+
+  const dateModeRow = `<div class="bank-tab-row" style="margin-bottom:10px">
+    <button type="button" class="bank-tab-btn${kccovDateMode==='month'?' active':''}" onclick="setKccovDateMode('month')">Cust NPA Date — By Month</button>
+    <button type="button" class="bank-tab-btn${kccovDateMode==='range'?' active':''}" onclick="setKccovDateMode('range')">By Date Range</button>
+  </div>`;
+  const dateInputsRow = kccovDateMode==='month'
+    ? `<input type="month" id="kccovMonthInput" class="dash-select" value="${esc(kccovMonthFilter)}" style="max-width:200px">`
+    : `<input type="date" id="kccovDateFromInput" class="dash-select" value="${esc(kccovDateFrom)}" style="max-width:170px">
+       <span style="color:var(--ink-mute);font-size:12px;align-self:center">to</span>
+       <input type="date" id="kccovDateToInput" class="dash-select" value="${esc(kccovDateTo)}" style="max-width:170px">`;
+
+  const toolbar = `<div class="dash-toolbar">
+      <span class="dash-toolbar-label">Branch</span>
+      <select id="kccovBranchFilterSelect" class="dash-select">${branchFilterOptions}</select>
+    </div>
+    <div class="bank-filter-row">
+      <select id="kccovFyFilterSelect" class="dash-select">${fyFilterOptions}</select>
+    </div>
+    ${dateModeRow}
+    <div class="bank-filter-row">${dateInputsRow}</div>`;
+
+  const filteredRows = kccovFilteredRows(d);
+  const bucketTotals = {};
+  KCC_OVERDUE_SCHEMES.forEach(s=>{ bucketTotals[s.key]={count:0,os:0,branches:new Set()}; });
+  for(const r of filteredRows){
+    const bk = kccOverdueBucketOf(r[KC.SCHEME]);
+    bucketTotals[bk].count++; bucketTotals[bk].os += r[KC.OS]; bucketTotals[bk].branches.add(r[KC.BRANCH]);
+  }
+  const bucketIcon = {kcc:ICON_TARGET, kccah:ICON_STAR, od023:ICON_ALERT_TRIANGLE};
+  const heroRow = `<div class="hero-kpi-row bank-hero-row">${KCC_OVERDUE_SCHEMES.map(s=>{
+    const t = bucketTotals[s.key], isActive = kccovSchemeTab===s.key;
+    return heroKpiCard({
+      id:'kccovHero_'+s.key, icon: bucketIcon[s.key],
+      tint: isActive?'var(--accent-soft)':'rgba(120,120,140,.12)', color: isActive?'var(--accent)':'var(--ink-mute)',
+      onclick:`setKccovSchemeTab('${s.key}')`,
+      label: s.label,
+      fallback: fmtCr(t.os),
+      sub: `${t.count.toLocaleString('en-IN')} accounts · ${t.branches.size.toLocaleString('en-IN')} branches`,
+      badge: isActive ? `<div class="hero-kpi-badge" style="background:var(--accent-soft);color:var(--accent)">Viewing</div>` : '',
+    });
+  }).join('')}</div>`;
+
+  el.innerHTML = toolbar + heroRow +
+    `<div class="chart-card" style="margin-top:20px">
+      <div class="section-label" id="kccovTableLabel"></div>
+      <div id="kccovBranchTableCard"></div>
+    </div>`;
+
+  const branchSel = document.getElementById('kccovBranchFilterSelect');
+  if(branchSel) branchSel.onchange = () => { kccovBranchFilter = branchSel.value; renderKccOverdueBody(); };
+  const fySel = document.getElementById('kccovFyFilterSelect');
+  if(fySel) fySel.onchange = () => { kccovFyFilter = fySel.value; renderKccOverdueBody(); };
+  const monthInput = document.getElementById('kccovMonthInput');
+  if(monthInput) monthInput.onchange = () => { kccovMonthFilter = monthInput.value; renderKccOverdueBody(); };
+  const fromInput = document.getElementById('kccovDateFromInput');
+  if(fromInput) fromInput.onchange = () => { kccovDateFrom = fromInput.value; renderKccOverdueBody(); };
+  const toInput = document.getElementById('kccovDateToInput');
+  if(toInput) toInput.onchange = () => { kccovDateTo = toInput.value; renderKccOverdueBody(); };
+
+  renderKccOverdueBranchTable(filteredRows);
+}
+
+function renderKccOverdueBranchTable(filteredRows){
+  const wrap = document.getElementById('kccovBranchTableCard');
+  const labelEl = document.getElementById('kccovTableLabel');
+  if(!wrap) return;
+  const activeScheme = KCC_OVERDUE_SCHEMES.find(s=>s.key===kccovSchemeTab);
+  const branchAgg = kccovBranchAgg(filteredRows, kccovSchemeTab);
+  const scopeLabel = kccovBranchFilter ? esc(kccovBranchFilter) : 'Regional Office (all branches)';
+  if(labelEl) labelEl.innerHTML = `${esc(activeScheme.label)} — Branch-wise Summary, highest O/S first<span class="chart-sub">Scheme ${esc(activeScheme.code)} · ${scopeLabel} · ${branchAgg.length.toLocaleString('en-IN')} branch(es) shown · tap a branch to see the account list</span>`;
+  const rowsHtml = branchAgg.map((r,i)=>`<tr class="clickable" onclick="kccovShowBranchAccounts('${kccovSchemeTab}','${esc(r.branch)}')">
+    <td><span class="dash-rank">${i+1}</span></td>
+    <td class="tal">${esc(r.branch)}</td>
+    <td>${r.count.toLocaleString('en-IN')}</td>
+    <td>${fmtCr(r.os)}</td>
+  </tr>`).join('');
+  wrap.innerHTML = `<div class="dash-table-wrap acct-list-scroll">
+    <table class="dash-table">
+      <thead><tr><th class="tal">Rank</th><th class="tal">Branch</th><th>Accounts</th><th>Total O/S</th></tr></thead>
+      <tbody>${rowsHtml || `<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">No branches match</td></tr>`}</tbody>
+    </table>
+  </div>`;
+}
+
+const KCCOV_ACCT_LIST_HEAD = '<tr>'
+  +'<th class="sortable" data-key="acctNo" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'acctNo\')">Account<span class="sort-ic">▾</span></th>'
+  +'<th class="tal sortable" data-key="name" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'name\')">Customer<span class="sort-ic">▾</span></th>'
+  +'<th class="sortable" data-key="os" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'os\')">O/S<span class="sort-ic">▾</span></th>'
+  +'<th class="sortable" data-key="cadu" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'cadu\')">CADU<span class="sort-ic">▾</span></th>'
+  +'<th class="sortable" data-key="limit" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'limit\')">Limit<span class="sort-ic">▾</span></th>'
+  +'<th class="tal sortable" data-key="custNpaDate" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'custNpaDate\')">Cust NPA Date<span class="sort-ic">▾</span></th>'
+  +'<th class="tal sortable" data-key="fy" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'fy\')">F.Y.<span class="sort-ic">▾</span></th>'
+  +'<th class="tal sortable" data-key="category" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'category\')">Category<span class="sort-ic">▾</span></th>'
+  +'<th class="tal sortable" data-key="sma" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'sma\')">SMA<span class="sort-ic">▾</span></th>'
+  +'</tr>';
+function kccovAcctRows(list){
+  if(!list.length) return `<tr><td colspan="9" style="text-align:center;color:var(--ink-mute)">No accounts</td></tr>`;
+  return list.map(a=>`<tr>
+    <td>${esc(a.acctNo)}</td>
+    <td class="tal">${esc(a.name)||'—'}</td>
+    <td>${fmtINR2(a.os)}</td>
+    <td>${fmtINR2(a.cadu)}</td>
+    <td>${fmtINR2(a.limit)}</td>
+    <td class="tal">${esc(a.custNpaDate)||'—'}</td>
+    <td class="tal">${esc(a.fy)||'—'}</td>
+    <td class="tal">${esc(a.category)||'—'}</td>
+    <td class="tal">${esc(a.sma)||'—'}</td>
+  </tr>`).join('');
+}
+function showKccovListModal(title, sub, list){ showListModal(title, sub, KCCOV_ACCT_LIST_HEAD, 'kccov', list, {key:'os',dir:'desc'}); }
+window.showKccovListModal = showKccovListModal;
+function kccovShowBranchAccounts(bucket, branch){
+  const filteredRows = kccovFilteredRows(KCC_OVERDUE_DATA);
+  const rows = filteredRows.filter(r=>kccOverdueBucketOf(r[KC.SCHEME])===bucket && r[KC.BRANCH]===branch);
+  const list = rows.map(r=>({ acctNo:r[KC.ACCT], name:r[KC.NAME], os:r[KC.OS], cadu:r[KC.CADU], limit:r[KC.LIMIT], custNpaDate:r[KC.CUSTNPADATE], fy:r[KC.FY], category:r[KC.CATEGORY], sma:r[KC.SMA] }));
+  const sLabel = (KCC_OVERDUE_SCHEMES.find(s=>s.key===bucket)||{}).label || bucket;
+  showKccovListModal(`${branch} — ${sLabel}`, `Hathras · ${list.length.toLocaleString('en-IN')} account(s)`, list);
+}
+window.kccovShowBranchAccounts = kccovShowBranchAccounts;
+
 /* ---------- Nav / view switching ---------- */
 function switchView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.dataset.view===view));
@@ -2725,6 +3031,7 @@ function switchView(view){
   if(view==='dashboard') renderDashboard();
   if(view==='bank') renderBankDashboard();
   if(view==='pnpa') renderPnpaDashboard();
+  if(view==='kccov') renderKccOverdue();
   const mainCol = document.getElementById('mainCol');
   if(mainCol) mainCol.scrollTop = 0;
 }
@@ -2770,6 +3077,8 @@ function toggleTheme(){
   on('bankPdfFileInput','change',(e)=>handleBankPdfUpload(e));
   on('pnpaUploadDrop','click',()=>document.getElementById('pnpaFileInput').click());
   on('pnpaFileInput','change',(e)=>handlePnpaUpload(e));
+  on('kccOverdueUploadDrop','click',()=>document.getElementById('kccOverdueFileInput').click());
+  on('kccOverdueFileInput','change',(e)=>handleKccOverdueUpload(e));
   on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
@@ -2799,6 +3108,11 @@ function toggleTheme(){
   on('pnpaRefreshBtn','click',(e)=>{
     e.currentTarget.classList.add('is-spinning');
     refreshPnpaDashboard();
+    setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
+  });
+  on('kccovRefreshBtn','click',(e)=>{
+    e.currentTarget.classList.add('is-spinning');
+    refreshKccOverdue();
     setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
   });
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{
