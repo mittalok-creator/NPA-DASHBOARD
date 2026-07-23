@@ -527,6 +527,28 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Standing rule: dates always DD-MM-YYYY, never locale-dependent (2026-07-23, same day)
+
+You asked that date format always be DD-MM-YYYY, everywhere. Audited
+every date display in the app — almost everything already went through
+`fmtDate()` (which always produces DD-MM-YYYY), with one real exception:
+
+- **Bug found + fixed**: the Version History list's "published ..."
+  timestamp used `new Date(v.publishedAt).toLocaleString('en-IN')` —
+  locale-dependent, and in practice renders as `D/M/YYYY, h:mm:ss am/pm`
+  (slashes, not dashes, and not guaranteed consistent across
+  browsers/devices). Added `fmtDateTime(d)`, which always formats the
+  date part via `fmtDate()` and only uses `toLocaleTimeString` for the
+  time-of-day (no date-format ambiguity there), and switched Version
+  History to it.
+- Documented this as a standing rule in a new `CLAUDE.md` (project root)
+  so it's remembered automatically in future sessions — including the
+  one legitimate exception: native `<input type="date">`/`type="month"`
+  elements, whose `value` attribute is required by the HTML spec to be
+  `YYYY-MM-DD`/`YYYY-MM` (that's wire format, not display, and the
+  on-screen picker rendering itself is native browser UI outside JS's
+  control).
+
 ### Main Dashboard: Branch Advance template extended with NPA March/June, same corner treatment (2026-07-23, same day)
 
 You re-uploaded the Branch Advance template, hand-modified with two new
