@@ -527,6 +527,25 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Bank Dashboard: Target/March consolidated into tabs on every card (2026-07-23, same day)
+
+You asked for the Target-progress and Since-March positions to show right
+inside the hero cards via tabs, instead of as separate always-visible
+sections — and for the same treatment on all three Circle cards too, not
+just the hero row.
+
+- Removed the standalone "Target Progress" and "Since March 2026"
+  chart-card sections entirely.
+- Added a small "vs Target — 07-22" / "Since March 2026" tab switcher
+  above the hero row. Whichever tab is active now shows as one extra
+  colored line (green = ahead/reduced, red = behind/increased) at the
+  bottom of **every** card that has this comparison — the 3 hero cards
+  (Whole Bank, CO Moradabad, Hathras) and all 3 Circle cards (Gorakhpur,
+  Lucknow, Moradabad), so switching the tab once updates all six places
+  together.
+- Verified both tab states render correctly on all six cards, in both
+  themes and on mobile (tab pills wrap cleanly).
+
 ### Bank Dashboard: pie charts, a bar chart, and history capture for a future sparkline (2026-07-23, same day)
 
 You asked whether pie charts, a bar chart, or a sparkline could be added.
