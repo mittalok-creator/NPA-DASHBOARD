@@ -2472,15 +2472,16 @@ const PC = {REGION:0, BRANCH:1, SCHEME:2, ACCT:3, NAME:4, OS:5, CADU:6, LIMIT:7,
    scheme code, so KCC/KCC-AH/Other only ever show accounts NOT already
    called out for a limit review (no double-counting across buckets). */
 const PNPA_BUCKETS = [
-  {key:'kcc', label:'KCC', sub:'Scheme code CC004, excluding Limit Review'},
+  {key:'kcc', label:'KCC', sub:'Scheme code CC004 · reason "KCC-Disbrsmnt-36" only'},
   {key:'kccah', label:'KCC — Animal Husbandry', sub:'Scheme code CC043, excluding Limit Review'},
   {key:'limitreview', label:'Limit Review', sub:'Flagged "Limit Review", any scheme'},
   {key:'other', label:'Other Schemes', sub:'All remaining scheme codes, excluding Limit Review'},
 ];
 function pnpaBucketOfRow(row){
   if(String(row[PC.REASON]||'').includes('Limit Review')) return 'limitreview';
-  const scheme = row[PC.SCHEME];
-  return scheme==='CC004'?'kcc':(scheme==='CC043'?'kccah':'other');
+  const scheme = row[PC.SCHEME], reason = String(row[PC.REASON]||'');
+  if(scheme==='CC004') return reason.includes('KCC-Disbrsmnt-36') ? 'kcc' : 'other';
+  return scheme==='CC043' ? 'kccah' : 'other';
 }
 /* The source file's own "Remarks" column is almost always just "-" (no real
    content) -- the actual why-is-this-flagged info lives in "Reasons"

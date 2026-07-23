@@ -527,6 +527,20 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Daily PNPA: KCC bucket narrowed to reason "KCC-Disbrsmnt-36" only (2026-07-23, same day)
+
+You asked for KCC's O/S to only count accounts flagged with the
+"KCC-Disbrsmnt-36" reason — noticing that the CC004 scheme bucket was
+pulling in a few accounts flagged for other reasons instead.
+
+- `pnpaBucketOfRow()` now requires **both** `scheme === 'CC004'` **and**
+  `Reason` containing "KCC-Disbrsmnt-36" for an account to land in KCC;
+  a CC004 account with any other reason (found: 3 "CUSTLEVEL" accounts in
+  today's data) now falls through to the Other bucket instead.
+- With today's data: KCC 56→53 accounts (₹213.84L→₹198.02L), Other
+  35→38 accounts (₹41.16L→₹56.99L) — same 104 total, nothing dropped,
+  just re-routed to the bucket that actually matches its reason.
+
 ### Daily PNPA: "Limit Review" split into its own bucket (2026-07-23, same day)
 
 You asked to pull Limit Review out as its own category, and drop those
