@@ -527,6 +527,41 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Center the account-list modal + freeze Branch column in Daily NPA Projection (2026-07-23, same day)
+
+Two more phone screenshots: one showing a KCC Overdue branch drill-down list
+rendered as a barely-visible sliver stuck to the bottom of the screen
+("Ye top ya middle se show hona chahiye" — this should show from the top or
+middle), and one of the Daily NPA Projection grid asking that the branch
+name stay visible alongside Recovery when scrolling right, plus a general
+"make this more beautiful" ask.
+
+- **List modal (account/branch drill-down)**: `#listModalOverlay` (shared
+  by every "tap to see the list" drill-down across Dashboard/PNPA/KCC
+  Overdue) was using the same `.modal-overlay{align-items:flex-end}` as
+  short confirm-style sheets — fine for a 2-line dialog, but a data table
+  with only a couple of rows rendered as a tiny sliver pinned to the
+  screen's bottom edge, half-hidden behind the mobile bottom nav. Scoped an
+  override to just this modal: `#listModalOverlay{align-items:center}` +
+  full corner rounding (was flat-bottomed for the bottom-sheet look), so it
+  now always renders as a clearly visible centered dialog regardless of
+  row count. Other short modals (Update Data, GitHub sign-in) keep their
+  original bottom-sheet behavior — this was scoped to the list modal only.
+- **Daily NPA Projection — frozen Branch column**: the grid is 11 columns
+  wide and needs horizontal scroll to reach Recovery/GAP/Follow-up, during
+  which the Branch name used to scroll out of view, making it easy to lose
+  track of which row you were looking at. S N, Sol ID, and Branch are now
+  `position:sticky` on the left (explicit pixel widths so the 3 sticky
+  offsets line up exactly, since a plain table's auto column widths can't
+  be trusted for that), with a subtle drop-shadow marking the edge of the
+  frozen block, correct zebra-stripe backgrounds so alternating rows still
+  look right as they scroll under the frozen columns, and a light
+  row-hover highlight added for easier scanning across a wide sheet.
+- Verified both fixes live in the browser (dark and light theme, 390px
+  mobile viewport): the list modal now shows centered and fully visible
+  even for a 1-row list; scrolling the projection grid right to Recovery
+  keeps Sol ID/Branch pinned and legible the whole time.
+
 ### Reordered nav: Search moved from 2nd to last position (2026-07-23, same day)
 
 - In both the desktop sidebar and the mobile bottom nav, **Search &
