@@ -2466,19 +2466,29 @@ function renderBankDashboardBody(){
    actionable). Rows are stored as compact arrays (see PC below) instead
    of the full 35-column HO layout -- only the fields this tab actually
    uses are kept. */
-const PC = {REGION:0, BRANCH:1, SCHEME:2, ACCT:3, NAME:4, OS:5, CADU:6, LIMIT:7, REVIEW:8, REMARKS:9};
+const PC = {REGION:0, BRANCH:1, SCHEME:2, ACCT:3, NAME:4, OS:5, CADU:6, LIMIT:7, REVIEW:8, REASON:9};
 const PNPA_BUCKETS = [
   {key:'kcc', label:'KCC', sub:'Scheme code CC004'},
   {key:'kccah', label:'KCC — Animal Husbandry', sub:'Scheme code CC043'},
   {key:'other', label:'Other Schemes', sub:'All remaining scheme codes'},
 ];
 function pnpaBucketOf(scheme){ return scheme==='CC004'?'kcc':(scheme==='CC043'?'kccah':'other'); }
+/* The source file's own "Remarks" column is almost always just "-" (no real
+   content) -- the actual why-is-this-flagged info lives in "Reasons"
+   instead (e.g. "LAANPA,LimReview"), so that's what gets shown and searched
+   as this tab's reason/remark field. "LimReview" is spelled out as "Limit
+   Review" since Alok specifically calls that one out; the other codes are
+   shown as-is rather than guessed-translated. */
+function formatPnpaReasons(raw){
+  return String(raw||'').split(',').map(s=>s.trim()).filter(Boolean)
+    .map(s=>s==='LimReview'?'Limit Review':s).join(', ');
+}
 function parsePnpaRows(headerCells, dataRows){
   const header = headerCells.map(normHeader);
   const idx = (name) => header.indexOf(normHeader(name));
   const iRegion=idx('region'), iBranch=idx('branch'), iAcct=idx('accountno'), iScheme=idx('schemecode'),
     iName=idx('accountname'), iBal=idx('balanceamount'), iCadu=idx('cadu'), iLimit=idx('limit'),
-    iReview=idx('reviewdate'), iRemarks=idx('remarks');
+    iReview=idx('reviewdate'), iReasons=idx('reasons');
   const missing = [];
   if(iAcct<0) missing.push('Account No');
   if(iBranch<0) missing.push('Branch');
@@ -2504,7 +2514,7 @@ function parsePnpaRows(headerCells, dataRows){
       bal, parseFloat(row[iCadu])||0,
       iLimit>=0 ? (parseFloat(row[iLimit])||0) : 0,
       reviewDt ? fmtDate(reviewDt) : '',
-      iRemarks>=0 ? cellStr(row, iRemarks) : '',
+      iReasons>=0 ? formatPnpaReasons(cellStr(row, iReasons)) : '',
     ]);
   }
   return rows;
@@ -2619,7 +2629,7 @@ function renderPnpaDashboardBody(){
     `<div class="chart-card" style="margin-top:20px">
       <div class="section-label" id="pnpaTableLabel"></div>
       <div class="bank-filter-row">
-        <input type="text" id="pnpaBranchSearchInput" class="dash-select" placeholder="Search branch…" value="${esc(pnpaBranchSearch)}" style="flex:1">
+        <input type="text" id="pnpaBranchSearchInput" class="dash-select" placeholder="Search branch, or type &quot;Limit Review&quot;…" value="${esc(pnpaBranchSearch)}" style="flex:1">
       </div>
       <div id="pnpaBranchTableCard"></div>
     </div>`;
@@ -2637,10 +2647,15 @@ function renderPnpaBranchTable(){
   const activeBucket = PNPA_BUCKETS.find(b=>b.key===pnpaBucketTab);
   let branchAgg = pnpaBranchAgg(d.rows, pnpaBucketTab);
   if(pnpaBranchSearch){
-    const q = pnpaBranchSearch.toLowerCase();
-    branchAgg = branchAgg.filter(r=>r.branch.toLowerCase().includes(q));
+    const q = pnpaBranchSearch.toLowerCase().trim();
+    if(q==='limreview' || q==='lim review' || q==='limit review'){
+      const flagged = new Set(d.rows.filter(r=>pnpaBucketOf(r[PC.SCHEME])===pnpaBucketTab && r[PC.REASON].includes('Limit Review')).map(r=>r[PC.BRANCH]));
+      branchAgg = branchAgg.filter(r=>flagged.has(r.branch));
+    } else {
+      branchAgg = branchAgg.filter(r=>r.branch.toLowerCase().includes(q));
+    }
   }
-  if(labelEl) labelEl.innerHTML = `${esc(activeBucket.label)} — Branch-wise Summary, highest O/S first<span class="chart-sub">${esc(activeBucket.sub)} · Hathras region · ${branchAgg.length.toLocaleString('en-IN')} branch(es) shown · tap a branch to see the account list</span>`;
+  if(labelEl) labelEl.innerHTML = `${esc(activeBucket.label)} — Branch-wise Summary, highest O/S first<span class="chart-sub">${esc(activeBucket.sub)} · Hathras region · ${branchAgg.length.toLocaleString('en-IN')} branch(es) shown · tap a branch to see the account list · search also matches "Limit Review"</span>`;
   const rowsHtml = branchAgg.map((r,i)=>{
     return `<tr class="clickable" onclick="pnpaShowBranchAccounts('${pnpaBucketTab}','${esc(r.branch)}')">
       <td><span class="dash-rank">${i+1}</span></td>
@@ -2664,7 +2679,7 @@ const PNPA_ACCT_LIST_HEAD = '<tr>'
   +'<th class="sortable" data-key="cadu" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'cadu\')">CADU<span class="sort-ic">▾</span></th>'
   +'<th class="sortable" data-key="limit" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'limit\')">Limit<span class="sort-ic">▾</span></th>'
   +'<th class="tal sortable" data-key="reviewDate" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'reviewDate\')">Review Date<span class="sort-ic">▾</span></th>'
-  +'<th class="tal sortable" data-key="remarks" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'remarks\')">Remarks<span class="sort-ic">▾</span></th>'
+  +'<th class="tal sortable" data-key="reason" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'reason\')">Reason<span class="sort-ic">▾</span></th>'
   +'</tr>';
 function pnpaAcctRows(list){
   if(!list.length) return `<tr><td colspan="7" style="text-align:center;color:var(--ink-mute)">No accounts</td></tr>`;
@@ -2675,14 +2690,14 @@ function pnpaAcctRows(list){
     <td>${fmtINR2(a.cadu)}</td>
     <td>${fmtINR2(a.limit)}</td>
     <td class="tal">${esc(a.reviewDate)||'—'}</td>
-    <td class="tal">${esc(a.remarks)||'—'}</td>
+    <td class="tal">${esc(a.reason)||'—'}</td>
   </tr>`).join('');
 }
 function showPnpaListModal(title, sub, list){ showListModal(title, sub, PNPA_ACCT_LIST_HEAD, 'pnpa', list, {key:'os',dir:'desc'}); }
 window.showPnpaListModal = showPnpaListModal;
 function pnpaShowBranchAccounts(bucket, branch){
   const rows = PNPA_DATA.rows.filter(r=>pnpaBucketOf(r[PC.SCHEME])===bucket && r[PC.BRANCH]===branch);
-  const list = rows.map(r=>({ acctNo:r[PC.ACCT], name:r[PC.NAME], os:r[PC.OS], cadu:r[PC.CADU], limit:r[PC.LIMIT], reviewDate:r[PC.REVIEW], remarks:r[PC.REMARKS] }));
+  const list = rows.map(r=>({ acctNo:r[PC.ACCT], name:r[PC.NAME], os:r[PC.OS], cadu:r[PC.CADU], limit:r[PC.LIMIT], reviewDate:r[PC.REVIEW], reason:r[PC.REASON] }));
   const bLabel = (PNPA_BUCKETS.find(b=>b.key===bucket)||{}).label || bucket;
   showPnpaListModal(`${branch} — ${bLabel}`, `Hathras · ${list.length.toLocaleString('en-IN')} account(s)`, list);
 }
