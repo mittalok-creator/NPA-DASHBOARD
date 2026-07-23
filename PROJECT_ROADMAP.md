@@ -527,6 +527,28 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Bug fix: P&L Impact colors went washed-out after the light-theme chrome flip (2026-07-23, same day)
+
+You spotted the "Total P&L Impact" figure on the account detail page's
+aggregate panel rendering in near-invisible white after the chrome-flip
+fix above — you asked to keep it showing its positive/negative color like
+before.
+
+- Root cause: `.agg-stat.impact .av.pos`/`.av.neg` (and the matching
+  `.side-rail .rail-value.pos`/`.neg`) use hardcoded pastel green/red
+  (`#5fe0a3`/`#ff8a80`) tuned to pop on the old dark aggregate-panel
+  background. The chrome-flip fix moved that panel's background to near-
+  white but didn't touch these two pos/neg color rules specifically (only
+  the plain, non-colored `.av` text), so the pastel colors — nearly
+  invisible against white — were the actual bug.
+- Added light-theme overrides using the same `--pos`/`--neg` tokens
+  already used for P&L coloring everywhere else on the page (dark green
+  `#0C8049` / red `#D1362C`), so it now reads exactly like every other
+  positive/negative figure in the app.
+- Verified both signs render correctly (green for a savings/positive
+  impact, red for negative) and confirmed dark theme's original pastel
+  colors are byte-for-byte unchanged.
+
 ### Light theme chrome flip: side nav, header, bottom tabs, aggregate rail and table headers now go fully light (2026-07-23)
 
 You sent a screenshot of the Search page in light theme showing the top
