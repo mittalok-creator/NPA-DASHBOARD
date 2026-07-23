@@ -527,6 +527,41 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Light theme chrome flip: side nav, header, bottom tabs, aggregate rail and table headers now go fully light (2026-07-23)
+
+You sent a screenshot of the Search page in light theme showing the top
+header bar still solid black, and said "Light theme ko pura hi light karo,
+usmein kuch bhi dark na ho" (make the light theme completely light —
+nothing in it should stay dark).
+
+- **Root cause**: an earlier design decision (from the original color-theme
+  redesign) deliberately kept the app's "chrome" — side nav, bottom tabs,
+  top header/search bar, the account-detail aggregate totals rail, and the
+  Dashboard/loan-comparison table header rows — permanently dark in both
+  themes, the same way apps like Linear/Stripe keep a dark sidebar
+  regardless of the content theme. That was a deliberate choice at the
+  time, but you now want light theme to be light everywhere, no exceptions.
+- Two separate layers had to be fixed, not one: the `--chrome-*`/`--head-*`
+  CSS custom properties (color tokens), **and** a later "console pass" set
+  of rules further down the stylesheet that had hardcoded flat dark colors
+  directly (`background:rgba(9,9,15,.97)` etc.) bypassing those variables
+  entirely — flipping only the variables left the header/aggregate-rail
+  still black, since the hardcoded rule was winning the cascade. Found this
+  by inspecting the actual computed background in a real browser rather
+  than assuming the variable-based fix was sufficient.
+- Added a full light-theme override set: `#sideNav`/`#bottomTabs`/mobile
+  signature strip/header/`.detail-head`/`#aggBar`/`.side-rail` all move to
+  a bright glass surface; nav hover/active states, icon buttons, the search
+  box, mode pills, and the Dashboard/loan-table header rows all get
+  matching light-appropriate colors instead of white-on-white or
+  invisible-on-white treatments.
+- Dark theme was not touched — verified pixel-for-pixel same before/after
+  via screenshot comparison (Dashboard and the account-detail page).
+- Verified in light theme via screenshot: Dashboard, Search landing,
+  account detail (header/aggregate rail/side-rail/loan table), Update Data
+  modal, and mobile viewport (bottom tabs + signature strip) — no dark
+  surface remains anywhere.
+
 ### Publish review now also shows new accounts added, not just removed (2026-07-23)
 
 You pointed out the Publish confirm dialog only showed "X account(s) removed
