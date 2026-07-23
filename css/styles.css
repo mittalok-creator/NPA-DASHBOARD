@@ -1291,6 +1291,10 @@ header.app-head::before,.detail-head::before{
 :root[data-theme="light"] #aggBar .agg-stat{border-top-color:rgba(33,33,46,.10)}
 :root[data-theme="light"] #aggBar .agg-stat .av{color:var(--head-ink)}
 :root[data-theme="light"] #aggBar .agg-stat.impact{background:rgba(33,33,46,.04);border-color:rgba(33,33,46,.09)}
+:root[data-theme="light"] #aggBar .agg-stat.impact .av.pos{color:var(--pos)}
+:root[data-theme="light"] #aggBar .agg-stat.impact .av.neg{color:var(--neg)}
+:root[data-theme="light"] .side-rail .rail-value.pos{color:var(--pos)}
+:root[data-theme="light"] .side-rail .rail-value.neg{color:var(--neg)}
 
 :root[data-theme="light"] .side-rail{background:rgba(255,255,255,.92)}
 :root[data-theme="light"] .side-rail .rail-value{color:var(--head-ink)}
