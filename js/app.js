@@ -1381,6 +1381,30 @@ function closePublishReview(){
   if(panel) panel.style.display = 'none';
   __pendingPublish = null;
 }
+/* Snapshots each published bank-wide dataset to its own small history file,
+   mirroring the main NPA data's history/index.json pattern -- lets a future
+   sparkline/trend feature look back over daily uploads once enough of them
+   have accumulated. Best-effort: a failure here must never block the main
+   NPA-data publish, so callers should swallow errors from this. */
+async function buildBankHistoryFiles(bankData, user){
+  let index = [];
+  try{ index = await fetchJson('data/bank-history/index.json?t=' + Date.now()); } catch(e){ index = []; }
+  if(!Array.isArray(index)) index = [];
+  const safeDate = (bankData.asOnDate||'unknown').replace(/[^0-9-]/g,'');
+  const historyFileName = `bank-history/${safeDate}-${Date.now()}.json`;
+  index.unshift({
+    date: bankData.asOnDate||null,
+    file: historyFileName,
+    regionsCount: bankData.regions.length,
+    publishedAt: new Date().toISOString(),
+    publishedBy: user.login||null,
+  });
+  if(index.length>120) index = index.slice(0,120);
+  return [
+    { path:`data/${historyFileName}`, content: bankData },
+    { path:'data/bank-history/index.json', content: index },
+  ];
+}
 async function confirmPublish(){
   if(!__pendingPublish || !window.UPGBPublish) return;
   const confirmBtn = document.getElementById('publishConfirmBtn');
@@ -1390,8 +1414,14 @@ async function confirmPublish(){
   confirmBtn.classList.add('is-loading');
   const onProgress = (msg) => { statusEl.innerHTML = `<div class="upload-status ok">⏳ ${esc(msg)}</div>`; };
   try{
-    const extraFiles = (__pendingPublish.type!=='rollback' && __pendingBankData)
-      ? [{ path:'data/bank-npa.json', content: __pendingBankData }] : undefined;
+    let extraFiles;
+    if(__pendingPublish.type!=='rollback' && __pendingBankData){
+      extraFiles = [{ path:'data/bank-npa.json', content: __pendingBankData }];
+      try{
+        const user = (window.UPGBAuth && window.UPGBAuth.getCurrentUser()) || {};
+        extraFiles = extraFiles.concat(await buildBankHistoryFiles(__pendingBankData, user));
+      } catch(e){ /* history snapshot is best-effort -- the main bank-npa.json publish still proceeds */ }
+    }
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
       : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress, extraFiles);
@@ -2315,6 +2345,57 @@ function renderBankDashboardBody(){
     </div>`;
   }).join('');
 
+  /* Categorical fill for the 3 circles (identity, not severity) -- distinct
+     from the green/amber/red status ramp used everywhere else on this tab.
+     #0EA5C4 is a deliberately deepened cyan (not --accent-2's bright dark-
+     theme value, which is tuned for text and reads too pale as a solid fill)
+     -- validated via the dataviz skill's palette checker against both
+     theme surfaces before shipping. */
+  const CIRCLE_FILL_COLORS = { 'CO Gorakhpur':'var(--accent)', 'CO Lucknow':'#0EA5C4', 'CO Moradabad':'var(--seal-d)' };
+  const circleSeg = d.circles.map(c => ({
+    value: c.remainingNpaAsOnDate,
+    color: CIRCLE_FILL_COLORS[c.name] || 'var(--ink-mute)',
+    label: c.name.replace('CO ',''),
+    valueLabel: `${fmtBankCr(c.remainingNpaAsOnDate)} · ${(c.remainingNpaAsOnDate/bank.remainingNpaAsOnDate*100).toFixed(1)}%`,
+  }));
+  const circleDonutCard = `<div class="chart-card">
+    <div class="section-label">NPA Share by Circle<span class="chart-sub">of the whole bank's ${fmtBankCr(bank.remainingNpaAsOnDate)} NPA book</span></div>
+    <div class="donut-flex">
+      ${donutCard(circleSeg, undefined, fmtBankCr(bank.remainingNpaAsOnDate), 'Total NPA')}
+      <div class="donut-legend">${donutLegend(circleSeg)}</div>
+    </div>
+  </div>`;
+
+  // Hathras's own asset-classification mix comes from the separate account-
+  // level dataset (the Hathras-only Dashboard's own data), not the bank-wide
+  // PDF -- that level of detail isn't available for other regions/circles.
+  const hathrasStats = computeDashboardStats('');
+  const assetSeg = ASSET_ORDER.filter(k=>hathrasStats.assetMix[k]).map(k=>({
+    value: hathrasStats.assetMix[k].os,
+    color: ASSET_SEV_COLOR[k],
+    label: assetLabel(k)+' ('+k+')',
+    valueLabel: `${hathrasStats.assetMix[k].count.toLocaleString('en-IN')} · ${fmtCr(hathrasStats.assetMix[k].os)}`,
+  }));
+  const assetDonutCard = `<div class="chart-card">
+    <div class="section-label">Hathras — Asset Classification Mix<span class="chart-sub">by outstanding balance · RBI IRAC norms (only available at Hathras's own account-level detail)</span></div>
+    <div class="donut-flex">
+      ${donutCard(assetSeg, undefined, fmtCr(hathrasStats.totalOS), 'Total O/S')}
+      <div class="donut-legend">${donutLegend(assetSeg)}</div>
+    </div>
+  </div>`;
+
+  const top10Worst = [...d.regions].sort((a,b)=>b.pctRemainingNpaWithAdv-a.pctRemainingNpaWithAdv).slice(0,10);
+  const worstBarItems = top10Worst.map(r => ({
+    label: r.region + (r.region===d.ourRegion?' ★':''),
+    value: r.pctRemainingNpaWithAdv,
+    color: npaPctSeverity(r.pctRemainingNpaWithAdv).color,
+    valueLabel: fmtBankPct(r.pctRemainingNpaWithAdv),
+  }));
+  const worstBarCard = `<div class="chart-card chart-card-wide">
+    <div class="section-label">Top 10 Worst NPA % Regions<span class="chart-sub">out of all 65 · ★ marks Hathras if it appears here</span></div>
+    <div class="bar-list">${barRows(worstBarItems)}</div>
+  </div>`;
+
   const filterOptions = ['<option value="">All circles (65 regions)</option>']
     .concat(d.circles.map(c=>`<option value="${esc(c.name)}"${bankRegionFilter===c.name?' selected':''}>${esc(c.name)} only</option>`)).join('');
   const marchFilterOptions = `
@@ -2377,6 +2458,7 @@ function renderBankDashboardBody(){
   el.innerHTML = heroRow + insight + marchSection + targetSection +
     `<div class="section-label" style="margin-top:26px">Circles<span class="chart-sub">CO Moradabad is our circle</span></div>
      <div class="circle-card-row">${circleCards}</div>` +
+    `<div class="chart-grid" style="margin-top:6px">${circleDonutCard}${assetDonutCard}${worstBarCard}</div>` +
     regionTable;
 
   const filterSel = document.getElementById('bankRegionFilterSelect');

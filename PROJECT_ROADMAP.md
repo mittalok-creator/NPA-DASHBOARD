@@ -527,6 +527,43 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Bank Dashboard: pie charts, a bar chart, and history capture for a future sparkline (2026-07-23, same day)
+
+You asked whether pie charts, a bar chart, or a sparkline could be added.
+Sparklines need a time series — today's data is a single snapshot (plus
+one March baseline point) — so per our discussion, that part isn't built
+yet, but the underlying capture needed for it starts today.
+
+- **NPA Share by Circle** (donut): Gorakhpur/Lucknow/Moradabad's share of
+  the whole bank's NPA book, with a legend showing amount and %. The 3
+  colors are a new categorical assignment (identity, not severity) — run
+  through the `dataviz` skill's palette validator against both this app's
+  actual dark and light card surfaces before shipping: the dark theme's
+  own `--accent-2` (bright cyan, tuned for text) failed the validator's
+  lightness-band check as a solid *fill* color, so the Lucknow slice uses
+  a deliberately deeper cyan (`#0EA5C4` — coincidentally the same hex the
+  light theme already uses for `--accent-2`) instead; Moradabad reuses the
+  existing `--seal-d` token. All three checks (lightness band, CVD
+  separation, contrast) pass on both themes.
+- **Hathras — Asset Classification Mix** (donut): reuses the existing,
+  already-validated 5-step RBI IRAC severity ramp (`--sev-1..5`) from the
+  Hathras-only Dashboard's own account-level data — clearly labeled that
+  this level of detail only exists for Hathras, since the bank-wide PDF
+  itself has no per-region asset-classification breakdown for the other
+  64 regions.
+- **Top 10 Worst NPA % Regions** (bar chart): reuses the existing
+  `barRows()` component and severity-color logic already used elsewhere on
+  this tab, marking Hathras with a ★ if it ever appears in the worst 10.
+- **History capture for a future sparkline**: every Publish that includes
+  a freshly-uploaded bank PDF now also writes a dated snapshot to
+  `data/bank-history/<date>-<timestamp>.json` plus an entry in a new
+  `data/bank-history/index.json` (capped at 120 entries), mirroring the
+  main NPA dataset's own history mechanism — best-effort, so a failure
+  here can never block the main data from publishing. Once a few weeks of
+  daily uploads have accumulated, a trend sparkline becomes buildable from
+  this without needing to touch the parsing or publish code again.
+- Verified all three charts in both themes and on mobile.
+
 ### Bank Dashboard: Total Advance shown in the hero cards (2026-07-23, same day)
 
 You asked for the Total Advance figure to also show in the NPA hero cards
