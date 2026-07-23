@@ -891,7 +891,7 @@ body{overscroll-behavior:none}
 @keyframes viewIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
 /* ---------- Dashboard view ---------- */
-#viewDashboard{padding:32px clamp(18px,3.5vw,48px) 60px;max-width:1560px;margin:0 auto}
+#viewDashboard,#viewBank{padding:32px clamp(18px,3.5vw,48px) 60px;max-width:1560px;margin:0 auto}
 .view-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:26px}
 .view-title{margin:0;font-size:clamp(22px,2.6vw,30px);font-weight:800;letter-spacing:-.7px;color:var(--ink);
   background:linear-gradient(135deg,#fff,#a9c6ff 70%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
@@ -944,8 +944,31 @@ body{overscroll-behavior:none}
 .hero-kpi-value{font-size:38px;font-weight:800;color:var(--ink);margin-top:6px;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1.1;position:relative}
 .hero-kpi-sub{font-size:12.5px;color:var(--ink-mute);margin-top:8px;font-weight:600;position:relative}
 .hero-kpi-badge{position:absolute;top:22px;right:22px;padding:6px 12px;border-radius:10px;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.3px;z-index:1}
+.bank-hero-row{grid-template-columns:repeat(3,1fr)}
 @media (max-width:1023px){ .hero-kpi-row{grid-template-columns:repeat(2,1fr)} }
 @media (max-width:599px){ .hero-kpi-row{grid-template-columns:1fr} .hero-kpi-value{font-size:32px} .hero-kpi-badge{position:static;display:inline-block;margin-bottom:10px} }
+
+/* ---------- Bank-wide NPA Dashboard ---------- */
+.target-chip-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+.target-chip{flex:1;min-width:170px;padding:12px 14px;border-radius:var(--radius-md);border:1px solid var(--line);background:var(--stripe)}
+.target-chip .tc-label{display:block;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--sub);margin-bottom:4px}
+.target-chip .tc-val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+.target-chip.ahead .tc-val{color:var(--green)}
+.target-chip.behind .tc-val{color:var(--red)}
+.circle-card-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:14px 0 26px}
+.circle-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px;position:relative;box-shadow:var(--shadow-sm);transition:border-color .18s var(--ease),box-shadow .18s var(--ease)}
+.circle-card.is-ours{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft),var(--shadow-sm)}
+.circle-card-tag{position:absolute;top:-9px;right:14px;background:linear-gradient(135deg,var(--accent),var(--gold-d));color:#fff;font-size:9px;font-weight:800;letter-spacing:.6px;padding:3px 9px;border-radius:6px}
+.circle-card-name{font-weight:800;font-size:14px;color:var(--ink);letter-spacing:-.2px}
+.circle-card-npa{font-size:26px;font-weight:800;margin-top:8px;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.circle-card-sub{font-size:11.5px;color:var(--sub);margin-top:4px}
+.bank-npa-pill{display:inline-block;padding:3px 10px;border-radius:7px;font-size:11.5px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dash-table tr.is-ours td{background:var(--accent-soft)}
+.dash-table tr.is-our-circle td{background:rgba(58,123,255,.06)}
+:root[data-theme="light"] .dash-table tr.is-our-circle td{background:rgba(27,79,224,.045)}
+@media (max-width:900px){
+  .circle-card-row{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+}
 
 /* ---------- Dashboard: insight / attention strip ---------- */
 .insight-strip{
@@ -1318,6 +1341,10 @@ header.app-head::before,.detail-head::before{
 /* ---------- Dashboard interactivity additions ---------- */
 .modal-sheet.wide{max-width:720px}
 .list-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+@media (max-width:659px){
+  .list-modal-head{flex-wrap:wrap}
+  .list-modal-head .dash-select{width:100%;min-width:0}
+}
 .list-modal-sub{font-size:12px;color:var(--sub);margin-top:2px}
 .modal-close-x{flex-shrink:0;width:30px;height:30px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink-mute);font-size:13px;cursor:pointer;transition:background .15s,color .15s}
 .modal-close-x:hover{background:var(--accent-soft);color:var(--ink)}

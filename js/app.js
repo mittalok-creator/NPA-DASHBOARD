@@ -1350,11 +1350,15 @@ function openPublishReview(){
   const addedLine = meta.newAddedCount>0
     ? `<div class="pr-good">${meta.newAddedCount.toLocaleString('en-IN')} new account(s) added.</div>`
     : '';
+  const bankLine = __pendingBankData
+    ? `<div class="pr-good">Bank-wide dashboard data will also update — ${__pendingBankData.regions.length} regions, as on ${esc((__pendingBankData.asOnDate||'').split('-').reverse().join('-'))}.</div>`
+    : '';
   document.getElementById('publishReviewSummary').innerHTML = `
     <div>Data as on: <b>${esc(fmtAsOnDisplay())}</b></div>
     <div>Total accounts live after publish: <b>${summary.rowCount.toLocaleString('en-IN')}</b></div>
     ${addedLine}
     ${staleLine}
+    ${bankLine}
     <div style="margin-top:8px;color:var(--sub)">Publishing as <b>${esc(user.login||'unknown')}</b>. Goes live on npadashboard.alokmittal.net within about a minute.</div>
   `;
   __pendingPublish = {
@@ -1386,11 +1390,14 @@ async function confirmPublish(){
   confirmBtn.classList.add('is-loading');
   const onProgress = (msg) => { statusEl.innerHTML = `<div class="upload-status ok">⏳ ${esc(msg)}</div>`; };
   try{
+    const extraFiles = (__pendingPublish.type!=='rollback' && __pendingBankData)
+      ? [{ path:'data/bank-npa.json', content: __pendingBankData }] : undefined;
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
-      : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress);
+      : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress, extraFiles);
     statusEl.innerHTML = `<div class="upload-status ok">✔ Published — live at npadashboard.alokmittal.net within ~30-60s (commit ${esc(result.commitSha.slice(0,7))}).</div>`;
     document.getElementById('publishBtn').disabled = true;
+    __pendingBankData = null;
     closePublishReview();
     loadVersionHistory();
   } catch(err){
@@ -1840,6 +1847,10 @@ const ICON_USERS = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle
 const ICON_ALERT_TRIANGLE = '<path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>';
 const ICON_TICKET = '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 11v2M13 17v2"/>';
 const ICON_ALERT_CIRCLE = '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>';
+const ICON_LANDMARK = '<path d="M3 21h18"/><path d="M3 10h18"/><path d="M5 6l7-3 7 3"/><path d="M4 10v11"/><path d="M20 10v11"/><path d="M8 14v3"/><path d="M12 14v3"/><path d="M16 14v3"/>';
+const ICON_MAP = '<path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/>';
+const ICON_STAR = '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>';
+const ICON_TARGET = '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>';
 function svgIcon(pathData){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathData}</svg>`; }
 
 function heroKpiCard(opts){
@@ -2087,11 +2098,259 @@ function renderDashboard(){
   if(heroTicket) animateNumber(heroTicket, 0, avgTicket, fmtINR2, 900);
 }
 
+/* ---------- Bank-wide NPA Dashboard (all 65 regions, from Alok's daily
+   whole-bank MIS PDF -- separate dataset from the Hathras-only account-
+   level book above). Figures here are already in ₹ Crore, as printed in
+   the source PDF -- fmtCr() above assumes plain rupees, so this view uses
+   its own formatter instead. ---------- */
+let BANK_DATA = null;
+function fmtBankCr(n){ if(n===null||n===undefined||isNaN(n)) return '—'; return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})+' Cr'; }
+function fmtBankPct(n){ return (n===null||n===undefined||isNaN(n)) ? '—' : n.toFixed(2)+'%'; }
+let bankRegionFilter = '';
+let __pendingBankData = null;
+
+/* Parses Alok's daily whole-bank "Dashboard of NPA" PDF client-side, via
+   pdf.js (js/vendor/pdf.min.js) -- no server involved. The PDF has no
+   underlying table structure, only positioned text, so rows are
+   reconstructed by clustering text items with close y-coordinates
+   (tolerance tuned against the real report; regular data rows land
+   consistently within ~1-2pt of each other, comfortably under the ~9pt gap
+   between separate rows) then reading left-to-right by x. Region rows are
+   "S.No, Region, 18 numbers" (20 items); "Sub Total CO <name>" rows close
+   out a circle; "Total UPGB" is the bank grand total. This exact approach
+   was validated against a real file before shipping: extracted figures
+   matched the source PDF exactly, including cross-checking sums. */
+const BANK_PDF_FIELD_NAMES = ['branches','totalAdv','npaMar26','pctWithAdvMar26','npaJun26','slippage',
+  'addition','acSlippedUpgradedClosed','inttReversal','npaReductionOn','reductionDuringMonth',
+  'netReductionDuringMonth','pctNetReductionOverPrevMonth','pctRemainingNpaWithAdv','remainingNpaAsOnDate',
+  'netReductionOverMar26','targetCurrentMonth','gapFromTarget'];
+function bankPdfToNum(s){ const c = String(s).replace(/%/g,'').replace(/,/g,'').trim(); const n = parseFloat(c); return isNaN(n)?null:n; }
+function bankPdfFields(nums){ const o={}; BANK_PDF_FIELD_NAMES.forEach((name,i)=>{ o[name]=bankPdfToNum(nums[i]); }); return o; }
+function bankPdfClusterRows(items, tol){
+  const sorted = [...items].sort((a,b)=>b.y-a.y || a.x-b.x);
+  const rows = []; let current=null, refY=null;
+  for(const it of sorted){
+    if(current && Math.abs(it.y-refY)<=tol) current.push(it);
+    else { current=[it]; refY=it.y; rows.push(current); }
+  }
+  return rows.map(r=>r.sort((a,b)=>a.x-b.x));
+}
+async function parseBankPdf(arrayBuffer){
+  if(!window.pdfjsLib) throw new Error('PDF reader did not load — check your connection and reload the page, then try again.');
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/vendor/pdf.worker.min.js';
+  const doc = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let regions = [], currentCoRegions = [], circles = [], grandTotal = null, asOnDateRaw = null;
+  for(let p=1; p<=doc.numPages; p++){
+    const page = await doc.getPage(p);
+    const content = await page.getTextContent();
+    const items = content.items.map(it=>({x:it.transform[4], y:it.transform[5], str:(it.str||'').trim()})).filter(it=>it.str!=='');
+    const rows = bankPdfClusterRows(items, 3.5);
+    for(const row of rows){
+      const strs = row.map(it=>it.str);
+      if(!asOnDateRaw){
+        const m = strs.join(' ').match(/Dashboard of NPA as on ([\d.]+)/);
+        if(m) asOnDateRaw = m[1];
+      }
+      if(/^\d+$/.test(strs[0]) && strs.length===20){
+        currentCoRegions.push({ sno: parseInt(strs[0],10), region: strs[1], ...bankPdfFields(strs.slice(2)) });
+      } else if(/^Sub Total/.test(strs[0]) && strs.length===19){
+        const coName = strs[0].replace(/^Sub Total\s+/,'');
+        circles.push({ name: coName, ...bankPdfFields(strs.slice(1)) });
+        regions.push(...currentCoRegions.map(r=>({ ...r, co: coName })));
+        currentCoRegions = [];
+      } else if(/^Total UPGB/.test(strs[0]) && strs.length===19){
+        grandTotal = bankPdfFields(strs.slice(1));
+      }
+    }
+  }
+  if(!grandTotal || regions.length<50){
+    throw new Error('Could not recognize this PDF\'s layout — expected the "Dashboard of NPA" bank-wide report with region rows and a "Total UPGB" grand total.');
+  }
+  let asOnDate = null;
+  if(asOnDateRaw){
+    const parts = asOnDateRaw.split('.');
+    if(parts.length===3) asOnDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return { asOnDate, ourRegion:'HATHRAS', ourCircle:'CO Moradabad', bankTotal:grandTotal, circles, regions };
+}
+function handleBankPdfUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('bankPdfUploadStatus');
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try{
+      const parsed = await parseBankPdf(reader.result);
+      __pendingBankData = parsed;
+      BANK_DATA = parsed;
+      const label = document.getElementById('bankPdfStatusLabel');
+      if(label) label.textContent = `${parsed.regions.length} regions loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${parsed.regions.length} regions across ${parsed.circles.length} circles, as on ${esc(parsed.asOnDate||'unknown date')}. Goes live the next time you hit Publish.</div>`;
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.querySelector('.view.active')?.dataset.view==='bank') renderBankDashboardBody();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderBankDashboard(){
+  const el = document.getElementById('bankDashboardArea');
+  if(!el) return;
+  if(BANK_DATA){ renderBankDashboardBody(); return; }
+  el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading bank-wide NPA data…</p></div>`;
+  fetchJson('data/bank-npa.json?t=' + Date.now())
+    .then(d => { BANK_DATA = d; renderBankDashboardBody(); })
+    .catch(() => {
+      el.innerHTML = `<div class="empty-state"><h2>Could not load bank-wide data</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
+    });
+}
+function refreshBankDashboard(){ BANK_DATA = null; renderBankDashboard(); }
+
+function bankRegionRank(regions, region){
+  const sorted = [...regions].sort((a,b)=>a.pctRemainingNpaWithAdv-b.pctRemainingNpaWithAdv);
+  return sorted.findIndex(r=>r.region===region.region)+1;
+}
+
+function renderBankDashboardBody(){
+  const el = document.getElementById('bankDashboardArea');
+  const d = BANK_DATA;
+  const bank = d.bankTotal;
+  const circle = d.circles.find(c=>c.name===d.ourCircle);
+  const region = d.regions.find(r=>r.region===d.ourRegion);
+  if(!bank || !circle || !region){ el.innerHTML = `<div class="empty-state"><h2>Bank data looks incomplete</h2></div>`; return; }
+
+  document.querySelectorAll('.bank-report-date-val').forEach(e=>{
+    const parts = (d.asOnDate||'').split('-');
+    e.textContent = parts.length===3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : (d.asOnDate||'—');
+  });
+
+  const bankSev = npaPctSeverity(bank.pctRemainingNpaWithAdv);
+  const circleSev = npaPctSeverity(circle.pctRemainingNpaWithAdv);
+  const regionSev = npaPctSeverity(region.pctRemainingNpaWithAdv);
+  const rank = bankRegionRank(d.regions, region);
+
+  const heroRow = `<div class="hero-kpi-row bank-hero-row">
+    ${heroKpiCard({
+      id:'bankHeroTotal', icon:ICON_LANDMARK, label:'Whole Bank — UPGB',
+      tint:'var(--accent-soft)', color:'var(--accent)',
+      fallback: fmtBankCr(bank.remainingNpaAsOnDate),
+      sub: `${bank.branches.toLocaleString('en-IN')} branches · 65 regions`,
+      badge: `<div class="hero-kpi-badge" style="background:${bankSev.soft};color:${bankSev.color}">${fmtBankPct(bank.pctRemainingNpaWithAdv)} NPA</div>`
+    })}
+    ${heroKpiCard({
+      id:'bankHeroCircle', icon:ICON_MAP, label:'CO Moradabad — Our Circle',
+      tint:'var(--accent-soft)', color:'var(--accent)',
+      fallback: fmtBankCr(circle.remainingNpaAsOnDate),
+      sub: `${circle.branches.toLocaleString('en-IN')} branches · 19 regions`,
+      badge: `<div class="hero-kpi-badge" style="background:${circleSev.soft};color:${circleSev.color}">${fmtBankPct(circle.pctRemainingNpaWithAdv)} NPA</div>`
+    })}
+    ${heroKpiCard({
+      id:'bankHeroRegion', icon:ICON_STAR, label:'Hathras — Our Region',
+      tint:'rgba(212,165,68,.16)', color:'var(--seal-d)',
+      fallback: fmtBankCr(region.remainingNpaAsOnDate),
+      sub: `${region.branches} branches · rank #${rank} of 65 (lower NPA % = better)`,
+      badge: `<div class="hero-kpi-badge" style="background:${regionSev.soft};color:${regionSev.color}">${fmtBankPct(region.pctRemainingNpaWithAdv)} NPA</div>`
+    })}
+  </div>`;
+
+  const vsCircle = circle.pctRemainingNpaWithAdv - region.pctRemainingNpaWithAdv;
+  const vsBank = bank.pctRemainingNpaWithAdv - region.pctRemainingNpaWithAdv;
+  const dir = (v) => v>=0 ? 'better' : 'worse';
+  const insight = `<div class="insight-strip">
+    <div class="insight-icon">${svgIcon(ICON_STAR)}</div>
+    <div class="insight-body">
+      <div class="insight-title">Hathras vs the rest of the bank</div>
+      <div class="insight-text">Hathras's NPA ratio (${fmtBankPct(region.pctRemainingNpaWithAdv)}) is ${Math.abs(vsCircle).toFixed(2)} points ${dir(vsCircle)} than CO Moradabad's average and ${Math.abs(vsBank).toFixed(2)} points ${dir(vsBank)} than the whole Bank's average — ranked #${rank} of 65 regions.</div>
+    </div>
+  </div>`;
+
+  const gapChip = (label, gap) => {
+    const ahead = gap<=0;
+    return `<div class="target-chip ${ahead?'ahead':'behind'}">
+      <span class="tc-label">${esc(label)}</span>
+      <span class="tc-val">${ahead?'✓ Ahead by':'⚠ Behind by'} ${fmtBankCr(Math.abs(gap))}</span>
+    </div>`;
+  };
+  const targetSection = `<div class="chart-card">
+    <div class="section-label">Target Progress — ${esc((d.asOnDate||'').slice(5))||'this month'}<span class="chart-sub">remaining NPA vs the monthly reduction target</span></div>
+    <div class="target-chip-row">
+      ${gapChip('Whole Bank', bank.gapFromTarget)}
+      ${gapChip('CO Moradabad', circle.gapFromTarget)}
+      ${gapChip('Hathras', region.gapFromTarget)}
+    </div>
+  </div>`;
+
+  const circleCards = d.circles.map(c => {
+    const sev = npaPctSeverity(c.pctRemainingNpaWithAdv);
+    const isOurs = c.name === d.ourCircle;
+    return `<div class="circle-card${isOurs?' is-ours':''}">
+      ${isOurs?'<div class="circle-card-tag">OUR CIRCLE</div>':''}
+      <div class="circle-card-name">${esc(c.name)}</div>
+      <div class="circle-card-npa" style="color:${sev.color}">${fmtBankPct(c.pctRemainingNpaWithAdv)}</div>
+      <div class="circle-card-sub">${fmtBankCr(c.remainingNpaAsOnDate)} NPA · ${c.branches.toLocaleString('en-IN')} branches</div>
+      <div class="circle-card-sub">${c.gapFromTarget<=0?'✓ ahead of':'⚠ behind'} target by ${fmtBankCr(Math.abs(c.gapFromTarget))}</div>
+    </div>`;
+  }).join('');
+
+  const filterOptions = ['<option value="">All circles (65 regions)</option>']
+    .concat(d.circles.map(c=>`<option value="${esc(c.name)}"${bankRegionFilter===c.name?' selected':''}>${esc(c.name)} only</option>`)).join('');
+
+  const filteredRegions = (bankRegionFilter ? d.regions.filter(r=>r.co===bankRegionFilter) : d.regions)
+    .slice().sort((a,b)=>b.pctRemainingNpaWithAdv-a.pctRemainingNpaWithAdv);
+
+  const regionTableRows = filteredRegions.map(r => {
+    const sev = npaPctSeverity(r.pctRemainingNpaWithAdv);
+    const isOurs = r.region === d.ourRegion;
+    const isOurCircle = r.co === d.ourCircle;
+    return `<tr class="${isOurs?'is-ours':(isOurCircle?'is-our-circle':'')}">
+      <td>${bankRegionRank(d.regions, r)}</td>
+      <td class="tal">${esc(r.region)}${isOurs?' <span class="badge-pill locked" style="margin-left:6px">★ Ours</span>':''}</td>
+      <td class="tal">${esc(r.co.replace('CO ',''))}</td>
+      <td>${r.branches}</td>
+      <td>${fmtBankCr(r.totalAdv)}</td>
+      <td>${fmtBankCr(r.remainingNpaAsOnDate)}</td>
+      <td><span class="bank-npa-pill" style="background:${sev.soft};color:${sev.color}">${fmtBankPct(r.pctRemainingNpaWithAdv)}</span></td>
+      <td style="color:${r.netReductionDuringMonth<=0?'var(--green)':'var(--red)'}">${fmtBankCr(r.netReductionDuringMonth)}</td>
+      <td style="color:${r.gapFromTarget<=0?'var(--green)':'var(--red)'}">${fmtBankCr(r.gapFromTarget)}</td>
+    </tr>`;
+  }).join('');
+
+  const regionTable = `<div class="chart-card">
+    <div class="list-modal-head">
+      <div>
+        <div class="section-label">All Regions — Ranked by NPA %<span class="chart-sub">worst first · Hathras highlighted</span></div>
+      </div>
+      <select id="bankRegionFilterSelect" class="dash-select">${filterOptions}</select>
+    </div>
+    <div class="dash-table-wrap acct-list-scroll">
+      <table class="dash-table">
+        <thead><tr>
+          <th class="tal">Rank</th><th class="tal">Region</th><th class="tal">Circle</th>
+          <th>Br.</th><th>Total Adv.</th><th>NPA (now)</th><th>NPA %</th><th>Net Reduction</th><th>Gap from Target</th>
+        </tr></thead>
+        <tbody>${regionTableRows}</tbody>
+      </table>
+    </div>
+  </div>`;
+
+  el.innerHTML = heroRow + insight + targetSection +
+    `<div class="section-label" style="margin-top:26px">Circles<span class="chart-sub">CO Moradabad is our circle</span></div>
+     <div class="circle-card-row">${circleCards}</div>` +
+    regionTable;
+
+  const filterSel = document.getElementById('bankRegionFilterSelect');
+  if(filterSel) filterSel.onchange = () => { bankRegionFilter = filterSel.value; renderBankDashboardBody(); };
+}
+
 /* ---------- Nav / view switching ---------- */
 function switchView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.dataset.view===view));
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   if(view==='dashboard') renderDashboard();
+  if(view==='bank') renderBankDashboard();
   const mainCol = document.getElementById('mainCol');
   if(mainCol) mainCol.scrollTop = 0;
 }
@@ -2133,6 +2392,8 @@ function toggleTheme(){
   on('masterFileInput','change',(e)=>handleMasterFileUpload(e));
   on('branchAdvUploadDrop','click',()=>document.getElementById('branchAdvFileInput').click());
   on('branchAdvFileInput','change',(e)=>handleBranchAdvUpload(e));
+  on('bankPdfUploadDrop','click',()=>document.getElementById('bankPdfFileInput').click());
+  on('bankPdfFileInput','change',(e)=>handleBankPdfUpload(e));
   on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
@@ -2153,6 +2414,11 @@ function toggleTheme(){
     // connection.
     e.currentTarget.classList.add('is-spinning');
     location.reload();
+  });
+  on('bankRefreshBtn','click',(e)=>{
+    e.currentTarget.classList.add('is-spinning');
+    refreshBankDashboard();
+    setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
   });
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{
     b.addEventListener('click',()=>switchView(b.dataset.view));

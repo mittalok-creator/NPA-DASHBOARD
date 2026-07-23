@@ -77,8 +77,13 @@
     return base64ToUtf8(res.content);
   }
 
-  /* meta: { asOnDate, rowCount, commitMessage, publishedBy, isRollback } */
-  async function publishData(dataObj, meta, onProgress) {
+  /* meta: { asOnDate, rowCount, commitMessage, publishedBy, isRollback }
+     extraFiles: optional [{path, content}] -- additional files committed in
+     the SAME commit as data/latest.json (content stringified if not already
+     a string). Used for datasets that live in their own file separate from
+     the main NPA book (e.g. data/bank-npa.json), so they can go live
+     alongside a regular daily Publish without a second commit/step. */
+  async function publishData(dataObj, meta, onProgress, extraFiles) {
     meta = meta || {};
     const progress = (msg) => { if (onProgress) onProgress(msg); };
     const dataJsonString = JSON.stringify(dataObj);
@@ -128,6 +133,17 @@
       { path: `data/${historyFileName}`, mode: '100644', type: 'blob', sha: dataBlob.sha },
       { path: 'data/history/index.json', mode: '100644', type: 'blob', sha: historyIndexBlob.sha },
     ];
+    if (extraFiles && extraFiles.length) {
+      progress('Uploading additional data…');
+      for (const f of extraFiles) {
+        const content = typeof f.content === 'string' ? f.content : JSON.stringify(f.content);
+        const blob = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
+          method: 'POST',
+          body: { content: utf8ToBase64(content), encoding: 'base64' },
+        });
+        treeEntries.push({ path: f.path, mode: '100644', type: 'blob', sha: blob.sha });
+      }
+    }
     evicted.forEach(e => { if (e.file) treeEntries.push({ path: `data/${e.file}`, mode: '100644', type: 'blob', sha: null }); });
     const tree = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/trees`, {
       method: 'POST',
