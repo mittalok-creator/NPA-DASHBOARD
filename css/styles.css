@@ -1108,11 +1108,33 @@ body{overscroll-behavior:none}
    input so typing or pasting a block copied from Excel works like a real
    spreadsheet, not a read-only report. */
 .dash-table td.editcell{padding:0}
-.editgrid-input{width:100%;box-sizing:border-box;border:none;background:transparent;font:inherit;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);text-align:right;padding:11px 14px}
+.editgrid-input{width:100%;box-sizing:border-box;border:none;background:transparent;font:inherit;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);text-align:right;padding:11px 14px;cursor:text}
 .editgrid-input.tal{text-align:left}
 .editgrid-input:focus{outline:2px solid var(--accent);outline-offset:-2px;background:var(--accent-soft)}
 .editgrid-input.neg{color:var(--red)}
 .editgrid-input.pos{color:var(--green)}
+select.editgrid-select{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:26px}
+
+/* Sticky header while the grid scrolls -- th already has an opaque
+   background (--table-head), so no content shows through underneath. */
+.projgrid-scroll{max-height:70vh;overflow-y:auto}
+.projgrid-scroll .dash-table thead th{position:sticky;top:0;z-index:2}
+
+/* ---------- Summary stat strip (Daily NPA Projection) -- recalculated
+   live from the grid, no publish needed to see updated totals. */
+.projstat-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.projstat-tile{flex:1;min-width:120px;background:var(--card);border:1px solid var(--line);border-top:3px solid var(--line);border-radius:var(--radius-md);padding:10px 14px;box-shadow:var(--shadow-sm)}
+.projstat-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--sub)}
+.projstat-val{font-size:19px;font-weight:800;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+.projstat-tile.tone-red{border-top-color:var(--red)}
+.projstat-tile.tone-red .projstat-val{color:var(--red)}
+.projstat-tile.tone-green{border-top-color:var(--green)}
+.projstat-tile.tone-green .projstat-val{color:var(--green)}
+.projstat-tile.tone-amber{border-top-color:var(--amber);background:var(--amber-soft)}
+.projstat-tile.tone-amber .projstat-val{color:var(--amber)}
+.projstat-tile.tone-blue{border-top-color:var(--accent)}
+.projstat-tile.tone-blue .projstat-val{color:var(--accent)}
+@media (max-width:699px){ .projstat-tile{min-width:calc(50% - 5px)} }
 
 @media (max-width:900px){
   .chart-grid{grid-template-columns:1fr}
