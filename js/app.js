@@ -2532,8 +2532,8 @@ function parsePnpaRows(headerCells, dataRows){
 let PNPA_DATA = null;
 let __pendingPnpaData = null;
 let pnpaBucketTab = 'kcc';
-let pnpaBranchSearch = '';
-function setPnpaBucketTab(tab){ pnpaBucketTab = tab; pnpaBranchSearch=''; renderPnpaDashboardBody(); }
+let pnpaBranchFilter = '';
+function setPnpaBucketTab(tab){ pnpaBucketTab = tab; renderPnpaDashboardBody(); }
 window.setPnpaBucketTab = setPnpaBucketTab;
 
 function handlePnpaUpload(evt){
@@ -2635,17 +2635,22 @@ function renderPnpaDashboardBody(){
     });
   }).join('')}</div>`;
 
+  const allBranches = [...new Set(d.rows.map(r=>r[PC.BRANCH]))].sort((a,b)=>a.localeCompare(b));
+  const branchFilterOptions = `<option value="">Regional Office</option>` +
+    allBranches.map(b=>`<option value="${esc(b)}"${pnpaBranchFilter===b?' selected':''}>${esc(b)}</option>`).join('');
+
   el.innerHTML = heroRow +
     `<div class="chart-card" style="margin-top:20px">
       <div class="section-label" id="pnpaTableLabel"></div>
-      <div class="bank-filter-row">
-        <input type="text" id="pnpaBranchSearchInput" class="dash-select" placeholder="Search branch…" value="${esc(pnpaBranchSearch)}" style="flex:1">
+      <div class="dash-toolbar" style="margin:2px 0 14px">
+        <span class="dash-toolbar-label">Branch</span>
+        <select id="pnpaBranchFilterSelect" class="dash-select">${branchFilterOptions}</select>
       </div>
       <div id="pnpaBranchTableCard"></div>
     </div>`;
 
-  const searchInput = document.getElementById('pnpaBranchSearchInput');
-  if(searchInput) searchInput.oninput = () => { pnpaBranchSearch = searchInput.value; renderPnpaBranchTable(); };
+  const filterSel = document.getElementById('pnpaBranchFilterSelect');
+  if(filterSel) filterSel.onchange = () => { pnpaBranchFilter = filterSel.value; renderPnpaBranchTable(); };
   renderPnpaBranchTable();
 }
 
@@ -2656,11 +2661,9 @@ function renderPnpaBranchTable(){
   if(!wrap || !d) return;
   const activeBucket = PNPA_BUCKETS.find(b=>b.key===pnpaBucketTab);
   let branchAgg = pnpaBranchAgg(d.rows, pnpaBucketTab);
-  if(pnpaBranchSearch){
-    const q = pnpaBranchSearch.toLowerCase().trim();
-    branchAgg = branchAgg.filter(r=>r.branch.toLowerCase().includes(q));
-  }
-  if(labelEl) labelEl.innerHTML = `${esc(activeBucket.label)} — Branch-wise Summary, highest O/S first<span class="chart-sub">${esc(activeBucket.sub)} · Hathras region · ${branchAgg.length.toLocaleString('en-IN')} branch(es) shown · tap a branch to see the account list</span>`;
+  if(pnpaBranchFilter) branchAgg = branchAgg.filter(r=>r.branch===pnpaBranchFilter);
+  const scopeLabel = pnpaBranchFilter ? esc(pnpaBranchFilter) : 'Regional Office (all branches)';
+  if(labelEl) labelEl.innerHTML = `${esc(activeBucket.label)} — Branch-wise Summary, highest O/S first<span class="chart-sub">${esc(activeBucket.sub)} · ${scopeLabel} · ${branchAgg.length.toLocaleString('en-IN')} branch(es) shown · tap a branch to see the account list</span>`;
   const rowsHtml = branchAgg.map((r,i)=>{
     return `<tr class="clickable" onclick="pnpaShowBranchAccounts('${pnpaBucketTab}','${esc(r.branch)}')">
       <td><span class="dash-rank">${i+1}</span></td>
