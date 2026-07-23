@@ -592,6 +592,8 @@ main{padding:20px 16px 40px}
 .freeze-chip.lt-freeze:hover{transform:scale(1.06)}
 .freeze-chip.lt-freeze.ready{background:linear-gradient(135deg,var(--seal-l),var(--seal-d));border-color:var(--seal);color:#241d08;animation:ringPulse 1.6s ease-out 2}
 .freeze-chip.lt-freeze.frozen{background:var(--green);border-color:var(--green);color:#0b2417;animation:sealStamp .32s var(--ease)}
+.freeze-chip.lt-freeze.syncing{opacity:.6}
+.freeze-chip.lt-freeze.sync-err{border-color:var(--red);box-shadow:0 0 0 2px var(--red-soft)}
 @keyframes sealStamp{0%{transform:scale(1.35);opacity:.6}60%{transform:scale(.9)}100%{transform:scale(1);opacity:1}}
 .loan-table td[id^="impact-"]{font-weight:800;font-size:14px;border-radius:8px;transition:background .2s var(--ease)}
 .loan-table td[id^="impact-"].pos{color:var(--pos);background:var(--pos-soft)}
