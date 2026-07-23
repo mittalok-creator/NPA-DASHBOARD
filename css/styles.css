@@ -1120,6 +1120,20 @@ select.editgrid-select{cursor:pointer;-webkit-appearance:none;appearance:none;ba
 .projgrid-scroll{max-height:70vh;overflow-y:auto}
 .projgrid-scroll .dash-table thead th{position:sticky;top:0;z-index:2}
 
+/* Freeze S N / Sol ID / Branch as the grid's left columns, so scrolling
+   right to see Recovery/GAP/Follow-up never loses track of which branch a
+   row belongs to -- explicit widths keep the three sticky offsets exact,
+   since a plain table's auto column widths can't be relied on for a
+   sticky "left" value to land correctly. */
+#dailyProjTable th:nth-child(1),#dailyProjTable td:nth-child(1){position:sticky;left:0;z-index:2;width:34px;min-width:34px;max-width:34px}
+#dailyProjTable th:nth-child(2),#dailyProjTable td:nth-child(2){position:sticky;left:34px;z-index:2;width:64px;min-width:64px;max-width:64px}
+#dailyProjTable th:nth-child(3),#dailyProjTable td:nth-child(3){position:sticky;left:98px;z-index:2;width:130px;min-width:130px;max-width:130px;white-space:normal;box-shadow:3px 0 8px rgba(0,0,0,.12)}
+#dailyProjTable td:nth-child(1),#dailyProjTable td:nth-child(2),#dailyProjTable td:nth-child(3){background:var(--card)}
+#dailyProjTable tbody tr:nth-child(even) td:nth-child(1),#dailyProjTable tbody tr:nth-child(even) td:nth-child(2),#dailyProjTable tbody tr:nth-child(even) td:nth-child(3){background:var(--stripe)}
+#dailyProjTable thead th:nth-child(1),#dailyProjTable thead th:nth-child(2),#dailyProjTable thead th:nth-child(3){z-index:4;background:var(--table-head)}
+#dailyProjTable tbody tr:hover td{background:var(--accent-soft)}
+#dailyProjTable tbody tr:hover td:nth-child(1),#dailyProjTable tbody tr:hover td:nth-child(2),#dailyProjTable tbody tr:hover td:nth-child(3){background:var(--accent-soft)}
+
 /* ---------- Summary stat strip (Daily NPA Projection) -- recalculated
    live from the grid, no publish needed to see updated totals. */
 .projstat-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
@@ -1441,6 +1455,14 @@ header.app-head::before,.detail-head::before{
 
 /* ---------- Dashboard interactivity additions ---------- */
 .modal-sheet.wide{max-width:720px}
+/* The account-list modal (branch/bucket drill-down) carries a real data
+   table, unlike the short confirm-style sheets that share .modal-overlay --
+   those are fine bottom-anchored, but a table with just 1-2 rows would
+   otherwise render as a tiny sliver stuck to the screen's bottom edge,
+   half-hidden behind the mobile bottom nav. Center it instead so it's
+   always clearly visible regardless of how many rows it holds. */
+#listModalOverlay{align-items:center}
+#listModalOverlay .modal-sheet{border-radius:22px}
 .list-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
 @media (max-width:659px){
   .list-modal-head{flex-wrap:wrap}
