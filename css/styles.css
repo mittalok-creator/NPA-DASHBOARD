@@ -1191,9 +1191,23 @@ select.editgrid-select{cursor:pointer;-webkit-appearance:none;appearance:none;ba
 /* ---------- Bottom tabs (mobile) ---------- */
 #bottomTabs{display:none}
 .mobile-sig{display:none}
+/* Mobile-only top utility bar: Quick search / Update data / Theme toggle live
+   here instead of in #bottomTabs, so the bottom bar stays down to the 6 real
+   view tabs and their labels are actually legible on a phone. */
+#mobileUtilBar{display:none}
 @media (max-width:899px){
   #sideNav{display:none}
-  #mainCol{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+  #mainCol{padding-bottom:calc(84px + env(safe-area-inset-bottom));padding-top:56px}
+  #mobileUtilBar{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    position:fixed;left:0;right:0;top:0;z-index:91;height:56px;padding:0 14px;
+    padding-top:env(safe-area-inset-top);
+    background:rgba(9,9,15,.97);backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);
+    border-bottom:1px solid var(--glass-border);
+  }
+  .mobile-util-brand{font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--chrome-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mobile-util-btns{display:flex;gap:8px;flex-shrink:0}
+  .mobile-util-btns .icon-btn{width:32px;height:32px}
   #bottomTabs{
     display:flex;position:fixed;left:0;right:0;bottom:0;z-index:90;height:calc(64px + env(safe-area-inset-bottom));
     padding-bottom:env(safe-area-inset-bottom);
@@ -1387,6 +1401,8 @@ header.app-head::before,.detail-head::before{
 :root[data-theme="light"] #bottomTabs{background:rgba(255,255,255,.94)}
 :root[data-theme="light"] #bottomTabs .nav-item.active{color:var(--accent)}
 :root[data-theme="light"] .mobile-sig{background:rgba(255,255,255,.9);border-top:1px solid var(--glass-border)}
+:root[data-theme="light"] #mobileUtilBar{background:rgba(255,255,255,.94);border-bottom:1px solid var(--glass-border)}
+:root[data-theme="light"] .mobile-util-brand{color:var(--head-ink)}
 
 :root[data-theme="light"] header.app-head,:root[data-theme="light"] .detail-head{background:rgba(255,255,255,.94);box-shadow:0 10px 26px rgba(34,30,60,.10)}
 :root[data-theme="light"] #aggBar{background:linear-gradient(160deg,rgba(255,255,255,.88),rgba(238,243,252,.88))}
