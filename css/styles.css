@@ -955,6 +955,7 @@ body{overscroll-behavior:none}
 .target-chip .tc-val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
 .target-chip.ahead .tc-val{color:var(--green)}
 .target-chip.behind .tc-val{color:var(--red)}
+.target-chip .tc-march{display:block;font-size:11px;color:var(--sub);font-weight:600;margin:2px 0;font-variant-numeric:tabular-nums}
 .circle-card-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:14px 0 26px}
 .circle-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px;position:relative;box-shadow:var(--shadow-sm);transition:border-color .18s var(--ease),box-shadow .18s var(--ease)}
 .circle-card.is-ours{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft),var(--shadow-sm)}

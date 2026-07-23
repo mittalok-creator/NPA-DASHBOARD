@@ -527,6 +527,25 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Bank Dashboard: added a "Since March 2026" comparison (2026-07-23, same day)
+
+You asked for March's figures to show too, with a comparison — the source
+PDF already carries "NPA MAR-26 (Post Audit)" and "% With Adv. Mar-26" per
+region (columns F/G), plus a ready-made "Net Reduction over Mar-26" (column
+S), so no new parsing was needed, only surfacing what was already captured.
+
+- New "Since March 2026" section (same chip layout as Target Progress)
+  shows Whole Bank / CO Moradabad / Hathras: March's post-audit NPA figure
+  and %, this month's current figure and %, and the reduction (or
+  increase) between them — green when reduced, red when it grew.
+- The all-regions table gained two columns, "NPA Mar-26" and "Since
+  Mar-26", so the financial-year-to-date trend is visible per region too,
+  not just at the three highlighted levels.
+- Verified against the real PDF's figures: Hathras's Mar-26 NPA was
+  ₹128.95 Cr (9.02%), now ₹128.39 Cr (8.98%) — a ₹0.56 Cr reduction,
+  matching the source file's own "Net Reduction over Mar-26" column
+  exactly (both circle and bank totals cross-checked the same way).
+
 ### New "Bank Dashboard" tab: whole-bank NPA MIS, all 65 regions, Hathras/CO Moradabad highlighted (2026-07-23, same day)
 
 You uploaded UPGB's daily whole-bank "Dashboard of NPA" PDF (65 regions
