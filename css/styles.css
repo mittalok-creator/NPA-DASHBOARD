@@ -377,7 +377,8 @@
   --bg:#0B1020; --card:#151C2E; --ink:#EEEDF6; --sub:#A6A8BE; --ink-mute:#7F819A;
   --line:rgba(255,255,255,.08);
 
-  /* chrome text tokens — side nav / bottom tabs stay dark ink in both themes */
+  /* chrome text tokens — side nav / bottom tabs (dark-theme values; light
+     theme gets its own set further down, flipping the chrome to match) */
   --chrome-ink:#EEEDF6; --chrome-sub:#A6A8BE; --chrome-mute:#7F819A; --chrome-line:rgba(255,255,255,.08);
 
   --glass-fill:rgba(255,255,255,.035);
@@ -1205,7 +1206,10 @@ header.app-head::before,.detail-head::before{
   --accent:#1B4FE0; --accent-2:#0EA5C4; --accent-soft:rgba(27,79,224,.10);
   --gold:#1B4FE0; --gold-l:#3A7BFF; --gold-d:#123A9E; --gold-soft:rgba(27,79,224,.08);
   --stripe:rgba(33,33,46,.022); --stripe-label:rgba(33,33,46,.032);
-  --table-head:#1B2130; --table-head-label:#141926;
+  /* Table headers now match the rest of the light surface (a faint blue-
+     gray strip) instead of staying black -- see the chrome tokens below
+     for the matching side nav/top header flip. */
+  --table-head:#EDF1FA; --table-head-label:#E3E9F6;
   --scrollbar-thumb:rgba(33,33,46,.16); --scrollbar-thumb-hover:rgba(33,33,46,.26);
   --track-bg:rgba(33,33,46,.07); --track-ring:rgba(33,33,46,.05);
   --scrim:rgba(28,27,38,.44);
@@ -1221,6 +1225,16 @@ header.app-head::before,.detail-head::before{
   --green-soft:rgba(12,128,73,.12); --amber-soft:rgba(143,99,0,.13); --red-soft:rgba(209,54,44,.12);
   --pos-soft:rgba(12,128,73,.12); --neg-soft:rgba(209,54,44,.12);
   --gauge-track:rgba(33,33,46,.10);
+
+  /* Chrome (side nav, bottom tabs, top header/search bar, aggregate rail)
+     used to stay permanently dark in this theme by design -- now flips to
+     the same bright porcelain surface as everything else, so nothing on
+     the page reads as "still dark mode" once light theme is on. */
+  --chrome-ink:#21212E; --chrome-sub:#5E5F72; --chrome-mute:#6A6B7E; --chrome-line:rgba(33,33,46,.10);
+  --head-grad:linear-gradient(160deg,#FFFFFF 0%,#F9FBFF 55%,#EEF3FC 100%);
+  --head-weave:rgba(27,79,224,.035);
+  --head-line:rgba(27,79,224,.14);
+  --head-ink:#21212E; --head-sub:#5E5F72; --head-ph:#6A6B7E;
 }
 :root[data-theme="light"] .view-title{
   background:linear-gradient(135deg,#21212E,#123A9E 70%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
@@ -1247,8 +1261,46 @@ header.app-head::before,.detail-head::before{
 :root[data-theme="light"] .legend-dot{box-shadow:0 0 6px -2px currentColor}
 :root[data-theme="light"] .bgfx-grid{background-image:radial-gradient(rgba(33,33,46,.08) 1px,transparent 1px)}
 :root[data-theme="light"] ::selection{background:rgba(27,79,224,.22);color:#1b1830}
-:root[data-theme="light"] #sideNav{background:rgba(9,9,15,.97)}
-:root[data-theme="light"] #bottomTabs{background:rgba(9,9,15,.97)}
+/* ---------- Chrome flip: side nav, top header/search bar, bottom tabs,
+   aggregate rail and data-table headers all move to the same light glass
+   surface as the rest of the page instead of staying dark. ---------- */
+:root[data-theme="light"] #sideNav{background:rgba(255,255,255,.82)}
+:root[data-theme="light"] .nav-item:hover{background:rgba(33,33,46,.05)}
+:root[data-theme="light"] .nav-item.active{color:var(--gold-d)}
+:root[data-theme="light"] .nav-brand-text span{color:var(--accent)}
+:root[data-theme="light"] .nav-foot .sig{color:var(--ink-mute);text-shadow:none}
+:root[data-theme="light"] .auth-signin-btn{background:rgba(33,33,46,.04)}
+:root[data-theme="light"] .auth-signin-btn:hover{background:rgba(33,33,46,.08)}
+
+:root[data-theme="light"] #bottomTabs{background:rgba(255,255,255,.94)}
+:root[data-theme="light"] #bottomTabs .nav-item.active{color:var(--accent)}
+:root[data-theme="light"] .mobile-sig{background:rgba(255,255,255,.9);border-top:1px solid var(--glass-border)}
+
+:root[data-theme="light"] header.app-head,:root[data-theme="light"] .detail-head{background:rgba(255,255,255,.94);box-shadow:0 10px 26px rgba(34,30,60,.10)}
+:root[data-theme="light"] #aggBar{background:linear-gradient(160deg,rgba(255,255,255,.88),rgba(238,243,252,.88))}
+:root[data-theme="light"] .icon-btn{background:rgba(33,33,46,.05);border-color:rgba(27,79,224,.20);color:var(--head-ink)}
+:root[data-theme="light"] .icon-btn:hover{background:rgba(27,79,224,.10)}
+:root[data-theme="light"] .back-btn,:root[data-theme="light"] .share-btn{background:rgba(33,33,46,.05);border-color:rgba(27,79,224,.20);color:var(--head-ink)}
+:root[data-theme="light"] .back-btn:hover,:root[data-theme="light"] .share-btn:hover{background:rgba(27,79,224,.10)}
+:root[data-theme="light"] .search-box{background:rgba(33,33,46,.04);border-color:rgba(33,33,46,.14)}
+:root[data-theme="light"] .search-box:focus-within{background:rgba(33,33,46,.06)}
+:root[data-theme="light"] .mode-pills button{background:rgba(33,33,46,.04);border-color:rgba(33,33,46,.13)}
+:root[data-theme="light"] .mode-pills button.active{background:rgba(27,79,224,.12)}
+
+:root[data-theme="light"] #aggBar{color:var(--head-ink)}
+:root[data-theme="light"] #aggBar .agg-stat{border-top-color:rgba(33,33,46,.10)}
+:root[data-theme="light"] #aggBar .agg-stat .av{color:var(--head-ink)}
+:root[data-theme="light"] #aggBar .agg-stat.impact{background:rgba(33,33,46,.04);border-color:rgba(33,33,46,.09)}
+
+:root[data-theme="light"] .side-rail{background:rgba(255,255,255,.92)}
+:root[data-theme="light"] .side-rail .rail-value{color:var(--head-ink)}
+
+:root[data-theme="light"] .loan-table thead th{color:var(--head-ink)}
+:root[data-theme="light"] .loan-table .lt-scheme{color:var(--head-sub)}
+:root[data-theme="light"] .dash-table th{color:var(--head-ink)}
+:root[data-theme="light"] .dash-table th.sortable:hover{color:var(--accent)}
+:root[data-theme="light"] .dash-table th.sortable.sort-desc .sort-ic{color:var(--accent)}
+:root[data-theme="light"] .dash-table th.sortable.sort-asc .sort-ic{color:var(--accent)}
 
 /* ---------- Theme toggle button ---------- */
 .theme-icon-moon{display:none}
