@@ -527,6 +527,33 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Mobile bottom nav: moved Quick Search/Update Data/Theme to a top utility bar (2026-07-23, same day)
+
+You sent a phone screenshot showing the bottom tab bar crammed with 9 items
+(6 real tabs — Dashboard/Search/Bank/PNPA/Overdue/Projection — plus 3 utility
+buttons — Quick Search/Update Data/Theme toggle) all squeezed to the same
+tiny size, labels barely readable. Asked what to do before touching
+anything; recommended separating navigation destinations from utility
+actions, and you picked that option.
+
+- The 3 utility buttons are no longer in `#bottomTabs` — they now live in a
+  new fixed top bar (`#mobileUtilBar`, mobile-only, hidden on desktop where
+  the existing sidebar already has its own copies of these same buttons).
+  Reused the exact same element IDs/attributes (`cmdkBtnNavMobile`,
+  `data-open-data`, `themeToggleBtnMobile`) so no JS wiring changed at all
+  — only where the markup lives moved.
+- `#bottomTabs` now holds only the 6 real view tabs, each getting a bigger
+  effective share of the bar's width since there are 3 fewer items —
+  labels are legible again instead of getting squashed.
+- `#mainCol` gained matching top padding so page content doesn't slide
+  under the new fixed top bar; the top bar carries the `no-print` class so
+  it (like the bottom bar) disappears in Print/PDF output.
+- Verified at a 390px mobile viewport in both dark and light theme: top bar
+  renders correctly, theme toggle still flips the icon and site theme,
+  Quick Search still opens the command palette, Update Data still opens
+  the GitHub sign-in/upload modal — all exactly as before, just relocated.
+  Confirmed the desktop sidebar layout (≥900px) is completely unaffected.
+
 ### Daily NPA Projection: Undo, Print/Export PDF, Export to Excel + GAP color bug fix (2026-07-23, same day)
 
 - **Bug found and fixed**: GAP was being colored with the same rule as
