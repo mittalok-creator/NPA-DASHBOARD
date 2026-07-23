@@ -2614,9 +2614,22 @@ function renderPnpaDashboardBody(){
     e.textContent = parts.length===3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : (d.asOnDate||'—');
   });
 
+  const allBranches = [...new Set(d.rows.map(r=>r[PC.BRANCH]))].sort((a,b)=>a.localeCompare(b));
+  const branchFilterOptions = `<option value="">Regional Office</option>` +
+    allBranches.map(b=>`<option value="${esc(b)}"${pnpaBranchFilter===b?' selected':''}>${esc(b)}</option>`).join('');
+  const toolbar = `<div class="dash-toolbar">
+    <span class="dash-toolbar-label">Branch</span>
+    <select id="pnpaBranchFilterSelect" class="dash-select">${branchFilterOptions}</select>
+  </div>`;
+
+  // Hero blocks total whichever rows are currently in scope -- Regional
+  // Office (all Hathras) by default, or just the selected branch's own
+  // rows once one is picked, so the KCC/KCC-AH/Limit Review/Other numbers
+  // always match what the Branch filter above them is set to.
+  const scopedRows = pnpaBranchFilter ? d.rows.filter(r=>r[PC.BRANCH]===pnpaBranchFilter) : d.rows;
   const bucketTotals = {};
   PNPA_BUCKETS.forEach(b=>{ bucketTotals[b.key]={count:0,os:0,branches:new Set()}; });
-  for(const r of d.rows){
+  for(const r of scopedRows){
     const bk = pnpaBucketOfRow(r);
     bucketTotals[bk].count++; bucketTotals[bk].os += r[PC.OS]; bucketTotals[bk].branches.add(r[PC.BRANCH]);
   }
@@ -2630,27 +2643,21 @@ function renderPnpaDashboardBody(){
       onclick:`setPnpaBucketTab('${b.key}')`,
       label: b.label,
       fallback: fmtCr(t.os),
-      sub: `${t.count.toLocaleString('en-IN')} accounts · ${t.branches.size.toLocaleString('en-IN')} branches`,
+      sub: pnpaBranchFilter
+        ? `${t.count.toLocaleString('en-IN')} accounts in ${esc(pnpaBranchFilter)}`
+        : `${t.count.toLocaleString('en-IN')} accounts · ${t.branches.size.toLocaleString('en-IN')} branches`,
       badge: isActive ? `<div class="hero-kpi-badge" style="background:var(--accent-soft);color:var(--accent)">Viewing</div>` : '',
     });
   }).join('')}</div>`;
 
-  const allBranches = [...new Set(d.rows.map(r=>r[PC.BRANCH]))].sort((a,b)=>a.localeCompare(b));
-  const branchFilterOptions = `<option value="">Regional Office</option>` +
-    allBranches.map(b=>`<option value="${esc(b)}"${pnpaBranchFilter===b?' selected':''}>${esc(b)}</option>`).join('');
-
-  el.innerHTML = heroRow +
+  el.innerHTML = toolbar + heroRow +
     `<div class="chart-card" style="margin-top:20px">
       <div class="section-label" id="pnpaTableLabel"></div>
-      <div class="dash-toolbar" style="margin:2px 0 14px">
-        <span class="dash-toolbar-label">Branch</span>
-        <select id="pnpaBranchFilterSelect" class="dash-select">${branchFilterOptions}</select>
-      </div>
       <div id="pnpaBranchTableCard"></div>
     </div>`;
 
   const filterSel = document.getElementById('pnpaBranchFilterSelect');
-  if(filterSel) filterSel.onchange = () => { pnpaBranchFilter = filterSel.value; renderPnpaBranchTable(); };
+  if(filterSel) filterSel.onchange = () => { pnpaBranchFilter = filterSel.value; renderPnpaDashboardBody(); };
   renderPnpaBranchTable();
 }
 

@@ -527,6 +527,21 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Daily PNPA: dropdown moved above the bucket blocks, blocks now scope to the selected branch (2026-07-23, same day)
+
+Two follow-up asks: put the Branch dropdown on top, and make the
+KCC/KCC-AH/Limit Review/Other blocks actually reflect the selected
+branch's numbers instead of always showing the whole region.
+
+- The Branch/Regional Office `<select>` now renders above the 4 bucket
+  cards instead of below them.
+- The bucket cards now total whichever rows are in scope: all of
+  Hathras by default ("Regional Office"), or just the selected branch's
+  own rows once one is picked — e.g. picking "MATHURA CITY" changes KCC's
+  card from the whole region's 53 accounts down to just that branch's 2.
+  The branch-wise table beneath keeps behaving the same way it already
+  did (narrowing to the selected branch).
+
 ### Daily PNPA: Branch/Regional Office dropdown filter, matching the main Dashboard (2026-07-23, same day)
 
 You asked for a branch/regional-office filter on Daily PNPA "like
