@@ -527,6 +527,27 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Bank Dashboard: added Since-March and vs-Target filters to the region table (2026-07-23, same day)
+
+You asked for the all-regions table to be filterable by "regions above/
+below March" and "regions above/below target" — quickly narrowing down to
+just the regions that got worse since March, or that are behind this
+month's target, without having to scan all 65 rows.
+
+- Two new filter dropdowns next to the existing Circle filter: **Since
+  March** (Increased since March / Reduced since March) using the same
+  `netReductionOverMar26` figure the "Since March 2026" section already
+  computes, and **vs Target** (Behind Target / Ahead of Target) using
+  `gapFromTarget`. All three filters combine (e.g. "CO Moradabad" +
+  "Reduced since March" together).
+- The section subtitle now shows a live count — "worst first · Hathras
+  highlighted · 18 of 65 regions shown" — so it's clear when a filter has
+  narrowed the list.
+- Verified the split is exhaustive both ways: 8 regions increased since
+  March + 57 reduced = 65 (all accounted for); 60 behind target + 5 ahead
+  = 65. Checked the combined-filter case and mobile layout (three
+  dropdowns stack full-width).
+
 ### Bank Dashboard: added a "Since March 2026" comparison (2026-07-23, same day)
 
 You asked for March's figures to show too, with a comparison — the source

@@ -2107,6 +2107,8 @@ let BANK_DATA = null;
 function fmtBankCr(n){ if(n===null||n===undefined||isNaN(n)) return '—'; return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})+' Cr'; }
 function fmtBankPct(n){ return (n===null||n===undefined||isNaN(n)) ? '—' : n.toFixed(2)+'%'; }
 let bankRegionFilter = '';
+let bankMarchFilter = '';
+let bankTargetFilter = '';
 let __pendingBankData = null;
 
 /* Parses Alok's daily whole-bank "Dashboard of NPA" PDF client-side, via
@@ -2315,9 +2317,21 @@ function renderBankDashboardBody(){
 
   const filterOptions = ['<option value="">All circles (65 regions)</option>']
     .concat(d.circles.map(c=>`<option value="${esc(c.name)}"${bankRegionFilter===c.name?' selected':''}>${esc(c.name)} only</option>`)).join('');
+  const marchFilterOptions = `
+    <option value="">Since March: All</option>
+    <option value="above"${bankMarchFilter==='above'?' selected':''}>Increased since March</option>
+    <option value="below"${bankMarchFilter==='below'?' selected':''}>Reduced since March</option>`;
+  const targetFilterOptions = `
+    <option value="">vs Target: All</option>
+    <option value="above"${bankTargetFilter==='above'?' selected':''}>Behind Target</option>
+    <option value="below"${bankTargetFilter==='below'?' selected':''}>Ahead of Target</option>`;
 
-  const filteredRegions = (bankRegionFilter ? d.regions.filter(r=>r.co===bankRegionFilter) : d.regions)
-    .slice().sort((a,b)=>b.pctRemainingNpaWithAdv-a.pctRemainingNpaWithAdv);
+  let filteredRegions = bankRegionFilter ? d.regions.filter(r=>r.co===bankRegionFilter) : d.regions.slice();
+  if(bankMarchFilter==='above') filteredRegions = filteredRegions.filter(r=>r.netReductionOverMar26>0);
+  else if(bankMarchFilter==='below') filteredRegions = filteredRegions.filter(r=>r.netReductionOverMar26<=0);
+  if(bankTargetFilter==='above') filteredRegions = filteredRegions.filter(r=>r.gapFromTarget>0);
+  else if(bankTargetFilter==='below') filteredRegions = filteredRegions.filter(r=>r.gapFromTarget<=0);
+  filteredRegions = filteredRegions.sort((a,b)=>b.pctRemainingNpaWithAdv-a.pctRemainingNpaWithAdv);
 
   const regionTableRows = filteredRegions.map(r => {
     const sev = npaPctSeverity(r.pctRemainingNpaWithAdv);
@@ -2341,9 +2355,13 @@ function renderBankDashboardBody(){
   const regionTable = `<div class="chart-card">
     <div class="list-modal-head">
       <div>
-        <div class="section-label">All Regions — Ranked by NPA %<span class="chart-sub">worst first · Hathras highlighted</span></div>
+        <div class="section-label">All Regions — Ranked by NPA %<span class="chart-sub">worst first · Hathras highlighted · ${filteredRegions.length} of ${d.regions.length} regions shown</span></div>
       </div>
+    </div>
+    <div class="bank-filter-row">
       <select id="bankRegionFilterSelect" class="dash-select">${filterOptions}</select>
+      <select id="bankMarchFilterSelect" class="dash-select">${marchFilterOptions}</select>
+      <select id="bankTargetFilterSelect" class="dash-select">${targetFilterOptions}</select>
     </div>
     <div class="dash-table-wrap acct-list-scroll">
       <table class="dash-table">
@@ -2363,6 +2381,10 @@ function renderBankDashboardBody(){
 
   const filterSel = document.getElementById('bankRegionFilterSelect');
   if(filterSel) filterSel.onchange = () => { bankRegionFilter = filterSel.value; renderBankDashboardBody(); };
+  const marchFilterSel = document.getElementById('bankMarchFilterSelect');
+  if(marchFilterSel) marchFilterSel.onchange = () => { bankMarchFilter = marchFilterSel.value; renderBankDashboardBody(); };
+  const targetFilterSel = document.getElementById('bankTargetFilterSelect');
+  if(targetFilterSel) targetFilterSel.onchange = () => { bankTargetFilter = targetFilterSel.value; renderBankDashboardBody(); };
 }
 
 /* ---------- Nav / view switching ---------- */
