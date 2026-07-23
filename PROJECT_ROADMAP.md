@@ -527,6 +527,32 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Daily PNPA: real "Reason" field (not the always-blank Remarks), Limit Review search (2026-07-23, same day)
+
+You asked to separate Limit/Review out further and let search pull up
+accounts by branch, KCC vs non-KCC, and by "Limit Review" — and pointed
+out a leftover `*` in the list, which turned out to be the ★ "Hathras"
+badge from a stale/cached screenshot (already removed in the previous
+update, confirmed with you, no further action needed there).
+
+- Discovered the source file's actual **"Remarks"** column is essentially
+  always `"-"` (no real content) — the genuinely useful why-is-this-
+  flagged text lives in the **"Reasons"** column instead (e.g.
+  `"LAANPA,LimReview"`, `"No Credit for 90Days,TurnOver"`). Swapped the
+  account list's last column from the always-blank Remarks to this real
+  Reasons text, relabeled **"Reason"**.
+- `LimReview` is spelled out as **"Limit Review"** (the one code you
+  specifically called out); every other code is shown as-is rather than
+  guess-translated, since I'm not confident of every internal code's exact
+  banking meaning and didn't want to mislabel one.
+- The branch search box now also recognizes "Limit Review" / "LimReview"
+  as a special filter — typing it narrows the branch-wise summary (in
+  whichever bucket tab, KCC or non-KCC, is active) down to only branches
+  with at least one Limit-Review-flagged account, alongside its existing
+  plain branch-name search.
+- Re-shipped today's data with the Reason field: of the 104 Hathras rows,
+  13 accounts carry a "Limit Review" flag.
+
 ### Daily PNPA: rescoped to Hathras-only, zero-balance dropped, added Limit/Review Date/Remarks (2026-07-23, same day)
 
 Right after shipping the whole-bank version, you clarified: "i need daily
