@@ -527,6 +527,16 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Bank Dashboard: Total Advance shown in the hero cards (2026-07-23, same day)
+
+You asked for the Total Advance figure to also show in the NPA hero cards
+themselves, small size, space not a concern.
+
+- Added a small muted second line under the branch/region count on all
+  three hero cards (Whole Bank, CO Moradabad, Hathras) — "Total Advance:
+  ₹&lt;amount&gt; Cr" — using the same `totalAdv` field already parsed from
+  the PDF, no new data needed.
+
 ### Bank Dashboard: added Since-March and vs-Target filters to the region table (2026-07-23, same day)
 
 You asked for the all-regions table to be filterable by "regions above/

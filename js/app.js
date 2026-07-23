@@ -2239,21 +2239,21 @@ function renderBankDashboardBody(){
       id:'bankHeroTotal', icon:ICON_LANDMARK, label:'Whole Bank — UPGB',
       tint:'var(--accent-soft)', color:'var(--accent)',
       fallback: fmtBankCr(bank.remainingNpaAsOnDate),
-      sub: `${bank.branches.toLocaleString('en-IN')} branches · 65 regions`,
+      sub: `${bank.branches.toLocaleString('en-IN')} branches · 65 regions<span class="hero-kpi-sub2">Total Advance: ${fmtBankCr(bank.totalAdv)}</span>`,
       badge: `<div class="hero-kpi-badge" style="background:${bankSev.soft};color:${bankSev.color}">${fmtBankPct(bank.pctRemainingNpaWithAdv)} NPA</div>`
     })}
     ${heroKpiCard({
       id:'bankHeroCircle', icon:ICON_MAP, label:'CO Moradabad — Our Circle',
       tint:'var(--accent-soft)', color:'var(--accent)',
       fallback: fmtBankCr(circle.remainingNpaAsOnDate),
-      sub: `${circle.branches.toLocaleString('en-IN')} branches · 19 regions`,
+      sub: `${circle.branches.toLocaleString('en-IN')} branches · 19 regions<span class="hero-kpi-sub2">Total Advance: ${fmtBankCr(circle.totalAdv)}</span>`,
       badge: `<div class="hero-kpi-badge" style="background:${circleSev.soft};color:${circleSev.color}">${fmtBankPct(circle.pctRemainingNpaWithAdv)} NPA</div>`
     })}
     ${heroKpiCard({
       id:'bankHeroRegion', icon:ICON_STAR, label:'Hathras — Our Region',
       tint:'rgba(212,165,68,.16)', color:'var(--seal-d)',
       fallback: fmtBankCr(region.remainingNpaAsOnDate),
-      sub: `${region.branches} branches · rank #${rank} of 65 (lower NPA % = better)`,
+      sub: `${region.branches} branches · rank #${rank} of 65<span class="hero-kpi-sub2">Total Advance: ${fmtBankCr(region.totalAdv)}</span>`,
       badge: `<div class="hero-kpi-badge" style="background:${regionSev.soft};color:${regionSev.color}">${fmtBankPct(region.pctRemainingNpaWithAdv)} NPA</div>`
     })}
   </div>`;
