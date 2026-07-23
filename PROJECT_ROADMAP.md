@@ -527,6 +527,30 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Fixed: left sidebar wouldn't scroll on a rotated (landscape) phone (2026-07-23, same day)
+
+A phone screenshot showed the desktop-style left sidebar cut off after
+"Daily NPA Projection" with the Refresh icon barely peeking in at the
+bottom — Quick Search, Settings, Theme, and Sign-in-with-GitHub were all
+below the fold and unreachable ("Rotate karne par left side mein panel
+scroll nahi ho raha" — the panel doesn't scroll after rotating).
+
+- Root cause: `#sideNav` never had `overflow-y:auto`. In portrait mode the
+  sidebar's full content (nav items + Quick Search/Settings/Theme/sign-in/
+  footer) always fit within the viewport height, so this was never
+  visible — but rotating a phone to landscape can be wide enough to
+  trigger the `>=900px` desktop sidebar layout while only being ~400-500px
+  tall, at which point the overflowing content had nowhere to go: `html,
+  body{overflow:hidden}` blocks the page itself from scrolling, and the
+  sidebar had no scroll of its own either, so that content was just
+  clipped.
+- Fixed with `#sideNav{overflow-y:auto;-webkit-overflow-scrolling:touch}`.
+- Verified with a 1000×420 viewport (simulating a rotated phone): before
+  the fix the sidebar's `scrollHeight` (666px) exceeded its `clientHeight`
+  (420px) with no way to reach the rest; after the fix, scrolling the
+  sidebar reveals Refresh, Quick Search, Settings, Light/Dark Mode,
+  Sign in with GitHub, and the footer, exactly as expected.
+
 ### One consolidated Refresh button instead of 5 duplicated per-tab icons (2026-07-23, same day)
 
 - Every data tab (Dashboard, Bank Dashboard, Daily PNPA, KCC Overdue, Daily

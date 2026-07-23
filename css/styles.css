@@ -846,6 +846,12 @@ body{overscroll-behavior:none}
   width:248px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;padding:22px 14px;
   background:rgba(12,12,20,.62);backdrop-filter:blur(28px) saturate(160%);-webkit-backdrop-filter:blur(28px) saturate(160%);
   border-right:1px solid var(--glass-border);position:relative;z-index:5;
+  /* #app is height:100vh with body{overflow:hidden}, so on a short
+     viewport (e.g. a phone rotated to landscape, wide enough to trigger
+     this desktop layout but only ~400px tall) the nav items + nav-foot
+     content can be taller than the sidebar itself -- without its own
+     scroll, that overflow was just clipped and unreachable. */
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
 }
 .nav-brand{display:flex;align-items:center;gap:11px;padding:6px 10px 22px}
 .nav-logo{width:38px;height:38px;border-radius:12px;background:#fff;padding:4px;flex-shrink:0;box-shadow:0 4px 14px rgba(0,0,0,.35),0 0 0 2px rgba(58,123,255,.28)}
