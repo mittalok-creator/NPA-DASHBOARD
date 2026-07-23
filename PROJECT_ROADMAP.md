@@ -527,6 +527,16 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Daily NPA Projection: added a "Clear All Fields" button (2026-07-23, same day)
+
+- New button above the grid resets every editable field (Morning/Evening
+  NPA, Commitment, Eve. Commitment, Follow-up, Remarks) to blank across
+  all 55 branches in one tap — Sol ID/Branch are untouched since they're
+  fixed reference columns. Confirm-gated (this is a same-day sheet edited
+  several times — a stray tap shouldn't be able to silently wipe out
+  figures already typed in that morning). Marks the change pending like
+  any other edit, so it still needs Publish to go live for everyone else.
+
 ### Daily NPA Projection: redesigned as a live calculator, Follow-up By + summary strip (2026-07-23, same day)
 
 You shared a photo of a reference sheet ("NPA COMMITMENT GAP DATA") and

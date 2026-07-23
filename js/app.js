@@ -3254,13 +3254,19 @@ function renderDailyProjBody(){
   }).join('');
 
   el.innerHTML = renderSummaryStrip(dpSummary(d.rows)) +
-    `<p style="font-size:12px;color:var(--ink-mute);margin:0 0 14px">Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Recovery, GAP and the totals above recalculate instantly. Raw entries go live the next time you hit Publish (Settings → Update Data).</p>
+    `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px">
+      <p style="font-size:12px;color:var(--ink-mute);margin:0;flex:1;min-width:220px">Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Recovery, GAP and the totals above recalculate instantly. Raw entries go live the next time you hit Publish (Settings → Update Data).</p>
+      <button type="button" class="btn-ghost" id="dailyProjClearBtn" style="border-color:var(--red);color:var(--red);white-space:nowrap">Clear All Fields</button>
+    </div>
     <div class="dash-table-wrap projgrid-scroll">
       <table class="dash-table" id="dailyProjTable">
         <thead>${headHtml}</thead>
         <tbody>${bodyHtml}</tbody>
       </table>
     </div>`;
+
+  const clearBtn = document.getElementById('dailyProjClearBtn');
+  if(clearBtn) clearBtn.onclick = () => clearDailyProjFields();
 
   const table = document.getElementById('dailyProjTable');
   if(table && !table.__wired){
@@ -3347,6 +3353,29 @@ function commitDailyProjCell(origIdx, colIdx, rawValue){
   __pendingDailyProjData = DAILY_PROJ_DATA;
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;
+}
+
+/* Clears every editable field (Morning/Evening NPA, Commitment,
+   Eve. Commitment, Follow-up, Remarks) on every branch -- Sol ID/Branch
+   are left untouched since they're fixed reference columns, not entries.
+   Confirmed first since this is a same-day, multi-edit sheet where a
+   stray tap could otherwise wipe out figures already typed in that
+   morning. */
+function clearDailyProjFields(){
+  if(!DAILY_PROJ_DATA || !DAILY_PROJ_DATA.rows) return;
+  if(!confirm('Clear all editable fields (Morning/Evening NPA, Commitment, Eve. Commitment, Follow-up, Remarks) for every branch? This cannot be undone once published.')) return;
+  DAILY_PROJ_DATA.rows.forEach(row=>{
+    row[DP.MORNING_NPA] = null;
+    row[DP.EVENING_NPA] = null;
+    row[DP.COMMITMENT] = null;
+    row[DP.EVE_COMMITMENT] = null;
+    row[DP.FOLLOWUP] = null;
+    row[DP.REMARKS] = null;
+  });
+  __pendingDailyProjData = DAILY_PROJ_DATA;
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+  renderDailyProjBody();
 }
 
 /* ---------- Nav / view switching ---------- */
