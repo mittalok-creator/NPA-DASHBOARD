@@ -2160,10 +2160,27 @@ function bankTabInfo(o){
    PDF itself reports (npaMar26/npaJun26), so showing both directly here
    is more scannable than the tab-toggle this replaced (had to click to
    see one comparison at a time). */
+/* Gap line under each of Mar/Jun: negative = NPA has since reduced (good,
+   green ▼); positive = increased (bad, red ▲) -- same sign convention as
+   netReductionOverMar26 everywhere else in this tab. March's gap reuses
+   the report's own netReductionOverMar26 field rather than re-deriving it
+   (avoids rounding drift); June has no equivalent field in the source
+   PDF, so it's computed directly (current − npaJun26). */
+function bankCornerGapLine(v){
+  const improved = v<=0;
+  return `<span style="color:${improved?'var(--green)':'var(--red)'}">${improved?'▼':'▲'} ${fmtBankCr(Math.abs(v))}</span>`;
+}
 function bankCornerStats(o){
+  const junGap = o.remainingNpaAsOnDate - o.npaJun26;
   return `<div class="hero-kpi-corner-stats">
-    <div class="hero-kpi-corner-row"><span>Mar</span><b>${fmtBankCr(o.npaMar26)}</b></div>
-    <div class="hero-kpi-corner-row"><span>Jun</span><b>${fmtBankCr(o.npaJun26)}</b></div>
+    <div class="hero-kpi-corner-group">
+      <div class="hero-kpi-corner-row"><span>Mar</span><b>${fmtBankCr(o.npaMar26)}</b></div>
+      <div class="hero-kpi-corner-gap">${bankCornerGapLine(o.netReductionOverMar26)}</div>
+    </div>
+    <div class="hero-kpi-corner-group">
+      <div class="hero-kpi-corner-row"><span>Jun</span><b>${fmtBankCr(o.npaJun26)}</b></div>
+      <div class="hero-kpi-corner-gap">${bankCornerGapLine(junGap)}</div>
+    </div>
   </div>`;
 }
 let __pendingBankData = null;
