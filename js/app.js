@@ -1919,13 +1919,15 @@ const ICON_TARGET = '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="
 function svgIcon(pathData){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathData}</svg>`; }
 
 function heroKpiCard(opts){
+  const side = (opts.badge||opts.corner) ? `<div class="hero-kpi-side">${opts.badge||''}${opts.corner||''}</div>` : '';
   return `<div class="hero-kpi-card${opts.onclick?' clickable':''}"${opts.onclick?` onclick="${opts.onclick}"`:''} style="--hero-tint:${opts.tint};--hero-color:${opts.color}">
-    ${opts.badge||''}
-    ${opts.corner||''}
-    <div class="hero-kpi-icon">${svgIcon(opts.icon)}</div>
-    <div class="hero-kpi-label">${esc(opts.label)}</div>
-    <div class="hero-kpi-value" id="${opts.id}">${opts.fallback||'—'}</div>
-    <div class="hero-kpi-sub">${opts.sub}</div>
+    <div class="hero-kpi-main">
+      <div class="hero-kpi-icon">${svgIcon(opts.icon)}</div>
+      <div class="hero-kpi-label">${esc(opts.label)}</div>
+      <div class="hero-kpi-value" id="${opts.id}">${opts.fallback||'—'}</div>
+      <div class="hero-kpi-sub">${opts.sub}</div>
+    </div>
+    ${side}
   </div>`;
 }
 
