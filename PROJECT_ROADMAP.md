@@ -527,6 +527,41 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### New "Daily NPA Projection" tab: plain editable grid, paste straight from Excel (2026-07-23, same day)
+
+You uploaded `Daily_NPA_Projection.xlsx` (9 columns: Sol ID, Branch Name,
+Morning NPA, Morning Commitment, Evening NPA, Recovery, GAP, Evening
+Commitment, Proposed Reduction — one row per branch) and explicitly asked
+for **no fancy dashboard**, just a clean editable table where you can type
+directly or paste a whole column/row copied straight from Excel, sortable
+on every column, positive/negative shown in color — since this sheet gets
+updated several times a day (morning figures, then evening figures).
+
+- Every cell is a plain `<input>`, not a read-only display — click and
+  type, exactly like a spreadsheet cell.
+- **Paste support**: copying a block of cells in Excel and pasting into
+  the top-left target cell here distributes the values across the grid
+  (tab-separated → columns, newline-separated → rows), instead of
+  dumping raw tab/newline characters into one cell — the same behavior
+  Excel/Google Sheets give you.
+- Every one of the 9 columns is sortable (click the header, same
+  sort-arrow convention as the rest of the app).
+- Numeric cells color themselves live as you type or paste: green for
+  positive, red for negative — a plain, literal reading of the sign, not
+  a domain judgment about which columns are "good" when positive vs
+  negative (GAP and Recovery, for instance, have opposite good/bad
+  directions) since guessing that wrong on a live tracking sheet used
+  multiple times a day would be worse than not color-coding at all.
+- No file-upload button for this one, unlike every other tab — edits
+  happen directly in the browser and simply ride along in the next
+  Publish (Settings → Update Data → Publish), same `extraFiles`
+  mechanism as PNPA/KCC Overdue/Bank PDF. A refresh with unpublished
+  edits pending asks for confirmation first, so a stray tap can't
+  silently discard in-progress typing.
+- Seeded `data/daily-npa-projection.json` with today's real 55-branch
+  file (one Sol ID with no matching NPA rows, same as the other
+  branch-level files this session, isn't in the set).
+
 ### Standing rule: dates always DD-MM-YYYY, never locale-dependent (2026-07-23, same day)
 
 You asked that date format always be DD-MM-YYYY, everywhere. Audited
