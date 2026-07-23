@@ -2283,6 +2283,24 @@ function renderBankDashboardBody(){
     </div>
   </div>`;
 
+  const marchChip = (label, o) => {
+    const improved = o.netReductionOverMar26<=0;
+    return `<div class="target-chip ${improved?'ahead':'behind'}">
+      <span class="tc-label">${esc(label)}</span>
+      <div class="tc-march">Mar-26 (post-audit): ${fmtBankCr(o.npaMar26)} · ${fmtBankPct(o.pctWithAdvMar26)}</div>
+      <span class="tc-val">${improved?'▼':'▲'} Now: ${fmtBankCr(o.remainingNpaAsOnDate)} · ${fmtBankPct(o.pctRemainingNpaWithAdv)}</span>
+      <div class="tc-march" style="color:${improved?'var(--green)':'var(--red)'};margin-top:2px">${improved?'Reduced':'Increased'} by ${fmtBankCr(Math.abs(o.netReductionOverMar26))} since March</div>
+    </div>`;
+  };
+  const marchSection = `<div class="chart-card">
+    <div class="section-label">Since March 2026<span class="chart-sub">post-audit NPA (Mar-26) vs today — the full financial-year-to-date picture</span></div>
+    <div class="target-chip-row">
+      ${marchChip('Whole Bank', bank)}
+      ${marchChip('CO Moradabad', circle)}
+      ${marchChip('Hathras', region)}
+    </div>
+  </div>`;
+
   const circleCards = d.circles.map(c => {
     const sev = npaPctSeverity(c.pctRemainingNpaWithAdv);
     const isOurs = c.name === d.ourCircle;
@@ -2313,6 +2331,8 @@ function renderBankDashboardBody(){
       <td>${fmtBankCr(r.totalAdv)}</td>
       <td>${fmtBankCr(r.remainingNpaAsOnDate)}</td>
       <td><span class="bank-npa-pill" style="background:${sev.soft};color:${sev.color}">${fmtBankPct(r.pctRemainingNpaWithAdv)}</span></td>
+      <td>${fmtBankCr(r.npaMar26)}</td>
+      <td style="color:${r.netReductionOverMar26<=0?'var(--green)':'var(--red)'}">${fmtBankCr(r.netReductionOverMar26)}</td>
       <td style="color:${r.netReductionDuringMonth<=0?'var(--green)':'var(--red)'}">${fmtBankCr(r.netReductionDuringMonth)}</td>
       <td style="color:${r.gapFromTarget<=0?'var(--green)':'var(--red)'}">${fmtBankCr(r.gapFromTarget)}</td>
     </tr>`;
@@ -2329,14 +2349,14 @@ function renderBankDashboardBody(){
       <table class="dash-table">
         <thead><tr>
           <th class="tal">Rank</th><th class="tal">Region</th><th class="tal">Circle</th>
-          <th>Br.</th><th>Total Adv.</th><th>NPA (now)</th><th>NPA %</th><th>Net Reduction</th><th>Gap from Target</th>
+          <th>Br.</th><th>Total Adv.</th><th>NPA (now)</th><th>NPA %</th><th>NPA Mar-26</th><th>Since Mar-26</th><th>Net Reduction</th><th>Gap from Target</th>
         </tr></thead>
         <tbody>${regionTableRows}</tbody>
       </table>
     </div>
   </div>`;
 
-  el.innerHTML = heroRow + insight + targetSection +
+  el.innerHTML = heroRow + insight + marchSection + targetSection +
     `<div class="section-label" style="margin-top:26px">Circles<span class="chart-sub">CO Moradabad is our circle</span></div>
      <div class="circle-card-row">${circleCards}</div>` +
     regionTable;
