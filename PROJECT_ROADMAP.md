@@ -527,6 +527,40 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Fixed: hero KPI card value overlapping the NPA%/Mar-Jun badge (2026-07-23, same day)
+
+Asked to search for more bugs after the last two fixes. Two more phone
+screenshots showed the "Total Outstanding" hero card's big value
+("₹128.35 Cr") visually overlapping the "8.9% NPA" badge and "MAR/JUN"
+corner-stats sitting in the card's top-right corner — the "JUN ₹129.00 Cr"
+text was rendering right through the "Cr" of the value.
+
+- Root cause: `.hero-kpi-badge` and `.hero-kpi-corner-stats` were
+  `position:absolute` overlays pinned at a fixed distance from the card's
+  top-right corner, completely independent of how wide the value text
+  actually rendered. Measured with Playwright across 7 different card
+  widths (600px to 1440px) — the overlap was present at **every** one of
+  them, not just narrow ones; the "clean" earlier screenshots of this
+  exact card just hadn't been looked at closely enough. Affects any hero
+  card carrying both a badge and Mar/Jun corner-stats together: Dashboard's
+  Total Outstanding card, and all 3 of Bank Dashboard's hero cards.
+- Fixed the actual layout, not just this one card's numbers: `heroKpiCard()`
+  now wraps its icon/label/value/sub content in `.hero-kpi-main` and its
+  badge/corner-stats in `.hero-kpi-side`, laid out as two real flex columns
+  on the card (`display:flex;justify-content:space-between`) instead of an
+  absolutely-positioned layer on top of normal-flow content — so they
+  physically cannot share the same space regardless of value length or
+  card width. The existing mobile single-column stack (badge, then
+  corner-stats, then icon/label/value) is preserved via `order:-1` on
+  `.hero-kpi-side` inside the existing `max-width:599px` breakpoint — no
+  visual change there.
+- Verified: the same 7-width Playwright measurement now shows zero
+  horizontal overlap at every desktop/tablet width, and screenshots of
+  Dashboard, Bank Dashboard, Daily PNPA, and KCC Overdue (dark + light,
+  mobile + desktop) all show clean, non-overlapping cards. On very narrow
+  cards the value can now wrap onto two lines instead of overlapping —
+  a legible two-line number instead of illegible overlapping text.
+
 ### Fixed: left sidebar wouldn't scroll on a rotated (landscape) phone (2026-07-23, same day)
 
 A phone screenshot showed the desktop-style left sidebar cut off after
