@@ -527,6 +527,24 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Bank Dashboard: added a colored gap line under each Mar/Jun corner figure (2026-07-23, same day)
+
+Immediately after confirming the March/June corner layout looked right,
+you asked for a gap line under each of them too — current vs March under
+Mar, current vs June under Jun, both with the same green/red
+better-or-worse convention already used everywhere else.
+
+- Mar's gap reuses the report's own `netReductionOverMar26` field
+  directly (no re-derivation, avoids rounding drift); Jun's gap is
+  computed fresh as `remainingNpaAsOnDate − npaJun26`, since the source
+  PDF has no equivalent field for June.
+- Same sign convention as the rest of the tab: negative/reduced → green
+  ▼, positive/increased → red ▲.
+- Restructured the corner markup into two small grouped blocks (Mar
+  value+gap, Jun value+gap) instead of 4 flat lines, so the mobile layout
+  (which lays the two months out side-by-side once the badge goes static)
+  keeps each month's figure and its gap together instead of interleaving.
+
 ### Bank Dashboard: replaced the Target/March tab-toggle with always-visible March + June figures (2026-07-23, same day)
 
 You pointed at the empty space on the right side of the hero cards
