@@ -527,6 +527,28 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Search result cards now show "Already Told" when an OTS amount is locked (2026-07-23, same day)
+
+You asked: whenever an OTS amount is locked/frozen for an account, that
+should be visible to anyone using the app, not just inside that account's
+own detail page — and specifically, the search result card (the summary
+card shown before you open an account) should carry some "already told"
+style language for it. You also asked for the actual locked amount to be
+shown on the card, not just in a hover tooltip.
+
+- Locked OTS data (`DATA.lockedOts`) was already synced to every viewer as
+  part of the published data (since the earlier "Locked OTS amounts now
+  persist for every viewer" work) — what was missing was surfacing it at
+  the search-result-card level, where it's most useful (you can see it
+  before even opening the account).
+- `renderResults()` now checks `frozen[acctNo]` per card and, when locked,
+  shows a gold "🔒 Already Told · ₹&lt;amount&gt;" badge next to the asset
+  classification badge — same brass/gold visual language already used for
+  the freeze button elsewhere in the app, so it reads as "this OTS is
+  settled" at a glance.
+- Verified in both themes: badge only appears on cards with a locked OTS,
+  shows the correct amount, and unlocked cards render unchanged.
+
 ### Bug fix: P&L Impact colors went washed-out after the light-theme chrome flip (2026-07-23, same day)
 
 You spotted the "Total P&L Impact" figure on the account detail page's
