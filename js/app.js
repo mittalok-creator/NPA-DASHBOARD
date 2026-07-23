@@ -49,6 +49,10 @@ function endOfMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0); }
 function sameDate(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
 function daysBetween(a,b){ return Math.round((a-b)/86400000); }
 function fmtDate(d){ if(!d) return '—'; return String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear(); }
+/* Date part always goes through fmtDate() (DD-MM-YYYY, never locale-
+   dependent) -- only the time-of-day portion uses toLocaleTimeString,
+   since that carries no date-format ambiguity. */
+function fmtDateTime(d){ if(!d) return ''; return fmtDate(d)+', '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
 function fmtINR(n){ if(n===''||n===null||n===undefined||isNaN(n)) return '—'; return '₹'+Number(n).toLocaleString('en-IN',{maximumFractionDigits:2}); }
 function fmtCr(n){
   if(n===''||n===null||n===undefined||isNaN(n)) return '—';
@@ -1476,7 +1480,7 @@ async function loadVersionHistory(){
       <div class="version-row${i===0?' current':''}">
         <div>
           <span class="vr-meta">${esc(v.date||'Unknown date')} — ${(v.rowCount||0).toLocaleString('en-IN')} accounts</span>
-          <span class="vr-sub">${v.isRollback?'rollback · ':''}published ${v.publishedAt?new Date(v.publishedAt).toLocaleString('en-IN'):''}${v.publishedBy?' by '+esc(v.publishedBy):''}</span>
+          <span class="vr-sub">${v.isRollback?'rollback · ':''}published ${v.publishedAt?fmtDateTime(new Date(v.publishedAt)):''}${v.publishedBy?' by '+esc(v.publishedBy):''}</span>
         </div>
         ${i===0?'':`<button type="button" onclick="openRollbackReview('${esc(v.file)}')">Rollback to this</button>`}
       </div>
