@@ -1449,6 +1449,9 @@ async function confirmPublish(){
     if(__pendingPublish.type!=='rollback' && __pendingKccOverdueData){
       extraFiles = (extraFiles||[]).concat([{ path:'data/kcc-overdue.json', content: __pendingKccOverdueData }]);
     }
+    if(__pendingPublish.type!=='rollback' && __pendingDailyProjData){
+      extraFiles = (extraFiles||[]).concat([{ path:'data/daily-npa-projection.json', content: __pendingDailyProjData }]);
+    }
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
       : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress, extraFiles);
@@ -1457,6 +1460,7 @@ async function confirmPublish(){
     __pendingBankData = null;
     __pendingPnpaData = null;
     __pendingKccOverdueData = null;
+    __pendingDailyProjData = null;
     closePublishReview();
     loadVersionHistory();
   } catch(err){
@@ -3089,6 +3093,162 @@ function kccovShowBranchAccounts(bucket, branch){
 }
 window.kccovShowBranchAccounts = kccovShowBranchAccounts;
 
+/* ---------- Daily NPA Projection -- plain editable grid, no report/dashboard
+   trappings by design (explicitly asked for "koi fancy dashboard nahi").
+   Every cell is a real <input>, so typing works like any form field and
+   pasting a block copied from Excel (tab-separated columns, newline-
+   separated rows) distributes across the grid the way it would in a real
+   spreadsheet, rather than dumping raw tab/newline characters into one
+   cell. Edited multiple times a day, so edits are tracked continuously
+   (not behind a file-upload step) and simply ride along in the next
+   Publish, same extraFiles mechanism as PNPA/KCC Overdue/Bank PDF. */
+const DP_COLS = [
+  {key:'sol', label:'Sol ID', numeric:true},
+  {key:'branch', label:'Branch Name', numeric:false},
+  {key:'morningNpa', label:'Morning NPA', numeric:true},
+  {key:'morningCommit', label:'Morning Commitment', numeric:true},
+  {key:'eveningNpa', label:'Evening NPA', numeric:true},
+  {key:'recovery', label:'Recovery', numeric:true},
+  {key:'gap', label:'GAP', numeric:true},
+  {key:'eveningCommit', label:'Evening Commitment', numeric:true},
+  {key:'proposedReduction', label:'Proposed Reduction', numeric:true},
+];
+let DAILY_PROJ_DATA = null;
+let __pendingDailyProjData = null;
+let dailyProjSort = {key:null, dir:'asc'};
+
+function parseGridCell(raw, numeric){
+  if(!numeric) return String(raw==null?'':raw).trim();
+  const s = String(raw==null?'':raw).replace(/,/g,'').trim();
+  if(s==='') return null;
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+function gridCellDisplay(v){ return v===null||v===undefined ? '' : String(v); }
+
+function renderDailyProj(){
+  const el = document.getElementById('dailyProjArea');
+  if(!el) return;
+  if(DAILY_PROJ_DATA){ renderDailyProjBody(); return; }
+  el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading Daily NPA Projection…</p></div>`;
+  fetchJson('data/daily-npa-projection.json?t=' + Date.now())
+    .then(d => { DAILY_PROJ_DATA = d; renderDailyProjBody(); })
+    .catch(() => {
+      el.innerHTML = `<div class="empty-state"><h2>Could not load Daily NPA Projection</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
+    });
+}
+function refreshDailyProj(){ DAILY_PROJ_DATA = null; renderDailyProj(); }
+
+function dailyProjSortBy(key){
+  dailyProjSort = (dailyProjSort.key===key) ? {key, dir: dailyProjSort.dir==='asc'?'desc':'asc'} : {key, dir:'asc'};
+  renderDailyProjBody();
+}
+window.dailyProjSortBy = dailyProjSortBy;
+
+function renderDailyProjBody(){
+  const el = document.getElementById('dailyProjArea');
+  const d = DAILY_PROJ_DATA;
+  if(!el) return;
+  if(!d || !d.rows){ el.innerHTML = `<div class="empty-state"><h2>No Daily NPA Projection data yet</h2></div>`; return; }
+
+  let order = d.rows.map((r,i)=>i);
+  if(dailyProjSort.key){
+    const ci = DP_COLS.findIndex(c=>c.key===dailyProjSort.key);
+    const dir = dailyProjSort.dir==='asc' ? 1 : -1;
+    order.sort((ia,ib)=>{
+      let a = d.rows[ia][ci], b = d.rows[ib][ci];
+      if(a===null||a===undefined) a = DP_COLS[ci].numeric ? -Infinity : '';
+      if(b===null||b===undefined) b = DP_COLS[ci].numeric ? -Infinity : '';
+      if(typeof a==='string') a = a.toLowerCase();
+      if(typeof b==='string') b = b.toLowerCase();
+      if(a<b) return -1*dir;
+      if(a>b) return 1*dir;
+      return 0;
+    });
+  }
+
+  const headHtml = '<tr>' + DP_COLS.map(c=>{
+    const active = dailyProjSort.key===c.key;
+    return `<th class="${c.numeric?'':'tal'} sortable${active?(dailyProjSort.dir==='asc'?' sort-asc':' sort-desc'):''}" tabindex="0" role="button" aria-sort="none" onclick="dailyProjSortBy('${c.key}')">${esc(c.label)}<span class="sort-ic">▾</span></th>`;
+  }).join('') + '</tr>';
+
+  const bodyHtml = order.map(origIdx=>{
+    const row = d.rows[origIdx];
+    return '<tr>' + DP_COLS.map((c,ci)=>{
+      const val = row[ci];
+      const cls = c.numeric ? (typeof val==='number' ? (val<0?'neg':(val>0?'pos':'')) : '') : 'tal';
+      return `<td class="editcell"><input class="editgrid-input ${cls}" type="text" inputmode="${c.numeric?'decimal':'text'}" data-orig="${origIdx}" data-col="${ci}" value="${esc(gridCellDisplay(val))}"></td>`;
+    }).join('') + '</tr>';
+  }).join('');
+
+  el.innerHTML = `
+    <p style="font-size:12px;color:var(--ink-mute);margin:0 0 14px">Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Changes go live the next time you hit Publish (Settings → Update Data).</p>
+    <div class="dash-table-wrap" style="max-height:70vh;overflow-y:auto">
+      <table class="dash-table" id="dailyProjTable">
+        <thead>${headHtml}</thead>
+        <tbody>${bodyHtml}</tbody>
+      </table>
+    </div>`;
+
+  const table = document.getElementById('dailyProjTable');
+  if(table && !table.__wired){
+    table.__wired = true;
+    table.addEventListener('input', (e)=>{
+      const inp = e.target.closest('input.editgrid-input');
+      if(!inp) return;
+      const ci = parseInt(inp.dataset.col,10);
+      const col = DP_COLS[ci];
+      if(col.numeric){
+        const n = parseGridCell(inp.value, true);
+        inp.classList.toggle('neg', typeof n==='number' && n<0);
+        inp.classList.toggle('pos', typeof n==='number' && n>0);
+      }
+      commitDailyProjCell(parseInt(inp.dataset.orig,10), ci, inp.value);
+    });
+    table.addEventListener('paste', (e)=>{
+      const inp = e.target.closest('input.editgrid-input');
+      if(!inp) return;
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      if(!text || !/[\t\n]/.test(text)){ return; } // single value -- let the browser's normal paste happen
+      e.preventDefault();
+      const tbody = table.querySelector('tbody');
+      const trs = [...tbody.rows];
+      const startTr = inp.closest('tr');
+      const startRowPos = trs.indexOf(startTr);
+      const startCol = parseInt(inp.dataset.col,10);
+      const lines = text.replace(/\r/g,'').split('\n');
+      while(lines.length && lines[lines.length-1]==='') lines.pop();
+      lines.forEach((line, rOff)=>{
+        const cells = line.split('\t');
+        const tr = trs[startRowPos+rOff];
+        if(!tr) return;
+        cells.forEach((cellVal, cOff)=>{
+          const c = startCol+cOff;
+          if(c>=DP_COLS.length) return;
+          const cellInput = tr.cells[c] && tr.cells[c].querySelector('input.editgrid-input');
+          if(!cellInput) return;
+          cellInput.value = cellVal.trim();
+          const col = DP_COLS[c];
+          if(col.numeric){
+            const n = parseGridCell(cellVal, true);
+            cellInput.classList.toggle('neg', typeof n==='number' && n<0);
+            cellInput.classList.toggle('pos', typeof n==='number' && n>0);
+          }
+          commitDailyProjCell(parseInt(cellInput.dataset.orig,10), c, cellVal);
+        });
+      });
+    });
+  }
+}
+
+function commitDailyProjCell(origIdx, colIdx, rawValue){
+  const col = DP_COLS[colIdx];
+  DAILY_PROJ_DATA.rows[origIdx][colIdx] = parseGridCell(rawValue, col.numeric);
+  __pendingDailyProjData = DAILY_PROJ_DATA;
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+}
+
 /* ---------- Nav / view switching ---------- */
 function switchView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.dataset.view===view));
@@ -3097,6 +3257,7 @@ function switchView(view){
   if(view==='bank') renderBankDashboard();
   if(view==='pnpa') renderPnpaDashboard();
   if(view==='kccov') renderKccOverdue();
+  if(view==='dailyproj') renderDailyProj();
   const mainCol = document.getElementById('mainCol');
   if(mainCol) mainCol.scrollTop = 0;
 }
@@ -3178,6 +3339,12 @@ function toggleTheme(){
   on('kccovRefreshBtn','click',(e)=>{
     e.currentTarget.classList.add('is-spinning');
     refreshKccOverdue();
+    setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
+  });
+  on('dailyProjRefreshBtn','click',(e)=>{
+    if(__pendingDailyProjData && !confirm('You have unpublished edits on this grid. Refreshing will discard them. Continue?')) return;
+    e.currentTarget.classList.add('is-spinning');
+    refreshDailyProj();
     setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
   });
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{

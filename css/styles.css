@@ -1104,6 +1104,16 @@ body{overscroll-behavior:none}
 .dash-table th.sortable.sort-desc .sort-ic{opacity:1;color:var(--accent-2)}
 .dash-table th.sortable.sort-asc .sort-ic{opacity:1;color:var(--accent-2);transform:rotate(180deg)}
 
+/* ---------- Editable grid (Daily NPA Projection) -- every cell is a plain
+   input so typing or pasting a block copied from Excel works like a real
+   spreadsheet, not a read-only report. */
+.dash-table td.editcell{padding:0}
+.editgrid-input{width:100%;box-sizing:border-box;border:none;background:transparent;font:inherit;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);text-align:right;padding:11px 14px}
+.editgrid-input.tal{text-align:left}
+.editgrid-input:focus{outline:2px solid var(--accent);outline-offset:-2px;background:var(--accent-soft)}
+.editgrid-input.neg{color:var(--red)}
+.editgrid-input.pos{color:var(--green)}
+
 @media (max-width:900px){
   .chart-grid{grid-template-columns:1fr}
   .kpi-grid{grid-template-columns:repeat(2,1fr)}
