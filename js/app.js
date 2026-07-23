@@ -3132,6 +3132,24 @@ const DP_EDITABLE_COLS = DP_DISPLAY.map((c,i)=>i).filter(i=>DP_DISPLAY[i].editab
 let DAILY_PROJ_DATA = null;
 let __pendingDailyProjData = null;
 let dailyProjSort = {key:null, dir:'asc'};
+let dailyProjUndoStack = [];
+const DP_UNDO_MAX = 20;
+function dpPushUndo(){
+  if(!DAILY_PROJ_DATA) return;
+  dailyProjUndoStack.push(JSON.parse(JSON.stringify(DAILY_PROJ_DATA.rows)));
+  if(dailyProjUndoStack.length > DP_UNDO_MAX) dailyProjUndoStack.shift();
+  const undoBtn = document.getElementById('dailyProjUndoBtn');
+  if(undoBtn) undoBtn.disabled = false;
+}
+function dailyProjUndo(){
+  if(!dailyProjUndoStack.length) return;
+  DAILY_PROJ_DATA.rows = dailyProjUndoStack.pop();
+  __pendingDailyProjData = DAILY_PROJ_DATA;
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+  renderDailyProjBody();
+}
+window.dailyProjUndo = dailyProjUndo;
 
 function dpRecovery(row){
   const m = row[DP.MORNING_NPA], e = row[DP.EVENING_NPA];
@@ -3162,7 +3180,14 @@ function parseGridCell(raw, numeric){
   return isNaN(n) ? null : n;
 }
 function gridCellDisplay(v){ return v===null||v===undefined ? '' : String(v); }
-function dpSignClass(v){ return typeof v==='number' ? (v<0?'neg':(v>0?'pos':'')) : ''; }
+/* GAP's color meaning is inverted from a plain positive/negative reading:
+   a positive GAP means recovery fell short of commitment (bad -> red),
+   a negative GAP means recovery met or exceeded commitment (good ->
+   green) -- confirmed against the reference photo row-by-row (e.g. a
+   +0.25 GAP was shown red, a -0.95 GAP was shown green). Recovery and
+   the raw entry columns are shown plain (no color), matching the
+   reference photo -- only GAP carries the red/green treatment there. */
+function dpGapClass(v){ if(typeof v!=='number' || v===0) return ''; return v>0 ? 'gap-bad' : 'gap-good'; }
 
 function renderDailyProj(){
   const el = document.getElementById('dailyProjArea');
@@ -3238,7 +3263,8 @@ function renderDailyProjBody(){
       if(c.type==='serial') return `<td>${pos+1}</td>`;
       if(c.type==='recovery' || c.type==='gap'){
         const v = dpCellValue(row, ci);
-        return `<td class="${dpSignClass(v)}" style="font-weight:800">${v===null?'—':v.toFixed(2)}</td>`;
+        const cls = c.type==='gap' ? dpGapClass(v) : '';
+        return `<td class="${cls}" style="font-weight:800">${v===null?'—':v.toFixed(2)}</td>`;
       }
       if(!c.editable){
         return `<td class="${c.tal?'tal':''}">${esc(gridCellDisplay(row[c.dp]))}</td>`;
@@ -3249,14 +3275,19 @@ function renderDailyProjBody(){
         return `<td class="editcell"><select class="editgrid-input editgrid-select tal" data-orig="${origIdx}" data-col="${ci}">${opts.join('')}</select></td>`;
       }
       const val = row[c.dp];
-      return `<td class="editcell"><input class="editgrid-input ${c.tal?'tal':''} ${dpSignClass(typeof val==='number'?val:null)}" type="text" inputmode="${c.numeric?'decimal':'text'}" data-orig="${origIdx}" data-col="${ci}" value="${esc(gridCellDisplay(val))}"></td>`;
+      return `<td class="editcell"><input class="editgrid-input ${c.tal?'tal':''}" type="text" inputmode="${c.numeric?'decimal':'text'}" data-orig="${origIdx}" data-col="${ci}" value="${esc(gridCellDisplay(val))}"></td>`;
     }).join('') + '</tr>';
   }).join('');
 
   el.innerHTML = renderSummaryStrip(dpSummary(d.rows)) +
-    `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px">
-      <p style="font-size:12px;color:var(--ink-mute);margin:0;flex:1;min-width:220px">Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Recovery, GAP and the totals above recalculate instantly. Raw entries go live the next time you hit Publish (Settings → Update Data).</p>
-      <button type="button" class="btn-ghost" id="dailyProjClearBtn" style="border-color:var(--red);color:var(--red);white-space:nowrap">Clear All Fields</button>
+    `<div class="projgrid-toolbar no-print">
+      <p class="projgrid-hint">Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Recovery, GAP and the totals above recalculate instantly. Raw entries go live the next time you hit Publish (Settings → Update Data).</p>
+      <div class="projgrid-btns">
+        <button type="button" class="btn-ghost" id="dailyProjUndoBtn"${dailyProjUndoStack.length?'':' disabled'}>↺ Undo</button>
+        <button type="button" class="btn-ghost" id="dailyProjClearBtn" style="border-color:var(--red);color:var(--red)">Clear All Fields</button>
+        <button type="button" class="btn-ghost" id="dailyProjPrintBtn">🖨 Print / Export PDF</button>
+        <button type="button" class="btn-ghost" id="dailyProjExcelBtn">⬇ Export Excel</button>
+      </div>
     </div>
     <div class="dash-table-wrap projgrid-scroll">
       <table class="dash-table" id="dailyProjTable">
@@ -3267,6 +3298,12 @@ function renderDailyProjBody(){
 
   const clearBtn = document.getElementById('dailyProjClearBtn');
   if(clearBtn) clearBtn.onclick = () => clearDailyProjFields();
+  const undoBtn = document.getElementById('dailyProjUndoBtn');
+  if(undoBtn) undoBtn.onclick = () => dailyProjUndo();
+  const printBtn = document.getElementById('dailyProjPrintBtn');
+  if(printBtn) printBtn.onclick = () => window.print();
+  const excelBtn = document.getElementById('dailyProjExcelBtn');
+  if(excelBtn) excelBtn.onclick = () => exportDailyProjExcel();
 
   const table = document.getElementById('dailyProjTable');
   if(table && !table.__wired){
@@ -3282,20 +3319,30 @@ function renderDailyProjBody(){
         if(c.type!=='recovery' && c.type!=='gap') return;
         const v = dpCellValue(row, ci);
         const td = tr.cells[ci];
-        td.className = dpSignClass(v);
+        td.className = c.type==='gap' ? dpGapClass(v) : '';
         td.textContent = v===null ? '—' : v.toFixed(2);
       });
     };
+    // One undo snapshot per "edit session" (focus-to-blur), not per
+    // keystroke -- input already commits live for the real-time
+    // calculation, so the pre-edit state is captured on focus and only
+    // pushed to the undo stack on blur if the value actually changed.
+    let focusSnapshot = null;
+    table.addEventListener('focusin', (e)=>{
+      const ctrl = e.target.closest('input.editgrid-input, select.editgrid-select');
+      if(!ctrl) return;
+      focusSnapshot = { orig: parseInt(ctrl.dataset.orig,10), col: DP_DISPLAY[parseInt(ctrl.dataset.col,10)].dp, value: ctrl.value };
+    });
+    table.addEventListener('focusout', (e)=>{
+      const ctrl = e.target.closest('input.editgrid-input, select.editgrid-select');
+      if(!ctrl || !focusSnapshot) return;
+      if(ctrl.value !== focusSnapshot.value) dpPushUndo();
+      focusSnapshot = null;
+    });
     table.addEventListener('input', (e)=>{
       const ctrl = e.target.closest('input.editgrid-input, select.editgrid-select');
       if(!ctrl) return;
       const ci = parseInt(ctrl.dataset.col,10);
-      const col = DP_DISPLAY[ci];
-      if(col.numeric && ctrl.tagName==='INPUT'){
-        const n = parseGridCell(ctrl.value, true);
-        ctrl.classList.toggle('neg', typeof n==='number' && n<0);
-        ctrl.classList.toggle('pos', typeof n==='number' && n>0);
-      }
       commitDailyProjCell(parseInt(ctrl.dataset.orig,10), ci, ctrl.value);
       refreshRowFormulas(ctrl.closest('tr'));
       refreshSummary();
@@ -3306,6 +3353,8 @@ function renderDailyProjBody(){
       const text = (e.clipboardData || window.clipboardData).getData('text/plain');
       if(!text || !/[\t\n]/.test(text)){ return; } // single value -- let the browser's normal paste happen
       e.preventDefault();
+      dpPushUndo();
+      focusSnapshot = null; // this paste is already its own undo step
       const tbody = table.querySelector('tbody');
       const trs = [...tbody.rows];
       const startTr = ctrl.closest('tr');
@@ -3331,11 +3380,6 @@ function renderDailyProjBody(){
             cellCtrl.value = match;
           } else {
             cellCtrl.value = raw;
-            if(col.numeric){
-              const n = parseGridCell(raw, true);
-              cellCtrl.classList.toggle('neg', typeof n==='number' && n<0);
-              cellCtrl.classList.toggle('pos', typeof n==='number' && n>0);
-            }
           }
           commitDailyProjCell(parseInt(cellCtrl.dataset.orig,10), ci, cellCtrl.value);
           touchedRows.add(tr);
@@ -3363,7 +3407,8 @@ function commitDailyProjCell(origIdx, colIdx, rawValue){
    morning. */
 function clearDailyProjFields(){
   if(!DAILY_PROJ_DATA || !DAILY_PROJ_DATA.rows) return;
-  if(!confirm('Clear all editable fields (Morning/Evening NPA, Commitment, Eve. Commitment, Follow-up, Remarks) for every branch? This cannot be undone once published.')) return;
+  if(!confirm('Clear all editable fields (Morning/Evening NPA, Commitment, Eve. Commitment, Follow-up, Remarks) for every branch? You can Undo right after if this was a mistake, but it can\'t be undone once you Publish.')) return;
+  dpPushUndo();
   DAILY_PROJ_DATA.rows.forEach(row=>{
     row[DP.MORNING_NPA] = null;
     row[DP.EVENING_NPA] = null;
@@ -3376,6 +3421,38 @@ function clearDailyProjFields(){
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;
   renderDailyProjBody();
+}
+
+/* Plain-data export (correct values, headers, column widths) -- the
+   vendored community SheetJS build can't write cell background/font
+   colors into a real .xlsx (that's a paid-tier feature upstream), so the
+   GAP red/green highlighting doesn't carry into this file. The Print /
+   Export PDF button is where the colored, single-page-formatted view
+   lives, since that's plain CSS the browser's print engine renders
+   directly rather than something baked into an .xlsx. */
+function exportDailyProjExcel(){
+  if(!DAILY_PROJ_DATA || !DAILY_PROJ_DATA.rows) return;
+  const sum = dpSummary(DAILY_PROJ_DATA.rows);
+  const headerRow = DP_DISPLAY.map(c=>c.label);
+  const dataRows = DAILY_PROJ_DATA.rows.map((row,i)=>DP_DISPLAY.map((c,ci)=>{
+    if(c.type==='serial') return i+1;
+    const v = dpCellValue(row, ci);
+    return v===null||v===undefined ? '' : v;
+  }));
+  const aoa = [
+    ['Daily NPA Projection — Hathras Region'],
+    ['As on', fmtDate(new Date())],
+    [],
+    ['Morning NPA (Cr)', +( (sum.morningSum/100).toFixed(2) ), 'Evening NPA (Cr)', +( (sum.eveningSum/100).toFixed(2) ), 'Total Commitment', +sum.commitSum.toFixed(2), 'Recovery', +sum.recoverySum.toFixed(2), 'Net GAP', +sum.netGap.toFixed(2), 'Eve. Commitment', +sum.eveCommitSum.toFixed(2), 'Projected Recovery', +sum.projectedRecovery.toFixed(2)],
+    [],
+    headerRow,
+    ...dataRows,
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = DP_DISPLAY.map(c=> (c.label==='Branch'||c.label==='Remarks (if any)') ? {wch:20} : {wch:13});
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Daily NPA Projection');
+  XLSX.writeFile(wb, `Daily_NPA_Projection_${dateToInputValue(new Date())}.xlsx`);
 }
 
 /* ---------- Nav / view switching ---------- */
