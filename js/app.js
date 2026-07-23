@@ -1897,6 +1897,7 @@ function svgIcon(pathData){ return `<svg viewBox="0 0 24 24" fill="none" stroke=
 function heroKpiCard(opts){
   return `<div class="hero-kpi-card${opts.onclick?' clickable':''}"${opts.onclick?` onclick="${opts.onclick}"`:''} style="--hero-tint:${opts.tint};--hero-color:${opts.color}">
     ${opts.badge||''}
+    ${opts.corner||''}
     <div class="hero-kpi-icon">${svgIcon(opts.icon)}</div>
     <div class="hero-kpi-label">${esc(opts.label)}</div>
     <div class="hero-kpi-value" id="${opts.id}">${opts.fallback||'—'}</div>
@@ -2150,16 +2151,20 @@ function fmtBankPct(n){ return (n===null||n===undefined||isNaN(n)) ? '—' : n.t
 let bankRegionFilter = '';
 let bankMarchFilter = '';
 let bankTargetFilter = '';
-let bankInfoTab = 'target';
-function setBankInfoTab(tab){ bankInfoTab = tab; renderBankDashboardBody(); }
-window.setBankInfoTab = setBankInfoTab;
 function bankTabInfo(o){
-  if(bankInfoTab==='march'){
-    const improved = o.netReductionOverMar26<=0;
-    return { color: improved?'var(--green)':'var(--red)', text: `${improved?'▼ Reduced':'▲ Increased'} by ${fmtBankCr(Math.abs(o.netReductionOverMar26))} since March` };
-  }
   const ahead = o.gapFromTarget<=0;
   return { color: ahead?'var(--green)':'var(--red)', text: `${ahead?'✓ Ahead of target by':'⚠ Behind target by'} ${fmtBankCr(Math.abs(o.gapFromTarget))}` };
+}
+/* Shown in the otherwise-empty top-right corner of each hero card, below
+   the NPA% badge -- March and June are fixed baseline columns the source
+   PDF itself reports (npaMar26/npaJun26), so showing both directly here
+   is more scannable than the tab-toggle this replaced (had to click to
+   see one comparison at a time). */
+function bankCornerStats(o){
+  return `<div class="hero-kpi-corner-stats">
+    <div class="hero-kpi-corner-row"><span>Mar</span><b>${fmtBankCr(o.npaMar26)}</b></div>
+    <div class="hero-kpi-corner-row"><span>Jun</span><b>${fmtBankCr(o.npaJun26)}</b></div>
+  </div>`;
 }
 let __pendingBankData = null;
 
@@ -2286,32 +2291,30 @@ function renderBankDashboardBody(){
   const regionSev = npaPctSeverity(region.pctRemainingNpaWithAdv);
   const rank = bankRegionRank(d.regions, region);
 
-  const infoTabBar = `<div class="bank-tab-row">
-    <button type="button" class="bank-tab-btn${bankInfoTab==='target'?' active':''}" onclick="setBankInfoTab('target')">vs Target — ${esc((d.asOnDate||'').slice(5))||'this month'}</button>
-    <button type="button" class="bank-tab-btn${bankInfoTab==='march'?' active':''}" onclick="setBankInfoTab('march')">Since March 2026</button>
-  </div>`;
-
   const heroRow = `<div class="hero-kpi-row bank-hero-row">
     ${heroKpiCard({
       id:'bankHeroTotal', icon:ICON_LANDMARK, label:'Whole Bank — UPGB',
       tint:'var(--accent-soft)', color:'var(--accent)',
       fallback: fmtBankCr(bank.remainingNpaAsOnDate),
       sub: `${bank.branches.toLocaleString('en-IN')} branches · 65 regions<span class="hero-kpi-sub2">Total Advance: ${fmtBankCr(bank.totalAdv)}</span><span class="hero-kpi-sub2" style="color:${bankTabInfo(bank).color}">${bankTabInfo(bank).text}</span>`,
-      badge: `<div class="hero-kpi-badge" style="background:${bankSev.soft};color:${bankSev.color}">${fmtBankPct(bank.pctRemainingNpaWithAdv)} NPA</div>`
+      badge: `<div class="hero-kpi-badge" style="background:${bankSev.soft};color:${bankSev.color}">${fmtBankPct(bank.pctRemainingNpaWithAdv)} NPA</div>`,
+      corner: bankCornerStats(bank)
     })}
     ${heroKpiCard({
       id:'bankHeroCircle', icon:ICON_MAP, label:'CO Moradabad — Our Circle',
       tint:'var(--accent-soft)', color:'var(--accent)',
       fallback: fmtBankCr(circle.remainingNpaAsOnDate),
       sub: `${circle.branches.toLocaleString('en-IN')} branches · 19 regions<span class="hero-kpi-sub2">Total Advance: ${fmtBankCr(circle.totalAdv)}</span><span class="hero-kpi-sub2" style="color:${bankTabInfo(circle).color}">${bankTabInfo(circle).text}</span>`,
-      badge: `<div class="hero-kpi-badge" style="background:${circleSev.soft};color:${circleSev.color}">${fmtBankPct(circle.pctRemainingNpaWithAdv)} NPA</div>`
+      badge: `<div class="hero-kpi-badge" style="background:${circleSev.soft};color:${circleSev.color}">${fmtBankPct(circle.pctRemainingNpaWithAdv)} NPA</div>`,
+      corner: bankCornerStats(circle)
     })}
     ${heroKpiCard({
       id:'bankHeroRegion', icon:ICON_STAR, label:'Hathras — Our Region',
       tint:'rgba(212,165,68,.16)', color:'var(--seal-d)',
       fallback: fmtBankCr(region.remainingNpaAsOnDate),
       sub: `${region.branches} branches · rank #${rank} of 65<span class="hero-kpi-sub2">Total Advance: ${fmtBankCr(region.totalAdv)}</span><span class="hero-kpi-sub2" style="color:${bankTabInfo(region).color}">${bankTabInfo(region).text}</span>`,
-      badge: `<div class="hero-kpi-badge" style="background:${regionSev.soft};color:${regionSev.color}">${fmtBankPct(region.pctRemainingNpaWithAdv)} NPA</div>`
+      badge: `<div class="hero-kpi-badge" style="background:${regionSev.soft};color:${regionSev.color}">${fmtBankPct(region.pctRemainingNpaWithAdv)} NPA</div>`,
+      corner: bankCornerStats(region)
     })}
   </div>`;
 
@@ -2449,7 +2452,7 @@ function renderBankDashboardBody(){
     </div>
   </div>`;
 
-  el.innerHTML = infoTabBar + heroRow + insight +
+  el.innerHTML = heroRow + insight +
     `<div class="section-label" style="margin-top:26px">Circles<span class="chart-sub">CO Moradabad is our circle</span></div>
      <div class="circle-card-row">${circleCards}</div>` +
     `<div class="chart-grid" style="margin-top:6px">${circleDonutCard}${assetDonutCard}${worstBarCard}</div>` +
