@@ -527,6 +527,23 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Daily PNPA: Branch/Regional Office dropdown filter, matching the main Dashboard (2026-07-23, same day)
+
+You asked for a branch/regional-office filter on Daily PNPA "like
+dashboard" — the free-text branch search box is replaced with the same
+`<select>` pattern the main Dashboard uses: "Regional Office" (= all
+branches) plus every distinct branch, built from the whole PNPA dataset
+(all 4 buckets combined, 37 distinct Hathras branches today), reusing the
+same `.dash-toolbar` styling.
+
+- Unlike the old text search (which reset every time you switched bucket
+  tabs), the branch selection now **persists** across KCC/KCC-AH/Limit
+  Review/Other — pick a branch once and flip through all four buckets for
+  that same branch.
+- Selecting a branch narrows the branch-wise summary table to just that
+  branch (still within whichever bucket tab is active); "Regional Office"
+  shows every branch, same as before.
+
 ### Daily PNPA: KCC bucket narrowed to reason "KCC-Disbrsmnt-36" only (2026-07-23, same day)
 
 You asked for KCC's O/S to only count accounts flagged with the
