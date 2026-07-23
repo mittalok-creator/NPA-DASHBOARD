@@ -3095,28 +3095,65 @@ window.kccovShowBranchAccounts = kccovShowBranchAccounts;
 
 /* ---------- Daily NPA Projection -- plain editable grid, no report/dashboard
    trappings by design (explicitly asked for "koi fancy dashboard nahi").
-   Every cell is a real <input>, so typing works like any form field and
-   pasting a block copied from Excel (tab-separated columns, newline-
-   separated rows) distributes across the grid the way it would in a real
-   spreadsheet, rather than dumping raw tab/newline characters into one
-   cell. Edited multiple times a day, so edits are tracked continuously
-   (not behind a file-upload step) and simply ride along in the next
-   Publish, same extraFiles mechanism as PNPA/KCC Overdue/Bank PDF. */
-const DP_COLS = [
-  {key:'sol', label:'Sol ID', numeric:true},
-  {key:'branch', label:'Branch Name', numeric:false},
-  {key:'morningNpa', label:'Morning NPA', numeric:true},
-  {key:'morningCommit', label:'Morning Commitment', numeric:true},
-  {key:'eveningNpa', label:'Evening NPA', numeric:true},
-  {key:'recovery', label:'Recovery', numeric:true},
-  {key:'gap', label:'GAP', numeric:true},
-  {key:'eveningCommit', label:'Evening Commitment', numeric:true},
-  {key:'proposedReduction', label:'Proposed Reduction', numeric:true},
+   Recovery and GAP are NOT stored data -- they're computed live from
+   Morning NPA / Evening NPA / Commitment (confirmed against a real
+   reference sheet: Recovery = Morning − Evening, GAP = Commitment −
+   Recovery, and the summary strip's totals reconcile exactly with that),
+   so this behaves like a real calculator -- edit an input, the derived
+   cells and the summary strip update instantly, no publish/save needed
+   to see them. The underlying raw entries (Morning/Evening NPA,
+   Commitment, Eve. Commitment, Follow-up, Remarks) still ride along in
+   the next Publish so they sync across devices, same extraFiles
+   mechanism as PNPA/KCC Overdue/Bank PDF -- only the *computation* is
+   instant/local, not the data's persistence.
+   Every editable cell is a real <input> (or <select> for Follow-up By),
+   so typing works like any form field and pasting a block copied from
+   Excel (tab-separated columns, newline-separated rows) distributes
+   across the grid the way it would in a real spreadsheet. Sol ID/Branch
+   are fixed reference columns (read-only) so an errant paste can't break
+   branch matching; Recovery/GAP are read-only for the same reason --
+   they're formulas, not data. */
+const DP = {SOL:0, BRANCH:1, MORNING_NPA:2, EVENING_NPA:3, COMMITMENT:4, EVE_COMMITMENT:5, FOLLOWUP:6, REMARKS:7};
+const DP_FOLLOWUP_NAMES = ['Alok','Deepak','Dharmendra','Himanshu','Meenu','Rajeev'];
+const DP_DISPLAY = [
+  {label:'S N', type:'serial'},
+  {label:'Sol ID', dp:DP.SOL, numeric:true},
+  {label:'Branch', dp:DP.BRANCH, tal:true},
+  {label:'Morning NPA', dp:DP.MORNING_NPA, numeric:true, editable:true},
+  {label:'Evening NPA', dp:DP.EVENING_NPA, numeric:true, editable:true},
+  {label:'Commitment', dp:DP.COMMITMENT, numeric:true, editable:true},
+  {label:'Recovery', type:'recovery', numeric:true},
+  {label:'GAP', type:'gap', numeric:true},
+  {label:'Eve. Commitment', dp:DP.EVE_COMMITMENT, numeric:true, editable:true},
+  {label:'Follow-up By', dp:DP.FOLLOWUP, tal:true, editable:true, dropdown:true},
+  {label:'Remarks (if any)', dp:DP.REMARKS, tal:true, editable:true},
 ];
+const DP_EDITABLE_COLS = DP_DISPLAY.map((c,i)=>i).filter(i=>DP_DISPLAY[i].editable);
 let DAILY_PROJ_DATA = null;
 let __pendingDailyProjData = null;
 let dailyProjSort = {key:null, dir:'asc'};
 
+function dpRecovery(row){
+  const m = row[DP.MORNING_NPA], e = row[DP.EVENING_NPA];
+  return (typeof m==='number' && typeof e==='number') ? m-e : null;
+}
+function dpGap(row){
+  const c = row[DP.COMMITMENT], r = dpRecovery(row);
+  return (typeof c==='number' && typeof r==='number') ? c-r : null;
+}
+function dpSummary(rows){
+  let morningSum=0, eveningSum=0, commitSum=0, recoverySum=0, eveCommitSum=0;
+  for(const row of rows){
+    morningSum += (row[DP.MORNING_NPA]||0);
+    eveningSum += (row[DP.EVENING_NPA]||0);
+    commitSum += (row[DP.COMMITMENT]||0);
+    eveCommitSum += (row[DP.EVE_COMMITMENT]||0);
+    const r = dpRecovery(row);
+    if(typeof r==='number') recoverySum += r;
+  }
+  return { morningSum, eveningSum, commitSum, recoverySum, eveCommitSum,
+    netGap: commitSum-recoverySum, projectedRecovery: recoverySum+eveCommitSum };
+}
 function parseGridCell(raw, numeric){
   if(!numeric) return String(raw==null?'':raw).trim();
   const s = String(raw==null?'':raw).replace(/,/g,'').trim();
@@ -3125,6 +3162,7 @@ function parseGridCell(raw, numeric){
   return isNaN(n) ? null : n;
 }
 function gridCellDisplay(v){ return v===null||v===undefined ? '' : String(v); }
+function dpSignClass(v){ return typeof v==='number' ? (v<0?'neg':(v>0?'pos':'')) : ''; }
 
 function renderDailyProj(){
   const el = document.getElementById('dailyProjArea');
@@ -3139,11 +3177,31 @@ function renderDailyProj(){
 }
 function refreshDailyProj(){ DAILY_PROJ_DATA = null; renderDailyProj(); }
 
-function dailyProjSortBy(key){
-  dailyProjSort = (dailyProjSort.key===key) ? {key, dir: dailyProjSort.dir==='asc'?'desc':'asc'} : {key, dir:'asc'};
+function dailyProjSortBy(idx){
+  dailyProjSort = (dailyProjSort.key===idx) ? {key:idx, dir: dailyProjSort.dir==='asc'?'desc':'asc'} : {key:idx, dir:'asc'};
   renderDailyProjBody();
 }
 window.dailyProjSortBy = dailyProjSortBy;
+
+function dpCellValue(row, ci){
+  const c = DP_DISPLAY[ci];
+  if(c.type==='recovery') return dpRecovery(row);
+  if(c.type==='gap') return dpGap(row);
+  return row[c.dp];
+}
+
+function renderSummaryStrip(sum){
+  const tile = (label, val, cls, tone) => `<div class="projstat-tile${tone?' tone-'+tone:''}"><div class="projstat-label">${esc(label)}</div><div class="projstat-val ${cls||''}">${val}</div></div>`;
+  return `<div class="projstat-row">
+    ${tile('Morning NPA', fmtBankCr(sum.morningSum/100))}
+    ${tile('Evening NPA', fmtBankCr(sum.eveningSum/100))}
+    ${tile('Total Commitment', sum.commitSum.toFixed(2), '', 'red')}
+    ${tile('Recovery', sum.recoverySum.toFixed(2), '', 'green')}
+    ${tile('Net GAP', sum.netGap.toFixed(2), '', 'amber')}
+    ${tile('Eve. Commitment', sum.eveCommitSum.toFixed(2), '', 'blue')}
+    ${tile('Projected Recovery', sum.projectedRecovery.toFixed(2), '', 'green')}
+  </div>`;
+}
 
 function renderDailyProjBody(){
   const el = document.getElementById('dailyProjArea');
@@ -3152,13 +3210,14 @@ function renderDailyProjBody(){
   if(!d || !d.rows){ el.innerHTML = `<div class="empty-state"><h2>No Daily NPA Projection data yet</h2></div>`; return; }
 
   let order = d.rows.map((r,i)=>i);
-  if(dailyProjSort.key){
-    const ci = DP_COLS.findIndex(c=>c.key===dailyProjSort.key);
+  if(dailyProjSort.key!==null){
+    const ci = dailyProjSort.key;
+    const col = DP_DISPLAY[ci];
     const dir = dailyProjSort.dir==='asc' ? 1 : -1;
     order.sort((ia,ib)=>{
-      let a = d.rows[ia][ci], b = d.rows[ib][ci];
-      if(a===null||a===undefined) a = DP_COLS[ci].numeric ? -Infinity : '';
-      if(b===null||b===undefined) b = DP_COLS[ci].numeric ? -Infinity : '';
+      let a = dpCellValue(d.rows[ia], ci), b = dpCellValue(d.rows[ib], ci);
+      if(a===null||a===undefined) a = col.numeric ? -Infinity : '';
+      if(b===null||b===undefined) b = col.numeric ? -Infinity : '';
       if(typeof a==='string') a = a.toLowerCase();
       if(typeof b==='string') b = b.toLowerCase();
       if(a<b) return -1*dir;
@@ -3167,23 +3226,36 @@ function renderDailyProjBody(){
     });
   }
 
-  const headHtml = '<tr>' + DP_COLS.map(c=>{
-    const active = dailyProjSort.key===c.key;
-    return `<th class="${c.numeric?'':'tal'} sortable${active?(dailyProjSort.dir==='asc'?' sort-asc':' sort-desc'):''}" tabindex="0" role="button" aria-sort="none" onclick="dailyProjSortBy('${c.key}')">${esc(c.label)}<span class="sort-ic">▾</span></th>`;
+  const headHtml = '<tr>' + DP_DISPLAY.map((c,ci)=>{
+    if(c.type==='serial') return `<th>${esc(c.label)}</th>`;
+    const active = dailyProjSort.key===ci;
+    return `<th class="${c.numeric?'':'tal'} sortable${active?(dailyProjSort.dir==='asc'?' sort-asc':' sort-desc'):''}" tabindex="0" role="button" aria-sort="none" onclick="dailyProjSortBy(${ci})">${esc(c.label)}<span class="sort-ic">▾</span></th>`;
   }).join('') + '</tr>';
 
-  const bodyHtml = order.map(origIdx=>{
+  const bodyHtml = order.map((origIdx, pos)=>{
     const row = d.rows[origIdx];
-    return '<tr>' + DP_COLS.map((c,ci)=>{
-      const val = row[ci];
-      const cls = c.numeric ? (typeof val==='number' ? (val<0?'neg':(val>0?'pos':'')) : '') : 'tal';
-      return `<td class="editcell"><input class="editgrid-input ${cls}" type="text" inputmode="${c.numeric?'decimal':'text'}" data-orig="${origIdx}" data-col="${ci}" value="${esc(gridCellDisplay(val))}"></td>`;
+    return '<tr>' + DP_DISPLAY.map((c,ci)=>{
+      if(c.type==='serial') return `<td>${pos+1}</td>`;
+      if(c.type==='recovery' || c.type==='gap'){
+        const v = dpCellValue(row, ci);
+        return `<td class="${dpSignClass(v)}" style="font-weight:800">${v===null?'—':v.toFixed(2)}</td>`;
+      }
+      if(!c.editable){
+        return `<td class="${c.tal?'tal':''}">${esc(gridCellDisplay(row[c.dp]))}</td>`;
+      }
+      if(c.dropdown){
+        const cur = row[c.dp]||'';
+        const opts = ['<option value=""></option>'].concat(DP_FOLLOWUP_NAMES.map(n=>`<option value="${esc(n)}"${n===cur?' selected':''}>${esc(n)}</option>`));
+        return `<td class="editcell"><select class="editgrid-input editgrid-select tal" data-orig="${origIdx}" data-col="${ci}">${opts.join('')}</select></td>`;
+      }
+      const val = row[c.dp];
+      return `<td class="editcell"><input class="editgrid-input ${c.tal?'tal':''} ${dpSignClass(typeof val==='number'?val:null)}" type="text" inputmode="${c.numeric?'decimal':'text'}" data-orig="${origIdx}" data-col="${ci}" value="${esc(gridCellDisplay(val))}"></td>`;
     }).join('') + '</tr>';
   }).join('');
 
-  el.innerHTML = `
-    <p style="font-size:12px;color:var(--ink-mute);margin:0 0 14px">Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Changes go live the next time you hit Publish (Settings → Update Data).</p>
-    <div class="dash-table-wrap" style="max-height:70vh;overflow-y:auto">
+  el.innerHTML = renderSummaryStrip(dpSummary(d.rows)) +
+    `<p style="font-size:12px;color:var(--ink-mute);margin:0 0 14px">Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Recovery, GAP and the totals above recalculate instantly. Raw entries go live the next time you hit Publish (Settings → Update Data).</p>
+    <div class="dash-table-wrap projgrid-scroll">
       <table class="dash-table" id="dailyProjTable">
         <thead>${headHtml}</thead>
         <tbody>${bodyHtml}</tbody>
@@ -3193,57 +3265,85 @@ function renderDailyProjBody(){
   const table = document.getElementById('dailyProjTable');
   if(table && !table.__wired){
     table.__wired = true;
+    const refreshSummary = () => {
+      const stripEl = el.querySelector('.projstat-row');
+      if(stripEl) stripEl.outerHTML = renderSummaryStrip(dpSummary(DAILY_PROJ_DATA.rows));
+    };
+    const refreshRowFormulas = (tr) => {
+      const origIdx = parseInt(tr.querySelector('[data-orig]').dataset.orig, 10);
+      const row = DAILY_PROJ_DATA.rows[origIdx];
+      DP_DISPLAY.forEach((c,ci)=>{
+        if(c.type!=='recovery' && c.type!=='gap') return;
+        const v = dpCellValue(row, ci);
+        const td = tr.cells[ci];
+        td.className = dpSignClass(v);
+        td.textContent = v===null ? '—' : v.toFixed(2);
+      });
+    };
     table.addEventListener('input', (e)=>{
-      const inp = e.target.closest('input.editgrid-input');
-      if(!inp) return;
-      const ci = parseInt(inp.dataset.col,10);
-      const col = DP_COLS[ci];
-      if(col.numeric){
-        const n = parseGridCell(inp.value, true);
-        inp.classList.toggle('neg', typeof n==='number' && n<0);
-        inp.classList.toggle('pos', typeof n==='number' && n>0);
+      const ctrl = e.target.closest('input.editgrid-input, select.editgrid-select');
+      if(!ctrl) return;
+      const ci = parseInt(ctrl.dataset.col,10);
+      const col = DP_DISPLAY[ci];
+      if(col.numeric && ctrl.tagName==='INPUT'){
+        const n = parseGridCell(ctrl.value, true);
+        ctrl.classList.toggle('neg', typeof n==='number' && n<0);
+        ctrl.classList.toggle('pos', typeof n==='number' && n>0);
       }
-      commitDailyProjCell(parseInt(inp.dataset.orig,10), ci, inp.value);
+      commitDailyProjCell(parseInt(ctrl.dataset.orig,10), ci, ctrl.value);
+      refreshRowFormulas(ctrl.closest('tr'));
+      refreshSummary();
     });
     table.addEventListener('paste', (e)=>{
-      const inp = e.target.closest('input.editgrid-input');
-      if(!inp) return;
+      const ctrl = e.target.closest('input.editgrid-input, select.editgrid-select');
+      if(!ctrl) return;
       const text = (e.clipboardData || window.clipboardData).getData('text/plain');
       if(!text || !/[\t\n]/.test(text)){ return; } // single value -- let the browser's normal paste happen
       e.preventDefault();
       const tbody = table.querySelector('tbody');
       const trs = [...tbody.rows];
-      const startTr = inp.closest('tr');
+      const startTr = ctrl.closest('tr');
       const startRowPos = trs.indexOf(startTr);
-      const startCol = parseInt(inp.dataset.col,10);
+      const startEditPos = DP_EDITABLE_COLS.indexOf(parseInt(ctrl.dataset.col,10));
       const lines = text.replace(/\r/g,'').split('\n');
       while(lines.length && lines[lines.length-1]==='') lines.pop();
+      const touchedRows = new Set();
       lines.forEach((line, rOff)=>{
         const cells = line.split('\t');
         const tr = trs[startRowPos+rOff];
         if(!tr) return;
         cells.forEach((cellVal, cOff)=>{
-          const c = startCol+cOff;
-          if(c>=DP_COLS.length) return;
-          const cellInput = tr.cells[c] && tr.cells[c].querySelector('input.editgrid-input');
-          if(!cellInput) return;
-          cellInput.value = cellVal.trim();
-          const col = DP_COLS[c];
-          if(col.numeric){
-            const n = parseGridCell(cellVal, true);
-            cellInput.classList.toggle('neg', typeof n==='number' && n<0);
-            cellInput.classList.toggle('pos', typeof n==='number' && n>0);
+          const ci = DP_EDITABLE_COLS[startEditPos+cOff];
+          if(ci===undefined) return;
+          const cellCtrl = tr.cells[ci] && tr.cells[ci].querySelector('input.editgrid-input, select.editgrid-select');
+          if(!cellCtrl) return;
+          const col = DP_DISPLAY[ci];
+          const raw = cellVal.trim();
+          if(col.dropdown){
+            const match = DP_FOLLOWUP_NAMES.find(n=>n.toLowerCase()===raw.toLowerCase());
+            if(match===undefined) return;
+            cellCtrl.value = match;
+          } else {
+            cellCtrl.value = raw;
+            if(col.numeric){
+              const n = parseGridCell(raw, true);
+              cellCtrl.classList.toggle('neg', typeof n==='number' && n<0);
+              cellCtrl.classList.toggle('pos', typeof n==='number' && n>0);
+            }
           }
-          commitDailyProjCell(parseInt(cellInput.dataset.orig,10), c, cellVal);
+          commitDailyProjCell(parseInt(cellCtrl.dataset.orig,10), ci, cellCtrl.value);
+          touchedRows.add(tr);
         });
       });
+      touchedRows.forEach(tr=>refreshRowFormulas(tr));
+      refreshSummary();
     });
   }
 }
 
 function commitDailyProjCell(origIdx, colIdx, rawValue){
-  const col = DP_COLS[colIdx];
-  DAILY_PROJ_DATA.rows[origIdx][colIdx] = parseGridCell(rawValue, col.numeric);
+  const col = DP_DISPLAY[colIdx];
+  DAILY_PROJ_DATA.rows[origIdx][col.dp] = parseGridCell(rawValue, col.numeric);
   __pendingDailyProjData = DAILY_PROJ_DATA;
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;

@@ -527,6 +527,50 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Daily NPA Projection: redesigned as a live calculator, Follow-up By + summary strip (2026-07-23, same day)
+
+You shared a photo of a reference sheet ("NPA COMMITMENT GAP DATA") and
+asked for the grid to look/work like that: frozen header, a totals strip,
+a Follow-up-By column with a name dropdown, and — the key behavioral
+change — "real time calculator ki tarah kaam kare, koi push nahi" (should
+work like a real-time calculator, no publish needed).
+
+- **Recovery and GAP are no longer stored data — they're computed live**:
+  Recovery = Morning NPA − Evening NPA, GAP = Commitment − Recovery.
+  Confirmed against the reference photo row-by-row (all 55 branches'
+  Recovery/GAP matched exactly) before trusting the formula. Editing
+  Morning NPA, Evening NPA, or Commitment now instantly recalculates that
+  row's Recovery/GAP and the summary strip — no publish/save step needed
+  to see the math, matching "real time calculator" literally. Sol ID and
+  Branch are fixed reference columns (read-only), same reasoning as
+  before.
+- Added a **live summary strip** above the grid: Morning NPA & Evening
+  NPA (as ₹ Cr), Total Commitment, Recovery, Net GAP, Eve. Commitment,
+  Projected Recovery (= Recovery + Eve. Commitment) — every figure a
+  straight sum/derivation over the current grid, recalculated on every
+  edit or paste. Cross-checked against the reference photo's own totals
+  (68.88 / 46.22 / 22.66 / 6.00 / 52.22) before shipping.
+- Added a **Follow-up By** column — a dropdown per branch (Alok, Deepak,
+  Dharmendra, Himanshu, Meenu, Rajeev) — and a **Remarks (if any)**
+  column, both editable and paste-able like the rest of the grid; a
+  paste into Follow-up matches the pasted text against the 6 names
+  (case-insensitive) rather than accepting arbitrary text, so an errant
+  paste can't silently set an invalid assignee.
+- **Frozen header**: the column header row now stays visible while
+  scrolling the grid (sticky positioning), matching the reference
+  sheet's frozen-panes behavior.
+- Paste distribution now targets only the *editable* columns in order
+  (skipping the read-only/computed ones), so a paste naturally lines up
+  with Morning NPA → Evening NPA → Commitment → Eve. Commitment →
+  Follow-up → Remarks regardless of how the source Excel sheet orders
+  its own (now-unnecessary) Recovery/GAP columns.
+- Re-seeded `data/daily-npa-projection.json` from the reference photo's
+  own 23-Jul-26 snapshot (55 branches, Follow-up assignments as shown) —
+  a small ~0.03 rounding drift in the reconstructed totals vs. the
+  photo's is expected and inherent to seeding from a 2-decimal screenshot
+  rather than the underlying full-precision file; every individual row's
+  Recovery/GAP matches the photo exactly.
+
 ### New "Daily NPA Projection" tab: plain editable grid, paste straight from Excel (2026-07-23, same day)
 
 You uploaded `Daily_NPA_Projection.xlsx` (9 columns: Sol ID, Branch Name,
