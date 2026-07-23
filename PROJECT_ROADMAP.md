@@ -527,6 +527,47 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### New "Daily PNPA" tab: whole-bank potential-NPA watch, branch-wise by scheme bucket (2026-07-23, same day)
+
+You uploaded `UPGB_Daily_PNPA_23.07.2026.xlsb` — a separate, whole-bank
+"Daily PNPA" (potential/early-warning NPA) export, same 35-column HO layout
+as the daily NPA file but covering all 65 regions and ~3,345 branches, not
+Hathras-only — and asked for a new tab: branch-wise totals split into
+KCC (scheme CC004), KCC Animal Husbandry (scheme CC043) and everything
+else, sorted highest O/S first, with a tap-through account list per branch
+showing Account No, Name, O/S and CADU.
+
+- **New tab, new data file** (`data/pnpa.json`), separate from both
+  `data/latest.json` (Hathras daily NPA) and `data/bank-npa.json` (bank PDF
+  MIS) — this is a third, independent dataset, because unlike the daily
+  NPA file (which HO already hands you pre-scoped to Hathras), this PNPA
+  export is genuinely whole-bank, so merging it into `DATA.npa` would have
+  silently polluted the Hathras-only book with 28,000+ other regions'
+  accounts. Only the 7 fields this tab actually needs (region, branch,
+  scheme code, account no, name, O/S, CADU) are kept per row, not the full
+  35-column layout, to keep the whole-bank file a reasonable size
+  (~2.6 MB for ~28,860 accounts, vs. several times that with all 35
+  columns).
+- Parsing happens entirely client-side (same SheetJS library already used
+  for the daily NPA upload, which already read `.xlsb` correctly) via a
+  new, separate upload section and file input in Update Data, so it can
+  never be confused with the existing daily-NPA/Customer-Master/Branch
+  Advance uploads' column detection.
+- Tab UI: three clickable summary cards (KCC / KCC-AH / Other), each
+  showing total O/S, account count, branch count, and Hathras's own
+  contribution within that bucket; tapping a card switches the branch
+  table below it. The table is branch-wise, highest O/S first, with a
+  live text filter (branch or region name) and Hathras branches
+  highlighted, reusing the same highlight styling as the Bank Dashboard's
+  region table. Tapping a branch row opens the existing sortable list
+  modal (same component used for account drill-downs elsewhere) showing
+  every account in that branch/bucket — Account No, Name, O/S, CADU.
+- Uploading applies immediately (like the Bank PDF) and ships in the same
+  commit as the next Publish, via `js/publish.js`'s existing `extraFiles`
+  mechanism.
+- Published today's real file: 28,860 accounts as on 23-07-2026 — 5,751 in
+  KCC (₹54.48 Cr), 383 in KCC-AH (₹4.21 Cr), 22,726 in Other (₹89.27 Cr).
+
 ### Bank Dashboard: Target/March consolidated into tabs on every card (2026-07-23, same day)
 
 You asked for the Target-progress and Since-March positions to show right

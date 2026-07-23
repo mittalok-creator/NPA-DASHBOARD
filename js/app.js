@@ -1422,12 +1422,16 @@ async function confirmPublish(){
         extraFiles = extraFiles.concat(await buildBankHistoryFiles(__pendingBankData, user));
       } catch(e){ /* history snapshot is best-effort -- the main bank-npa.json publish still proceeds */ }
     }
+    if(__pendingPublish.type!=='rollback' && __pendingPnpaData){
+      extraFiles = (extraFiles||[]).concat([{ path:'data/pnpa.json', content: __pendingPnpaData }]);
+    }
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
       : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress, extraFiles);
     statusEl.innerHTML = `<div class="upload-status ok">✔ Published — live at npadashboard.alokmittal.net within ~30-60s (commit ${esc(result.commitSha.slice(0,7))}).</div>`;
     document.getElementById('publishBtn').disabled = true;
     __pendingBankData = null;
+    __pendingPnpaData = null;
     closePublishReview();
     loadVersionHistory();
   } catch(err){
@@ -1810,6 +1814,7 @@ function renderListModalBody(resetScroll){
   listModalState.sortedList = sorted;
   updateSortIcons('listModalHead', listModalState.sort);
   if(listModalState.type==='cust'){ body.innerHTML = custRows(sorted); }
+  else if(listModalState.type==='pnpa'){ body.innerHTML = pnpaAcctRows(sorted); }
   else{
     body.innerHTML = '';
     const shownRef = {n:0};
@@ -2452,12 +2457,230 @@ function renderBankDashboardBody(){
   if(targetFilterSel) targetFilterSel.onchange = () => { bankTargetFilter = targetFilterSel.value; renderBankDashboardBody(); };
 }
 
+/* ---------- Daily PNPA (Potential NPA) -- whole-bank, branch-wise, bucketed by scheme ----------
+   A completely separate dataset from DATA.npa: the source file is the whole-bank
+   HO "Daily PNPA" export (all 65 regions, thousands of branches), not Hathras-only,
+   so it gets its own tab/file (data/pnpa.json) rather than merging into the
+   Hathras-scoped daily NPA book. Rows are stored as compact arrays (see PC below)
+   instead of the full 35-column HO layout -- only the fields this tab actually
+   uses (region/branch/scheme/acct/name/o-s/CADU) are kept, to avoid shipping an
+   ~28k-row, 35-column JSON file down to every device for a whole-bank list. */
+const PC = {REGION:0, BRANCH:1, SCHEME:2, ACCT:3, NAME:4, OS:5, CADU:6};
+const PNPA_BUCKETS = [
+  {key:'kcc', label:'KCC', sub:'Scheme code CC004'},
+  {key:'kccah', label:'KCC — Animal Husbandry', sub:'Scheme code CC043'},
+  {key:'other', label:'Other Schemes', sub:'All remaining scheme codes'},
+];
+function pnpaBucketOf(scheme){ return scheme==='CC004'?'kcc':(scheme==='CC043'?'kccah':'other'); }
+function parsePnpaRows(headerCells, dataRows){
+  const header = headerCells.map(normHeader);
+  const idx = (name) => header.indexOf(normHeader(name));
+  const iRegion=idx('region'), iBranch=idx('branch'), iAcct=idx('accountno'), iScheme=idx('schemecode'),
+    iName=idx('accountname'), iBal=idx('balanceamount'), iCadu=idx('cadu');
+  const missing = [];
+  if(iAcct<0) missing.push('Account No');
+  if(iBranch<0) missing.push('Branch');
+  if(iScheme<0) missing.push('Scheme Code');
+  if(iBal<0) missing.push('Balance Amount');
+  if(iCadu<0) missing.push('CADU');
+  if(missing.length) throw new Error('Missing required column(s): '+missing.join(', ')+'. Check this file matches the "Daily PNPA" export layout.');
+  const rows = [];
+  for(const row of dataRows){
+    if(!row || row.length<3) continue;
+    const acctRaw = cellStr(row, iAcct);
+    if(!acctRaw) continue;
+    let acctNo = acctRaw;
+    if(looksScientific(acctRaw)) acctNo = expandSci(acctRaw);
+    rows.push([
+      cellStr(row, iRegion), cellStr(row, iBranch), cellStr(row, iScheme), acctNo, cellStr(row, iName),
+      parseFloat(row[iBal])||0, parseFloat(row[iCadu])||0,
+    ]);
+  }
+  return rows;
+}
+let PNPA_DATA = null;
+let __pendingPnpaData = null;
+let pnpaBucketTab = 'kcc';
+let pnpaBranchSearch = '';
+function setPnpaBucketTab(tab){ pnpaBucketTab = tab; pnpaBranchSearch=''; renderPnpaDashboardBody(); }
+window.setPnpaBucketTab = setPnpaBucketTab;
+
+function handlePnpaUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const labelEl = document.getElementById('pnpaUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('pnpaUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Daily PNPA file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      let header, dataRows;
+      if(isCsv){
+        const allRows = parseCSV(String(e.target.result));
+        header = allRows[0]||[]; dataRows = allRows.slice(1);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        const sheetName = wb.SheetNames.find(n=>/pnpa/i.test(n)) || wb.SheetNames[0];
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+        header = raw[0]||[]; dataRows = raw.slice(1);
+      }
+      const rows = parsePnpaRows(header, dataRows);
+      if(!rows.length) throw new Error('No account rows found in this file.');
+      const guessed = parseAsOnDateFromFilename(file.name);
+      const asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
+      __pendingPnpaData = { asOnDate, rows };
+      PNPA_DATA = __pendingPnpaData;
+      const label = document.getElementById('pnpaStatusLabel');
+      if(label) label.textContent = `${rows.length.toLocaleString('en-IN')} accounts loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${rows.length.toLocaleString('en-IN')} accounts, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.</div>`;
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.querySelector('.view.active')?.dataset.view==='pnpa') renderPnpaDashboardBody();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
+function renderPnpaDashboard(){
+  const el = document.getElementById('pnpaDashboardArea');
+  if(!el) return;
+  if(PNPA_DATA){ renderPnpaDashboardBody(); return; }
+  el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading Daily PNPA data…</p></div>`;
+  fetchJson('data/pnpa.json?t=' + Date.now())
+    .then(d => { PNPA_DATA = d; renderPnpaDashboardBody(); })
+    .catch(() => {
+      el.innerHTML = `<div class="empty-state"><h2>Could not load Daily PNPA data</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
+    });
+}
+function refreshPnpaDashboard(){ PNPA_DATA = null; renderPnpaDashboard(); }
+
+function pnpaBranchAgg(rows, bucket){
+  const map = new Map();
+  for(const r of rows){
+    if(pnpaBucketOf(r[PC.SCHEME])!==bucket) continue;
+    const key = r[PC.BRANCH]+'||'+r[PC.REGION];
+    let e = map.get(key);
+    if(!e){ e = {branch:r[PC.BRANCH], region:r[PC.REGION], count:0, os:0}; map.set(key,e); }
+    e.count++; e.os += r[PC.OS];
+  }
+  return [...map.values()].sort((a,b)=>b.os-a.os);
+}
+
+function renderPnpaDashboardBody(){
+  const el = document.getElementById('pnpaDashboardArea');
+  const d = PNPA_DATA;
+  if(!el) return;
+  if(!d || !d.rows){ el.innerHTML = `<div class="empty-state"><h2>No Daily PNPA data yet</h2><p>Upload the Daily PNPA file from Update Data to populate this tab.</p></div>`; return; }
+
+  document.querySelectorAll('.pnpa-report-date-val').forEach(e=>{
+    const parts = (d.asOnDate||'').split('-');
+    e.textContent = parts.length===3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : (d.asOnDate||'—');
+  });
+
+  const bucketTotals = {}, hathrasTotals = {};
+  PNPA_BUCKETS.forEach(b=>{ bucketTotals[b.key]={count:0,os:0,branches:new Set()}; hathrasTotals[b.key]={count:0,os:0}; });
+  for(const r of d.rows){
+    const bk = pnpaBucketOf(r[PC.SCHEME]);
+    bucketTotals[bk].count++; bucketTotals[bk].os += r[PC.OS]; bucketTotals[bk].branches.add(r[PC.BRANCH]+'||'+r[PC.REGION]);
+    if((r[PC.REGION]||'').toUpperCase()==='HATHRAS'){ hathrasTotals[bk].count++; hathrasTotals[bk].os += r[PC.OS]; }
+  }
+  const bucketIcon = {kcc:ICON_TARGET, kccah:ICON_STAR, other:ICON_LANDMARK};
+
+  const heroRow = `<div class="hero-kpi-row bank-hero-row">${PNPA_BUCKETS.map(b=>{
+    const t = bucketTotals[b.key], h = hathrasTotals[b.key], isActive = pnpaBucketTab===b.key;
+    return heroKpiCard({
+      id:'pnpaHero_'+b.key, icon: bucketIcon[b.key],
+      tint: isActive?'var(--accent-soft)':'rgba(120,120,140,.12)', color: isActive?'var(--accent)':'var(--ink-mute)',
+      onclick:`setPnpaBucketTab('${b.key}')`,
+      label: b.label,
+      fallback: fmtCr(t.os),
+      sub: `${t.count.toLocaleString('en-IN')} accounts · ${t.branches.size.toLocaleString('en-IN')} branches<span class="hero-kpi-sub2">Hathras: ${h.count.toLocaleString('en-IN')} A/C · ${fmtCr(h.os)}</span>`,
+      badge: isActive ? `<div class="hero-kpi-badge" style="background:var(--accent-soft);color:var(--accent)">Viewing</div>` : '',
+    });
+  }).join('')}</div>`;
+
+  el.innerHTML = heroRow +
+    `<div class="chart-card" style="margin-top:20px">
+      <div class="section-label" id="pnpaTableLabel"></div>
+      <div class="bank-filter-row">
+        <input type="text" id="pnpaBranchSearchInput" class="dash-select" placeholder="Search branch or region…" value="${esc(pnpaBranchSearch)}" style="flex:1">
+      </div>
+      <div id="pnpaBranchTableCard"></div>
+    </div>`;
+
+  const searchInput = document.getElementById('pnpaBranchSearchInput');
+  if(searchInput) searchInput.oninput = () => { pnpaBranchSearch = searchInput.value; renderPnpaBranchTable(); };
+  renderPnpaBranchTable();
+}
+
+function renderPnpaBranchTable(){
+  const d = PNPA_DATA;
+  const wrap = document.getElementById('pnpaBranchTableCard');
+  const labelEl = document.getElementById('pnpaTableLabel');
+  if(!wrap || !d) return;
+  const activeBucket = PNPA_BUCKETS.find(b=>b.key===pnpaBucketTab);
+  let branchAgg = pnpaBranchAgg(d.rows, pnpaBucketTab);
+  if(pnpaBranchSearch){
+    const q = pnpaBranchSearch.toLowerCase();
+    branchAgg = branchAgg.filter(r=>r.branch.toLowerCase().includes(q) || r.region.toLowerCase().includes(q));
+  }
+  if(labelEl) labelEl.innerHTML = `${esc(activeBucket.label)} — Branch-wise, highest O/S first<span class="chart-sub">${esc(activeBucket.sub)} · ${branchAgg.length.toLocaleString('en-IN')} branch(es) shown · tap a branch to see accounts</span>`;
+  const rowsHtml = branchAgg.map((r,i)=>{
+    const isOurs = (r.region||'').toUpperCase()==='HATHRAS';
+    return `<tr class="clickable${isOurs?' is-ours':''}" onclick="pnpaShowBranchAccounts('${pnpaBucketTab}','${esc(r.branch)}','${esc(r.region)}')">
+      <td><span class="dash-rank">${i+1}</span></td>
+      <td class="tal">${esc(r.branch)}${isOurs?' <span class="badge-pill locked" style="margin-left:6px">★ Hathras</span>':''}</td>
+      <td class="tal">${esc(r.region)}</td>
+      <td>${r.count.toLocaleString('en-IN')}</td>
+      <td>${fmtCr(r.os)}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<div class="dash-table-wrap acct-list-scroll">
+    <table class="dash-table">
+      <thead><tr><th class="tal">Rank</th><th class="tal">Branch</th><th class="tal">Region</th><th>Accounts</th><th>Total O/S</th></tr></thead>
+      <tbody>${rowsHtml || `<tr><td colspan="5" style="text-align:center;color:var(--ink-mute)">No branches match</td></tr>`}</tbody>
+    </table>
+  </div>`;
+}
+
+const PNPA_ACCT_LIST_HEAD = '<tr>'
+  +'<th class="sortable" data-key="acctNo" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'acctNo\')">Account<span class="sort-ic">▾</span></th>'
+  +'<th class="tal sortable" data-key="name" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'name\')">Customer<span class="sort-ic">▾</span></th>'
+  +'<th class="sortable" data-key="os" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'os\')">O/S<span class="sort-ic">▾</span></th>'
+  +'<th class="sortable" data-key="cadu" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'cadu\')">CADU<span class="sort-ic">▾</span></th>'
+  +'</tr>';
+function pnpaAcctRows(list){
+  if(!list.length) return `<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">No accounts</td></tr>`;
+  return list.map(a=>`<tr>
+    <td>${esc(a.acctNo)}</td>
+    <td class="tal">${esc(a.name)||'—'}</td>
+    <td>${fmtINR2(a.os)}</td>
+    <td>${fmtINR2(a.cadu)}</td>
+  </tr>`).join('');
+}
+function showPnpaListModal(title, sub, list){ showListModal(title, sub, PNPA_ACCT_LIST_HEAD, 'pnpa', list, {key:'os',dir:'desc'}); }
+window.showPnpaListModal = showPnpaListModal;
+function pnpaShowBranchAccounts(bucket, branch, region){
+  const rows = PNPA_DATA.rows.filter(r=>pnpaBucketOf(r[PC.SCHEME])===bucket && r[PC.BRANCH]===branch && r[PC.REGION]===region);
+  const list = rows.map(r=>({ acctNo:r[PC.ACCT], name:r[PC.NAME], os:r[PC.OS], cadu:r[PC.CADU] }));
+  const bLabel = (PNPA_BUCKETS.find(b=>b.key===bucket)||{}).label || bucket;
+  showPnpaListModal(`${branch} — ${bLabel}`, `${region} · ${list.length.toLocaleString('en-IN')} account(s)`, list);
+}
+window.pnpaShowBranchAccounts = pnpaShowBranchAccounts;
+
 /* ---------- Nav / view switching ---------- */
 function switchView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.dataset.view===view));
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   if(view==='dashboard') renderDashboard();
   if(view==='bank') renderBankDashboard();
+  if(view==='pnpa') renderPnpaDashboard();
   const mainCol = document.getElementById('mainCol');
   if(mainCol) mainCol.scrollTop = 0;
 }
@@ -2501,6 +2724,8 @@ function toggleTheme(){
   on('branchAdvFileInput','change',(e)=>handleBranchAdvUpload(e));
   on('bankPdfUploadDrop','click',()=>document.getElementById('bankPdfFileInput').click());
   on('bankPdfFileInput','change',(e)=>handleBankPdfUpload(e));
+  on('pnpaUploadDrop','click',()=>document.getElementById('pnpaFileInput').click());
+  on('pnpaFileInput','change',(e)=>handlePnpaUpload(e));
   on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
@@ -2525,6 +2750,11 @@ function toggleTheme(){
   on('bankRefreshBtn','click',(e)=>{
     e.currentTarget.classList.add('is-spinning');
     refreshBankDashboard();
+    setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
+  });
+  on('pnpaRefreshBtn','click',(e)=>{
+    e.currentTarget.classList.add('is-spinning');
+    refreshPnpaDashboard();
     setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
   });
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{
