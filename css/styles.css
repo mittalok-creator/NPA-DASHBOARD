@@ -653,6 +653,7 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 .publish-review-summary{font-size:12.5px;line-height:1.8;color:var(--ink)}
 .publish-review-summary b{color:var(--accent)}
 .publish-review-summary .pr-warn{color:var(--red);font-weight:700}
+.publish-review-summary .pr-good{color:var(--green);font-weight:700}
 #publishStatus .upload-status{margin-top:10px}
 #versionHistoryList{font-size:12px}
 .version-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}

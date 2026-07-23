@@ -1160,7 +1160,9 @@ function applyNewDataNow(){
      longer present has regularized/closed and should disappear, so the
      new file always fully replaces the old data rather than merging. */
   const newAcctSet = new Set(newRows.map(r=>String(r[C.ACCT_NO]||'')));
+  const oldAcctSet = new Set((DATA.npa.rows||[]).map(r=>String(r[C.ACCT_NO]||'')));
   const staleRemovedCount = (DATA.npa.rows||[]).filter(r=>!newAcctSet.has(String(r[C.ACCT_NO]||''))).length;
+  const newAddedCount = newRows.filter(r=>!oldAcctSet.has(String(r[C.ACCT_NO]||''))).length;
 
   DATA.npa = { headers: __pendingData.npa.headers, rows: newRows };
   if(__pendingData.oldots) DATA.oldots = __pendingData.oldots;
@@ -1185,12 +1187,14 @@ function applyNewDataNow(){
   Object.keys(DATA.lockedOts).forEach(acct => { otsAmounts[acct] = DATA.lockedOts[acct]; frozen[acct] = true; });
   updateReportDateDisplay();
   const staleMsg = staleRemovedCount>0 ? ` (${staleRemovedCount.toLocaleString('en-IN')} account(s) from the previous data no longer appear — regularized/closed accounts removed.)` : '';
-  document.getElementById('uploadStatus').innerHTML = `<div class="upload-status ok">✔ Data updated — ${DATA.npa.rows.length.toLocaleString('en-IN')} NPA rows now active.${staleMsg}</div>`;
+  const addedMsg = newAddedCount>0 ? ` (${newAddedCount.toLocaleString('en-IN')} new account(s) added.)` : '';
+  document.getElementById('uploadStatus').innerHTML = `<div class="upload-status ok">✔ Data updated — ${DATA.npa.rows.length.toLocaleString('en-IN')} NPA rows now active.${staleMsg}${addedMsg}</div>`;
   document.getElementById('downloadAppBtn').disabled = false;
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;
   __lastApplyMeta = {
     staleRemovedCount,
+    newAddedCount,
     newRowCount: newRows.length,
   };
   document.getElementById('searchHeader').style.display='';
@@ -1275,9 +1279,13 @@ function openPublishReview(){
   const staleLine = meta.staleRemovedCount>0
     ? `<div class="pr-warn">${meta.staleRemovedCount.toLocaleString('en-IN')} account(s) removed as regularized/closed.</div>`
     : '';
+  const addedLine = meta.newAddedCount>0
+    ? `<div class="pr-good">${meta.newAddedCount.toLocaleString('en-IN')} new account(s) added.</div>`
+    : '';
   document.getElementById('publishReviewSummary').innerHTML = `
     <div>Data as on: <b>${esc(fmtAsOnDisplay())}</b></div>
     <div>Total accounts live after publish: <b>${summary.rowCount.toLocaleString('en-IN')}</b></div>
+    ${addedLine}
     ${staleLine}
     <div style="margin-top:8px;color:var(--sub)">Publishing as <b>${esc(user.login||'unknown')}</b>. Goes live on npadashboard.alokmittal.net within about a minute.</div>
   `;

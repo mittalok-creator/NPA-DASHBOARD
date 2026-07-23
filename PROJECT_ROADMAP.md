@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 ---
 
@@ -526,6 +526,24 @@ ise data se."
   Daily NPA Projection file yourself through the Update Data modal's
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
+
+### Publish review now also shows new accounts added, not just removed (2026-07-23)
+
+You pointed out the Publish confirm dialog only showed "X account(s) removed
+as regularized/closed" (in red) and asked to also show new additions
+prominently, same style.
+
+- `applyNewDataNow()` now also computes `newAddedCount` (accounts in the
+  freshly uploaded file that weren't in the previous data) alongside the
+  existing `staleRemovedCount`, using the same account-set-diff approach.
+- The Update Data modal's status line and the Publish review panel both now
+  show a green "N new account(s) added." line next to the existing red
+  "N account(s) removed as regularized/closed." line — new `.pr-good` CSS
+  class (green, matching the existing `.pr-warn` red) added alongside it.
+- Verified with a two-round upload test (day-1 fixture with 3 accounts →
+  day-2 fixture removing one and adding a different one, same session):
+  both counts computed correctly (1 removed, 1 added) and rendered in the
+  right colors in the actual Publish review panel via a screenshot.
 
 ### Dashboard redesign: enterprise fintech visual language (2026-07-22, same day)
 
