@@ -966,6 +966,9 @@ body{overscroll-behavior:none}
 .circle-card-sub{font-size:11.5px;color:var(--sub);margin-top:4px}
 .bank-filter-row{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 14px}
 .bank-filter-row .dash-select{min-width:170px;flex:1}
+.bank-tab-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.bank-tab-btn{background:var(--card);border:1.5px solid var(--line);color:var(--sub);padding:9px 16px;border-radius:20px;font-size:12.5px;font-weight:700;white-space:nowrap;transition:background .15s var(--ease),color .15s var(--ease),border-color .15s var(--ease)}
+.bank-tab-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
 .bank-npa-pill{display:inline-block;padding:3px 10px;border-radius:7px;font-size:11.5px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
 .dash-table tr.is-ours td{background:var(--accent-soft)}
 .dash-table tr.is-our-circle td{background:rgba(58,123,255,.06)}
