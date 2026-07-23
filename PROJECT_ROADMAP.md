@@ -527,6 +527,41 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Daily NPA Projection: Undo, Print/Export PDF, Export to Excel + GAP color bug fix (2026-07-23, same day)
+
+- **Bug found and fixed**: GAP was being colored with the same rule as
+  Recovery (positive=green, negative=red) — but checking every one of the
+  55 rows against your reference photo again showed GAP's colors are the
+  *opposite* of a plain sign reading: a positive GAP (shortfall against
+  commitment) is bad → red, a negative GAP (commitment met/exceeded) is
+  good → green. Fixed with a dedicated `dpGapClass()` used only on GAP;
+  confirmed on all 55 rows this now matches the photo exactly (37 red,
+  15 green, 3 neutral). Recovery and the raw editable cells (Morning/
+  Evening NPA, Commitment, Eve. Commitment) are back to plain/uncolored,
+  matching the reference image — they were never supposed to be tinted.
+- **Undo button**: protects against an accidental "Clear All Fields" tap
+  (or any bad edit/paste). Every real change to a cell — typing, pasting,
+  or Clear All — is snapshotted before it happens, up to the last 20
+  actions, so a mis-tap can always be walked back. Undo is disabled
+  (greyed out) once there's nothing left to undo. Like every other edit,
+  it still needs Publish to go live for everyone else, and Undo only
+  works before that Publish — once published, that data is live.
+- **Print / Export to PDF**: a Print button opens the browser's print
+  dialog pre-formatted to fit the whole 55-branch sheet on a single A4
+  landscape page — all app menus/navigation are hidden, input boxes and
+  dropdowns print as plain text (no borders/boxes), and the GAP red/green
+  shading is preserved in the printout. Choosing "Save as PDF" in that
+  same dialog is how you get a PDF — that's the standard way any browser
+  turns a print job into a PDF, so no separate PDF button was needed.
+- **Export to Excel**: one tap downloads a real `.xlsx` with the title,
+  date, summary totals, and all 55 rows (including computed Recovery/GAP
+  values) with sensible column widths. One honest limitation: the free
+  Excel-writing library this app uses can't write cell background colors
+  into a `.xlsx` file (that's a paid-tier feature upstream), so the
+  red/green GAP shading does **not** carry into the Excel file — only the
+  numbers do. Use Print/PDF instead when you need the colors on paper or
+  in a PDF.
+
 ### Daily NPA Projection: added a "Clear All Fields" button (2026-07-23, same day)
 
 - New button above the grid resets every editable field (Morning/Evening

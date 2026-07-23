@@ -1136,6 +1136,45 @@ select.editgrid-select{cursor:pointer;-webkit-appearance:none;appearance:none;ba
 .projstat-tile.tone-blue .projstat-val{color:var(--accent)}
 @media (max-width:699px){ .projstat-tile{min-width:calc(50% - 5px)} }
 
+/* GAP cells only -- sign meaning is inverted from a plain read (positive
+   GAP = shortfall = bad, negative GAP = met/exceeded commitment = good),
+   confirmed against the reference photo. print-color-adjust keeps the
+   tint in the Print/PDF export, where browsers otherwise strip
+   background colors by default. */
+.gap-bad{background:var(--red-soft);color:var(--red);print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.gap-good{background:var(--green-soft);color:var(--green);print-color-adjust:exact;-webkit-print-color-adjust:exact}
+
+/* ---------- Daily NPA Projection toolbar (Undo / Clear / Print / Excel) ---------- */
+.projgrid-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px}
+.projgrid-hint{font-size:12px;color:var(--ink-mute);margin:0;flex:1;min-width:220px}
+.projgrid-btns{display:flex;gap:8px;flex-wrap:wrap}
+.projgrid-btns .btn-ghost{padding:8px 14px;font-size:12px;white-space:nowrap;border-radius:var(--radius-sm,8px)}
+.projgrid-btns .btn-ghost:disabled{opacity:.4;cursor:not-allowed}
+
+/* ---------- Print / Export PDF: single A4 landscape sheet, no app chrome ---------- */
+@media print{
+  #sideNav,#bottomTabs,.mobile-sig,header.app-head,#aggBar,.no-print{display:none!important}
+  #mainCol{padding:0!important}
+  #app,#bgFx{background:#fff!important}
+  @page{size:A4 landscape;margin:8mm}
+  body{background:#fff!important}
+  .view{display:none!important}
+  .view.active{display:block!important}
+  .view-head{margin-bottom:6px}
+  .view-head .icon-btn{display:none!important}
+  .projstat-row{gap:6px;margin-bottom:8px}
+  .projstat-tile{padding:5px 8px;box-shadow:none;break-inside:avoid}
+  .projstat-label{font-size:7.5px}
+  .projstat-val{font-size:13px;margin-top:1px}
+  .projgrid-scroll{max-height:none!important;overflow:visible!important}
+  .dash-table{font-size:8px}
+  .dash-table th{padding:4px 5px;font-size:6.5px}
+  .dash-table td{padding:3px 5px}
+  .editgrid-input,select.editgrid-select{border:none!important;background:transparent!important;padding:0!important;color:inherit!important;-webkit-appearance:none;appearance:none}
+  select.editgrid-select{background-image:none!important}
+  .gap-bad,.gap-good{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+}
+
 @media (max-width:900px){
   .chart-grid{grid-template-columns:1fr}
   .kpi-grid{grid-template-columns:repeat(2,1fr)}
