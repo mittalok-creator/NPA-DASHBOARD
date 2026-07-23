@@ -129,6 +129,7 @@ const SEARCH_MODES = [
   {id:'sb', label:'SB No.', col:C.SB_ACCT, ph:'e.g. 152910100005105'},
 ];
 let searchMode = 'acct';
+let __lastSearchMatches = null, __lastSearchMode = null;
 const pillsEl = document.getElementById('modePills');
 const searchInputEl = document.getElementById('searchInput');
 SEARCH_MODES.forEach(m=>{
@@ -186,6 +187,7 @@ function renderEmpty(){
 }
 
 function renderResults(matches, mode){
+  __lastSearchMatches = matches; __lastSearchMode = mode;
   const el = document.getElementById('mainArea');
   if(!matches.length){
     el.innerHTML = `<div class="results-hint">0 matches found</div>` +
@@ -240,14 +242,73 @@ function renderResults(matches, mode){
 /* ---------- Detail view ---------- */
 let otsAmounts = {}; // key: acctNo -> value
 let frozen = {}; // key: acctNo -> bool
-/* Locked OTS amounts are also persisted on DATA.lockedOts (part of the
-   published data/latest.json, carried forward across daily data updates and
-   included whenever Publish is next clicked) so a negotiated settlement
-   figure shows to every viewer, not just whoever locked it in their own
-   browser -- unlike otsAmounts/frozen above, which are per-session scratch
-   state for amounts still being worked out. */
+/* Locked OTS amounts are also persisted on DATA.lockedOts and, as of the
+   "sync to everyone immediately" change, ALSO written straight to
+   data/locked-ots.json via the lock-ots relay endpoint the moment anyone
+   locks/unlocks one -- no GitHub sign-in or Admin Publish needed for this
+   specific action, since field staff using this app on their own phones
+   don't have repo access. (data/latest.json's own lockedOts field still
+   gets refreshed on every Admin Publish, as a durable snapshot -- but
+   data/locked-ots.json is the live, always-current source every viewer
+   merges in on load and on a periodic background check.) otsAmounts/frozen
+   below stay per-session scratch state for amounts still being worked out
+   and not yet locked. */
 DATA.lockedOts = DATA.lockedOts || {};
 Object.keys(DATA.lockedOts).forEach(acct => { otsAmounts[acct] = DATA.lockedOts[acct]; frozen[acct] = true; });
+
+const LOCK_OTS_RELAY_URL = 'https://npa-dashboard.vercel.app/api/lock-ots';
+function syncLockToServer(acctNo, locked, amount, btn){
+  if(btn){ btn.classList.remove('sync-err'); btn.classList.add('syncing'); }
+  fetch(LOCK_OTS_RELAY_URL, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ acctNo, locked, amount })
+  }).then(r => { if(!r.ok) throw new Error('sync_failed_'+r.status); })
+    .then(() => { if(btn) btn.classList.remove('syncing'); })
+    .catch(() => {
+      if(btn){
+        btn.classList.remove('syncing'); btn.classList.add('sync-err');
+        btn.title = 'Locked on this device, but could not sync to other devices -- check your internet connection.';
+      }
+    });
+}
+
+/* Merges in any lock/unlock made from another device since this page was
+   loaded. Only ever adds/removes entries actually present in the live file
+   -- never touches an in-progress unfrozen draft for an account nobody
+   else has locked, so it can't stomp on something the user is mid-typing. */
+function refreshLocksFromServer(){
+  fetchJson('data/locked-ots.json?t=' + Date.now()).then(liveLocks => {
+    if(!liveLocks || typeof liveLocks !== 'object') return;
+    let changed = false;
+    Object.keys(liveLocks).forEach(acct => {
+      if(frozen[acct]!==true || String(otsAmounts[acct])!==String(liveLocks[acct])){
+        frozen[acct] = true; otsAmounts[acct] = liveLocks[acct]; DATA.lockedOts[acct] = liveLocks[acct];
+        changed = true;
+      }
+    });
+    Object.keys(DATA.lockedOts).forEach(acct => {
+      if(!(acct in liveLocks)){ delete DATA.lockedOts[acct]; delete frozen[acct]; changed = true; }
+    });
+    if(!changed) return;
+    if(window.__slots){
+      window.__slots.forEach((s,i) => {
+        const btn = document.getElementById('freezeBtn-'+i);
+        const input = document.getElementById('otsInput-'+i);
+        if(!btn || !input) return;
+        const isFrozen = !!frozen[s.acctNo];
+        btn.classList.toggle('frozen', isFrozen);
+        btn.title = isFrozen ? 'Frozen — click to edit' : 'Freeze this OTS amount';
+        input.disabled = isFrozen;
+        if(isFrozen) input.value = otsAmounts[s.acctNo]||'';
+        recalcLoan(i);
+      });
+      recalcAggregate();
+    }
+    if(__lastSearchMatches && document.querySelector('.view.active')?.dataset.view==='search') renderResults(__lastSearchMatches, __lastSearchMode);
+    if(document.querySelector('.view.active')?.dataset.view==='dashboard') renderDashboard();
+  }).catch(()=>{});
+}
 
 function openDetail(custId, jumpAcct){
   const custRow = byCustId.get(custId);
@@ -442,6 +503,7 @@ function toggleFreeze(i, acctNo){
     if(btn){ btn.classList.remove('frozen'); btn.classList.toggle('ready', v!==undefined && v!=='' && !isNaN(parseFloat(v))); btn.title='Freeze this OTS amount'; }
     input.disabled=false; input.focus();
   }
+  syncLockToServer(acctNo, frozen[acctNo], frozen[acctNo]?v:undefined, btn);
 }
 
 const __reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -2103,6 +2165,10 @@ function toggleTheme(){
 renderEmpty();
 switchView('dashboard');
 
+// Pick up OTS locks/unlocks made from other devices without needing a full
+// page reload -- skips the check while the tab is backgrounded.
+setInterval(() => { if(document.visibilityState==='visible') refreshLocksFromServer(); }, 45000);
+
 window.openDetail = openDetail;
 window.closeDetail = closeDetail;
 window.toggleFreeze = toggleFreeze;
@@ -2120,9 +2186,20 @@ function fetchJson(url){
 function loadNpaData(isRetry){
   fetchJson('data/latest.json?t=' + Date.now())
     .then(data => {
-      const overlay = document.getElementById('dataLoadingOverlay');
-      if(overlay) overlay.classList.add('hidden');
-      initApp(data);
+      // data/locked-ots.json is the live, always-current source for locked
+      // OTS amounts (see syncLockToServer/refreshLocksFromServer) -- it can
+      // be ahead of whatever was baked into data/latest.json at the last
+      // Admin Publish, so it wins on merge. A failure here (e.g. the file
+      // briefly missing) shouldn't block the whole app from loading --
+      // fall back to data/latest.json's own lockedOts in that case.
+      return fetchJson('data/locked-ots.json?t=' + Date.now())
+        .catch(() => ({}))
+        .then(liveLocks => {
+          data.lockedOts = Object.assign({}, data.lockedOts||{}, liveLocks||{});
+          const overlay = document.getElementById('dataLoadingOverlay');
+          if(overlay) overlay.classList.add('hidden');
+          initApp(data);
+        });
     })
     .catch(err => {
       // A single blip (phone switching towers/wifi) shouldn't scare a non-technical

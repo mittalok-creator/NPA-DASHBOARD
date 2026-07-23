@@ -527,6 +527,56 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### OTS locks now sync to every device immediately, no Admin Publish needed (2026-07-23, same day)
+
+You reported: locked an OTS amount on your phone, searched again there and
+saw "Already Told ₹1,70,000" correctly — but the same account on a
+different browser/device didn't show it. Root cause: locking only ever
+updated in-memory state in that one browser tab; it only reached other
+viewers once the Admin manually clicked Publish. You clarified that's not
+workable, since **only you have Publish/push access — the staff who'd
+actually be locking OTS amounts in the field don't**, so this specific
+action needs to sync on its own, without anyone needing to sign in to
+GitHub.
+
+- **New relay endpoint** `relay/api/lock-ots.js` (deployed alongside the
+  existing GitHub-sign-in relay on the same Vercel project) lets ANY
+  visitor — no login — lock or unlock an OTS amount for one account. It
+  writes straight to a new, small, separate file, **`data/locked-ots.json`**
+  (kept apart from the main `data/latest.json` publish flow so this never
+  touches or risks the bulk NPA dataset), via the GitHub Contents API,
+  using a repo-scoped token that lives only server-side as a Vercel
+  environment variable — never sent to the browser. Handles the rare
+  case of two people locking different accounts at almost the same moment
+  (a 409 "someone else wrote first" conflict) by re-fetching and retrying,
+  up to 3 attempts, so neither person's change is silently lost.
+- **`toggleFreeze()`** (in `js/app.js`) now calls this endpoint the moment
+  anyone locks/unlocks an OTS amount, in addition to updating local state
+  as before. A small `.syncing`/`.sync-err` state on the freeze button
+  shows if the sync failed (e.g. no internet) so it's clear the lock only
+  took effect on that one device.
+- **Every page load** now also fetches `data/locked-ots.json` and merges
+  it into `DATA.lockedOts` — this is the live, always-current source,
+  taking priority over whatever was baked into the last Admin Publish.
+- **A background check every 45 seconds** (paused while the tab isn't
+  visible, to avoid pointless calls) picks up locks/unlocks made on other
+  devices without needing a manual refresh or reload — updates the
+  account detail page's freeze button/input live if that account happens
+  to be open, and refreshes the search results view's "Already Told"
+  badges.
+- **Verified end-to-end**: a lock written directly to
+  `data/locked-ots.json` (standing in for "another device just did this
+  via the relay") shows up on a completely fresh page load — both the
+  search card's badge and the detail page's freeze button — without ever
+  touching the freeze button on that browser. Also verified the real
+  45-second background poll picks up both a new lock AND a later unlock
+  on an already-open tab, and unit-tested the relay's lock/unlock/
+  conflict-retry/invalid-input logic directly (mocking GitHub's API,
+  since this environment can't reach a real deployed function).
+- **Requires one-time external setup before it works live** — see the
+  External Configuration Log below. Until that's done, locking still works
+  per-device exactly as before (just doesn't sync) — nothing regresses.
+
 ### Search result cards now show "Already Told" when an OTS amount is locked (2026-07-23, same day)
 
 You asked: whenever an OTS amount is locked/frozen for an account, that
@@ -1290,6 +1340,37 @@ Key findings, for whoever builds M4:
 Tracks every setup step done outside this repo (Azure, Microsoft Graph,
 GitHub settings, etc.) so nothing is forgotten or duplicated.
 
+- 2026-07-23: **PENDING — needs Alok to do this before OTS lock sync works
+  live.** The new `relay/api/lock-ots.js` endpoint needs a GitHub token with
+  write access to this repo, set as a Vercel environment variable (never
+  exposed to the browser). Steps:
+  1. Go to `https://github.com/settings/personal-access-tokens/new`
+     (fine-grained token).
+  2. Name it something like "NPA Dashboard - Lock OTS relay". Pick an
+     expiration (1 year is fine — this roadmap will need a note to renew
+     it before it expires, whatever you choose).
+  3. Under "Repository access", choose "Only select repositories" →
+     `mittalok-creator/NPA-DASHBOARD`.
+  4. Under "Permissions" → "Repository permissions" → set **Contents** to
+     **Read and write**. Leave everything else as No access.
+  5. Click "Generate token" and copy it (starts with `github_pat_`) —
+     GitHub only shows it once.
+  6. Go to `https://vercel.com/` → the `npa-dashboard` project → Settings →
+     Environment Variables.
+  7. Add a new variable: Name = `LOCK_OTS_GITHUB_TOKEN`, Value = the token
+     you copied, Environment = Production (tick Preview too if you want it
+     to work on preview deployments as well).
+  8. Save, then trigger a redeploy of the `npa-dashboard` project (Vercel
+     → Deployments → the latest one → "..." menu → Redeploy) — environment
+     variable changes only take effect on a fresh deployment, not
+     retroactively on one already running.
+  9. Verify: lock an OTS amount on any account, wait a few seconds, then
+     open the same account in a different browser/incognito window (or
+     ask someone else to check) — it should show "Already Told" there too
+     without anyone signing in.
+  Until this is done, locking still works exactly as before on that one
+  device — it just won't sync anywhere else yet, same as before this
+  feature existed. No other part of the app is affected either way.
 - 2026-07-21: Custom domain chosen for the live site:
   **`npadashboard.alokmittal.net`** (DNS: CNAME record on Squarespace,
   `NPADASHBOARD` → `mittalok-creator.github.io`). Repo now carries a
