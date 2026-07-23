@@ -527,6 +527,18 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Reordered nav: Search moved from 2nd to last position (2026-07-23, same day)
+
+- In both the desktop sidebar and the mobile bottom nav, **Search &
+  Settlement** moved from the 2nd slot to the last (6th) slot. New order in
+  both: Dashboard, Bank Dashboard, Daily PNPA, KCC Overdue, Daily NPA
+  Projection, Search & Settlement. Pure reorder — no tab added, removed, or
+  renamed, and `switchView()`/the click-wiring are generic over
+  `data-view`, so nothing else needed to change.
+- Verified in the browser at both a 390px mobile viewport and a 1440px
+  desktop viewport that the new order renders correctly and each tab still
+  switches views.
+
 ### Mobile bottom nav: moved Quick Search/Update Data/Theme to a top utility bar (2026-07-23, same day)
 
 You sent a phone screenshot showing the bottom tab bar crammed with 9 items
