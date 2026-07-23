@@ -3524,36 +3524,25 @@ function toggleTheme(){
   on('publishConfirmBtn','click',()=>confirmPublish());
   on('eligibleBanner','click',()=>document.getElementById('eligibleBanner').classList.remove('show'));
   on('dashBranchFilter','change',()=>renderDashboardSmooth());
-  on('refreshDataBtn','click',(e)=>{
-    // A full reload (not just re-fetching data/latest.json) also picks up
-    // any newly published app-shell code, and the service worker's
-    // network-first fetch (sw.js) means this always gets whatever is
-    // actually live, never a stale cached copy, as long as there's a
-    // connection.
+  // One consolidated Refresh button (top header/sidebar) replaces the old
+  // per-tab refresh icons -- it refreshes whichever view is currently
+  // active. Dashboard/Search fall back to a full reload (not just
+  // re-fetching data/latest.json), which also picks up any newly
+  // published app-shell code -- the service worker's network-first fetch
+  // (sw.js) means this always gets whatever is actually live, never a
+  // stale cached copy, as long as there's a connection.
+  const refreshCurrentView = (e) => {
+    const activeView = document.querySelector('.view.active')?.dataset.view;
+    if(activeView==='dailyproj' && __pendingDailyProjData && !confirm('You have unpublished edits on this grid. Refreshing will discard them. Continue?')) return;
     e.currentTarget.classList.add('is-spinning');
-    location.reload();
-  });
-  on('bankRefreshBtn','click',(e)=>{
-    e.currentTarget.classList.add('is-spinning');
-    refreshBankDashboard();
-    setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
-  });
-  on('pnpaRefreshBtn','click',(e)=>{
-    e.currentTarget.classList.add('is-spinning');
-    refreshPnpaDashboard();
-    setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
-  });
-  on('kccovRefreshBtn','click',(e)=>{
-    e.currentTarget.classList.add('is-spinning');
-    refreshKccOverdue();
-    setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
-  });
-  on('dailyProjRefreshBtn','click',(e)=>{
-    if(__pendingDailyProjData && !confirm('You have unpublished edits on this grid. Refreshing will discard them. Continue?')) return;
-    e.currentTarget.classList.add('is-spinning');
-    refreshDailyProj();
-    setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700);
-  });
+    if(activeView==='bank'){ refreshBankDashboard(); setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700); }
+    else if(activeView==='pnpa'){ refreshPnpaDashboard(); setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700); }
+    else if(activeView==='kccov'){ refreshKccOverdue(); setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700); }
+    else if(activeView==='dailyproj'){ refreshDailyProj(); setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700); }
+    else { location.reload(); }
+  };
+  on('refreshCurrentBtnMobile','click',refreshCurrentView);
+  on('refreshCurrentBtnNav','click',refreshCurrentView);
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{
     b.addEventListener('click',()=>switchView(b.dataset.view));
   });

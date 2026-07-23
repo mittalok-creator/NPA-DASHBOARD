@@ -527,6 +527,30 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### One consolidated Refresh button instead of 5 duplicated per-tab icons (2026-07-23, same day)
+
+- Every data tab (Dashboard, Bank Dashboard, Daily PNPA, KCC Overdue, Daily
+  NPA Projection) had its own "Refresh" icon in its view header
+  (`refreshDataBtn`/`bankRefreshBtn`/`pnpaRefreshBtn`/`kccovRefreshBtn`/
+  `dailyProjRefreshBtn`) — five copies of the same action. Removed all five
+  and added a single Refresh button in the same header area as the other
+  utility buttons: `#mobileUtilBar` on mobile, `#sideNav` on desktop.
+- New `refreshCurrentView()` checks which view is currently active and
+  calls that tab's own refresh function (Daily NPA Projection still warns
+  before discarding unpublished edits, same as before); Dashboard and
+  Search fall back to a full page reload, same as Dashboard's refresh
+  always did (also picks up any newly published app-shell code).
+- The mobile "Update data" button's icon was, by oversight, the same
+  circular-arrow "refresh" glyph — now that a real Refresh button sits
+  right next to it in the same bar, that would've been confusing. Changed
+  it to a distinct upload-tray icon; the desktop sidebar's "Settings"
+  button already used a separate gear icon, so it needed no change.
+- Verified in the browser (mobile 390px + desktop 1440px, both themes):
+  the old per-tab refresh icons are gone, the new header/sidebar Refresh
+  button correctly refreshes whichever tab is active without navigating
+  away from it (tested switching to KCC Overdue and refreshing from
+  there), and the Update Data icon no longer looks like a refresh icon.
+
 ### Recovery tile now shows how many branches reduced NPA today (2026-07-23, same day)
 
 - `dpSummary()` now also counts `reducedBranches` (branches where Recovery
