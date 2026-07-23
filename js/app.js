@@ -2458,14 +2458,15 @@ function renderBankDashboardBody(){
 }
 
 /* ---------- Daily PNPA (Potential NPA) -- whole-bank, branch-wise, bucketed by scheme ----------
-   A completely separate dataset from DATA.npa: the source file is the whole-bank
-   HO "Daily PNPA" export (all 65 regions, thousands of branches), not Hathras-only,
-   so it gets its own tab/file (data/pnpa.json) rather than merging into the
-   Hathras-scoped daily NPA book. Rows are stored as compact arrays (see PC below)
-   instead of the full 35-column HO layout -- only the fields this tab actually
-   uses (region/branch/scheme/acct/name/o-s/CADU) are kept, to avoid shipping an
-   ~28k-row, 35-column JSON file down to every device for a whole-bank list. */
-const PC = {REGION:0, BRANCH:1, SCHEME:2, ACCT:3, NAME:4, OS:5, CADU:6};
+   A separate dataset from DATA.npa: the source file is the whole-bank HO
+   "Daily PNPA" export (all 65 regions), but this tab only ever keeps
+   Hathras's own rows (Alok's ask -- this is a Hathras-scoped app, the
+   other 64 regions' potential-NPA accounts aren't his to work), and drops
+   zero-balance accounts (an SMA flag with a ₹0 outstanding isn't
+   actionable). Rows are stored as compact arrays (see PC below) instead
+   of the full 35-column HO layout -- only the fields this tab actually
+   uses are kept. */
+const PC = {REGION:0, BRANCH:1, SCHEME:2, ACCT:3, NAME:4, OS:5, CADU:6, LIMIT:7, REVIEW:8, REMARKS:9};
 const PNPA_BUCKETS = [
   {key:'kcc', label:'KCC', sub:'Scheme code CC004'},
   {key:'kccah', label:'KCC — Animal Husbandry', sub:'Scheme code CC043'},
@@ -2476,24 +2477,34 @@ function parsePnpaRows(headerCells, dataRows){
   const header = headerCells.map(normHeader);
   const idx = (name) => header.indexOf(normHeader(name));
   const iRegion=idx('region'), iBranch=idx('branch'), iAcct=idx('accountno'), iScheme=idx('schemecode'),
-    iName=idx('accountname'), iBal=idx('balanceamount'), iCadu=idx('cadu');
+    iName=idx('accountname'), iBal=idx('balanceamount'), iCadu=idx('cadu'), iLimit=idx('limit'),
+    iReview=idx('reviewdate'), iRemarks=idx('remarks');
   const missing = [];
   if(iAcct<0) missing.push('Account No');
   if(iBranch<0) missing.push('Branch');
   if(iScheme<0) missing.push('Scheme Code');
   if(iBal<0) missing.push('Balance Amount');
   if(iCadu<0) missing.push('CADU');
+  if(iRegion<0) missing.push('Region');
   if(missing.length) throw new Error('Missing required column(s): '+missing.join(', ')+'. Check this file matches the "Daily PNPA" export layout.');
   const rows = [];
   for(const row of dataRows){
     if(!row || row.length<3) continue;
+    const region = cellStr(row, iRegion);
+    if(region.toUpperCase()!=='HATHRAS') continue;
     const acctRaw = cellStr(row, iAcct);
     if(!acctRaw) continue;
+    const bal = parseFloat(row[iBal])||0;
+    if(bal===0) continue;
     let acctNo = acctRaw;
     if(looksScientific(acctRaw)) acctNo = expandSci(acctRaw);
+    const reviewDt = toDate(iReview>=0?row[iReview]:'');
     rows.push([
-      cellStr(row, iRegion), cellStr(row, iBranch), cellStr(row, iScheme), acctNo, cellStr(row, iName),
-      parseFloat(row[iBal])||0, parseFloat(row[iCadu])||0,
+      region, cellStr(row, iBranch), cellStr(row, iScheme), acctNo, cellStr(row, iName),
+      bal, parseFloat(row[iCadu])||0,
+      iLimit>=0 ? (parseFloat(row[iLimit])||0) : 0,
+      reviewDt ? fmtDate(reviewDt) : '',
+      iRemarks>=0 ? cellStr(row, iRemarks) : '',
     ]);
   }
   return rows;
@@ -2564,9 +2575,9 @@ function pnpaBranchAgg(rows, bucket){
   const map = new Map();
   for(const r of rows){
     if(pnpaBucketOf(r[PC.SCHEME])!==bucket) continue;
-    const key = r[PC.BRANCH]+'||'+r[PC.REGION];
+    const key = r[PC.BRANCH];
     let e = map.get(key);
-    if(!e){ e = {branch:r[PC.BRANCH], region:r[PC.REGION], count:0, os:0}; map.set(key,e); }
+    if(!e){ e = {branch:r[PC.BRANCH], count:0, os:0}; map.set(key,e); }
     e.count++; e.os += r[PC.OS];
   }
   return [...map.values()].sort((a,b)=>b.os-a.os);
@@ -2583,24 +2594,23 @@ function renderPnpaDashboardBody(){
     e.textContent = parts.length===3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : (d.asOnDate||'—');
   });
 
-  const bucketTotals = {}, hathrasTotals = {};
-  PNPA_BUCKETS.forEach(b=>{ bucketTotals[b.key]={count:0,os:0,branches:new Set()}; hathrasTotals[b.key]={count:0,os:0}; });
+  const bucketTotals = {};
+  PNPA_BUCKETS.forEach(b=>{ bucketTotals[b.key]={count:0,os:0,branches:new Set()}; });
   for(const r of d.rows){
     const bk = pnpaBucketOf(r[PC.SCHEME]);
-    bucketTotals[bk].count++; bucketTotals[bk].os += r[PC.OS]; bucketTotals[bk].branches.add(r[PC.BRANCH]+'||'+r[PC.REGION]);
-    if((r[PC.REGION]||'').toUpperCase()==='HATHRAS'){ hathrasTotals[bk].count++; hathrasTotals[bk].os += r[PC.OS]; }
+    bucketTotals[bk].count++; bucketTotals[bk].os += r[PC.OS]; bucketTotals[bk].branches.add(r[PC.BRANCH]);
   }
   const bucketIcon = {kcc:ICON_TARGET, kccah:ICON_STAR, other:ICON_LANDMARK};
 
   const heroRow = `<div class="hero-kpi-row bank-hero-row">${PNPA_BUCKETS.map(b=>{
-    const t = bucketTotals[b.key], h = hathrasTotals[b.key], isActive = pnpaBucketTab===b.key;
+    const t = bucketTotals[b.key], isActive = pnpaBucketTab===b.key;
     return heroKpiCard({
       id:'pnpaHero_'+b.key, icon: bucketIcon[b.key],
       tint: isActive?'var(--accent-soft)':'rgba(120,120,140,.12)', color: isActive?'var(--accent)':'var(--ink-mute)',
       onclick:`setPnpaBucketTab('${b.key}')`,
       label: b.label,
       fallback: fmtCr(t.os),
-      sub: `${t.count.toLocaleString('en-IN')} accounts · ${t.branches.size.toLocaleString('en-IN')} branches<span class="hero-kpi-sub2">Hathras: ${h.count.toLocaleString('en-IN')} A/C · ${fmtCr(h.os)}</span>`,
+      sub: `${t.count.toLocaleString('en-IN')} accounts · ${t.branches.size.toLocaleString('en-IN')} branches`,
       badge: isActive ? `<div class="hero-kpi-badge" style="background:var(--accent-soft);color:var(--accent)">Viewing</div>` : '',
     });
   }).join('')}</div>`;
@@ -2609,7 +2619,7 @@ function renderPnpaDashboardBody(){
     `<div class="chart-card" style="margin-top:20px">
       <div class="section-label" id="pnpaTableLabel"></div>
       <div class="bank-filter-row">
-        <input type="text" id="pnpaBranchSearchInput" class="dash-select" placeholder="Search branch or region…" value="${esc(pnpaBranchSearch)}" style="flex:1">
+        <input type="text" id="pnpaBranchSearchInput" class="dash-select" placeholder="Search branch…" value="${esc(pnpaBranchSearch)}" style="flex:1">
       </div>
       <div id="pnpaBranchTableCard"></div>
     </div>`;
@@ -2628,23 +2638,21 @@ function renderPnpaBranchTable(){
   let branchAgg = pnpaBranchAgg(d.rows, pnpaBucketTab);
   if(pnpaBranchSearch){
     const q = pnpaBranchSearch.toLowerCase();
-    branchAgg = branchAgg.filter(r=>r.branch.toLowerCase().includes(q) || r.region.toLowerCase().includes(q));
+    branchAgg = branchAgg.filter(r=>r.branch.toLowerCase().includes(q));
   }
-  if(labelEl) labelEl.innerHTML = `${esc(activeBucket.label)} — Branch-wise, highest O/S first<span class="chart-sub">${esc(activeBucket.sub)} · ${branchAgg.length.toLocaleString('en-IN')} branch(es) shown · tap a branch to see accounts</span>`;
+  if(labelEl) labelEl.innerHTML = `${esc(activeBucket.label)} — Branch-wise Summary, highest O/S first<span class="chart-sub">${esc(activeBucket.sub)} · Hathras region · ${branchAgg.length.toLocaleString('en-IN')} branch(es) shown · tap a branch to see the account list</span>`;
   const rowsHtml = branchAgg.map((r,i)=>{
-    const isOurs = (r.region||'').toUpperCase()==='HATHRAS';
-    return `<tr class="clickable${isOurs?' is-ours':''}" onclick="pnpaShowBranchAccounts('${pnpaBucketTab}','${esc(r.branch)}','${esc(r.region)}')">
+    return `<tr class="clickable" onclick="pnpaShowBranchAccounts('${pnpaBucketTab}','${esc(r.branch)}')">
       <td><span class="dash-rank">${i+1}</span></td>
-      <td class="tal">${esc(r.branch)}${isOurs?' <span class="badge-pill locked" style="margin-left:6px">★ Hathras</span>':''}</td>
-      <td class="tal">${esc(r.region)}</td>
+      <td class="tal">${esc(r.branch)}</td>
       <td>${r.count.toLocaleString('en-IN')}</td>
       <td>${fmtCr(r.os)}</td>
     </tr>`;
   }).join('');
   wrap.innerHTML = `<div class="dash-table-wrap acct-list-scroll">
     <table class="dash-table">
-      <thead><tr><th class="tal">Rank</th><th class="tal">Branch</th><th class="tal">Region</th><th>Accounts</th><th>Total O/S</th></tr></thead>
-      <tbody>${rowsHtml || `<tr><td colspan="5" style="text-align:center;color:var(--ink-mute)">No branches match</td></tr>`}</tbody>
+      <thead><tr><th class="tal">Rank</th><th class="tal">Branch</th><th>Accounts</th><th>Total O/S</th></tr></thead>
+      <tbody>${rowsHtml || `<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">No branches match</td></tr>`}</tbody>
     </table>
   </div>`;
 }
@@ -2654,23 +2662,29 @@ const PNPA_ACCT_LIST_HEAD = '<tr>'
   +'<th class="tal sortable" data-key="name" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'name\')">Customer<span class="sort-ic">▾</span></th>'
   +'<th class="sortable" data-key="os" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'os\')">O/S<span class="sort-ic">▾</span></th>'
   +'<th class="sortable" data-key="cadu" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'cadu\')">CADU<span class="sort-ic">▾</span></th>'
+  +'<th class="sortable" data-key="limit" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'limit\')">Limit<span class="sort-ic">▾</span></th>'
+  +'<th class="tal sortable" data-key="reviewDate" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'reviewDate\')">Review Date<span class="sort-ic">▾</span></th>'
+  +'<th class="tal sortable" data-key="remarks" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'remarks\')">Remarks<span class="sort-ic">▾</span></th>'
   +'</tr>';
 function pnpaAcctRows(list){
-  if(!list.length) return `<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">No accounts</td></tr>`;
+  if(!list.length) return `<tr><td colspan="7" style="text-align:center;color:var(--ink-mute)">No accounts</td></tr>`;
   return list.map(a=>`<tr>
     <td>${esc(a.acctNo)}</td>
     <td class="tal">${esc(a.name)||'—'}</td>
     <td>${fmtINR2(a.os)}</td>
     <td>${fmtINR2(a.cadu)}</td>
+    <td>${fmtINR2(a.limit)}</td>
+    <td class="tal">${esc(a.reviewDate)||'—'}</td>
+    <td class="tal">${esc(a.remarks)||'—'}</td>
   </tr>`).join('');
 }
 function showPnpaListModal(title, sub, list){ showListModal(title, sub, PNPA_ACCT_LIST_HEAD, 'pnpa', list, {key:'os',dir:'desc'}); }
 window.showPnpaListModal = showPnpaListModal;
-function pnpaShowBranchAccounts(bucket, branch, region){
-  const rows = PNPA_DATA.rows.filter(r=>pnpaBucketOf(r[PC.SCHEME])===bucket && r[PC.BRANCH]===branch && r[PC.REGION]===region);
-  const list = rows.map(r=>({ acctNo:r[PC.ACCT], name:r[PC.NAME], os:r[PC.OS], cadu:r[PC.CADU] }));
+function pnpaShowBranchAccounts(bucket, branch){
+  const rows = PNPA_DATA.rows.filter(r=>pnpaBucketOf(r[PC.SCHEME])===bucket && r[PC.BRANCH]===branch);
+  const list = rows.map(r=>({ acctNo:r[PC.ACCT], name:r[PC.NAME], os:r[PC.OS], cadu:r[PC.CADU], limit:r[PC.LIMIT], reviewDate:r[PC.REVIEW], remarks:r[PC.REMARKS] }));
   const bLabel = (PNPA_BUCKETS.find(b=>b.key===bucket)||{}).label || bucket;
-  showPnpaListModal(`${branch} — ${bLabel}`, `${region} · ${list.length.toLocaleString('en-IN')} account(s)`, list);
+  showPnpaListModal(`${branch} — ${bLabel}`, `Hathras · ${list.length.toLocaleString('en-IN')} account(s)`, list);
 }
 window.pnpaShowBranchAccounts = pnpaShowBranchAccounts;
 
