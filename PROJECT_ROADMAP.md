@@ -527,6 +527,17 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Recovery tile now shows how many branches reduced NPA today (2026-07-23, same day)
+
+- `dpSummary()` now also counts `reducedBranches` (branches where Recovery
+  = Morning NPA − Evening NPA is positive, i.e. Evening NPA is lower than
+  Morning) out of `totalBranches`. Shown as a small sub-line under the
+  Recovery summary tile: "N of 55 branches reduced NPA" — live-recalculated
+  the same way every other total on this strip already is, no publish
+  needed. Also added to the Excel export's summary row for the same
+  reason as everything else in that row: keep the exported figures
+  consistent with what's on screen.
+
 ### Center the account-list modal + freeze Branch column in Daily NPA Projection (2026-07-23, same day)
 
 Two more phone screenshots: one showing a KCC Overdue branch drill-down list

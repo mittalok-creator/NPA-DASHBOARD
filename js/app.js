@@ -3160,7 +3160,7 @@ function dpGap(row){
   return (typeof c==='number' && typeof r==='number') ? c-r : null;
 }
 function dpSummary(rows){
-  let morningSum=0, eveningSum=0, commitSum=0, recoverySum=0, eveCommitSum=0;
+  let morningSum=0, eveningSum=0, commitSum=0, recoverySum=0, eveCommitSum=0, reducedBranches=0;
   for(const row of rows){
     morningSum += (row[DP.MORNING_NPA]||0);
     eveningSum += (row[DP.EVENING_NPA]||0);
@@ -3168,8 +3168,9 @@ function dpSummary(rows){
     eveCommitSum += (row[DP.EVE_COMMITMENT]||0);
     const r = dpRecovery(row);
     if(typeof r==='number') recoverySum += r;
+    if(typeof r==='number' && r>0) reducedBranches++;
   }
-  return { morningSum, eveningSum, commitSum, recoverySum, eveCommitSum,
+  return { morningSum, eveningSum, commitSum, recoverySum, eveCommitSum, reducedBranches, totalBranches: rows.length,
     netGap: commitSum-recoverySum, projectedRecovery: recoverySum+eveCommitSum };
 }
 function parseGridCell(raw, numeric){
@@ -3216,12 +3217,12 @@ function dpCellValue(row, ci){
 }
 
 function renderSummaryStrip(sum){
-  const tile = (label, val, cls, tone) => `<div class="projstat-tile${tone?' tone-'+tone:''}"><div class="projstat-label">${esc(label)}</div><div class="projstat-val ${cls||''}">${val}</div></div>`;
+  const tile = (label, val, cls, tone, sub) => `<div class="projstat-tile${tone?' tone-'+tone:''}"><div class="projstat-label">${esc(label)}</div><div class="projstat-val ${cls||''}">${val}</div>${sub?`<div class="projstat-sub">${sub}</div>`:''}</div>`;
   return `<div class="projstat-row">
     ${tile('Morning NPA', fmtBankCr(sum.morningSum/100))}
     ${tile('Evening NPA', fmtBankCr(sum.eveningSum/100))}
     ${tile('Total Commitment', sum.commitSum.toFixed(2), '', 'red')}
-    ${tile('Recovery', sum.recoverySum.toFixed(2), '', 'green')}
+    ${tile('Recovery', sum.recoverySum.toFixed(2), '', 'green', `${sum.reducedBranches} of ${sum.totalBranches} branches reduced NPA`)}
     ${tile('Net GAP', sum.netGap.toFixed(2), '', 'amber')}
     ${tile('Eve. Commitment', sum.eveCommitSum.toFixed(2), '', 'blue')}
     ${tile('Projected Recovery', sum.projectedRecovery.toFixed(2), '', 'green')}
@@ -3443,7 +3444,7 @@ function exportDailyProjExcel(){
     ['Daily NPA Projection — Hathras Region'],
     ['As on', fmtDate(new Date())],
     [],
-    ['Morning NPA (Cr)', +( (sum.morningSum/100).toFixed(2) ), 'Evening NPA (Cr)', +( (sum.eveningSum/100).toFixed(2) ), 'Total Commitment', +sum.commitSum.toFixed(2), 'Recovery', +sum.recoverySum.toFixed(2), 'Net GAP', +sum.netGap.toFixed(2), 'Eve. Commitment', +sum.eveCommitSum.toFixed(2), 'Projected Recovery', +sum.projectedRecovery.toFixed(2)],
+    ['Morning NPA (Cr)', +( (sum.morningSum/100).toFixed(2) ), 'Evening NPA (Cr)', +( (sum.eveningSum/100).toFixed(2) ), 'Total Commitment', +sum.commitSum.toFixed(2), 'Recovery', +sum.recoverySum.toFixed(2), `Branches reduced NPA (of ${sum.totalBranches})`, sum.reducedBranches, 'Net GAP', +sum.netGap.toFixed(2), 'Eve. Commitment', +sum.eveCommitSum.toFixed(2), 'Projected Recovery', +sum.projectedRecovery.toFixed(2)],
     [],
     headerRow,
     ...dataRows,
