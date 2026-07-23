@@ -527,6 +527,27 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Bank Dashboard: replaced the Target/March tab-toggle with always-visible March + June figures (2026-07-23, same day)
+
+You pointed at the empty space on the right side of the hero cards
+(below the NPA% badge) and asked for March and June figures to go there
+directly, instead of the tab that had to be clicked to switch between
+"vs Target" and "Since March".
+
+- Removed the `bank-tab-row` tab switcher (`bankInfoTab`/`setBankInfoTab`)
+  entirely. The "vs Target" line at the bottom of each card is now always
+  shown (it's the more actionable of the two, so it stays put; "Since
+  March" as a computed delta is gone).
+- Added a new small stat pair in the previously-empty top-right corner of
+  each of the 3 hero cards (Whole Bank, CO Moradabad, Hathras): **Mar**
+  and **Jun** — the report's own fixed baseline columns (`npaMar26`/
+  `npaJun26`), shown as plain figures side by side with the current value,
+  no click needed to compare. `heroKpiCard()` gained a `corner` slot for
+  this (defaults to empty, so PNPA/KCC Overdue's cards are unaffected).
+- Handles mobile the same way the existing badge does: the corner stats
+  drop out of absolute positioning and lay out as a plain flex row once
+  the badge itself goes static.
+
 ### New "KCC Overdue" tab: Hathras-only, 3 schemes, rich filters (2026-07-23, same day)
 
 You uploaded `KCC_OVERDUE_22072026.xlsx` — a Hathras-only, already-
