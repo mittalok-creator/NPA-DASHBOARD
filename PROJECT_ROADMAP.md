@@ -527,6 +527,23 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Daily PNPA: "Limit Review" split into its own bucket (2026-07-23, same day)
+
+You asked to pull Limit Review out as its own category, and drop those
+accounts from KCC's summary rather than leaving them mixed in.
+
+- Added a 4th bucket, **Limit Review**, ahead of the scheme-based split:
+  any account whose Reason includes "Limit Review" is routed there
+  regardless of scheme code (`CC004`/`CC043`/anything else). KCC, KCC-AH
+  and Other now only ever show accounts that are *not* already called out
+  for a limit review — no account is double-counted across buckets.
+- With today's 104-row Hathras dataset: KCC dropped from 59→56 accounts,
+  Other from 45→35, and the new Limit Review bucket picked up all 13
+  (3 previously counted under KCC, 10 under Other).
+- Removed the "type Limit Review into search" special-case added minutes
+  earlier — now that it's a dedicated tab, that shortcut was redundant;
+  the search box goes back to plain branch-name filtering.
+
 ### Daily PNPA: real "Reason" field (not the always-blank Remarks), Limit Review search (2026-07-23, same day)
 
 You asked to separate Limit/Review out further and let search pull up
