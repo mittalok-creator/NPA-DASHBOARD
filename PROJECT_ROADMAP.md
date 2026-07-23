@@ -527,6 +527,35 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Daily PNPA: rescoped to Hathras-only, zero-balance dropped, added Limit/Review Date/Remarks (2026-07-23, same day)
+
+Right after shipping the whole-bank version, you clarified: "i need daily
+pnpa only for hathras region and remove 0 balance accounts. seprate the
+limit review remark and give the list and summary" — so the tab now
+matches this app's core Hathras-only identity instead of the whole-bank
+scope the source file happens to come in.
+
+- `parsePnpaRows()` now hard-filters to `Region === 'HATHRAS'` and drops
+  any row with a ₹0 Balance Amount (an SMA flag on an already-cleared
+  account isn't actionable) — this applies to every future upload too,
+  not just today's data.
+- Re-extracted today's real file with this filter: 28,860 whole-bank rows
+  → **104 Hathras rows** (59 KCC, 45 Other, 0 KCC-AH — all 6 of Hathras's
+  KCC-AH rows had already regularized to ₹0 and were dropped).
+- Since every row is now Hathras by construction, removed the now-
+  redundant "Hathras: X A/C" sub-line, the region column, and the
+  Hathras-highlight styling from the branch table — one less thing
+  competing for attention when the whole tab is Hathras already.
+- Added three more fields end-to-end (parser → `data/pnpa.json` → account
+  drill-down list): **Limit**, **Review Date** (converted from the Excel
+  serial date to `DD-MM-YYYY`, same helper as the rest of the app), and
+  **Remarks** — all sortable, alongside the existing Account/Name/O/S/CADU
+  columns.
+- The tab structure already gave you both a **summary** (branch-wise
+  totals, KCC/KCC-AH/Other) and a **list** (the account-level drill-down
+  per branch) — that split stays, just scoped to Hathras and enriched
+  with the 3 new columns.
+
 ### New "Daily PNPA" tab: whole-bank potential-NPA watch, branch-wise by scheme bucket (2026-07-23, same day)
 
 You uploaded `UPGB_Daily_PNPA_23.07.2026.xlsb` — a separate, whole-bank
