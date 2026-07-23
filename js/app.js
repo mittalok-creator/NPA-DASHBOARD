@@ -915,14 +915,18 @@ function buildCustomerMasterMap(headerCells, dataRows){
    same branch can appear under different name spellings/abbreviations
    across different HO reports (e.g. "MURSAN GATE" vs "M.G.Hathras") --
    Sol ID is the one thing guaranteed to match the NPA data's own Sol ID
-   column. Advance figures are entered in the same unit UPGB already
-   reports them in, Lakhs, and converted to plain rupees here to match the
-   NPA data's units. */
+   column. Figures are entered in the same unit UPGB already reports them
+   in, Lakhs, and converted to plain rupees here to match the NPA data's
+   units. NPA March/June are optional (older, simpler advance-only files
+   still work) -- matched by prefix ("npamarch"/"npajune") since the
+   header's own year suffix moves forward every year (MARCH 26 -> 27 -> ...). */
 function buildBranchAdvanceMap(allRows, hIdx){
   const header = (allRows[hIdx]||[]).map(normHeader);
   const idx = (...names) => { for(const n of names){ const i = header.indexOf(normHeader(n)); if(i>=0) return i; } return -1; };
+  const idxPrefix = (name) => header.findIndex(h=>h.startsWith(normHeader(name)));
   const iSol = idx('solid','sol');
   if(iSol<0) throw new Error('Could not find a "Sol ID" column -- branches are matched by Sol ID, not name, since branch names vary between reports.');
+  const iBranchName = idx('branchname','branch');
   let iAdv = idx('totaladvance','advance','advancelakhs','totaladvancelakhs');
   if(iAdv<0){
     for(let r=Math.max(0,hIdx-3); r<hIdx && iAdv<0; r++){
@@ -933,12 +937,24 @@ function buildBranchAdvanceMap(allRows, hIdx){
     }
   }
   if(iAdv<0) throw new Error('Could not find an "Advances" column (checked the header row and the few rows above it).');
+  const iNpaMar = idxPrefix('npamarch');
+  const iNpaJun = idxPrefix('npajune');
+  const toRupees = (v) => {
+    const lakhs = parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''));
+    return isNaN(lakhs) ? null : lakhs*100000;
+  };
   const map = {};
   for(const row of allRows.slice(hIdx+1)){
     const sol = cellStr(row, iSol);
     if(!sol) continue;
-    const lakhs = parseFloat(String(row[iAdv]==null?'':row[iAdv]).replace(/[^0-9.\-]/g,''));
-    if(!isNaN(lakhs) && lakhs>0) map[sol] = lakhs*100000;
+    const adv = toRupees(row[iAdv]);
+    if(adv===null || adv<=0) continue;
+    map[sol] = {
+      adv,
+      branchName: iBranchName>=0 ? cellStr(row, iBranchName) : '',
+      npaMar26: iNpaMar>=0 ? toRupees(row[iNpaMar]) : null,
+      npaJun26: iNpaJun>=0 ? toRupees(row[iNpaJun]) : null,
+    };
   }
   return map;
 }
@@ -1311,8 +1327,8 @@ function downloadMasterTemplate(){
   downloadCsvTemplate('UPGB_Customer_Master_Template.csv', headers, example);
 }
 function downloadBranchAdvTemplate(){
-  const headers = ['Sol ID','Branch Name','Advance (₹ Lakhs)'];
-  const example = ['9282','M.G.Hathras','1877.53'];
+  const headers = ['Sol ID','Branch Name','Advance (₹ Lakhs)','NPA MARCH 26 (₹ Lakhs)','NPA JUNE 26(₹ Lakhs)'];
+  const example = ['9282','M.G.Hathras','1877.53','71.53','75.45'];
   downloadCsvTemplate('UPGB_Branch_Advance_Template.csv', headers, example);
 }
 
@@ -1960,6 +1976,30 @@ window.showSchemeList = showSchemeList;
 window.showSlabList = showSlabList;
 window.showHighValueCustList = showHighValueCustList;
 
+/* Shown in the top-right corner of the "Total Outstanding" hero card,
+   below the NPA% badge -- mirrors the same March/June + gap treatment
+   built for the Bank Dashboard's hero cards, using the per-branch NPA
+   March/June figures from the Branch Advance upload. Only aggregates
+   over branches that actually have a Mar/Jun figure (and only compares
+   against THOSE branches' current O/S), same safeguard as the advance
+   aggregation just above -- so a partial upload never produces a
+   misleading gap by comparing against branches with no baseline. */
+function dashboardCornerStats(s){
+  let marOS=0, marBase=0, marN=0, junOS=0, junBase=0, junN=0;
+  s.branchMap.forEach((v)=>{
+    const rec = DATA.branchAdvances[v.solId];
+    if(rec && rec.npaMar26!=null){ marOS+=v.os; marBase+=rec.npaMar26; marN++; }
+    if(rec && rec.npaJun26!=null){ junOS+=v.os; junBase+=rec.npaJun26; junN++; }
+  });
+  if(!marN && !junN) return '';
+  const gapLine = (v) => { const improved = v<=0; return `<span style="color:${improved?'var(--green)':'var(--red)'}">${improved?'▼':'▲'} ${fmtCr(Math.abs(v))}</span>`; };
+  let html = '<div class="hero-kpi-corner-stats">';
+  if(marN) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>Mar</span><b>${fmtCr(marBase)}</b></div><div class="hero-kpi-corner-gap">${gapLine(marOS-marBase)}</div></div>`;
+  if(junN) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>Jun</span><b>${fmtCr(junBase)}</b></div><div class="hero-kpi-corner-gap">${gapLine(junOS-junBase)}</div></div>`;
+  html += '</div>';
+  return html;
+}
+
 function renderDashboard(){
   const el = document.getElementById('dashboardArea');
   if(!el) return;
@@ -1983,8 +2023,8 @@ function renderDashboard(){
 
   const branchTop = [...s.branchMap.entries()].sort((a,b)=>b[1].os-a[1].os).slice(0,10)
     .map(([branch,v])=>{
-      const adv = DATA.branchAdvances[v.solId];
-      const npaPct = adv>0 ? (v.os/adv*100) : null;
+      const rec = DATA.branchAdvances[v.solId];
+      const npaPct = rec && rec.adv>0 ? (v.os/rec.adv*100) : null;
       return {label:branch, value:v.os, color:'var(--accent)',
         valueLabel:`${v.count.toLocaleString('en-IN')} · ${fmtCr(v.os)} · ${(s.totalOS?(v.os/s.totalOS*100):0).toFixed(2)}%`,
         badge: npaPct!==null ? npaPct.toFixed(1)+'%' : null,
@@ -2023,10 +2063,11 @@ function renderDashboard(){
      understates the ratio by dividing by a smaller, incomplete total. */
   let advOsSum=0, advSum=0, advBranchCount=0;
   s.branchMap.forEach((v)=>{
-    const adv = DATA.branchAdvances[v.solId];
-    if(adv>0){ advOsSum+=v.os; advSum+=adv; advBranchCount++; }
+    const rec = DATA.branchAdvances[v.solId];
+    if(rec && rec.adv>0){ advOsSum+=v.os; advSum+=rec.adv; advBranchCount++; }
   });
   const aggNpaPct = advSum>0 ? (advOsSum/advSum*100) : null;
+  const heroCorner = dashboardCornerStats(s);
   let heroNpaBadge = '';
   if(aggNpaPct!==null){
     const sev = npaPctSeverity(aggNpaPct);
@@ -2042,7 +2083,7 @@ function renderDashboard(){
 
   el.innerHTML = `
     <div class="hero-kpi-row">
-      ${heroKpiCard({id:'heroTotalOs', label:'Total Outstanding', fallback:fmtCr(s.totalOS), sub:s.totalAccounts.toLocaleString('en-IN')+' accounts', icon:ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', badge:heroNpaBadge})}
+      ${heroKpiCard({id:'heroTotalOs', label:'Total Outstanding', fallback:fmtCr(s.totalOS), sub:s.totalAccounts.toLocaleString('en-IN')+' accounts', icon:ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', badge:heroNpaBadge, corner:heroCorner})}
       ${heroKpiCard({id:'heroTotalAccts', label:'Total Accounts', fallback:s.totalAccounts.toLocaleString('en-IN'), sub:s.custCount.toLocaleString('en-IN')+' unique customers', icon:ICON_USERS, tint:'var(--gauge-track)', color:'var(--accent-2)'})}
       ${heroKpiCard({id:'heroHighRisk', label:'High-Risk Exposure', fallback:fmtCr(highRiskOS), sub:'DA3 + Loss · '+highRiskPct.toFixed(1)+'% of book', icon:ICON_ALERT_TRIANGLE, tint:'var(--red-soft)', color:'var(--red)', onclick:(s.assetMix.LOSS||s.assetMix.DA3)?`showAssetList('${s.assetMix.LOSS?'LOSS':'DA3'}')`:''})}
       ${heroKpiCard({id:'heroAvgTicket', label:'Average Ticket Size', fallback:fmtINR2(avgTicket), sub:'per account, this book', icon:ICON_TICKET, tint:'var(--amber-soft)', color:'var(--amber)'})}

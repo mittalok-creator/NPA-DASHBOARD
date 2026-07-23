@@ -527,6 +527,35 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Main Dashboard: Branch Advance template extended with NPA March/June, same corner treatment (2026-07-23, same day)
+
+You re-uploaded the Branch Advance template, hand-modified with two new
+columns (NPA MARCH 26, NPA JUNE 26, ₹ Lakhs) filled in for all 55 Hathras
+branches, and asked to set up the template properly and incorporate it
+into the (Hathras) Dashboard.
+
+- `buildBranchAdvanceMap()` now returns `{adv, branchName, npaMar26,
+  npaJun26}` per Sol ID instead of a bare rupee number — both existing
+  consumers (the top-10-branches NPA% and the aggregate NPA% badge) were
+  updated to read `.adv`. March/June columns are optional (matched by
+  prefix, "npamarch"/"npajune", so next year's "MARCH 27" header still
+  matches) — a plain advance-only file still works exactly as before.
+- Added the same March/June + colored-gap treatment just built for the
+  Bank Dashboard to the main Dashboard's "Total Outstanding" hero card,
+  scoped to whatever's currently in view (Regional Office or a single
+  filtered branch) — using `s.branchMap`, which already respects the
+  branch filter. Same partial-upload safeguard as the existing NPA%
+  aggregation: only compares against branches that actually have a Mar/Jun
+  figure uploaded.
+- `downloadBranchAdvTemplate()` and the upload section's description now
+  reflect the extended 5-column shape.
+- Re-shipped `data/latest.json`'s `branchAdvances` from your real file:
+  55 branches (one stale Sol ID with no matching NPA rows dropped, per
+  the existing full-replace behavior). Cross-checked the aggregate
+  against the Bank Dashboard's own Hathras region row — Regional-Office
+  gap works out to ▼₹0.61 Cr since March and ▼₹0.66 Cr since June,
+  consistent with the whole-bank PDF's own figures.
+
 ### Bank Dashboard: added a colored gap line under each Mar/Jun corner figure (2026-07-23, same day)
 
 Immediately after confirming the March/June corner layout looked right,
