@@ -527,6 +527,67 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### New "Bank Dashboard" tab: whole-bank NPA MIS, all 65 regions, Hathras/CO Moradabad highlighted (2026-07-23, same day)
+
+You uploaded UPGB's daily whole-bank "Dashboard of NPA" PDF (65 regions
+across 3 Circles: CO Gorakhpur, CO Lucknow, CO Moradabad) and asked for a
+brand new, separate tab — as good as or better than the existing Dashboard
+— highlighting our own region (Hathras) against the whole bank, and
+against "hamara camp" (confirmed to mean CO Moradabad, the Circle Hathras
+reports into).
+
+- **New "Bank Dashboard" nav tab** (sideNav + mobile bottom tabs, bank/
+  landmark icon), completely separate from the existing Hathras-only
+  Dashboard/Search views — a different dataset (region-level MIS figures,
+  not individual accounts) gets its own `data/bank-npa.json` file and its
+  own render path (`renderBankDashboard()`), reusing the established
+  design system (hero-kpi-card, insight-strip, badge-pill, dash-table)
+  rather than inventing new visual language.
+- **3-level comparison**: hero row shows Whole Bank / CO Moradabad ("Our
+  Circle") / Hathras ("Our Region") side by side, each with its own NPA%
+  severity badge. An auto-computed insight sentence states exactly how
+  many points better or worse Hathras's ratio is than its Circle and the
+  Bank, plus its rank out of all 65 regions. A Target Progress section
+  shows all three levels' gap against this month's reduction target
+  (green "ahead", red "behind"). Three Circle cards let you compare
+  Gorakhpur/Lucknow/Moradabad directly, with Moradabad marked "OUR
+  CIRCLE". A full sortable-by-filter table of all 65 regions (worst NPA%
+  first) has Hathras's row specially highlighted with a gold "★ Ours" tag
+  and every other CO Moradabad region subtly tinted, with a dropdown to
+  narrow the table to just one Circle.
+- **Client-side PDF parsing (no server involved)**: the PDF has no real
+  table structure, only positioned text — pdf.js (vendored locally as
+  `js/vendor/pdf.min.js`/`pdf.worker.min.js`, same pattern as SheetJS)
+  extracts each page's text with x/y coordinates, then rows are
+  reconstructed by clustering items whose y-coordinates land within a
+  small tolerance of each other (tuned against the real file — genuine
+  data rows cluster within ~1-2pt, comfortably inside the ~9pt gap between
+  separate rows) and reading left-to-right by x. A region row is exactly
+  "S.No, Region name, 18 numbers"; a "Sub Total CO &lt;name&gt;" row closes
+  out that Circle's regions; "Total UPGB" is the bank-wide grand total.
+- **New upload section** in the Update Data modal ("Bank-wide NPA
+  Dashboard (PDF)"), applying immediately like the Branch Advance upload,
+  and bundled into the very next Admin Publish — `js/publish.js`'s
+  `publishData()` gained an optional `extraFiles` parameter so
+  `data/bank-npa.json` commits in the exact same commit as the daily NPA
+  data, without a second publish step. The Publish review panel shows a
+  green confirmation line when bank data is staged to go out.
+- **Verified against the real uploaded PDF, not a synthetic fixture**:
+  parsed all 65 regions + 3 Circle subtotals + the grand total correctly;
+  cross-checked the sum of all 65 regions' branch counts (4,330) and total
+  advances (₹90,178.76 Cr) against the PDF's own printed grand total
+  (4,330 branches, ₹90,178.72 Cr — the 0.04 Cr gap is pure rounding from
+  each region already being pre-rounded to 2 decimals in the source, not a
+  parsing error) before ever touching the UI. Uploaded the real PDF
+  through the actual Update Data modal (not a mock) and confirmed the
+  parsed data appears correctly on the Bank Dashboard tab and the Publish
+  review panel. Checked both themes and mobile (hero cards stack to one
+  column, the region filter dropdown goes full-width, the wide table
+  scrolls horizontally like the existing account table already does).
+- Today's real data (as on 22-07-2026) ships live in `data/bank-npa.json`
+  as part of this same change — the tab has real figures from day one,
+  not a placeholder.
+
 ### OTS locks now sync to every device immediately, no Admin Publish needed (2026-07-23, same day)
 
 You reported: locked an OTS amount on your phone, searched again there and
