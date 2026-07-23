@@ -1,13 +1,13 @@
-const CACHE_NAME = 'upgb-ots-shell-v22';
+const CACHE_NAME = 'upgb-ots-shell-v23';
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './css/styles.css?v=20260723c',
-  './js/app.js?v=20260723c',
-  './js/auth.js?v=20260723c',
-  './js/publish.js?v=20260723c',
-  './js/splash.js?v=20260723c',
-  './js/vendor/xlsx.full.min.js?v=20260723c',
+  './css/styles.css?v=20260723d',
+  './js/app.js?v=20260723d',
+  './js/auth.js?v=20260723d',
+  './js/publish.js?v=20260723d',
+  './js/splash.js?v=20260723d',
+  './js/vendor/xlsx.full.min.js?v=20260723d',
   './manifest.webmanifest',
 ];
 

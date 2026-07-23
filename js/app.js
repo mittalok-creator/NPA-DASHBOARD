@@ -206,6 +206,9 @@ function renderResults(matches, mode){
       const totalPL = (os!==''&&provision!=='') ? os-uri-provision : '';
       const custId = String(r[C.CUST_ID]);
       const linkedCount = [1,2,3,4].filter(n=>lookupLoanSlot(custId,n)).length;
+      const acctNoStr = String(r[C.ACCT_NO]);
+      const isLocked = !!frozen[acctNoStr];
+      const lockedAmt = otsAmounts[acctNoStr];
       return `
       <div class="result-card" data-asset="${esc(asset)}" onclick="openDetail('${esc(String(r[C.CUST_ID]))}','${esc(String(r[C.ACCT_NO]))}')">
         <div class="result-top">
@@ -214,7 +217,10 @@ function renderResults(matches, mode){
             <div class="result-acc">A/c · ${esc(r[C.ACCT_NO])}</div>
             <div class="result-scheme">${esc(r[C.SOL_DESC])||''}</div>
           </div>
-          ${asset?`<span class="badge-pill ${esc(asset)}" title="${esc(assetLabel(asset))}">${esc(asset)}</span>`:''}
+          <div class="result-badges">
+            ${asset?`<span class="badge-pill ${esc(asset)}" title="${esc(assetLabel(asset))}">${esc(asset)}</span>`:''}
+            ${isLocked?`<span class="badge-pill locked" title="OTS ${lockedAmt?fmtINR(parseFloat(lockedAmt)):''} locked and already communicated to the borrower">🔒 Already Told${lockedAmt?' · '+fmtINR(parseFloat(lockedAmt)):''}</span>`:''}
+          </div>
         </div>
         <div class="result-grid">
           <div><div class="k">O/S Balance</div><div class="v">${fmtINR(os)}</div></div>
