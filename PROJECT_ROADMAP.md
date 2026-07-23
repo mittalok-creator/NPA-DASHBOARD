@@ -527,6 +527,65 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Daily NPA Projection: Excel-style AutoFilter on every column + borrower search icon on account lists (2026-07-23, same day)
+
+Two asks in one batch: (1) "Projection main bilkul vaise filter lagao jaise
+Excel main lagta hai" — wants to see, e.g., only branches with 0 Recovery,
+or only branches that gave an Evening Commitment, with every column's
+subtotal recalculating for just those branches; (2) a search icon next to
+every heading where an account list appears, to jump straight to a
+borrower by name/account no.
+
+- **Column AutoFilter** (`js/app.js`, `dailyProjFilters`): every column
+  header in Daily NPA Projection now has a ⏷ button, same idea as Excel's
+  filter dropdown. Numeric columns (Morning/Evening NPA, Commitment,
+  Recovery, GAP, Eve. Commitment) get quick filters — All / Non-zero /
+  Zero (0) / Has a value / Blank (not entered) — covering the "0 recovery"
+  and "gave Eve. Commitment" cases directly. Text columns (Branch,
+  Follow-up By, Remarks) get a real Excel-style searchable checkbox list
+  of distinct values with a Select All toggle. Multiple column filters
+  combine with AND logic, same as Excel.
+- Filtering drives everything consistently: the visible rows, the summary
+  strip's totals (`dpSummary()` now runs over the filtered set, read
+  straight from the current tbody's `data-orig` rows so it can't drift out
+  of sync with what's on screen), and the Excel export (`dpComputeVisibleOrder()`
+  is shared by the render path and `exportDailyProjExcel()`, so exporting
+  after filtering gives you exactly the filtered branches, with a note in
+  the file saying how many were filtered out) — What-you-see-is-what-you-
+  export, like filtering a range in Excel.
+- A "N column filter(s) active · showing X of 55 branches · Clear Filters"
+  status line appears in the toolbar whenever any filter is on.
+- **Fixed along the way**: the Sol ID sticky column (frozen for horizontal
+  scroll, shipped earlier today) was 64px wide — enough for its numbers,
+  but too narrow to also fit the new filter button next to its header
+  label. The button silently overflowed into the neighboring Branch
+  header and became unclickable there instead. Widened Sol ID's frozen
+  column to 106px (verified via exact pixel measurement, not just eyeballing
+  it) so both the label and button fit inside its own header.
+- **Borrower search icon** (`sectionSearchBtn()`): a small 🔍 button next
+  to "All Accounts by Outstanding" on the Dashboard, and next to the title
+  in the shared account-list drill-down modal (used everywhere else an
+  account list surfaces — PNPA, KCC Overdue, and every Dashboard bucket/
+  asset/scheme click) — both just open the existing Quick Search (Cmd+K)
+  palette rather than building a second search UI, since that already
+  looks a borrower up by name/account no./customer ID/mobile and opens
+  their settlement detail.
+- **Bug caught while wiring the search icon**: `openCmdk()` had never been
+  exposed on `window` — the whole app lives inside one `initApp(DATA){...}`
+  function scope, so nothing inside it is globally callable unless
+  explicitly assigned to `window`, and every other place that opens it did
+  so via a proper JS event-listener closure, never an inline
+  `onclick="openCmdk()"` attribute, so this had never surfaced before.
+  Fixed by adding `window.openCmdk = openCmdk`.
+- Verified in the browser (dark theme, desktop + 390px mobile): Zero-
+  Recovery filter correctly narrowed 55 branches to 16, all showing
+  Recovery 0.00, with the summary strip recalculating to match; a
+  Follow-up-By checkbox filter (just "Deepak") correctly showed his 11
+  branches with a matching recalculated summary; Clear Filters correctly
+  restored all 55; the search icons open Cmd+K and find a borrower by
+  partial name; editing, sorting, Undo, and Excel export all still work
+  correctly alongside the new filters with no console errors.
+
 ### Fixed: hero KPI card value overlapping the NPA%/Mar-Jun badge (2026-07-23, same day)
 
 Asked to search for more bugs after the last two fixes. Two more phone

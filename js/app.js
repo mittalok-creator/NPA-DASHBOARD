@@ -1512,6 +1512,7 @@ function openRollbackReview(fileName){
 const cmdkOverlay=document.getElementById('cmdkOverlay'), cmdkInput=document.getElementById('cmdkInput'), cmdkResults=document.getElementById('cmdkResults'), cmdkClose=document.getElementById('cmdkClose');
 let cmdkMatches=[], cmdkActive=0;
 function openCmdk(){ if(!cmdkOverlay) return; cmdkOverlay.classList.add('show'); cmdkInput.value=''; renderCmdk(''); setTimeout(()=>cmdkInput.focus(),30); }
+window.openCmdk = openCmdk;
 function closeCmdk(){ if(cmdkOverlay) cmdkOverlay.classList.remove('show'); }
 function renderCmdk(q){
   q=String(q||'').trim().toLowerCase();
@@ -1931,6 +1932,17 @@ function heroKpiCard(opts){
   </div>`;
 }
 
+/* Small search-icon button dropped into a section heading wherever a raw
+   account list is shown (directly, or via the shared list-drill-down
+   modal) -- reuses the existing Quick Search (Cmd+K) palette rather than
+   building a second search UI, since that already looks up a borrower by
+   name/account no./customer ID/mobile and opens their settlement detail. */
+function sectionSearchBtn(){
+  return `<button type="button" class="section-search-btn" onclick="openCmdk()" title="Search a borrower by name or account no." aria-label="Search a borrower">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  </button>`;
+}
+
 let currentDashStats = null;
 const BUCKET_LABELS = {ne:'Not yet eligible (≤ 6 months)', y1:'6 months – 1 year', y13:'1 – 3 years', y3p:'3+ years'};
 
@@ -2165,7 +2177,7 @@ function renderDashboard(){
       ${kpiTile('Customers ≥ ₹10 Lakh O/S', s.highValueCustCount.toLocaleString('en-IN'), fmtCr(s.highValueOS)+(s.custCount?' · '+((s.highValueCustCount/s.custCount)*100).toFixed(1)+'% of customers':'')+' · tap to view list', 'showHighValueCustList()')}
     </div>
 
-    <div class="section-label">All Accounts by Outstanding<span class="chart-sub">${s.totalAccounts.toLocaleString('en-IN')} account(s) · tap a column to sort · scroll for more</span></div>
+    <div class="section-label">All Accounts by Outstanding<span class="chart-sub">${s.totalAccounts.toLocaleString('en-IN')} account(s) · tap a column to sort · scroll for more</span>${sectionSearchBtn()}</div>
     <div class="dash-table-wrap acct-list-scroll" id="acctListWrap">
       <table class="dash-table">
         <thead id="acctListHead"><tr>
@@ -3134,6 +3146,11 @@ const DP_EDITABLE_COLS = DP_DISPLAY.map((c,i)=>i).filter(i=>DP_DISPLAY[i].editab
 let DAILY_PROJ_DATA = null;
 let __pendingDailyProjData = null;
 let dailyProjSort = {key:null, dir:'asc'};
+/* Excel-style AutoFilter, keyed by column index. Numeric columns store
+   {kind:'numeric', mode: 'nonzero'|'zero'|'notblank'|'blank'}; text
+   columns (Branch/Follow-up/Remarks) store {kind:'list', selected:Set of
+   display strings}. Absent key = no filter on that column ("All"). */
+let dailyProjFilters = {};
 let dailyProjUndoStack = [];
 const DP_UNDO_MAX = 20;
 function dpPushUndo(){
@@ -3218,6 +3235,146 @@ function dpCellValue(row, ci){
   return row[c.dp];
 }
 
+/* ---------- Daily NPA Projection: Excel-style AutoFilter ---------- */
+function dpColumnDistinctValues(ci){
+  const labels = new Set();
+  DAILY_PROJ_DATA.rows.forEach(row=>{
+    const v = dpCellValue(row, ci);
+    labels.add(v===null||v===undefined||v===''?'(Blank)':String(v));
+  });
+  return [...labels].sort((a,b)=> a==='(Blank)' ? 1 : b==='(Blank)' ? -1 : a.localeCompare(b));
+}
+function dpRowMatchesFilters(row){
+  for(const ciStr in dailyProjFilters){
+    const ci = parseInt(ciStr,10);
+    const spec = dailyProjFilters[ci];
+    if(!spec) continue;
+    const v = dpCellValue(row, ci);
+    const isBlank = v===null || v===undefined || v==='';
+    if(spec.kind==='numeric'){
+      if(spec.mode==='zero' && !(!isBlank && Number(v)===0)) return false;
+      if(spec.mode==='nonzero' && !(!isBlank && Number(v)!==0)) return false;
+      if(spec.mode==='blank' && !isBlank) return false;
+      if(spec.mode==='notblank' && isBlank) return false;
+    } else if(spec.kind==='list'){
+      if(!spec.selected.has(isBlank?'(Blank)':String(v))) return false;
+    }
+  }
+  return true;
+}
+function dpActiveFilterCount(){ return Object.keys(dailyProjFilters).length; }
+/* Shared by the on-screen render and the Excel export, so "what you see
+   is what you export" -- sort first (matches the grid), then filter, so
+   S N numbering and row order are identical in both places. */
+function dpComputeVisibleOrder(){
+  const d = DAILY_PROJ_DATA;
+  if(!d || !d.rows) return [];
+  let order = d.rows.map((r,i)=>i);
+  if(dailyProjSort.key!==null){
+    const ci = dailyProjSort.key;
+    const col = DP_DISPLAY[ci];
+    const dir = dailyProjSort.dir==='asc' ? 1 : -1;
+    order.sort((ia,ib)=>{
+      let a = dpCellValue(d.rows[ia], ci), b = dpCellValue(d.rows[ib], ci);
+      if(a===null||a===undefined) a = col.numeric ? -Infinity : '';
+      if(b===null||b===undefined) b = col.numeric ? -Infinity : '';
+      if(typeof a==='string') a = a.toLowerCase();
+      if(typeof b==='string') b = b.toLowerCase();
+      if(a<b) return -1*dir;
+      if(a>b) return 1*dir;
+      return 0;
+    });
+  }
+  if(dpActiveFilterCount()) order = order.filter(idx=>dpRowMatchesFilters(d.rows[idx]));
+  return order;
+}
+function dpClearAllFilters(){ dailyProjFilters = {}; renderDailyProjBody(); }
+window.dpClearAllFilters = dpClearAllFilters;
+function dpClearColumnFilter(ci){ delete dailyProjFilters[ci]; dpCloseFilterPopover(); renderDailyProjBody(); }
+window.dpClearColumnFilter = dpClearColumnFilter;
+function dpSetNumericFilter(ci, mode){
+  if(mode==='all') delete dailyProjFilters[ci];
+  else dailyProjFilters[ci] = {kind:'numeric', mode};
+  dpCloseFilterPopover();
+  renderDailyProjBody();
+}
+window.dpSetNumericFilter = dpSetNumericFilter;
+function dpApplyListFilter(ci){
+  const pop = document.getElementById('dpFilterPopover');
+  const checks = [...pop.querySelectorAll('input[type=checkbox][data-val]')];
+  const selected = new Set(checks.filter(c=>c.checked).map(c=>c.dataset.val));
+  const allValues = dpColumnDistinctValues(ci);
+  if(selected.size >= allValues.length) delete dailyProjFilters[ci];
+  else dailyProjFilters[ci] = {kind:'list', selected};
+  dpCloseFilterPopover();
+  renderDailyProjBody();
+}
+window.dpApplyListFilter = dpApplyListFilter;
+function dpFilterToggleAll(cb){
+  document.getElementById('dpFilterPopover')?.querySelectorAll('input[type=checkbox][data-val]').forEach(c=>{ c.checked = cb.checked; });
+}
+window.dpFilterToggleAll = dpFilterToggleAll;
+function dpFilterSearch(input){
+  const q = input.value.trim().toLowerCase();
+  input.closest('.dp-filter-popover').querySelectorAll('.dp-filter-list .dp-filter-item').forEach(item=>{
+    item.style.display = item.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+window.dpFilterSearch = dpFilterSearch;
+function dpFilterOutsideClick(e){
+  const pop = document.getElementById('dpFilterPopover');
+  if(pop && !pop.contains(e.target)) dpCloseFilterPopover();
+}
+function dpCloseFilterPopover(){
+  document.getElementById('dpFilterPopover')?.remove();
+  document.removeEventListener('mousedown', dpFilterOutsideClick, true);
+}
+function dpToggleFilterPopover(ev, ci){
+  ev.stopPropagation();
+  const already = document.getElementById('dpFilterPopover');
+  const wasOpenForThisCol = already && already.dataset.ci === String(ci);
+  dpCloseFilterPopover();
+  if(wasOpenForThisCol) return;
+  const col = DP_DISPLAY[ci];
+  const spec = dailyProjFilters[ci];
+  const pop = document.createElement('div');
+  pop.id = 'dpFilterPopover';
+  pop.className = 'dp-filter-popover';
+  pop.dataset.ci = String(ci);
+  if(col.numeric && !col.dropdown){
+    const modes = [
+      {key:'all', label:'All'},
+      {key:'nonzero', label:'Non-zero'},
+      {key:'zero', label:'Zero (0)'},
+      {key:'notblank', label:'Has a value'},
+      {key:'blank', label:'Blank (not entered)'},
+    ];
+    pop.innerHTML = `<div class="dp-filter-title">${esc(col.label)}</div>` +
+      modes.map(m=>`<button type="button" class="dp-filter-opt${(!spec&&m.key==='all')||(spec&&spec.mode===m.key)?' active':''}" onclick="dpSetNumericFilter(${ci},'${m.key}')">${esc(m.label)}</button>`).join('');
+  } else {
+    const values = dpColumnDistinctValues(ci);
+    const selected = spec ? spec.selected : new Set(values);
+    pop.innerHTML = `<div class="dp-filter-title">${esc(col.label)}</div>
+      <input type="text" class="dp-filter-search" placeholder="Search…" oninput="dpFilterSearch(this)">
+      <label class="dp-filter-item dp-filter-selectall"><input type="checkbox" ${selected.size>=values.length?'checked':''} onchange="dpFilterToggleAll(this)"><b>Select All</b></label>
+      <div class="dp-filter-list">${values.map(v=>`<label class="dp-filter-item"><input type="checkbox" data-val="${esc(v)}"${selected.has(v)?' checked':''}>${esc(v)}</label>`).join('')}</div>
+      <div class="dp-filter-actions">
+        <button type="button" class="btn-ghost" onclick="dpClearColumnFilter(${ci})">Clear</button>
+        <button type="button" class="btn-primary" onclick="dpApplyListFilter(${ci})">Apply</button>
+      </div>`;
+  }
+  document.body.appendChild(pop);
+  const rect = ev.currentTarget.getBoundingClientRect();
+  const popRect = pop.getBoundingClientRect();
+  let left = Math.min(rect.left, window.innerWidth - popRect.width - 8);
+  let top = rect.bottom + 4;
+  if(top + popRect.height > window.innerHeight - 8) top = Math.max(8, rect.top - popRect.height - 4);
+  pop.style.left = Math.max(8,left) + 'px';
+  pop.style.top = top + 'px';
+  setTimeout(()=>document.addEventListener('mousedown', dpFilterOutsideClick, true), 0);
+}
+window.dpToggleFilterPopover = dpToggleFilterPopover;
+
 function renderSummaryStrip(sum){
   const tile = (label, val, cls, tone, sub) => `<div class="projstat-tile${tone?' tone-'+tone:''}"><div class="projstat-label">${esc(label)}</div><div class="projstat-val ${cls||''}">${val}</div>${sub?`<div class="projstat-sub">${sub}</div>`:''}</div>`;
   return `<div class="projstat-row">
@@ -3237,32 +3394,21 @@ function renderDailyProjBody(){
   if(!el) return;
   if(!d || !d.rows){ el.innerHTML = `<div class="empty-state"><h2>No Daily NPA Projection data yet</h2></div>`; return; }
 
-  let order = d.rows.map((r,i)=>i);
-  if(dailyProjSort.key!==null){
-    const ci = dailyProjSort.key;
-    const col = DP_DISPLAY[ci];
-    const dir = dailyProjSort.dir==='asc' ? 1 : -1;
-    order.sort((ia,ib)=>{
-      let a = dpCellValue(d.rows[ia], ci), b = dpCellValue(d.rows[ib], ci);
-      if(a===null||a===undefined) a = col.numeric ? -Infinity : '';
-      if(b===null||b===undefined) b = col.numeric ? -Infinity : '';
-      if(typeof a==='string') a = a.toLowerCase();
-      if(typeof b==='string') b = b.toLowerCase();
-      if(a<b) return -1*dir;
-      if(a>b) return 1*dir;
-      return 0;
-    });
-  }
+  const order = dpComputeVisibleOrder();
 
   const headHtml = '<tr>' + DP_DISPLAY.map((c,ci)=>{
     if(c.type==='serial') return `<th>${esc(c.label)}</th>`;
     const active = dailyProjSort.key===ci;
-    return `<th class="${c.numeric?'':'tal'} sortable${active?(dailyProjSort.dir==='asc'?' sort-asc':' sort-desc'):''}" tabindex="0" role="button" aria-sort="none" onclick="dailyProjSortBy(${ci})">${esc(c.label)}<span class="sort-ic">▾</span></th>`;
+    const hasFilter = !!dailyProjFilters[ci];
+    return `<th class="${c.numeric?'':'tal'} sortable${active?(dailyProjSort.dir==='asc'?' sort-asc':' sort-desc'):''}">
+      <span class="dp-th-label" tabindex="0" role="button" aria-sort="none" onclick="dailyProjSortBy(${ci})">${esc(c.label)}<span class="sort-ic">▾</span></span>
+      <button type="button" class="dp-filter-btn${hasFilter?' active':''}" onclick="dpToggleFilterPopover(event,${ci})" title="Filter ${esc(c.label)}" aria-label="Filter ${esc(c.label)}">⏷</button>
+    </th>`;
   }).join('') + '</tr>';
 
-  const bodyHtml = order.map((origIdx, pos)=>{
+  const bodyHtml = order.length ? order.map((origIdx, pos)=>{
     const row = d.rows[origIdx];
-    return '<tr>' + DP_DISPLAY.map((c,ci)=>{
+    return `<tr data-orig="${origIdx}">` + DP_DISPLAY.map((c,ci)=>{
       if(c.type==='serial') return `<td>${pos+1}</td>`;
       if(c.type==='recovery' || c.type==='gap'){
         const v = dpCellValue(row, ci);
@@ -3280,17 +3426,20 @@ function renderDailyProjBody(){
       const val = row[c.dp];
       return `<td class="editcell"><input class="editgrid-input ${c.tal?'tal':''}" type="text" inputmode="${c.numeric?'decimal':'text'}" data-orig="${origIdx}" data-col="${ci}" value="${esc(gridCellDisplay(val))}"></td>`;
     }).join('') + '</tr>';
-  }).join('');
+  }).join('') : `<tr><td colspan="${DP_DISPLAY.length}" style="text-align:center;color:var(--ink-mute)">No rows match the current filters</td></tr>`;
 
-  el.innerHTML = renderSummaryStrip(dpSummary(d.rows)) +
+  const filterStatus = dpActiveFilterCount() ? `<div class="dp-filter-status">${dpActiveFilterCount()} column filter${dpActiveFilterCount()>1?'s':''} active · showing ${order.length} of ${d.rows.length} branches <button type="button" class="btn-ghost" id="dailyProjClearFiltersBtn">Clear Filters</button></div>` : '';
+
+  el.innerHTML = renderSummaryStrip(dpSummary(order.map(i=>d.rows[i]))) +
     `<div class="projgrid-toolbar no-print">
-      <p class="projgrid-hint">Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Recovery, GAP and the totals above recalculate instantly. Raw entries go live the next time you hit Publish (Settings → Update Data).</p>
+      <p class="projgrid-hint">Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Recovery, GAP and the totals above recalculate instantly. Raw entries go live the next time you hit Publish (Settings → Update Data). Click the ⏷ on any column header to filter, just like Excel — the totals above and Export Excel follow whatever's currently filtered.</p>
       <div class="projgrid-btns">
         <button type="button" class="btn-ghost" id="dailyProjUndoBtn"${dailyProjUndoStack.length?'':' disabled'}>↺ Undo</button>
         <button type="button" class="btn-ghost" id="dailyProjClearBtn" style="border-color:var(--red);color:var(--red)">Clear All Fields</button>
         <button type="button" class="btn-ghost" id="dailyProjPrintBtn">🖨 Print / Export PDF</button>
         <button type="button" class="btn-ghost" id="dailyProjExcelBtn">⬇ Export Excel</button>
       </div>
+      ${filterStatus}
     </div>
     <div class="dash-table-wrap projgrid-scroll">
       <table class="dash-table" id="dailyProjTable">
@@ -3307,13 +3456,19 @@ function renderDailyProjBody(){
   if(printBtn) printBtn.onclick = () => window.print();
   const excelBtn = document.getElementById('dailyProjExcelBtn');
   if(excelBtn) excelBtn.onclick = () => exportDailyProjExcel();
+  const clearFiltersBtn = document.getElementById('dailyProjClearFiltersBtn');
+  if(clearFiltersBtn) clearFiltersBtn.onclick = () => dpClearAllFilters();
 
   const table = document.getElementById('dailyProjTable');
   if(table && !table.__wired){
     table.__wired = true;
+    // Reads whichever rows are currently in the tbody -- naturally
+    // respects an active AutoFilter without needing separate tracking,
+    // since the filtered set IS the DOM at this point.
     const refreshSummary = () => {
+      const rows = [...table.querySelectorAll('tbody tr[data-orig]')].map(tr=>DAILY_PROJ_DATA.rows[parseInt(tr.dataset.orig,10)]);
       const stripEl = el.querySelector('.projstat-row');
-      if(stripEl) stripEl.outerHTML = renderSummaryStrip(dpSummary(DAILY_PROJ_DATA.rows));
+      if(stripEl) stripEl.outerHTML = renderSummaryStrip(dpSummary(rows));
     };
     const refreshRowFormulas = (tr) => {
       const origIdx = parseInt(tr.querySelector('[data-orig]').dataset.orig, 10);
@@ -3435,16 +3590,23 @@ function clearDailyProjFields(){
    directly rather than something baked into an .xlsx. */
 function exportDailyProjExcel(){
   if(!DAILY_PROJ_DATA || !DAILY_PROJ_DATA.rows) return;
-  const sum = dpSummary(DAILY_PROJ_DATA.rows);
+  // Exports whatever's currently sorted/filtered on screen -- if you've
+  // filtered down to "0 Recovery" branches, that's what you get in the
+  // file, same as Excel exporting a filtered range.
+  const order = dpComputeVisibleOrder();
+  const visibleRows = order.map(i=>DAILY_PROJ_DATA.rows[i]);
+  const sum = dpSummary(visibleRows);
   const headerRow = DP_DISPLAY.map(c=>c.label);
-  const dataRows = DAILY_PROJ_DATA.rows.map((row,i)=>DP_DISPLAY.map((c,ci)=>{
+  const dataRows = visibleRows.map((row,i)=>DP_DISPLAY.map((c,ci)=>{
     if(c.type==='serial') return i+1;
     const v = dpCellValue(row, ci);
     return v===null||v===undefined ? '' : v;
   }));
+  const filterNote = dpActiveFilterCount() ? [`Filtered: showing ${visibleRows.length} of ${DAILY_PROJ_DATA.rows.length} branches`] : [];
   const aoa = [
     ['Daily NPA Projection — Hathras Region'],
     ['As on', fmtDate(new Date())],
+    filterNote,
     [],
     ['Morning NPA (Cr)', +( (sum.morningSum/100).toFixed(2) ), 'Evening NPA (Cr)', +( (sum.eveningSum/100).toFixed(2) ), 'Total Commitment', +sum.commitSum.toFixed(2), 'Recovery', +sum.recoverySum.toFixed(2), `Branches reduced NPA (of ${sum.totalBranches})`, sum.reducedBranches, 'Net GAP', +sum.netGap.toFixed(2), 'Eve. Commitment', +sum.eveCommitSum.toFixed(2), 'Projected Recovery', +sum.projectedRecovery.toFixed(2)],
     [],
