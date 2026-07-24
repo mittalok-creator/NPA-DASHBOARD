@@ -1209,10 +1209,18 @@ select.editgrid-select{cursor:pointer;-webkit-appearance:none;appearance:none;ba
 /* ---------- Daily NPA Projection: Excel-style AutoFilter on each column ---------- */
 #dailyProjTable th{position:relative}
 .dp-th-label{cursor:pointer;user-select:none;display:inline-flex;align-items:center}
-.dp-filter-btn{margin-left:6px;background:transparent;border:none;color:inherit;opacity:.5;font-size:9px;cursor:pointer;padding:2px 5px;border-radius:5px;vertical-align:middle;transition:background .15s var(--ease),opacity .15s var(--ease),color .15s var(--ease)}
-.dp-filter-btn:hover{opacity:1;background:rgba(255,255,255,.14)}
-.dp-filter-btn.active{opacity:1;color:var(--accent-2)}
-:root[data-theme="light"] .dp-filter-btn:hover{background:rgba(33,33,46,.08)}
+/* A distinct pill/chip, not just another small triangle character --
+   originally used the "⏷" glyph right next to the sort label's own "▾"
+   indicator, and the two looked near-identical at header size, so people
+   kept tapping the sort label (reordering rows) when they meant to open
+   the filter, and concluded filtering "wasn't working". A bordered chip
+   with a real funnel icon reads as a clearly separate control. */
+.dp-filter-btn{margin-left:6px;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.22);color:inherit;opacity:.85;cursor:pointer;padding:4px 6px;border-radius:6px;vertical-align:middle;transition:background .15s var(--ease),opacity .15s var(--ease),color .15s var(--ease),border-color .15s var(--ease)}
+.dp-filter-btn:hover{opacity:1;background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.4)}
+.dp-filter-btn.active{opacity:1;color:var(--accent-2);background:var(--accent-soft);border-color:var(--accent-2)}
+:root[data-theme="light"] .dp-filter-btn{background:rgba(33,33,46,.06);border-color:rgba(33,33,46,.18)}
+:root[data-theme="light"] .dp-filter-btn:hover{background:rgba(33,33,46,.12);border-color:rgba(33,33,46,.32)}
+:root[data-theme="light"] .dp-filter-btn.active{background:var(--accent-soft);border-color:var(--accent)}
 .dp-filter-popover{position:fixed;z-index:300;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:var(--shadow);padding:10px;min-width:200px;max-width:260px;animation:fadeIn .12s var(--ease)}
 .dp-filter-title{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);margin-bottom:8px;padding:0 2px}
 .dp-filter-opt{display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:transparent;border-radius:8px;font-size:13px;color:var(--ink);cursor:pointer;font-weight:600}
