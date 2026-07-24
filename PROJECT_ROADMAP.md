@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 ---
 
@@ -526,6 +526,32 @@ ise data se."
   Daily NPA Projection file yourself through the Update Data modal's
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
+
+### Fixed: AutoFilter button looked identical to the sort arrow (2026-07-24)
+
+Next day, reported that the column filter "only sorts, filtering doesn't
+work" — sounded like a functional regression, but re-tested the exact same
+Zero-Recovery/Follow-up-By scenarios from yesterday and the filtering
+itself was working exactly as before (rows correctly hidden, summary
+correctly recalculated). The real bug was **discoverability, not
+function**: the filter button used the `⏷` Unicode glyph sitting right
+next to the sort label's own `▾` indicator — at header font size the two
+looked nearly identical, so it was very easy to tap the sort label
+(reordering the column) while aiming for the filter button, and conclude
+filtering wasn't doing anything.
+
+- Replaced the `⏷` glyph with a real funnel SVG icon inside a bordered,
+  backgrounded chip (`.dp-filter-btn`) so it unmistakably reads as a
+  separate button, not just another small triangle floating next to the
+  header text. Active filters now also show a clearly highlighted
+  chip (accent-colored background/border), not just a subtle opacity
+  change.
+- Verified the chip's slightly larger size doesn't reopen the Sol ID
+  sticky-column overflow bug from yesterday (button stays inside its
+  106px column on a 390px mobile viewport), and confirmed with a direct
+  DOM check that clicking the filter chip never applies the `sort-asc`/
+  `sort-desc` class to that header — the two controls are genuinely
+  independent, this was purely a visual mix-up.
 
 ### Daily NPA Projection: Excel-style AutoFilter on every column + borrower search icon on account lists (2026-07-23, same day)
 

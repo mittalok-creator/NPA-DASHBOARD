@@ -3402,7 +3402,7 @@ function renderDailyProjBody(){
     const hasFilter = !!dailyProjFilters[ci];
     return `<th class="${c.numeric?'':'tal'} sortable${active?(dailyProjSort.dir==='asc'?' sort-asc':' sort-desc'):''}">
       <span class="dp-th-label" tabindex="0" role="button" aria-sort="none" onclick="dailyProjSortBy(${ci})">${esc(c.label)}<span class="sort-ic">▾</span></span>
-      <button type="button" class="dp-filter-btn${hasFilter?' active':''}" onclick="dpToggleFilterPopover(event,${ci})" title="Filter ${esc(c.label)}" aria-label="Filter ${esc(c.label)}">⏷</button>
+      <button type="button" class="dp-filter-btn${hasFilter?' active':''}" onclick="dpToggleFilterPopover(event,${ci})" title="Filter ${esc(c.label)}" aria-label="Filter ${esc(c.label)}"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button>
     </th>`;
   }).join('') + '</tr>';
 
