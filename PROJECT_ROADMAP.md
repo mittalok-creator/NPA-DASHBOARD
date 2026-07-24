@@ -527,6 +527,25 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Rows in PNPA/KCC Overdue account-list modals now open the same Quick Account Detail card (2026-07-24, same day)
+
+Liked the new Quick Account Detail card from Quick Search results and
+asked for the same thing when tapping any account row inside the PNPA
+and KCC Overdue account-list modals (the ones opened by tapping a
+branch's row in their "Branch-wise Summary" tables) — those rows did
+nothing on tap before.
+
+- Added `showQuickAcctDetailByAcct(source, acctNo)`, which looks the row
+  up by account number against the raw `KCC_OVERDUE_DATA`/`PNPA_DATA`
+  (account numbers are unique within each report) and reuses the exact
+  same `showQuickAcctDetail()` card built for search results — no new UI,
+  just wired the existing one to a second entry point.
+- Every row in `kccovAcctRows()`/`pnpaAcctRows()` now carries the
+  `clickable` class (existing hover-highlight styling) and this onclick.
+- Verified: tapping a row inside a KCC Overdue branch's account list
+  opens the borrower's detail card stacked on top, correct data every
+  time; same for a PNPA branch's account list.
+
 ### Quick Search couldn't find KCC Overdue or PNPA accounts at all (2026-07-24, same day)
 
 Reported "Overdue ke accounts search nahi kar pa raha hun" (can't search

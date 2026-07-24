@@ -1630,6 +1630,19 @@ function showQuickAcctDetail(source, row){
   document.getElementById('quickAcctModalOverlay').classList.add('show');
 }
 window.showQuickAcctDetail = showQuickAcctDetail;
+/* Tapping a row inside the PNPA/KCC Overdue account-list modal opens the
+   same Quick Account Detail card as a search result -- looked up by
+   account no. against the raw dataset rather than threading the raw row
+   through the list-modal's already-transformed {acctNo,name,os,...}
+   display objects, since account numbers are unique within each report. */
+function showQuickAcctDetailByAcct(source, acctNo){
+  const data = source==='kccov' ? KCC_OVERDUE_DATA : PNPA_DATA;
+  if(!data || !data.rows) return;
+  const col = source==='kccov' ? KC.ACCT : PC.ACCT;
+  const row = data.rows.find(r=>String(r[col])===String(acctNo));
+  if(row) showQuickAcctDetail(source, row);
+}
+window.showQuickAcctDetailByAcct = showQuickAcctDetailByAcct;
 function cmdkEnsureVisible(){ const el=cmdkResults.querySelector('.cmdk-item.active'); if(el) el.scrollIntoView({block:'nearest'}); }
 if(cmdkOverlay){
   cmdkInput.addEventListener('input',()=>renderCmdk(cmdkInput.value));
@@ -2871,7 +2884,7 @@ const PNPA_ACCT_LIST_HEAD = '<tr>'
   +'</tr>';
 function pnpaAcctRows(list){
   if(!list.length) return `<tr><td colspan="7" style="text-align:center;color:var(--ink-mute)">No accounts</td></tr>`;
-  return list.map(a=>`<tr>
+  return list.map(a=>`<tr class="clickable" onclick="showQuickAcctDetailByAcct('pnpa','${esc(a.acctNo)}')">
     <td>${esc(a.acctNo)}</td>
     <td class="tal">${esc(a.name)||'—'}</td>
     <td>${fmtINR2(a.os)}</td>
@@ -3168,7 +3181,7 @@ const KCCOV_ACCT_LIST_HEAD = '<tr>'
   +'</tr>';
 function kccovAcctRows(list){
   if(!list.length) return `<tr><td colspan="9" style="text-align:center;color:var(--ink-mute)">No accounts</td></tr>`;
-  return list.map(a=>`<tr>
+  return list.map(a=>`<tr class="clickable" onclick="showQuickAcctDetailByAcct('kccov','${esc(a.acctNo)}')">
     <td>${esc(a.acctNo)}</td>
     <td class="tal">${esc(a.name)||'—'}</td>
     <td>${fmtINR2(a.os)}</td>
