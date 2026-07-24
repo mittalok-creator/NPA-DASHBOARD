@@ -1534,6 +1534,8 @@ header.app-head::before,.detail-head::before{
    always clearly visible regardless of how many rows it holds. */
 #listModalOverlay{align-items:center}
 #listModalOverlay .modal-sheet{border-radius:22px}
+#quickAcctModalOverlay{align-items:center}
+#quickAcctModalOverlay .modal-sheet{border-radius:22px}
 .list-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
 @media (max-width:659px){
   .list-modal-head{flex-wrap:wrap}

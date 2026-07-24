@@ -527,6 +527,43 @@ ise data se."
   "Branch-wise Total Advance" section, same as any other daily update — no
   further direct-git-publish action is expected or planned.
 
+### Quick Search couldn't find KCC Overdue or PNPA accounts at all (2026-07-24, same day)
+
+Reported "Overdue ke accounts search nahi kar pa raha hun" (can't search
+KCC Overdue's accounts). Investigated with a direct data check rather
+than guessing: Quick Search (`openCmdk`/`renderCmdk`) has only ever
+searched `DATA.npa.rows`. Cross-checked every KCC Overdue account number
+(9,744 rows) and every Daily PNPA account number (104 rows) against that
+NPA dataset — **zero overlap in either case**. These are genuinely
+separate report universes, not filtered views of the same book, so no
+amount of typing the right name or account number could ever have
+surfaced a KCC Overdue or PNPA borrower — this wasn't a search-quality
+bug, Quick Search was blind to those two datasets entirely.
+
+- `renderCmdk()` now also searches `KCC_OVERDUE_DATA` and `PNPA_DATA` by
+  name/account no. (NPA results still get priority, capped at 12, then up
+  to 3 more from KCC Overdue, then up to 3 more from PNPA — 18 max total).
+  Each result carries a small "KCC Overdue" or "PNPA" tag so it's clear
+  which report it came from.
+- `openCmdk()` now prefetches both datasets in the background the moment
+  the palette opens, if they haven't already been loaded by visiting
+  those tabs — otherwise search would only start working for them after
+  the user happened to open KCC Overdue/PNPA at least once that session.
+- NPA results still open the full OTS settlement detail (`openDetail`) as
+  before. KCC Overdue/PNPA rows have no customer ID and none of the
+  fuller fields that view needs (confirmed by the same zero-overlap
+  check), so picking one instead opens a new lightweight read-only "Quick
+  Account Detail" modal (reusing the existing `.info-grid` key/value
+  layout from the borrower card) showing Account No, Scheme, Outstanding,
+  CADU, Limit, and whatever else that report tracks (Cust NPA Date/F.Y./
+  Category/SMA for KCC Overdue; Review Date/Reason for PNPA).
+- Verified: searching "Shashi Kumari" from the Dashboard (without ever
+  visiting the KCC Overdue tab first) correctly surfaced her KCC Overdue
+  record with the right account/branch, and opened a detail card matching
+  the real underlying data exactly; a PNPA-only borrower ("Narayan Singh
+  S/O Jeevan Lal") was found the same way; regular NPA search (e.g.
+  "Mahesh") still works exactly as before, unaffected.
+
 ### Fixed: AutoFilter button looked identical to the sort arrow (2026-07-24)
 
 Next day, reported that the column filter "only sorts, filtering doesn't
