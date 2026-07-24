@@ -1511,9 +1511,53 @@ function openRollbackReview(fileName){
 /* ---------- Cmd+K quick search palette ---------- */
 const cmdkOverlay=document.getElementById('cmdkOverlay'), cmdkInput=document.getElementById('cmdkInput'), cmdkResults=document.getElementById('cmdkResults'), cmdkClose=document.getElementById('cmdkClose');
 let cmdkMatches=[], cmdkActive=0;
-function openCmdk(){ if(!cmdkOverlay) return; cmdkOverlay.classList.add('show'); cmdkInput.value=''; renderCmdk(''); setTimeout(()=>cmdkInput.focus(),30); }
+/* Quick Search only ever looked at DATA.npa.rows -- confirmed by direct
+   data check that KCC Overdue's ~9.7k accounts and Daily PNPA's accounts
+   have ZERO overlap with that dataset's account numbers (completely
+   separate report universes, not just a filtered subset), so a borrower
+   who only appears in KCC Overdue or PNPA could never be found here no
+   matter what was typed. Prefetch both in the background the first time
+   the palette opens (if not already loaded from visiting those tabs) so
+   search works regardless of which tabs have been visited this session. */
+function openCmdk(){
+  if(!cmdkOverlay) return;
+  cmdkOverlay.classList.add('show'); cmdkInput.value=''; renderCmdk(''); setTimeout(()=>cmdkInput.focus(),30);
+  if(!KCC_OVERDUE_DATA){
+    fetchJson('data/kcc-overdue.json?t=' + Date.now())
+      .then(d=>{ KCC_OVERDUE_DATA=d; if(cmdkOverlay.classList.contains('show')) renderCmdk(cmdkInput.value); })
+      .catch(()=>{});
+  }
+  if(!PNPA_DATA){
+    fetchJson('data/pnpa.json?t=' + Date.now())
+      .then(d=>{ PNPA_DATA=d; if(cmdkOverlay.classList.contains('show')) renderCmdk(cmdkInput.value); })
+      .catch(()=>{});
+  }
+}
 window.openCmdk = openCmdk;
 function closeCmdk(){ if(cmdkOverlay) cmdkOverlay.classList.remove('show'); }
+function cmdkItemHtml(m, idx){
+  const r = m.row;
+  if(m.source==='npa'){
+    const asset=r[C.ASSET]||''; const initials=(String(r[C.NAME]||'?').trim().charAt(0)||'?').toUpperCase();
+    return `<div class="cmdk-item${idx===0?' active':''}" data-idx="${idx}">
+      <div class="ci-ic">${esc(initials)}</div>
+      <div class="ci-main"><div class="ci-name">${esc(r[C.NAME])||'—'}</div>
+        <div class="ci-sub">A/c ${esc(r[C.ACCT_NO])} · ${esc(r[C.SOL_DESC])||''} · Cust ${esc(r[C.CUST_ID])}</div></div>
+      ${asset?`<span class="badge-pill ci-badge ${esc(asset)}">${esc(asset)}</span>`:''}
+    </div>`;
+  }
+  const isKcc = m.source==='kccov';
+  const name = isKcc ? r[KC.NAME] : r[PC.NAME];
+  const acct = isKcc ? r[KC.ACCT] : r[PC.ACCT];
+  const branch = isKcc ? r[KC.BRANCH] : r[PC.BRANCH];
+  const initials=(String(name||'?').trim().charAt(0)||'?').toUpperCase();
+  return `<div class="cmdk-item${idx===0?' active':''}" data-idx="${idx}">
+    <div class="ci-ic">${esc(initials)}</div>
+    <div class="ci-main"><div class="ci-name">${esc(name)||'—'}</div>
+      <div class="ci-sub">A/c ${esc(acct)} · ${esc(branch)||''}</div></div>
+    <span class="badge-pill ci-badge" style="background:${isKcc?'var(--accent-soft);color:var(--accent)':'var(--amber-soft);color:var(--amber)'}">${isKcc?'KCC Overdue':'PNPA'}</span>
+  </div>`;
+}
 function renderCmdk(q){
   q=String(q||'').trim().toLowerCase();
   const out=[]; const seen=new Set();
@@ -1522,30 +1566,70 @@ function renderCmdk(q){
       const name=String(r[C.NAME]||'').toLowerCase(), acct=String(r[C.ACCT_NO]||'').toLowerCase(),
         cust=String(r[C.CUST_ID]||'').toLowerCase(), ph=String(r[C.PHONE]||'').toLowerCase();
       if(name.includes(q)||acct.includes(q)||cust.includes(q)||ph.includes(q)){
-        const cid=String(r[C.CUST_ID]); if(seen.has(cid)) continue; seen.add(cid); out.push(r);
+        const cid=String(r[C.CUST_ID]); if(seen.has(cid)) continue; seen.add(cid);
+        out.push({source:'npa', row:r});
         if(out.length>=12) break;
+      }
+    }
+    if(out.length<15 && KCC_OVERDUE_DATA && KCC_OVERDUE_DATA.rows){
+      for(const r of KCC_OVERDUE_DATA.rows){
+        const name=String(r[KC.NAME]||'').toLowerCase(), acct=String(r[KC.ACCT]||'').toLowerCase();
+        if(name.includes(q)||acct.includes(q)){
+          out.push({source:'kccov', row:r});
+          if(out.length>=15) break;
+        }
+      }
+    }
+    if(out.length<18 && PNPA_DATA && PNPA_DATA.rows){
+      for(const r of PNPA_DATA.rows){
+        const name=String(r[PC.NAME]||'').toLowerCase(), acct=String(r[PC.ACCT]||'').toLowerCase();
+        if(name.includes(q)||acct.includes(q)){
+          out.push({source:'pnpa', row:r});
+          if(out.length>=18) break;
+        }
       }
     }
   }
   cmdkMatches=out; cmdkActive=0;
   if(!q){ cmdkResults.innerHTML='<div class="cmdk-empty">Type a name, account no., customer ID or mobile…</div>'; return; }
   if(!out.length){ cmdkResults.innerHTML='<div class="cmdk-empty">No borrower found for that.</div>'; return; }
-  cmdkResults.innerHTML=out.map((r,idx)=>{
-    const asset=r[C.ASSET]||''; const initials=(String(r[C.NAME]||'?').trim().charAt(0)||'?').toUpperCase();
-    return `<div class="cmdk-item${idx===0?' active':''}" data-idx="${idx}">
-      <div class="ci-ic">${esc(initials)}</div>
-      <div class="ci-main"><div class="ci-name">${esc(r[C.NAME])||'—'}</div>
-        <div class="ci-sub">A/c ${esc(r[C.ACCT_NO])} · ${esc(r[C.SOL_DESC])||''} · Cust ${esc(r[C.CUST_ID])}</div></div>
-      ${asset?`<span class="badge-pill ci-badge ${esc(asset)}">${esc(asset)}</span>`:''}
-    </div>`;
-  }).join('');
+  cmdkResults.innerHTML=out.map((m,idx)=>cmdkItemHtml(m,idx)).join('');
   cmdkResults.querySelectorAll('.cmdk-item').forEach(it=>{
     it.addEventListener('click',()=>pickCmdk(+it.dataset.idx));
     it.addEventListener('mousemove',()=>setCmdkActive(+it.dataset.idx));
   });
 }
 function setCmdkActive(idx){ cmdkActive=idx; cmdkResults.querySelectorAll('.cmdk-item').forEach(it=>it.classList.toggle('active',+it.dataset.idx===idx)); }
-function pickCmdk(idx){ const r=cmdkMatches[idx]; if(!r) return; closeCmdk(); openDetail(String(r[C.CUST_ID])); }
+/* NPA results link to the real OTS settlement detail (openDetail); KCC
+   Overdue/PNPA rows have no customer ID or the fuller record that detail
+   view needs (confirmed separate datasets, not just a filtered view of
+   the same one), so they open a small read-only info card instead. */
+function pickCmdk(idx){
+  const m=cmdkMatches[idx]; if(!m) return;
+  closeCmdk();
+  if(m.source==='npa') openDetail(String(m.row[C.CUST_ID]));
+  else showQuickAcctDetail(m.source, m.row);
+}
+function showQuickAcctDetail(source, row){
+  const isKcc = source==='kccov';
+  const title = isKcc ? row[KC.NAME] : row[PC.NAME];
+  const branch = isKcc ? row[KC.BRANCH] : row[PC.BRANCH];
+  const sub = `${esc(branch)||'—'} · ${isKcc?'KCC Overdue':'Daily PNPA'}`;
+  const fields = isKcc ? [
+    ['Account No', row[KC.ACCT]], ['Scheme', row[KC.SCHEME]], ['Outstanding', fmtINR2(row[KC.OS])],
+    ['CADU', fmtINR2(row[KC.CADU])], ['Limit', fmtINR2(row[KC.LIMIT])], ['Cust NPA Date', row[KC.CUSTNPADATE]],
+    ['F.Y.', row[KC.FY]], ['Category', row[KC.CATEGORY]], ['SMA', row[KC.SMA]], ['Reason', row[KC.REASON]],
+  ] : [
+    ['Account No', row[PC.ACCT]], ['Scheme', row[PC.SCHEME]], ['Outstanding', fmtINR2(row[PC.OS])],
+    ['CADU', fmtINR2(row[PC.CADU])], ['Limit', fmtINR2(row[PC.LIMIT])], ['Review Date', row[PC.REVIEW]],
+    ['Reason', row[PC.REASON]],
+  ];
+  document.getElementById('quickAcctTitle').textContent = title || '—';
+  document.getElementById('quickAcctSub').innerHTML = sub;
+  document.getElementById('quickAcctGrid').innerHTML = fields.map(([k,v])=>`<div><div class="k">${esc(k)}</div><div class="v">${esc(v!==null&&v!==undefined&&v!==''?v:'—')}</div></div>`).join('');
+  document.getElementById('quickAcctModalOverlay').classList.add('show');
+}
+window.showQuickAcctDetail = showQuickAcctDetail;
 function cmdkEnsureVisible(){ const el=cmdkResults.querySelector('.cmdk-item.active'); if(el) el.scrollIntoView({block:'nearest'}); }
 if(cmdkOverlay){
   cmdkInput.addEventListener('input',()=>renderCmdk(cmdkInput.value));
@@ -3662,6 +3746,9 @@ function toggleTheme(){
   on('cmdkBtnNavMobile','click',()=>openCmdk());
   on('listModalCloseX','click',()=>closeListModal());
   document.getElementById('listModalOverlay')?.addEventListener('click',(e)=>{ if(e.target.id==='listModalOverlay') closeListModal(); });
+  const closeQuickAcctModal = () => document.getElementById('quickAcctModalOverlay')?.classList.remove('show');
+  on('quickAcctCloseX','click',closeQuickAcctModal);
+  document.getElementById('quickAcctModalOverlay')?.addEventListener('click',(e)=>{ if(e.target.id==='quickAcctModalOverlay') closeQuickAcctModal(); });
   on('clearBtn','click',()=>clearSearch());
   on('searchGoBtn','click',()=>runSearch());
   on('uploadDrop','click',()=>document.getElementById('fileInput').click());
