@@ -1449,9 +1449,6 @@ async function confirmPublish(){
     if(__pendingPublish.type!=='rollback' && __pendingKccOverdueData){
       extraFiles = (extraFiles||[]).concat([{ path:'data/kcc-overdue.json', content: __pendingKccOverdueData }]);
     }
-    if(__pendingPublish.type!=='rollback' && __pendingDailyProjData){
-      extraFiles = (extraFiles||[]).concat([{ path:'data/daily-npa-projection.json', content: __pendingDailyProjData }]);
-    }
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
       : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress, extraFiles);
@@ -1460,7 +1457,6 @@ async function confirmPublish(){
     __pendingBankData = null;
     __pendingPnpaData = null;
     __pendingKccOverdueData = null;
-    __pendingDailyProjData = null;
     closePublishReview();
     loadVersionHistory();
   } catch(err){
@@ -3241,7 +3237,6 @@ const DP_DISPLAY = [
 ];
 const DP_EDITABLE_COLS = DP_DISPLAY.map((c,i)=>i).filter(i=>DP_DISPLAY[i].editable);
 let DAILY_PROJ_DATA = null;
-let __pendingDailyProjData = null;
 let dailyProjSort = {key:null, dir:'asc'};
 /* Excel-style AutoFilter, keyed by column index. Numeric columns store
    {kind:'numeric', mode: 'nonzero'|'zero'|'notblank'|'blank'}; text
@@ -3260,12 +3255,125 @@ function dpPushUndo(){
 function dailyProjUndo(){
   if(!dailyProjUndoStack.length) return;
   DAILY_PROJ_DATA.rows = dailyProjUndoStack.pop();
-  __pendingDailyProjData = DAILY_PROJ_DATA;
-  const publishBtn = document.getElementById('publishBtn');
-  if(publishBtn) publishBtn.disabled = false;
+  DAILY_PROJ_DATA.rows.forEach((row,i)=>dpQueueLiveSync(i));
+  dpFlushLiveSync();
   renderDailyProjBody();
 }
 window.dailyProjUndo = dailyProjUndo;
+
+/* ---------- Live sync: every edit saves straight to everyone, no Publish
+   step for this sheet -- it's edited by whoever's on shift, not just the
+   Admin, and per the user's explicit ask this grid behaves like a shared
+   live spreadsheet. Writes go through a small Vercel relay (same repo-scoped
+   token as OTS-lock syncing) that merges just the changed row(s) into
+   data/daily-npa-projection.json on GitHub; reads are just the existing
+   fetchJson polled every few seconds while this tab is open, same pattern
+   as refreshLocksFromServer above. */
+const DP_LIVE_RELAY_URL = 'https://npa-dashboard.vercel.app/api/daily-proj-live';
+const DP_POLL_MS = 3000;
+let dpLivePending = new Map(); // rowIndex -> row array, not yet confirmed saved
+let dpLiveDebounce = null;
+let dpLiveFailCount = 0;
+let dpLiveRetryTimer = null;
+let dpPollTimer = null;
+
+function dpSetSyncStatus(state){
+  const el = document.getElementById('dailyProjSyncStatus');
+  if(!el) return;
+  el.className = 'dp-sync-status ' + state;
+  el.textContent = state==='saving' ? '◐ Saving…' : state==='error' ? '✕ Not syncing — retrying…' : '● Live';
+}
+function dpQueueLiveSync(rowIndex){
+  if(!DAILY_PROJ_DATA || !DAILY_PROJ_DATA.rows[rowIndex]) return;
+  dpLivePending.set(rowIndex, DAILY_PROJ_DATA.rows[rowIndex]);
+  dpSetSyncStatus('saving'); // queued immediately, not just once the network call actually starts
+  clearTimeout(dpLiveDebounce);
+  dpLiveDebounce = setTimeout(()=>dpFlushLiveSync(), 1200);
+}
+function dpFlushLiveSync(){
+  clearTimeout(dpLiveDebounce);
+  if(!dpLivePending.size) return;
+  const updates = [...dpLivePending.entries()].map(([rowIndex,row])=>({rowIndex, row}));
+  dpSetSyncStatus('saving');
+  fetch(DP_LIVE_RELAY_URL, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ updates }),
+  }).then(r => { if(!r.ok) throw new Error('sync_failed_'+r.status); return r.json(); })
+    .then(()=>{
+      updates.forEach(u => { if(dpLivePending.get(u.rowIndex)===u.row) dpLivePending.delete(u.rowIndex); });
+      dpLiveFailCount = 0;
+      clearTimeout(dpLiveRetryTimer);
+      dpSetSyncStatus('live');
+    })
+    .catch(()=>{
+      // Never drop the edit -- it stays in dpLivePending and keeps
+      // retrying with backoff, since removing Publish means this relay
+      // call is the ONLY thing that makes an edit visible to anyone else
+      // (or durable across a refresh) -- a silently-dropped retry here
+      // would be silent data loss, not just a sync delay.
+      dpLiveFailCount++;
+      dpSetSyncStatus('error');
+      clearTimeout(dpLiveRetryTimer);
+      dpLiveRetryTimer = setTimeout(()=>dpFlushLiveSync(), Math.min(2000*Math.pow(2,dpLiveFailCount), 20000));
+    });
+}
+
+/* Pulls in whatever anyone else has saved since this tab last checked.
+   Skips a row entirely if it's still in dpLivePending (this browser has a
+   newer local edit not yet confirmed saved -- a poll landing in between
+   must not clobber it) or if it's the row the user is currently typing in
+   (checked live, not cached, since focus can move between polls). Updates
+   are applied as surgical per-row DOM patches, not a full re-render, so
+   an in-progress keystroke elsewhere in the grid never loses focus. */
+function dpPollLive(){
+  if(!DAILY_PROJ_DATA) return;
+  fetchJson('data/daily-npa-projection.json?t=' + Date.now()).then(fresh=>{
+    if(!fresh || !Array.isArray(fresh.rows) || !DAILY_PROJ_DATA) return;
+    const table = document.getElementById('dailyProjTable');
+    const focusedTr = document.activeElement && document.activeElement.closest ? document.activeElement.closest('tr[data-orig]') : null;
+    const focusedOrig = focusedTr ? parseInt(focusedTr.dataset.orig,10) : null;
+    let anyApplied = false;
+    fresh.rows.forEach((row,i)=>{
+      if(i===focusedOrig || dpLivePending.has(i)) return;
+      if(JSON.stringify(row)===JSON.stringify(DAILY_PROJ_DATA.rows[i])) return;
+      DAILY_PROJ_DATA.rows[i] = row;
+      anyApplied = true;
+      const tr = table && table.querySelector(`tbody tr[data-orig="${i}"]`);
+      if(tr) dpApplyRowToDom(tr, row, i);
+    });
+    if(anyApplied){
+      const stripEl = document.querySelector('#dailyProjArea .projstat-row');
+      const order = dpComputeVisibleOrder();
+      if(stripEl) stripEl.outerHTML = renderSummaryStrip(dpSummary(order.map(idx=>DAILY_PROJ_DATA.rows[idx])));
+    }
+  }).catch(()=>{});
+}
+function dpApplyRowToDom(tr, row, origIdx){
+  DP_DISPLAY.forEach((c,ci)=>{
+    const td = tr.cells[ci];
+    if(!td) return;
+    if(c.type==='recovery' || c.type==='gap'){
+      const v = dpCellValue(row, ci);
+      td.className = c.type==='gap' ? dpGapClass(v) : '';
+      td.textContent = v===null ? '—' : v.toFixed(2);
+      return;
+    }
+    if(!c.editable) return;
+    const ctrl = td.querySelector('input.editgrid-input, select.editgrid-select');
+    if(!ctrl) return;
+    const val = gridCellDisplay(row[c.dp]);
+    if(document.activeElement!==ctrl) ctrl.value = val;
+  });
+}
+function dpStartLivePolling(){
+  clearInterval(dpPollTimer);
+  dpPollTimer = setInterval(()=>{ if(document.visibilityState==='visible') dpPollLive(); }, DP_POLL_MS);
+}
+function dpStopLivePolling(){
+  clearInterval(dpPollTimer);
+  dpPollTimer = null;
+}
 
 function dpRecovery(row){
   const m = row[DP.MORNING_NPA], e = row[DP.EVENING_NPA];
@@ -3317,7 +3425,10 @@ function renderDailyProj(){
       el.innerHTML = `<div class="empty-state"><h2>Could not load Daily NPA Projection</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
     });
 }
-function refreshDailyProj(){ DAILY_PROJ_DATA = null; renderDailyProj(); }
+function refreshDailyProj(){
+  if(dpLivePending.size && !confirm('Some of your edits on this grid haven\'t synced yet. Refreshing now could lose them. Refresh anyway?')) return;
+  DAILY_PROJ_DATA = null; renderDailyProj();
+}
 
 function dailyProjSortBy(idx){
   dailyProjSort = (dailyProjSort.key===idx) ? {key:idx, dir: dailyProjSort.dir==='asc'?'desc':'asc'} : {key:idx, dir:'asc'};
@@ -3529,7 +3640,7 @@ function renderDailyProjBody(){
 
   el.innerHTML = renderSummaryStrip(dpSummary(order.map(i=>d.rows[i]))) +
     `<div class="projgrid-toolbar no-print">
-      <p class="projgrid-hint">Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Recovery, GAP and the totals above recalculate instantly. Raw entries go live the next time you hit Publish (Settings → Update Data). Click the ⏷ on any column header to filter, just like Excel — the totals above and Export Excel follow whatever's currently filtered.</p>
+      <p class="projgrid-hint"><span id="dailyProjSyncStatus" class="dp-sync-status live">● Live</span> — every edit saves and syncs to everyone within a few seconds, no Publish needed for this sheet. Click any cell to type, or select a block in Excel, copy, click the top-left cell here and paste — it fills across and down automatically. Recovery, GAP and the totals above recalculate instantly. Click the ⏷ on any column header to filter, just like Excel — the totals above and Export Excel follow whatever's currently filtered.</p>
       <div class="projgrid-btns">
         <button type="button" class="btn-ghost" id="dailyProjUndoBtn"${dailyProjUndoStack.length?'':' disabled'}>↺ Undo</button>
         <button type="button" class="btn-ghost" id="dailyProjClearBtn" style="border-color:var(--red);color:var(--red)">Clear All Fields</button>
@@ -3649,9 +3760,7 @@ function renderDailyProjBody(){
 function commitDailyProjCell(origIdx, colIdx, rawValue){
   const col = DP_DISPLAY[colIdx];
   DAILY_PROJ_DATA.rows[origIdx][col.dp] = parseGridCell(rawValue, col.numeric);
-  __pendingDailyProjData = DAILY_PROJ_DATA;
-  const publishBtn = document.getElementById('publishBtn');
-  if(publishBtn) publishBtn.disabled = false;
+  dpQueueLiveSync(origIdx);
 }
 
 /* Clears every editable field (Morning/Evening NPA, Commitment,
@@ -3659,10 +3768,11 @@ function commitDailyProjCell(origIdx, colIdx, rawValue){
    are left untouched since they're fixed reference columns, not entries.
    Confirmed first since this is a same-day, multi-edit sheet where a
    stray tap could otherwise wipe out figures already typed in that
-   morning. */
+   morning -- and since there's no Publish step left to catch a mistake
+   after the fact, only Undo does. */
 function clearDailyProjFields(){
   if(!DAILY_PROJ_DATA || !DAILY_PROJ_DATA.rows) return;
-  if(!confirm('Clear all editable fields (Morning/Evening NPA, Commitment, Eve. Commitment, Follow-up, Remarks) for every branch? You can Undo right after if this was a mistake, but it can\'t be undone once you Publish.')) return;
+  if(!confirm('Clear all editable fields (Morning/Evening NPA, Commitment, Eve. Commitment, Follow-up, Remarks) for every branch? This clears it for everyone immediately -- you can Undo right after if this was a mistake.')) return;
   dpPushUndo();
   DAILY_PROJ_DATA.rows.forEach(row=>{
     row[DP.MORNING_NPA] = null;
@@ -3672,9 +3782,8 @@ function clearDailyProjFields(){
     row[DP.FOLLOWUP] = null;
     row[DP.REMARKS] = null;
   });
-  __pendingDailyProjData = DAILY_PROJ_DATA;
-  const publishBtn = document.getElementById('publishBtn');
-  if(publishBtn) publishBtn.disabled = false;
+  DAILY_PROJ_DATA.rows.forEach((row,i)=>dpQueueLiveSync(i));
+  dpFlushLiveSync();
   renderDailyProjBody();
 }
 
@@ -3726,6 +3835,7 @@ function switchView(view){
   if(view==='pnpa') renderPnpaDashboard();
   if(view==='kccov') renderKccOverdue();
   if(view==='dailyproj') renderDailyProj();
+  if(view==='dailyproj') dpStartLivePolling(); else dpStopLivePolling();
   const mainCol = document.getElementById('mainCol');
   if(mainCol) mainCol.scrollTop = 0;
 }
@@ -3797,7 +3907,6 @@ function toggleTheme(){
   // stale cached copy, as long as there's a connection.
   const refreshCurrentView = (e) => {
     const activeView = document.querySelector('.view.active')?.dataset.view;
-    if(activeView==='dailyproj' && __pendingDailyProjData && !confirm('You have unpublished edits on this grid. Refreshing will discard them. Continue?')) return;
     e.currentTarget.classList.add('is-spinning');
     if(activeView==='bank'){ refreshBankDashboard(); setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700); }
     else if(activeView==='pnpa'){ refreshPnpaDashboard(); setTimeout(()=>e.currentTarget.classList.remove('is-spinning'), 700); }

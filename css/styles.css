@@ -1205,6 +1205,14 @@ select.editgrid-select{cursor:pointer;-webkit-appearance:none;appearance:none;ba
 .projgrid-btns .btn-ghost:disabled{opacity:.4;cursor:not-allowed}
 .dp-filter-status{flex-basis:100%;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink-mute);font-weight:600}
 .dp-filter-status .btn-ghost{padding:5px 12px;font-size:11.5px}
+/* Live-sync status: this grid has no Publish step, so this is the only
+   signal the user gets that an edit actually reached everyone else --
+   deliberately not subtle, since a missed sync here is silent data loss,
+   not just a stale view. */
+.dp-sync-status{font-weight:800;margin-right:2px;white-space:nowrap}
+.dp-sync-status.live{color:var(--green)}
+.dp-sync-status.saving{color:var(--amber)}
+.dp-sync-status.error{color:var(--red)}
 
 /* ---------- Daily NPA Projection: Excel-style AutoFilter on each column ---------- */
 #dailyProjTable th{position:relative}
