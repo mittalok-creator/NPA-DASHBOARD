@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-07-24
+Last updated: 2026-07-26
 
 ---
 
@@ -495,6 +495,71 @@ regional aggregate. Checked in both themes and at a mobile viewport, where
 the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
+
+### Daily NPA Projection now syncs live to every user, no Publish needed for this tab (2026-07-26)
+
+You asked: "Projection har user ko live changes dikhenge na chahe koi bhi
+user jo bhi last type kare wo type hote hi har user ko live hona chahiye
+bina koi push k ye live intdrface hai realtime update" — the grid should
+show every user's changes to everyone else the instant they're typed, with
+no Publish/push step, because this is meant to be a genuinely live shared
+interface. Clarified scope via two quick questions and you picked
+near-real-time (2-3 second sync, no new paid infra) and removing Publish
+entirely for this one tab (every other tab keeps Publish unchanged).
+
+- **New relay endpoint** `relay/api/daily-proj-live.js`, built on the exact
+  same pattern as the existing `lock-ots.js` OTS-lock relay: no GitHub
+  sign-in needed, writes go through a repo-scoped token held server-side
+  (`LOCK_OTS_GITHUB_TOKEN` — the same Vercel env var OTS locking already
+  uses, no new setup). Body is `{ updates: [{ rowIndex, row }, ...] }` —
+  rows are addressed by array index (this 55-branch sheet is only ever
+  edited in place, rows never added/removed/reordered) and replaced whole,
+  so the server stays "dumb" about column meaning. Uses the same GitHub
+  Contents API GET-sha→merge→PUT-with-sha cycle, retried up to 3 times on
+  a 409/422 sha conflict from a concurrent writer.
+- **Client-side write path**: edits are no longer per-keystroke commits —
+  `dpQueueLiveSync()` debounces edits per-row into a `Map`, and
+  `dpFlushLiveSync()` sends everything queued as ONE batched POST after
+  ~1200ms of inactivity, so a multi-branch Excel paste becomes one write,
+  not dozens. A failed sync is never dropped (Publish, the old safety net,
+  no longer exists for this tab) — it retries with exponential backoff
+  (capped at 20s) and shows a persistent, hard-to-miss status pill:
+  **● Live** (green), **◐ Saving…** (amber, shown the instant an edit is
+  queued, not just once the network call starts), or **✕ Not syncing —
+  retrying…** (red).
+- **Client-side read path**: `dpPollLive()` polls the existing public
+  `data/daily-npa-projection.json` (no new endpoint needed for reads — it's
+  just the same GitHub Pages static file, cache-busted) every 3 seconds
+  while the tab is visible, and merges in any row that's actually changed —
+  **except** a row the local user currently has an input focused in
+  (checked live against `document.activeElement`, not cached) or a row
+  still sitting unconfirmed in the local pending map, so a slow round-trip
+  can never let a poll clobber someone's own newer, not-yet-saved edit.
+  A changed row is patched into the DOM surgically cell-by-cell
+  (`dpApplyRowToDom()`), not via a full table re-render, so a poll landing
+  mid-keystroke anywhere else in the grid never steals focus.
+  Undo, Clear All Fields, and paste all route through the same queue/flush
+  functions, so they sync live too.
+- **Publish removed for this tab only**: `__pendingDailyProjData` deleted
+  entirely; `confirmPublish()` no longer touches this file at all. Every
+  other tab (Dashboard NPA data, Bank Dashboard, PNPA, KCC Overdue) is
+  completely unchanged and still requires the Admin's manual Publish.
+- **Verified with Playwright** (mocked relay for the write side, direct
+  file edits simulating "another user" for the read side): editing a cell
+  recalculates Recovery/GAP/the summary strip instantly as before, flips
+  to "Saving" immediately then back to "Live" once the batched POST
+  resolves, with the exact expected payload. Separately confirmed the poll
+  path: an unfocused row picks up another user's change within one 3s
+  poll; a row with focus is left untouched (and regains it correctly on
+  the next poll after blur); a row with a local edit still pending sync is
+  also left untouched even if the server file changed underneath it too.
+  Zero console errors across all runs.
+- **Depends on `LOCK_OTS_GITHUB_TOKEN` already being configured in
+  Vercel** (see Section 5 — flagged there since 2026-07-23 for OTS lock
+  sync). If OTS locking already syncs live across devices for you, this
+  will too, automatically. If that one-time setup was never finished,
+  writes from this tab will fail the same way lock syncing would, until
+  it's done — no other part of the app is affected either way.
 
 ### One-time direct publish of real branch advance data (2026-07-22, same day)
 
