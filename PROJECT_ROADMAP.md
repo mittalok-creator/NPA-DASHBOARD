@@ -496,6 +496,27 @@ the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
 
+### Bug fix: only the 3 left-frozen header cells were staying pinned on vertical scroll, not the whole header row (2026-07-26, same day)
+
+You reported: "Projection ki table main keval pahle 2 column ki 1st row
+freeze hai baki nahi jabki 1st row header wali puri row freeze honi
+chahiye" — only the first couple of header cells stayed put while
+scrolling the grid down, the rest of the header row scrolled away with
+the data. Root cause: the AutoFilter feature (2026-07-23) added
+`#dailyProjTable th{position:relative}` to anchor each column's filter
+popover — an ID selector, which outranks the class-based sticky-header
+rule (`.projgrid-scroll .dash-table thead th{position:sticky;top:0}`) on
+specificity for the `position` property alone, silently un-stickying
+every header cell except S N/Sol ID/Branch (which already had their own
+even-more-specific left-freeze override). Fixed by changing that rule to
+`#dailyProjTable thead th{position:sticky;top:0;z-index:2}` — same or
+higher specificity, so it wins outright instead of fighting the other
+rule column-by-column, and `position:sticky` still anchors the filter
+popover exactly as `position:relative` did. Verified with Playwright:
+after scrolling the grid 400px, all 11 header cells report computed
+`position:sticky` and sit at the identical `top` offset (fully aligned,
+whole row moves together).
+
 ### Daily NPA Projection now syncs live to every user, no Publish needed for this tab (2026-07-26)
 
 You asked: "Projection har user ko live changes dikhenge na chahe koi bhi
