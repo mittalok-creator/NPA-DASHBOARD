@@ -1214,8 +1214,14 @@ select.editgrid-select{cursor:pointer;-webkit-appearance:none;appearance:none;ba
 .dp-sync-status.saving{color:var(--amber)}
 .dp-sync-status.error{color:var(--red)}
 
-/* ---------- Daily NPA Projection: Excel-style AutoFilter on each column ---------- */
-#dailyProjTable th{position:relative}
+/* ---------- Daily NPA Projection: Excel-style AutoFilter on each column ----------
+   thead th (not plain th -- td never uses this selector, and #dailyProjTable is
+   an ID selector so it must stay AT LEAST as specific as the sticky-header rule
+   above, or it silently wins on the `position` property and un-stickies every
+   header cell except the 3 left-frozen ones, which have their own even-more-
+   specific override). position:sticky still anchors the absolutely-positioned
+   filter popover, same as position:relative would have. */
+#dailyProjTable thead th{position:sticky;top:0;z-index:2}
 .dp-th-label{cursor:pointer;user-select:none;display:inline-flex;align-items:center}
 /* A distinct pill/chip, not just another small triangle character --
    originally used the "⏷" glyph right next to the sort label's own "▾"
