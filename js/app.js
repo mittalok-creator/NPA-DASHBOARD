@@ -62,6 +62,23 @@ function fmtCr(n){
   return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function esc(s){ return (s===null||s===undefined)?'':String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* Two different print jobs on this one page want two different @page
+   sizes (OTS Calculator: portrait A4; Daily NPA Projection grid: landscape
+   A4) -- but @page has no selector to scope it by view, so two static
+   @page rules in the stylesheet just fight over the "size" property and
+   whichever is later in source order silently wins for BOTH print jobs.
+   Swapping a single <style> tag's @page rule right before each print call
+   keeps only one @page declaration in the document at any moment, so each
+   button reliably gets its own layout regardless of the other's CSS. */
+function printWithPageSize(pageCss){
+  let el = document.getElementById('dynamicPrintPage');
+  if(!el){ el = document.createElement('style'); el.id = 'dynamicPrintPage'; document.head.appendChild(el); }
+  el.textContent = `@page{${pageCss}}`;
+  window.print();
+}
+function printOtsSheet(){ printWithPageSize('size:A4;margin:12mm'); }
+window.printOtsSheet = printOtsSheet;
 /* Illustrative severity bands for NPA % (NPA outstanding / total advance),
    not a claim of official RBI benchmark thresholds -- just enough to spot
    a high-NPA branch/region at a glance. */
@@ -338,7 +355,7 @@ function openDetail(custId, jumpAcct){
           <h2>${esc(custRow[C.NAME])||'—'}</h2>
           <p>${esc(custRow[C.SOL_DESC])||''} · Cust ID ${esc(custRow[C.CUST_ID])}</p>
         </div>
-        <button class="share-btn" onclick="window.print()" title="Print / Share" aria-label="Print or share this report">
+        <button class="share-btn" onclick="printOtsSheet()" title="Print / Share" aria-label="Print or share this report">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
         </button>
       </div>
@@ -3661,7 +3678,7 @@ function renderDailyProjBody(){
   const undoBtn = document.getElementById('dailyProjUndoBtn');
   if(undoBtn) undoBtn.onclick = () => dailyProjUndo();
   const printBtn = document.getElementById('dailyProjPrintBtn');
-  if(printBtn) printBtn.onclick = () => window.print();
+  if(printBtn) printBtn.onclick = () => printWithPageSize('size:A4 landscape;margin:8mm');
   const excelBtn = document.getElementById('dailyProjExcelBtn');
   if(excelBtn) excelBtn.onclick = () => exportDailyProjExcel();
   const clearFiltersBtn = document.getElementById('dailyProjClearFiltersBtn');

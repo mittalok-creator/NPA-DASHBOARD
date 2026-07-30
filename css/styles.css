@@ -708,27 +708,34 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 .eligible-banner.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0)}
 .eligible-banner-close{margin-left:auto;flex-shrink:0;font-size:15px;opacity:.85;cursor:pointer}
 
-/* ---------- Print view ---------- */
-.pv-header{text-align:center;border-bottom:3px solid #333;padding-bottom:12px;margin-bottom:22px}
-.pv-title{font-size:19px;font-weight:800;letter-spacing:1px}
-.pv-sub{font-size:12.5px;color:#333;margin-top:3px}
-.pv-meta{display:flex;justify-content:center;gap:28px;font-size:12px;color:#333;margin-top:8px}
-.pv-borrower{margin-bottom:24px}
-.pv-name{font-size:16px;font-weight:800}
-.pv-addr{font-size:12.5px;color:#444;margin-top:2px}
-.pv-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 32px;margin-top:14px}
-.pv-info-grid div{display:flex;justify-content:space-between;font-size:12px;border-bottom:1px dotted #ccc;padding:4px 0}
+/* ---------- Print view ----------
+   Sized to reliably fit the OTS Calculator sheet (header + borrower info +
+   the fixed 18-row particulars table + aggregate totals + footer) on a
+   single A4 page -- this row count is constant regardless of how many
+   loan accounts print as columns, so a compact-but-legible static size
+   (not a dynamic per-print scale) is enough, with real headroom to spare
+   for a wrapped address line or similar. Previously sized for on-screen
+   comfort, which spilled the bottom third of the table onto a 2nd page. */
+.pv-header{text-align:center;border-bottom:2px solid #333;padding-bottom:6px;margin-bottom:10px}
+.pv-title{font-size:16px;font-weight:800;letter-spacing:.6px}
+.pv-sub{font-size:10.5px;color:#333;margin-top:2px}
+.pv-meta{display:flex;justify-content:center;gap:24px;font-size:10px;color:#333;margin-top:4px}
+.pv-borrower{margin-bottom:10px}
+.pv-name{font-size:13.5px;font-weight:800}
+.pv-addr{font-size:10.5px;color:#444;margin-top:1px}
+.pv-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;margin-top:6px}
+.pv-info-grid div{display:flex;justify-content:space-between;font-size:10px;border-bottom:1px dotted #ccc;padding:2px 0}
 .pv-info-grid .k{color:#555}
 .pv-info-grid .v{font-weight:700}
-.pv-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:24px}
-.pv-table th,.pv-table td{border:1px solid #bbb;padding:7px 10px;text-align:right;line-height:1.4}
+.pv-table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:10px}
+.pv-table th,.pv-table td{border:1px solid #bbb;padding:2.5px 8px;text-align:right;line-height:1.15}
 .pv-table th:first-child,.pv-table td.pv-label{text-align:left;font-weight:700;background:#f4f4f4}
-.pv-table thead th{background:#e8e8e8;font-weight:800;padding:8px 10px}
-.pv-agg{margin-bottom:22px}
-.pv-agg-title{font-size:12.5px;font-weight:800;letter-spacing:3px;text-align:center;margin-bottom:10px}
-.pv-agg-row{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px dotted #ccc}
-.pv-footer{text-align:center;font-size:11px;color:#444;letter-spacing:1px;margin-top:20px}
-.pv-schemes{display:flex;justify-content:space-around;font-size:11px;color:#555;margin-top:6px}
+.pv-table thead th{background:#e8e8e8;font-weight:800;padding:4px 8px}
+.pv-agg{margin-bottom:8px}
+.pv-agg-title{font-size:10.5px;font-weight:800;letter-spacing:2.5px;text-align:center;margin-bottom:5px}
+.pv-agg-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px dotted #ccc}
+.pv-footer{text-align:center;font-size:9.5px;color:#444;letter-spacing:.6px;margin-top:8px}
+.pv-schemes{display:flex;justify-content:space-around;font-size:9.5px;color:#555;margin-top:3px}
 
 /* ---------- Cmd+K command palette ---------- */
 .cmdk-overlay{position:fixed;inset:0;z-index:120;background:var(--scrim);backdrop-filter:blur(6px);
@@ -824,12 +831,19 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
   .detail-active .side-rail{display:none!important}
 }
 @media print{
-  @page{size:A4;margin:14mm}
+  /* @page size is injected dynamically per print job (see printWithPageSize
+     in js/app.js) -- this view's own portrait/12mm and the Daily NPA
+     Projection grid's landscape/8mm used to both live here as static rules,
+     but @page can't be scoped by selector, so the two silently fought over
+     the "size" property and whichever was later in the stylesheet won for
+     BOTH print jobs regardless of which view was open. */
   body *{visibility:hidden}
   #printArea, #printArea *{visibility:visible}
   #printArea{display:block!important;position:absolute;top:0;left:0;width:100%}
   body{background:#fff}
   #printArea{overflow:visible}
+  .pv-table,.pv-agg{page-break-inside:avoid}
+  .pv-table thead{display:table-header-group}
 }
 
 /* ==================================================================
@@ -1254,7 +1268,6 @@ select.editgrid-select{cursor:pointer;-webkit-appearance:none;appearance:none;ba
   #sideNav,#bottomTabs,.mobile-sig,header.app-head,#aggBar,.no-print{display:none!important}
   #mainCol{padding:0!important}
   #app,#bgFx{background:#fff!important}
-  @page{size:A4 landscape;margin:8mm}
   body{background:#fff!important}
   .view{display:none!important}
   .view.active{display:block!important}

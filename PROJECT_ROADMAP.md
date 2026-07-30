@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-07-26
+Last updated: 2026-07-30
 
 ---
 
@@ -495,6 +495,47 @@ regional aggregate. Checked in both themes and at a mobile viewport, where
 the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
+
+### Bug fix: OTS Calculator print sheet spilled onto 2 pages instead of fitting 1 (2026-07-30)
+
+You sent the actual printed PDF: "OTS SHEET ASE PRINT HO RAHE HAI JABKI YE
+MUJHE 1 PAGE PAR CHAHIYE. PURA 1 PAGE PAR ALIGN KARO" — the borrower's
+Sanction Date through Net O/S rows landed on page 1, then Provision
+through Impact on P&L plus the Aggregate Totals spilled onto a 2nd page.
+Two separate things were wrong:
+
+1. **The `.pv-*` print styles were sized for on-screen comfort, not a
+   single printed page.** The particulars table always has exactly 18
+   rows regardless of how many loan accounts a borrower has (accounts
+   print as extra *columns*, not rows), so the sheet's height is
+   effectively fixed — it just needed tightening, not a dynamic
+   scale-to-fit. Compressed font sizes, paddings and margins across the
+   header, borrower-info grid, particulars table, aggregate totals and
+   footer, and trimmed the page margin from 14mm to 12mm — built in
+   deliberate headroom (verified content height leaves ~250px of A4 page
+   to spare) so an occasional 2-line address won't tip it back over.
+2. **Found in the process, a real latent bug**: this print view's own
+   `@page{size:A4;margin:12mm}` and the Daily NPA Projection grid's
+   `@page{size:A4 landscape;margin:8mm}` (added 2026-07-23) both lived as
+   unconditional rules in the stylesheet. `@page` can't be scoped to a
+   selector/view, so the two were silently fighting over the page `size`
+   property for **every** print job on the site, with whichever rule
+   happened to sit later in the stylesheet winning regardless of which
+   view was actually being printed. Fixed by removing both static rules
+   and instead injecting a single `<style>` tag's `@page` text right
+   before each `window.print()` call (`printWithPageSize()` in
+   `js/app.js`) — the OTS Calculator's Print/Share button now calls
+   `printOtsSheet()` (portrait/12mm) and the Daily NPA Projection grid's
+   Print button sets landscape/8mm, each independently, with no more
+   cross-view interference.
+- **Verified with Playwright + `page.pdf({preferCSSPageSize:true})`**
+  (which honors the page's actual CSS `@page`, the same as a real
+  "Save as PDF"), against the exact real account from your reported PDF
+  (KAMLA DEVI, Cust ID 710391021): clicking the real Print/Share button
+  correctly injects the portrait/12mm rule and the resulting PDF is
+  **1 page** (confirmed via `pypdf`'s page count), where before it was 2.
+  Separately confirmed the Daily NPA Projection grid's print button still
+  independently gets its own landscape/8mm rule, unaffected.
 
 ### Bug fix: only the 3 left-frozen header cells were staying pinned on vertical scroll, not the whole header row (2026-07-26, same day)
 
