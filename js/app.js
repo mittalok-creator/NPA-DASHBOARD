@@ -649,27 +649,32 @@ function renderPrintView(){
   let totalOtsSum = 0, anyOts = false;
   slots.forEach(s=>{ const v = otsFor(s); if(v!==null){ totalOtsSum+=v; anyOts=true; } });
 
+  // Rows the sheet is actually read for -- bolded/enlarged in print (see
+  // .pv-table tr.pv-strong in styles.css) so they stand out from the
+  // supporting particulars around them, same "which numbers matter"
+  // convention as the on-screen loan table's own lt-strong rows.
+  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total Contractual Dues','Total P&L','OTS Amount','Total Sacrifice','Impact on P&L']);
   const rows = [
     ['Sanction Date', s=>fmtDate(toDate(s.sanctionDate))],
-    ['Sanction Limit', s=>fmtINR(s.sanctionLimit)],
+    ['Sanction Limit', s=>fmtINR2(s.sanctionLimit)],
     ['Asset Code', s=>esc(s.assetCode)||'—'],
     ['NPA Date', s=>fmtDate(toDate(s.npaDate))],
     ['Days in NPA', s=>s.daysNpa!==''?s.daysNpa.toLocaleString('en-IN')+' days':'—'],
-    ['O/S Balance', s=>fmtINR(s.os)],
-    ['UCI @ 8.5%', s=>fmtINR(s.uci)],
-    ['Total Dues', s=>fmtINR(s.totalDues)],
-    ['Total Contractual Dues', s=>fmtINR(s.totalContractualDues)],
-    ['Interest Reversal', s=>fmtINR(s.uri)],
-    ['Net O/S', s=>fmtINR(s.netOutstanding)],
-    ['Provision', s=>fmtINR(s.provision)],
-    ['Total P&L', s=>fmtINR(s.totalPL) + (s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'')],
-    ['OTS Amount', s=>{const v=otsFor(s); return v===null?'—':fmtINR(v);}],
-    ['Total Sacrifice', s=>{const v=otsFor(s); return v===null?'—':fmtINR(s.totalContractualDues-v);}],
-    ['Ledger Sacrifice', s=>{const v=otsFor(s); return v===null?'—':fmtINR(s.os-v);}],
-    ['BDWO Amount', s=>{const v=otsFor(s); return v===null?'—':fmtINR((s.os-v)-s.uri);}],
-    ['Impact on P&L', s=>{const v=otsFor(s); return v===null?'—':fmtINR(v-s.totalPL);}],
+    ['O/S Balance', s=>fmtINR2(s.os)],
+    ['UCI @ 8.5%', s=>fmtINR2(s.uci)],
+    ['Total Dues', s=>fmtINR2(s.totalDues)],
+    ['Total Contractual Dues', s=>fmtINR2(s.totalContractualDues)],
+    ['Interest Reversal', s=>fmtINR2(s.uri)],
+    ['Net O/S', s=>fmtINR2(s.netOutstanding)],
+    ['Provision', s=>fmtINR2(s.provision)],
+    ['Total P&L', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'')],
+    ['OTS Amount', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v);}],
+    ['Total Sacrifice', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.totalContractualDues-v);}],
+    ['Ledger Sacrifice', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.os-v);}],
+    ['BDWO Amount', s=>{const v=otsFor(s); return v===null?'—':fmtINR2((s.os-v)-s.uri);}],
+    ['Impact on P&L', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v-s.totalPL);}],
   ];
-  const tableRows = rows.map(([label,fn])=>`<tr><td class="pv-label">${label}</td>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('');
+  const tableRows = rows.map(([label,fn])=>`<tr${STRONG_ROWS.has(label)?' class="pv-strong"':''}><td class="pv-label">${label}</td>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('');
 
   document.getElementById('printArea').innerHTML = `
     <div class="pv-header">
@@ -688,7 +693,7 @@ function renderPrintView(){
         <div><span class="k">PAN</span><span class="v">${esc(custRow[C.PAN])||'—'}</span></div>
         <div><span class="k">Branch</span><span class="v">${esc(custRow[C.SOL_DESC])||'—'}</span></div>
         <div><span class="k">SB A/c</span><span class="v">${esc(custRow[C.SB_ACCT])||'—'}</span></div>
-        <div><span class="k">SB Balance</span><span class="v">${fmtINR(custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL])}</span></div>
+        <div><span class="k">SB Balance</span><span class="v">${fmtINR2(custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL])}</span></div>
       </div>
     </div>
     <table class="pv-table">
@@ -697,10 +702,10 @@ function renderPrintView(){
     </table>
     <div class="pv-agg">
       <div class="pv-agg-title">A G G R E G A T E&nbsp;&nbsp;T O T A L S</div>
-      <div class="pv-agg-row"><span>Total O/S Balance</span><span>${fmtINR(totalOS)}</span></div>
-      <div class="pv-agg-row"><span>Total Dues</span><span>${fmtINR(totalDues)}</span></div>
-      <div class="pv-agg-row"><span>Total OTS Amount</span><span>${anyOts?fmtINR(totalOtsSum):'—'}</span></div>
-      <div class="pv-agg-row"><span>Total Sacrifice</span><span>${anyOts?fmtINR(window.__totalContractualDues-totalOtsSum):'—'}</span></div>
+      <div class="pv-agg-row"><span>Total O/S Balance</span><span>${fmtINR2(totalOS)}</span></div>
+      <div class="pv-agg-row"><span>Total Dues</span><span>${fmtINR2(totalDues)}</span></div>
+      <div class="pv-agg-row"><span>Total OTS Amount</span><span>${anyOts?fmtINR2(totalOtsSum):'—'}</span></div>
+      <div class="pv-agg-row"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(window.__totalContractualDues-totalOtsSum):'—'}</span></div>
     </div>
     <div class="pv-footer">Designed &amp; Developed by ALOK MITTAL · Uttar Pradesh Gramin Bank</div>
     <div class="pv-schemes">${slots.map(s=>`<span>${esc(s.scheme)||''} · ${esc(custRow[C.SOL_DESC])||''}</span>`).join('')}</div>
