@@ -496,6 +496,47 @@ the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
 
+### Search result card now shows every linked account, not just the one that matched (2026-08-05, same day)
+
+You sent a screenshot of a result card for a borrower with "2 accounts
+linked" that still only showed ONE account's O/S Balance/Net O/S/Total
+P&L, and asked for both linked accounts' figures plus a combined Total
+O/S/Total Dues/Total P&L on the card itself — "yhin dono a/c ki itna hi
+data aana chahiye... fir ye block thoda bada ho jaye ya redesign karna
+pade" (show both accounts' data right here, even if the card needs to
+get bigger/redesigned for it).
+
+- **Root cause**: `runSearch()` dedupes matches by *customer*, not by
+  account, for any search mode other than Account No. — so a borrower
+  with 2 linked loans only ever produced ONE row in `matches`, and the
+  card rendered straight from that one row's own columns. The "🔗 N
+  accounts linked" line was always correct (computed separately via
+  `lookupLoanSlot`), but the figures above it silently belonged to just
+  one of the N accounts.
+- **Fix**: when a matched customer has more than one linked account
+  (`[1,2,3,4].map(n=>lookupLoanSlot(custId,n))...`, same helper
+  `openDetail()` already uses), the card now renders a new
+  `.result-multi` block instead of the old flat O/S/Net O/S/P&L grid —
+  one compact row per linked account (Account No., Asset Code badge,
+  O/S, Net O/S, P&L), followed by a highlighted "All N Accounts" totals
+  row (Total O/S, Total Dues, Total P&L summed across every linked
+  account). NPA Date/Branch still show once below (shared per borrower).
+  Single-account borrowers (the common case) are completely unchanged —
+  still the original compact 5-field grid, no card growth.
+- Built the per-account figure grid the same way `result-grid` already
+  does (CSS Grid, `repeat(3,1fr)`, not flex) specifically so it keeps
+  shrinking cleanly at the results list's card width instead of
+  overflowing — an earlier flex-based attempt clipped the 3rd column at
+  the card's actual width, caught via a Playwright screenshot before
+  shipping.
+- **Verified** against the exact borrower from the reported screenshot
+  (RADHE LAL S/O PATIRAM, Cust ID 705701596, accounts 160635110000521 +
+  160681210000001): both accounts' figures and the combined totals now
+  show directly on the card. Checked dark theme, light theme, and a
+  390px mobile viewport — all render cleanly with no overflow/clipping.
+  Also confirmed a genuinely single-account borrower still renders the
+  original, unchanged layout (no regression).
+
 ### OTS Calculator print sheet: laser-printer-friendly contrast + bold key figures (2026-08-05)
 
 You sent another printed PDF and asked: "isko thoda aur is tarah banao ki

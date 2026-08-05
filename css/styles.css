@@ -524,6 +524,33 @@ main{padding:20px 16px 40px}
 .result-grid .k{font-size:9.5px;color:var(--sub);text-transform:uppercase;font-weight:700;letter-spacing:.7px}
 .result-grid .v{font-size:13.5px;font-weight:800;color:var(--ink);margin-top:3px}
 .result-grid .v-pl{color:var(--pos)}
+/* result-grid-sm: same look as result-grid but only 2 columns (NPA
+   Date/Branch) -- used under result-multi, which already covers the
+   O/S/Net O/S/P&L figures per linked account. */
+.result-grid.result-grid-sm{grid-template-columns:repeat(2,1fr);margin-top:12px;padding-top:12px}
+
+/* ---------- Multi-account result card ----------
+   A borrower with 2+ linked accounts gets every account's own figures
+   right on the card (not just whichever single account matched the
+   search), plus a combined-total row -- so the card is a real summary,
+   not a teaser that hides how much is actually linked. */
+.result-multi{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+/* Stacked (account line, then a 3-col grid of figures below it) rather than
+   side-by-side -- a flex row of 3 value columns doesn't shrink the way a
+   grid does, so at the results list's narrower card width it either
+   overflowed or got clipped. Grid columns compress cleanly at any width,
+   same technique result-grid already relies on. */
+.rm-row{padding:9px 12px;border-radius:10px;background:var(--stripe)}
+.rm-acc{font-size:12px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.rm-vals{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rm-vals span{display:flex;flex-direction:column;line-height:1.3}
+.rm-vals b{font-size:13px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.rm-vals small{font-size:9px;color:var(--sub);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-top:2px}
+.rm-vals .v-pl b{color:var(--pos)}
+.rm-row.rm-totals{background:var(--accent-soft)}
+.rm-row.rm-totals .rm-acc{color:var(--accent);font-weight:800;margin-bottom:8px}
+.badge-pill.mini{padding:2px 7px;font-size:8.5px;border-radius:6px}
+.result-card-multi{padding-bottom:20px}
 .result-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:12px;color:var(--sub)}
 .result-bottom .chev{width:26px;height:26px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;transition:transform .18s var(--ease)}
 .result-card:hover .chev{transform:translateX(3px)}
