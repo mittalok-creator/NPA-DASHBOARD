@@ -229,12 +229,55 @@ function renderResults(matches, mode){
       const provision = (netOutstanding!=='' && PROV_RATES[asset]!==undefined) ? netOutstanding*PROV_RATES[asset] : '';
       const totalPL = (os!==''&&provision!=='') ? os-uri-provision : '';
       const custId = String(r[C.CUST_ID]);
-      const linkedCount = [1,2,3,4].filter(n=>lookupLoanSlot(custId,n)).length;
+      const linkedSlots = [1,2,3,4].map(n=>lookupLoanSlot(custId,n)).filter(Boolean).map(computeSlot);
+      const linkedCount = linkedSlots.length;
       const acctNoStr = String(r[C.ACCT_NO]);
       const isLocked = !!frozen[acctNoStr];
       const lockedAmt = otsAmounts[acctNoStr];
+      // A borrower with 2+ linked accounts used to show just the ONE row that
+      // happened to match the search, even though "N accounts linked" implied
+      // more -- now every linked account gets its own O/S Balance/Net O/S/P&L,
+      // plus a combined-total row across all of them (Total O/S/Total
+      // Dues/Total P&L), so the card is a genuine at-a-glance summary of the
+      // whole borrower without needing to open the detail view for it.
+      const multiBody = linkedCount>1 ? (()=>{
+        const totOs = linkedSlots.reduce((a,s)=>a+(s.os!==''?s.os:0),0);
+        const totDues = linkedSlots.reduce((a,s)=>a+(s.totalDues!==''?s.totalDues:0),0);
+        const totPL = linkedSlots.reduce((a,s)=>a+(s.totalPL!==''?s.totalPL:0),0);
+        return `
+        <div class="result-multi">
+          ${linkedSlots.map(s=>`
+          <div class="rm-row">
+            <div class="rm-acc">A/c · ${esc(s.acctNo)}${s.assetCode?`<span class="badge-pill mini ${esc(s.assetCode)}">${esc(s.assetCode)}</span>`:''}</div>
+            <div class="rm-vals">
+              <span><b>${s.os!==''?fmtINR2(s.os):'—'}</b><small>O/S</small></span>
+              <span><b>${s.netOutstanding!==''?fmtINR2(s.netOutstanding):'—'}</b><small>Net O/S</small></span>
+              <span class="v-pl"><b>${s.totalPL!==''?fmtINR2(s.totalPL):'—'}</b><small>P&amp;L</small></span>
+            </div>
+          </div>`).join('')}
+          <div class="rm-row rm-totals">
+            <div class="rm-acc">All ${linkedCount} Accounts</div>
+            <div class="rm-vals">
+              <span><b>${fmtINR2(totOs)}</b><small>Total O/S</small></span>
+              <span><b>${fmtINR2(totDues)}</b><small>Total Dues</small></span>
+              <span class="v-pl"><b>${fmtINR2(totPL)}</b><small>Total P&amp;L</small></span>
+            </div>
+          </div>
+        </div>
+        <div class="result-grid result-grid-sm">
+          <div><div class="k">NPA Date</div><div class="v">${npaDate}</div></div>
+          <div><div class="k">Branch</div><div class="v">${esc(r[C.SOL_DESC])||'—'}</div></div>
+        </div>`;
+      })() : `
+        <div class="result-grid">
+          <div><div class="k">O/S Balance</div><div class="v">${fmtINR(os)}</div></div>
+          <div><div class="k">Net O/S</div><div class="v">${netOutstanding!==''?fmtINR(netOutstanding):'—'}</div></div>
+          <div><div class="k">Total P&amp;L</div><div class="v v-pl">${totalPL!==''?fmtINR(totalPL):'—'}</div></div>
+          <div><div class="k">NPA Date</div><div class="v">${npaDate}</div></div>
+          <div><div class="k">Branch</div><div class="v">${esc(r[C.SOL_DESC])||'—'}</div></div>
+        </div>`;
       return `
-      <div class="result-card" data-asset="${esc(asset)}" onclick="openDetail('${esc(String(r[C.CUST_ID]))}','${esc(String(r[C.ACCT_NO]))}')">
+      <div class="result-card${linkedCount>1?' result-card-multi':''}" data-asset="${esc(asset)}" onclick="openDetail('${esc(String(r[C.CUST_ID]))}','${esc(String(r[C.ACCT_NO]))}')">
         <div class="result-top">
           <div>
             <div class="result-name">${esc(r[C.NAME])||'—'}</div>
@@ -246,13 +289,7 @@ function renderResults(matches, mode){
             ${isLocked?`<span class="badge-pill locked" title="OTS ${lockedAmt?fmtINR(parseFloat(lockedAmt)):''} locked and already communicated to the borrower">🔒 Already Told${lockedAmt?' · '+fmtINR(parseFloat(lockedAmt)):''}</span>`:''}
           </div>
         </div>
-        <div class="result-grid">
-          <div><div class="k">O/S Balance</div><div class="v">${fmtINR(os)}</div></div>
-          <div><div class="k">Net O/S</div><div class="v">${netOutstanding!==''?fmtINR(netOutstanding):'—'}</div></div>
-          <div><div class="k">Total P&amp;L</div><div class="v v-pl">${totalPL!==''?fmtINR(totalPL):'—'}</div></div>
-          <div><div class="k">NPA Date</div><div class="v">${npaDate}</div></div>
-          <div><div class="k">Branch</div><div class="v">${esc(r[C.SOL_DESC])||'—'}</div></div>
-        </div>
+        ${multiBody}
         <div class="result-bottom">
           <span>Cust ID: ${esc(r[C.CUST_ID])} · 🔗 ${linkedCount} account${linkedCount>1?'s':''} linked</span>
           <span class="chev" aria-hidden="true">›</span>
