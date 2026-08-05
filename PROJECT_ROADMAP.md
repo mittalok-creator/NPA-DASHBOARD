@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-07-30
+Last updated: 2026-08-05
 
 ---
 
@@ -495,6 +495,46 @@ regional aggregate. Checked in both themes and at a mobile viewport, where
 the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
+
+### OTS Calculator print sheet: laser-printer-friendly contrast + bold key figures (2026-08-05)
+
+You sent another printed PDF and asked: "isko thoda aur is tarah banao ki
+laser printer se dull print na aaye thoda bold jo data highlight hone
+chahiye wo bold and increased font size" — the print sheet should read
+crisp and bold off a laser printer, with whatever data matters most
+called out bigger/bolder, and to ask if anything needed clarifying.
+Asked one question (which figures count as "should be highlighted") —
+you picked **key settlement figures only**, not every row.
+
+- **Root cause of "dull"**: the compact print styles from the 1-page fit
+  (2026-07-30, below) used mid-gray text (`#333`/`#444`/`#555`) and light
+  gray borders (`#bbb`/dotted `#ccc`) throughout. Mid-grays halftone to a
+  faint, washed-out result on laser printers, especially toner-saver
+  settings — fine on a backlit screen, poor on paper. Replaced with
+  near-black text everywhere and solid (not dotted) darker-gray borders.
+- **Key figures now bold + a hair larger, with a light tint background**:
+  O/S Balance, Total Dues, Total Contractual Dues, Total P&L, OTS Amount,
+  Total Sacrifice, Impact on P&L, and the entire Aggregate Totals section
+  — the same "which numbers matter" convention already used by the
+  on-screen loan table's `lt-strong` rows, now mirrored in print via a
+  new `.pv-strong` row class set from `renderPrintView()`'s `STRONG_ROWS`
+  list. Every other row (Sanction Date, Asset Code, NPA Date, etc.) stays
+  plain weight, so the highlighted rows actually stand out instead of
+  everything being uniformly bold.
+- **Also fixed while in there**: this print view still had the same
+  decimal-inconsistency bug fixed on-screen five days earlier (below) —
+  it was never touched at the time since only the interactive table was
+  shown. Switched every `fmtINR()` call in `renderPrintView()` to
+  `fmtINR2()` so the print sheet now also always shows exactly 2 decimals.
+- `print-color-adjust:exact` added on the shaded cells so the highlight
+  tint survives regardless of the browser/OS print dialog's own
+  "background graphics" toggle.
+- **Verified the 1-page fit from 2026-07-30 didn't regress**: re-ran the
+  same Playwright + `page.pdf({preferCSSPageSize:true})` + `pypdf` check
+  used for that fix — still exactly 1 page after the bolder/larger key
+  rows. Confirmed visually via a print-media screenshot: highlighted rows
+  clearly pop against the plain ones, borrower name and all header text
+  read solid black, borders are crisp.
 
 ### OTS Calculator detail table: all currency figures now always show exactly 2 decimals (2026-07-30, same day)
 

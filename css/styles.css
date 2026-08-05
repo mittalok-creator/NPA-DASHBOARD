@@ -715,27 +715,40 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
    loan accounts print as columns, so a compact-but-legible static size
    (not a dynamic per-print scale) is enough, with real headroom to spare
    for a wrapped address line or similar. Previously sized for on-screen
-   comfort, which spilled the bottom third of the table onto a 2nd page. */
-.pv-header{text-align:center;border-bottom:2px solid #333;padding-bottom:6px;margin-bottom:10px}
-.pv-title{font-size:16px;font-weight:800;letter-spacing:.6px}
-.pv-sub{font-size:10.5px;color:#333;margin-top:2px}
-.pv-meta{display:flex;justify-content:center;gap:24px;font-size:10px;color:#333;margin-top:4px}
+   comfort, which spilled the bottom third of the table onto a 2nd page.
+
+   Colors deliberately avoid mid-grays (#333/#444/#bbb/#ccc): those halftone
+   to a faint, washed-out result on laser printers, especially in a shared-
+   office/toner-saver setting -- everything meant to be read easily is
+   near-black text on solid (not dotted) dark borders instead. */
+.pv-header{text-align:center;border-bottom:2.5px solid #000;padding-bottom:6px;margin-bottom:10px}
+.pv-title{font-size:17px;font-weight:800;letter-spacing:.6px;color:#000}
+.pv-sub{font-size:10.5px;color:#000;margin-top:2px;font-weight:600}
+.pv-meta{display:flex;justify-content:center;gap:24px;font-size:10.5px;color:#000;margin-top:4px;font-weight:600}
 .pv-borrower{margin-bottom:10px}
-.pv-name{font-size:13.5px;font-weight:800}
-.pv-addr{font-size:10.5px;color:#444;margin-top:1px}
+.pv-name{font-size:14.5px;font-weight:800;color:#000}
+.pv-addr{font-size:10.5px;color:#222;margin-top:1px}
 .pv-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;margin-top:6px}
-.pv-info-grid div{display:flex;justify-content:space-between;font-size:10px;border-bottom:1px dotted #ccc;padding:2px 0}
-.pv-info-grid .k{color:#555}
-.pv-info-grid .v{font-weight:700}
-.pv-table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:10px}
-.pv-table th,.pv-table td{border:1px solid #bbb;padding:2.5px 8px;text-align:right;line-height:1.15}
-.pv-table th:first-child,.pv-table td.pv-label{text-align:left;font-weight:700;background:#f4f4f4}
-.pv-table thead th{background:#e8e8e8;font-weight:800;padding:4px 8px}
+.pv-info-grid div{display:flex;justify-content:space-between;font-size:10.5px;border-bottom:1px solid #999;padding:2px 0}
+.pv-info-grid .k{color:#333;font-weight:600}
+.pv-info-grid .v{font-weight:800;color:#000}
+.pv-table{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:10px}
+.pv-table th,.pv-table td{border:1px solid #555;padding:3px 8px;text-align:right;line-height:1.2;color:#000}
+.pv-table th:first-child,.pv-table td.pv-label{text-align:left;font-weight:700;background:#e2e2e2;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.pv-table thead th{background:#c9c9c9;font-weight:800;padding:5px 8px;color:#000;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+/* Key settlement figures (O/S Balance, Total Dues, Total Contractual Dues,
+   Total P&L, OTS Amount, Total Sacrifice, Impact on P&L) -- the numbers
+   someone actually reads this sheet for -- get bolder + a hair larger and
+   a light fill so they read at a glance against the plainer rows around
+   them, same "which rows matter" convention as the on-screen loan table's
+   own lt-strong rows (see loanTableHTML). */
+.pv-table tr.pv-strong td{font-weight:800;font-size:11.5px;background:#eef1f8;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.pv-table tr.pv-strong td.pv-label{background:#d8deee;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 .pv-agg{margin-bottom:8px}
-.pv-agg-title{font-size:10.5px;font-weight:800;letter-spacing:2.5px;text-align:center;margin-bottom:5px}
-.pv-agg-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px dotted #ccc}
-.pv-footer{text-align:center;font-size:9.5px;color:#444;letter-spacing:.6px;margin-top:8px}
-.pv-schemes{display:flex;justify-content:space-around;font-size:9.5px;color:#555;margin-top:3px}
+.pv-agg-title{font-size:11px;font-weight:800;letter-spacing:2.5px;text-align:center;margin-bottom:5px;color:#000}
+.pv-agg-row{display:flex;justify-content:space-between;font-size:12.5px;font-weight:800;padding:4px 6px;border-bottom:1px solid #999;color:#000}
+.pv-footer{text-align:center;font-size:9.5px;color:#333;letter-spacing:.6px;margin-top:8px}
+.pv-schemes{display:flex;justify-content:space-around;font-size:9.5px;color:#333;margin-top:3px}
 
 /* ---------- Cmd+K command palette ---------- */
 .cmdk-overlay{position:fixed;inset:0;z-index:120;background:var(--scrim);backdrop-filter:blur(6px);
