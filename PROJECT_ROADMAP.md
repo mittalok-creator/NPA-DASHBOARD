@@ -496,6 +496,30 @@ the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
 
+### OTS Calculator detail table: all currency figures now always show exactly 2 decimals (2026-07-30, same day)
+
+You sent a screenshot of the interactive Loan Accounts table (not the
+print sheet — the on-screen "A/c · ..." particulars grid with Sanction
+Limit, O/S Balance, Settlement/OTS Amount etc.) asking for all digits to
+be fixed at 2 decimal places. Root cause: this table (and the aggregate
+sidebar showing the same totals for multi-account borrowers) used
+`fmtINR()`, which caps decimals at 2 but doesn't pad them
+(`maximumFractionDigits:2` with no minimum) — so a whole-number value
+like ₹4,63,000 showed with no decimals at all while a value like
+₹4,58,728.90 got its trailing zero silently dropped to ₹4,58,728.9,
+right next to each other in the same column. Switched every currency
+figure on this page (borrower card's SB Balance, every row in the loan
+particulars table, Total Sacrifice/Ledger Sacrifice/BDWO/P&L Impact, and
+the aggregate sidebar's totals) to `fmtINR2()` — an existing helper
+(already used elsewhere for KCC Overdue/PNPA account tables) that forces
+`minimumFractionDigits:2` too, so every amount reads consistently as
+`₹X,XX,XXX.XX`. The print sheet (fixed separately, above) and the search
+results list were left untouched — not shown in the reported screenshot,
+so out of scope for this fix. Verified against the same KAMLA DEVI
+account (Cust ID 710391021) with a test OTS amount entered: every figure
+in both the loan table and the sidebar now shows exactly 2 decimals,
+confirmed via screenshot.
+
 ### Bug fix: OTS Calculator print sheet spilled onto 2 pages instead of fitting 1 (2026-07-30)
 
 You sent the actual printed PDF: "OTS SHEET ASE PRINT HO RAHE HAI JABKI YE

@@ -406,7 +406,7 @@ function drawDetailBody(custRow, slots, prevOts){
         <div><div class="k">PAN</div><div class="v">${esc(custRow[C.PAN])||'—'}</div></div>
         <div><div class="k">Branch</div><div class="v">${esc(custRow[C.SOL_DESC])||'—'}</div></div>
         <div><div class="k">SB A/C</div><div class="v">${esc(custRow[C.SB_ACCT])||'—'}</div></div>
-        <div><div class="k">SB Balance</div><div class="v">${fmtINR(custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL])}</div></div>
+        <div><div class="k">SB Balance</div><div class="v">${fmtINR2(custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL])}</div></div>
       </div>
       ${prevOts?`<div class="linked-note">⏱ Previous OTS on record: ${esc(prevOts.date)} — ${esc(prevOts.amount)}</div>`:''}
       <div class="linked-note">🔗 ${slots.length} loan account${slots.length>1?'s':''} linked</div>
@@ -477,17 +477,17 @@ function loanTableHTML(slots){
       ${eligRow}
       ${group('Loan Terms')}
       ${row('Sanction Date', s=>fmtDate(toDate(s.sanctionDate)))}
-      ${row('Sanction Limit', s=>fmtINR(s.sanctionLimit))}
+      ${row('Sanction Limit', s=>fmtINR2(s.sanctionLimit))}
       ${row('NPA Date', s=>fmtDate(toDate(s.npaDate)))}
-      ${row('O/S Balance', s=>fmtINR(s.os), 'lt-strong')}
+      ${row('O/S Balance', s=>fmtINR2(s.os), 'lt-strong')}
       ${group('Dues &amp; Provisioning')}
-      ${row('UCI @ 8.5%', s=>fmtINR(s.uci))}
-      ${row('Total Dues', s=>fmtINR(s.totalDues), 'lt-strong')}
-      ${row('Total Contractual Dues', s=>fmtINR(s.totalContractualDues), 'lt-strong lt-divider')}
-      ${row('Interest Reversal', s=>fmtINR(s.uri))}
-      ${row('Net O/S', s=>fmtINR(s.netOutstanding))}
-      ${row('Provision', s=>fmtINR(s.provision))}
-      ${row('Total P&amp;L', s=>fmtINR(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
+      ${row('UCI @ 8.5%', s=>fmtINR2(s.uci))}
+      ${row('Total Dues', s=>fmtINR2(s.totalDues), 'lt-strong')}
+      ${row('Total Contractual Dues', s=>fmtINR2(s.totalContractualDues), 'lt-strong lt-divider')}
+      ${row('Interest Reversal', s=>fmtINR2(s.uri))}
+      ${row('Net O/S', s=>fmtINR2(s.netOutstanding))}
+      ${row('Provision', s=>fmtINR2(s.provision))}
+      ${row('Total P&amp;L', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
       ${group('Settlement &amp; Impact')}
       ${otsRow()}
       ${statRow('Total Sacrifice','totalSac')}
@@ -563,9 +563,9 @@ function recalcLoan(i){
   const ledgerSac = s.os!=='' ? s.os-ots : '';
   const bdwo = (ledgerSac!=='' && s.uri!=='') ? ledgerSac-s.uri : '';
   const impact = s.totalPL!=='' ? ots - s.totalPL : '';
-  totalSacEl.textContent = fmtINR(totalSac);
-  ledgerEl.textContent = fmtINR(ledgerSac);
-  bdwoEl.textContent = fmtINR(bdwo);
+  totalSacEl.textContent = fmtINR2(totalSac);
+  ledgerEl.textContent = fmtINR2(ledgerSac);
+  bdwoEl.textContent = fmtINR2(bdwo);
   if(pctEl) pctEl.textContent = (s.netOutstanding && s.netOutstanding!=='') ? (ots/s.netOutstanding*100).toFixed(1)+'%' : '—';
   impactEl.classList.remove('pos','neg');
   if(impact!=='' && !isNaN(impact)){
@@ -573,11 +573,11 @@ function recalcLoan(i){
     impactEl.__val = impact;
     animateNumber(impactEl, prev, impact, (v)=>{
       const sign = v>0.5?'+':(v<-0.5?'−':'');
-      return sign + fmtINR(Math.abs(v)).replace('₹','₹ ');
+      return sign + fmtINR2(Math.abs(v)).replace('₹','₹ ');
     });
     impactEl.classList.add(impact>0?'pos':(impact<0?'neg':''));
   } else {
-    impactEl.textContent = fmtINR(impact);
+    impactEl.textContent = fmtINR2(impact);
     impactEl.__val = 0;
   }
   impactEl.classList.remove('flash');
@@ -592,20 +592,20 @@ function recalcAggregate(){
     const v = otsAmounts[s.acctNo];
     if(v!==undefined && v!=='' && !isNaN(parseFloat(v))){ totalOts+=parseFloat(v); any=true; }
   });
-  document.getElementById('aggOts') && (document.getElementById('aggOts').textContent = any?fmtINR(totalOts):'—');
-  document.getElementById('aggSac') && (document.getElementById('aggSac').textContent = any?fmtINR(window.__totalContractualDues-totalOts):'—');
-  const otsTxt = any?fmtINR(totalOts):'—';
+  document.getElementById('aggOts') && (document.getElementById('aggOts').textContent = any?fmtINR2(totalOts):'—');
+  document.getElementById('aggSac') && (document.getElementById('aggSac').textContent = any?fmtINR2(window.__totalContractualDues-totalOts):'—');
+  const otsTxt = any?fmtINR2(totalOts):'—';
   const railOts = document.getElementById('railOts'); if(railOts) railOts.textContent = otsTxt;
   const railOts2 = document.getElementById('railOts2'); if(railOts2) railOts2.textContent = otsTxt;
-  const railDues = document.getElementById('railDues'); if(railDues) railDues.textContent = fmtINR(window.__totalDues);
+  const railDues = document.getElementById('railDues'); if(railDues) railDues.textContent = fmtINR2(window.__totalDues);
   const railPLLeft = document.getElementById('railPLLeft');
   if(railPLLeft){
     const impact = any ? (totalOts - window.__totalPL) : '';
-    railPLLeft.textContent = impact===''?'—':(impact>0?'+':(impact<0?'−':'')) + fmtINR(Math.abs(impact));
+    railPLLeft.textContent = impact===''?'—':(impact>0?'+':(impact<0?'−':'')) + fmtINR2(Math.abs(impact));
     railPLLeft.classList.remove('pos','neg');
     if(impact!==''){ if(impact>0) railPLLeft.classList.add('pos'); else if(impact<0) railPLLeft.classList.add('neg'); }
   }
-  const railSac = document.getElementById('railSac'); if(railSac) railSac.textContent = any?fmtINR(window.__totalContractualDues-totalOts):'—';
+  const railSac = document.getElementById('railSac'); if(railSac) railSac.textContent = any?fmtINR2(window.__totalContractualDues-totalOts):'—';
   // Live aggregate summary panel (shown for multi-account borrowers)
   const aggBarEl = document.getElementById('aggBar');
   if(aggBarEl){
@@ -616,18 +616,18 @@ function recalcAggregate(){
   if(aggOtsEl){
     aggOtsEl.textContent = otsTxt;
     const aggNetOsEl = document.getElementById('aggTotNetOs');
-    if(aggNetOsEl) aggNetOsEl.textContent = fmtINR(window.__totalNetOS);
+    if(aggNetOsEl) aggNetOsEl.textContent = fmtINR2(window.__totalNetOS);
     const aggPLEl = document.getElementById('aggTotPL');
-    if(aggPLEl) aggPLEl.textContent = fmtINR(window.__totalPL);
+    if(aggPLEl) aggPLEl.textContent = fmtINR2(window.__totalPL);
     const aggSacEl = document.getElementById('aggTotSac');
-    if(aggSacEl) aggSacEl.textContent = any?fmtINR(window.__totalContractualDues-totalOts):'—';
+    if(aggSacEl) aggSacEl.textContent = any?fmtINR2(window.__totalContractualDues-totalOts):'—';
     const aggImpEl = document.getElementById('aggTotImpact');
     if(aggImpEl){
       const impact = any ? (totalOts - window.__totalPL) : '';
       aggImpEl.classList.remove('pos','neg');
       if(impact===''){ aggImpEl.textContent='—'; }
       else {
-        aggImpEl.textContent = (impact>0?'+':(impact<0?'−':'')) + fmtINR(Math.abs(impact));
+        aggImpEl.textContent = (impact>0?'+':(impact<0?'−':'')) + fmtINR2(Math.abs(impact));
         aggImpEl.classList.add(impact>0?'pos':(impact<0?'neg':''));
       }
     }
