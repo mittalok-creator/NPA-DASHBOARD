@@ -496,6 +496,46 @@ the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
 
+### New "smart edge panel": Branch / Sol ID reference list, reachable from every tab (2026-08-05, same day)
+
+You sent `SOL_ID.xlsx` (Old Sol ID / New Sol ID / Branch, 57 rows —
+56 branches + R O Hathras) and asked for a slide-in panel that shows this
+list from any tab with one click, opening/closing "just like Android
+smart side bar or Edge panels".
+
+- **`.edge-handle`**: a slim pull-tab pinned to the right edge of the
+  viewport (`position:fixed`, `right:0;top:50%`), rendered as a sibling
+  of `#app` so no individual view's own layout, overflow, or scroll
+  container can hide or clip it — reachable on literally any tab,
+  including mid-scroll on a long page, matching "kisi bhi tab par bas
+  click karte hi" from the ask. Reads "BRANCHES" vertically with a small
+  list icon; a hamburger-style always-visible handle rather than
+  something the user has to remember exists.
+- **`.edge-panel`**: slides in from the right (`transform:translateX`,
+  280ms ease) over a dimmed backdrop, listing every branch — Branch name,
+  New Sol ID (the one used everywhere else in this app), and the Old Sol
+  ID as smaller reference text, in the source file's own order (R O
+  Hathras first, then the rest by Sol ID). A live search box filters by
+  branch name or either Sol ID as you type (`renderBranchList()`).
+- **Three ways to close it**, matching real edge-panel/side-panel
+  conventions: tap the handle again, tap the backdrop, or press Escape —
+  `toggleBranchPanel()` handles all three plus the initial open, and a
+  single global `keydown` listener covers Escape regardless of which
+  element currently has focus.
+- Data is embedded directly in `js/app.js` as a small constant
+  (`BRANCH_LIST`) rather than published/uploaded like the daily NPA
+  data — this is static Sol ID↔Branch mapping info that doesn't change
+  with daily updates, so it doesn't need the Update Data/Publish
+  pipeline at all.
+- **Verified** via Playwright: handle is visible and clickable from the
+  Dashboard (default view) and after switching to a completely different
+  tab (Daily NPA Projection) with no re-navigation needed; all 57 rows
+  render; search correctly narrows to 1 row for both a branch-name query
+  ("goverdhan") and a Sol ID query ("9270"); closes correctly via
+  backdrop click and via Escape. Checked dark theme, light theme, and a
+  390px mobile viewport — clean in all three, panel width caps at
+  `min(340px, 86vw)` so it never overflows a narrow screen.
+
 ### Search result card now shows every linked account, not just the one that matched (2026-08-05, same day)
 
 You sent a screenshot of a result card for a borrower with "2 accounts

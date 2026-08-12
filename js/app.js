@@ -91,6 +91,50 @@ const ASSET_LABELS = {SUB_STD:'Substandard asset', DA1:'Doubtful — up to 1 yea
 function assetLabel(code){ return ASSET_LABELS[code] || code; }
 function titleCase(s){ return String(s||'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()); }
 
+/* Sol ID / Branch reference list -- [oldSolId, newSolId, branchName], from
+   Alok's SOL_ID.xlsx. Static reference data (doesn't change with daily NPA
+   updates), so it's embedded directly rather than published/uploaded like
+   the NPA dataset -- one row per branch, "R O Hathras" (the Regional
+   Office) listed first same as in the source file, rest in Sol ID order. */
+const BRANCH_LIST = [[15990,9269,"R O Hathras"],[15010,9270,"Agsauli"],[15020,9271,"Bamnai"],[15030,9272,"Bandhnoo"],[15040,9273,"Baraus"],[15050,9274,"Bastoi"],[15060,9275,"Bisawar"],[15070,9276,"Chandpa"],[15080,9277,"Chhonda Gadua"],[15090,9278,"Devinagar"],[15100,9279,"Eihan"],[15110,9280,"Agra Road"],[15120,9281,"Aligarh Road"],[15130,9282,"Mursan Gate"],[15140,9283,"Service Branch"],[15150,9284,"Hatisa"],[15160,9285,"Jarera"],[15170,9286,"Komari"],[15180,9287,"Kota"],[15190,9288,"Ladpur"],[15200,9289,"Mahow"],[15210,9290,"Meetai"],[15220,9291,"Mendu"],[15230,9292,"Mughal Garhi"],[15240,9293,"Mursan"],[15250,9294,"Parsara"],[15260,9295,"Pora"],[15270,9296,"Purdil Nagar"],[15280,9297,"Ratibhanpur"],[15290,9298,"Ruheri"],[15300,9299,"Sadabad"],[15310,9300,"Sahpau"],[15320,9301,"Salempur"],[15330,9302,"Sasni"],[15340,9303,"Sikandra Rao"],[15350,9304,"Tuksan"],[15360,9305,"Wazidpur"],[15370,9306,"Adarshnagar"],[15380,9307,"Hasayan"],[15390,9308,"Jaleser Road"],[15400,9309,"Naugaon"],[16010,9310,"Bajna"],[16020,9311,"Baldev"],[16030,9312,"Bati"],[16040,9313,"Damodarpura"],[16050,9314,"Farah"],[16060,9315,"Goverdhan"],[16070,9316,"Maant"],[16080,9317,"Mathura City"],[16090,9318,"Laxmi Nagar"],[16100,9319,"Pali Kheda"],[16110,9320,"Raya"],[16120,9321,"Ronchi Bangar"],[16130,9322,"Sonai"],[16140,9323,"Tarsi"],[16150,9324,"Vrindavan"],[16160,9325,"Jajan Patti"]];
+
+function renderBranchList(filter){
+  const q = (filter||'').trim().toLowerCase();
+  const body = document.getElementById('branchListBody');
+  if(!body) return;
+  const rows = q ? BRANCH_LIST.filter(([oldId,newId,name])=>
+    String(newId).includes(q) || String(oldId).includes(q) || name.toLowerCase().includes(q)
+  ) : BRANCH_LIST;
+  body.innerHTML = rows.length ? rows.map(([oldId,newId,name])=>`
+    <div class="edge-row">
+      <div class="edge-row-branch">${esc(name)}</div>
+      <div class="edge-row-ids"><span class="edge-solid">Sol ID ${esc(newId)}</span><span class="edge-oldid">Old ${esc(oldId)}</span></div>
+    </div>`).join('') : `<div class="edge-empty">No branch matches "${esc(filter)}"</div>`;
+}
+function filterBranchList(){ renderBranchList(document.getElementById('branchListSearch').value); }
+window.filterBranchList = filterBranchList;
+function toggleBranchPanel(force){
+  const panel = document.getElementById('branchEdgePanel');
+  const backdrop = document.getElementById('branchEdgeBackdrop');
+  const handle = document.getElementById('branchEdgeHandle');
+  if(!panel) return;
+  const open = force===undefined ? !panel.classList.contains('open') : force;
+  panel.classList.toggle('open', open);
+  backdrop.classList.toggle('open', open);
+  handle.classList.toggle('active', open);
+  handle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if(open){
+    renderBranchList('');
+    const search = document.getElementById('branchListSearch');
+    search.value = '';
+    setTimeout(()=>search.focus(), 260);
+  }
+}
+window.toggleBranchPanel = toggleBranchPanel;
+document.addEventListener('keydown', (e)=>{
+  if(e.key==='Escape') toggleBranchPanel(false);
+});
+
 updateReportDateDisplay();
 
 /* ---------- Core formula engine (1:1 with the OTS sheet) ---------- */
