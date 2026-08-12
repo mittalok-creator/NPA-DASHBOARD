@@ -425,7 +425,7 @@ body{
   line-height:1.5;
 }
 h1,h2,h3,.result-name,.bname{font-family:var(--font-display)}
-.result-grid .v,#aggBar .av{font-family:var(--font-mono)}
+.result-grid .v,#aggBar .agg-hero-value,#aggBar .agg-mini .v{font-family:var(--font-mono)}
 a{color:var(--accent)}
 a:hover{color:var(--gold-l)}
 button,input{font-family:inherit}
@@ -598,9 +598,20 @@ main{padding:20px 16px 40px}
 .list-modal-head-btns{display:flex;gap:8px;flex-shrink:0}
 
 /* ---------- Loan comparison table ---------- */
-.loan-table-wrap{background:var(--card);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);border:1px solid var(--line);overflow-x:auto;margin-top:2px}
+.loan-table-wrap{position:relative;background:var(--card);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);border:1px solid var(--line);overflow-x:auto;margin-top:2px}
+/* Scroll-fade cue: a wide multi-account table has more columns off to the
+   right than fit on screen -- this gradient hints there's more to scroll
+   to, and fades out once the wrapper is scrolled to its actual end
+   (.at-end, toggled by a scroll listener in drawDetailBody). */
+.loan-table-wrap::after{content:"";position:absolute;top:0;right:0;bottom:0;width:28px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--card) 92%);opacity:1;transition:opacity .2s var(--ease)}
+.loan-table-wrap.at-end::after{opacity:0}
 .loan-table{width:100%;border-collapse:collapse;font-size:12.5px;white-space:nowrap}
-.loan-table th,.loan-table td{padding:10px 14px;border-bottom:1px solid var(--line);text-align:right}
+/* Rows no longer carry a border each -- only real boundaries do: group
+   starts (.lt-group) and the divider under a strong/key row (.lt-divider).
+   A border under every single row read as a spreadsheet; whitespace plus
+   the existing even-row stripe now do the separating. */
+.loan-table th,.loan-table td{padding:10px 14px;text-align:right}
 .loan-table thead th{background:var(--table-head);color:#fff;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;padding:13px 14px;position:sticky;top:0;z-index:2;font-weight:800;border-bottom:2px solid var(--accent)}
 .loan-table thead th.lt-label{text-align:left;background:var(--table-head-label)}
 .loan-table .lt-acc{color:var(--gold-l);font-weight:800;font-size:12.5px;text-transform:none;letter-spacing:0}
@@ -651,6 +662,14 @@ main{padding:20px 16px 40px}
 .loan-table td[id^="impact-"].pos{color:var(--pos);background:var(--pos-soft)}
 .loan-table td[id^="impact-"].neg{color:var(--neg);background:var(--neg-soft)}
 .loan-table td.flash{animation:flashUp .32s var(--ease)}
+/* Settlement Progress -- the one honest data-viz element: OTS Amount as a
+   share of Total Dues, so accounts can be compared by eye instead of
+   reading six-figure numbers column by column. */
+.settle-cell{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.settle-bar{width:100%;max-width:120px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.settle-bar span{display:block;height:100%;background:var(--accent);border-radius:3px}
+.settle-pct{font-size:10.5px;font-weight:800;color:var(--sub)}
+.dash{color:var(--ink-mute);font-weight:600}
 
 /* ---------- Footer ---------- */
 footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-inset-bottom))}
@@ -834,73 +853,76 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 #detailPane .detail-inner{padding:0 16px 40px}
 
 /* ---------- Aggregate totals summary (multi-account) ---------- */
-#aggBar{--pct:0;background:var(--head-grad);color:#fff;border-radius:16px;padding:16px 16px 14px;
+#aggBar{background:var(--head-grad);color:#fff;border-radius:16px;padding:16px 16px 14px;
   box-shadow:0 14px 34px rgba(8,6,20,.26);border:1px solid var(--head-line);position:relative}
 #aggBar .agg-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.9px;color:var(--gold-l);margin-bottom:10px}
-@media (min-width:860px){
-  #aggBar .agg-title{padding-right:56px}
-  #aggBar::after{
-    content:"";position:absolute;top:14px;right:14px;width:44px;height:44px;border-radius:50%;
-    background:conic-gradient(from -90deg, var(--gauge) calc(var(--pct)*3.6deg), var(--gauge-track) 0);
-    -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px));
-    mask:radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px));
-    transition:background 1s var(--ease);
-  }
-}
-#aggBar .agg-stat{padding:9px 0;border-top:1px solid rgba(255,255,255,.12)}
-#aggBar .agg-stat:first-of-type{border-top:none}
-/* Icon lives in its own fixed-size colored badge, on its own row above the
-   value -- previously the icon sat inline with the label text, which broke
-   in the sidebar's narrow width: long labels ("TOTAL O/S BALANCE") wrapped
-   to two lines, and the icon (vertically centered against the whole flex
-   row) ended up floating between the two lines instead of next to either. */
-#aggBar .agg-stat .ak-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;min-width:0}
-#aggBar .agg-stat .ak{min-width:0;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--head-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#aggBar .agg-stat .ak-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-#aggBar .agg-stat .ak-icon .lt-row-icon{width:11px;height:11px}
-/* Same reasoning as the table's .lt-icon-badge -- one consistent tone for
-   every stat instead of a different hue each (blue/gold/amber/green read
-   as decorative, not designed). Only P&L Impact stays dynamic, since
-   that's the one figure whose color genuinely means something. */
-#aggBar .agg-stat .ak-icon.c-ots,
-#aggBar .agg-stat .ak-icon.c-os,
-#aggBar .agg-stat .ak-icon.c-pl,
-#aggBar .agg-stat .ak-icon.c-sac{background:var(--gold-soft);color:var(--gold-l)}
-#aggBar .agg-stat .ak-icon.c-imp{background:rgba(255,255,255,.12);color:var(--head-sub)}
-#aggBar .agg-stat .ak-icon.c-imp.pos{background:var(--pos-soft);color:#5fe0a3}
-#aggBar .agg-stat .ak-icon.c-imp.neg{background:var(--neg-soft);color:#ff8a80}
-#aggBar .agg-stat .av{display:block;font-size:18px;font-weight:800;color:#fff;margin-top:3px;letter-spacing:-.3px}
-#aggBar .agg-stat.impact{margin-top:4px;background:rgba(255,255,255,.06);border-radius:11px;padding:12px 14px;border:1px solid rgba(255,255,255,.10)}
-/* Was 21px -- large positive/negative impact figures (crores possible on
-   real loan accounts) were crowding right up against the box's own edge
-   in the sidebar's fixed ~190px width. 17px plus the extra padding above
-   gives every figure room to breathe regardless of digit count. */
-#aggBar .agg-stat.impact .av{font-size:17px;word-break:break-word}
-#aggBar .agg-stat.impact .av.pos{color:#5fe0a3}
-#aggBar .agg-stat.impact .av.neg{color:#ff8a80}
-/* mobile: dock at the bottom of the screen */
+/* ---- Hero stat: ONE headline number (Net Settlement Impact) instead of
+   five equal-weight stats -- the figure that answers "what does this
+   settlement do to our books" gets real size; everything else below is
+   demoted to a quieter supporting grid. ---- */
+#aggBar .agg-hero{position:relative;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:14px 16px;margin-bottom:10px;overflow:hidden}
+#aggBar .agg-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+#aggBar .agg-hero-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--head-sub)}
+#aggBar .agg-hero-value{font-size:21px;font-weight:800;letter-spacing:-.5px;margin-top:5px;color:#fff;word-break:break-word}
+#aggBar .agg-hero-value.pos{color:#5fe0a3}
+#aggBar .agg-hero-value.neg{color:#ff8a80}
+#aggBar .agg-hero-sub{font-size:10.5px;color:var(--head-sub);margin-top:5px}
+/* Ring uses the same conic-gradient + radial mask technique as the old
+   #aggBar::after -- masking the annulus shape means the "hole" is simply
+   transparent (shows whatever sits behind it) instead of needing to
+   hardcode a fill color that matches the hero card's translucent bg. */
+#aggBar .agg-hero-ring{width:52px;height:52px;position:relative;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+#aggBar .agg-hero-ring::before{content:"";position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from -90deg, var(--gauge) calc(var(--pct)*3.6deg), var(--gauge-track) 0);
+  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px));
+  mask:radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px));
+  transition:background 1s var(--ease)}
+#aggBar .agg-hero-ring span{position:relative;font-size:11.5px;font-weight:800;color:#fff}
+/* ---- Secondary stats: smaller, quieter, subordinate to the hero ---- */
+#aggBar .agg-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.10);border-radius:12px;overflow:hidden}
+/* min-width:0 is load-bearing here -- without it a grid item won't shrink
+   below its content's intrinsic (min-content) width, so a long rupee
+   figure ("₹1,04,50,000.00") forces its 1fr track wider than the sidebar,
+   and the overflow silently clips against .agg-mini-grid's own
+   overflow:hidden (needed for the border-radius) instead of wrapping. */
+#aggBar .agg-mini{background:rgba(255,255,255,.03);padding:10px 12px;min-width:0}
+#aggBar .agg-mini .k{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--head-sub)}
+#aggBar .agg-mini .v{font-size:13.5px;font-weight:800;margin-top:3px;letter-spacing:-.2px;color:#fff;font-family:var(--font-mono);word-break:break-word}
+/* mobile: dock at the bottom of the screen -- hero shrinks to a compact
+   row (sub-line dropped, ring shrunk); the mini-grid stays 2 columns
+   (not 4 -- real rupee figures run 10-14 characters and need the room)
+   but shrinks its own padding/font so the whole thing still fits a
+   fixed-height bar. */
 @media (max-width:859px){
-  .detail-inner.has-agg{padding-bottom:132px}
+  /* #detailPane-prefixed on purpose -- ".detail-inner.has-agg" alone loses
+     the specificity fight against "#detailPane .detail-inner{padding:0 16px
+     40px}" above (an ID beats any number of plain classes), which silently
+     resets padding-bottom to 40px and lets the fixed dock overlap the last
+     table rows. */
+  #detailPane .detail-inner.has-agg{padding-bottom:210px}
   #aggBar{position:fixed;left:0;right:0;bottom:0;z-index:85;border-radius:18px 18px 0 0;
-    padding:12px 16px calc(12px + env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;
     box-shadow:0 -12px 34px rgba(8,6,20,.32);animation:paneUp .3s var(--ease)}
   #aggBar .agg-title{display:none}
-  #aggBar .agg-stat{border-top:none;padding:0;text-align:center}
-  #aggBar .agg-stat .ak-row{justify-content:center}
-  #aggBar .agg-stat .ak{text-align:left}
-  #aggBar .agg-stat .av{font-size:15px}
-  #aggBar .agg-stat.impact{background:none;border:none;padding:0;margin:0}
-  #aggBar .agg-stat.impact .av{font-size:15px}
+  #aggBar .agg-hero{padding:10px 12px;margin-bottom:0}
+  #aggBar .agg-hero-value{font-size:18px;margin-top:3px}
+  #aggBar .agg-hero-sub{display:none}
+  #aggBar .agg-hero-ring{width:38px;height:38px}
+  #aggBar .agg-hero-ring span{font-size:10px}
+  #aggBar .agg-mini{padding:7px 9px;text-align:center}
+  #aggBar .agg-mini .k{font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #aggBar .agg-mini .v{font-size:11.5px}
 }
-/* tablet/desktop: left column inside the detail */
+/* tablet/desktop: left column inside the detail -- widened from the old
+   190-210px so the hero's headline number has room to breathe. */
 @media (min-width:860px){
   .detail-inner.has-agg{display:flex;gap:20px;align-items:flex-start}
-  .detail-inner.has-agg #aggBar{position:sticky;top:96px;width:210px;flex-shrink:0;order:-1}
+  .detail-inner.has-agg #aggBar{position:sticky;top:96px;width:260px;flex-shrink:0;order:-1}
   .detail-inner.has-agg #detailBody{flex:1;min-width:0}
 }
 @media (min-width:1200px){
   .detail-inner.has-agg{gap:16px}
-  .detail-inner.has-agg #aggBar{width:190px}
+  .detail-inner.has-agg #aggBar{width:240px}
 }
 
 @media (min-width:860px){
@@ -1500,7 +1522,7 @@ header.app-head::before,.detail-head::before{
 
 /* ---------- premium type touches ---------- */
 .result-name,.bname{letter-spacing:-.3px}
-.result-grid .v,#aggBar .av,.kpi-value{font-variant-numeric:tabular-nums}
+.result-grid .v,#aggBar .agg-hero-value,#aggBar .agg-mini .v,.kpi-value{font-variant-numeric:tabular-nums}
 ::selection{background:rgba(58,123,255,.35);color:#fff}
 :focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
 
@@ -1617,11 +1639,14 @@ header.app-head::before,.detail-head::before{
 :root[data-theme="light"] .mode-pills button.active{background:rgba(27,79,224,.12)}
 
 :root[data-theme="light"] #aggBar{color:var(--head-ink)}
-:root[data-theme="light"] #aggBar .agg-stat{border-top-color:rgba(33,33,46,.10)}
-:root[data-theme="light"] #aggBar .agg-stat .av{color:var(--head-ink)}
-:root[data-theme="light"] #aggBar .agg-stat.impact{background:rgba(33,33,46,.04);border-color:rgba(33,33,46,.09)}
-:root[data-theme="light"] #aggBar .agg-stat.impact .av.pos{color:var(--pos)}
-:root[data-theme="light"] #aggBar .agg-stat.impact .av.neg{color:var(--neg)}
+:root[data-theme="light"] #aggBar .agg-hero{background:rgba(33,33,46,.04);border-color:rgba(33,33,46,.09)}
+:root[data-theme="light"] #aggBar .agg-hero-value{color:var(--head-ink)}
+:root[data-theme="light"] #aggBar .agg-hero-value.pos{color:var(--pos)}
+:root[data-theme="light"] #aggBar .agg-hero-value.neg{color:var(--neg)}
+:root[data-theme="light"] #aggBar .agg-mini-grid{background:rgba(33,33,46,.10);border-color:rgba(33,33,46,.10)}
+:root[data-theme="light"] #aggBar .agg-mini{background:rgba(33,33,46,.015)}
+:root[data-theme="light"] #aggBar .agg-mini .v{color:var(--head-ink)}
+:root[data-theme="light"] #aggBar .agg-hero-ring span{color:var(--head-ink)}
 :root[data-theme="light"] .side-rail .rail-value.pos{color:var(--pos)}
 :root[data-theme="light"] .side-rail .rail-value.neg{color:var(--neg)}
 
