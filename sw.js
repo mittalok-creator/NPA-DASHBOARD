@@ -1,4 +1,4 @@
-const CACHE_NAME = 'upgb-ots-shell-v68';
+const CACHE_NAME = 'upgb-ots-shell-v69';
 const SHELL_ASSETS = [
   './',
   './index.html',

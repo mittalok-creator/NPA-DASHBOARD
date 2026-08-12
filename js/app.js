@@ -179,16 +179,17 @@ function computeSlot(slot){
   const uri = typeof slot.uri==='number' ? slot.uri : 0;
   const uci = os!=='' ? computeUCI(os, slot.npaDate, slot.scheme, 8.5) : '';
   const uci125 = os!=='' ? computeUCI(os, slot.npaDate, slot.scheme, 12.5) : '';
-  const totalDues = (os!=='' && uci!=='') ? os+uci : '';
+  // Total Dues = O/S + UCI@8.5% + Interest Reversal.
+  const totalDues = (os!=='' && uci!=='') ? os+uci+uri : '';
   const totalContractualDues = (os!=='' && uci125!=='') ? os+uci125 : '';
-  // Net O/S always mirrors O/S Balance -- Interest Reversal is editable and
-  // must flow into Total P&L/Total Sacrifice, but never changes what "Net
-  // O/S" itself displays (Alok: outstanding and net outstanding stay the
-  // same figure even after interest reversal).
+  // Net O/S is always identical to O/S Balance -- not a separate figure --
+  // so Provision is calculated directly on O/S Balance (by asset code).
   const netOutstanding = os;
   let provision = '';
-  if(netOutstanding!=='' && PROV_RATES[slot.assetCode]!==undefined) provision = netOutstanding*PROV_RATES[slot.assetCode];
-  const totalPL = (os!==''&&provision!=='') ? os-uri-provision : '';
+  if(os!=='' && PROV_RATES[slot.assetCode]!==undefined) provision = os*PROV_RATES[slot.assetCode];
+  // Total P&L = O/S - Provision (Interest Reversal already flows into
+  // Total Dues/Total Sacrifice above, not into Total P&L).
+  const totalPL = (os!==''&&provision!=='') ? os-provision : '';
   const eligibleCompromise = totalPL!=='' ? Math.max(0,totalPL) : '';
   const ratio = (eligibleCompromise!=='' && os) ? eligibleCompromise/os : '';
   const notEligible = (daysNpa!=='' && daysNpa<=180);
@@ -278,10 +279,9 @@ function renderResults(matches, mode){
       const asset = r[C.ASSET]||'';
       const npaDate = fmtDate(toDate(r[C.NPA_DT]));
       const os = typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : '';
-      const uri = typeof r[C.URI]==='number' ? r[C.URI] : 0;
       const netOutstanding = os; // Net O/S always mirrors O/S Balance
-      const provision = (netOutstanding!=='' && PROV_RATES[asset]!==undefined) ? netOutstanding*PROV_RATES[asset] : '';
-      const totalPL = (os!==''&&provision!=='') ? os-uri-provision : '';
+      const provision = (os!=='' && PROV_RATES[asset]!==undefined) ? os*PROV_RATES[asset] : '';
+      const totalPL = (os!==''&&provision!=='') ? os-provision : '';
       const custId = String(r[C.CUST_ID]);
       const linkedSlots = [1,2,3,4].map(n=>lookupLoanSlot(custId,n)).filter(Boolean).map(computeSlot);
       const linkedCount = linkedSlots.length;
@@ -364,12 +364,12 @@ function uriFor(s){
   const v = parseFloat(raw);
   return (raw===''||isNaN(v)) ? 0 : v;
 }
-// Total P&L = O/S - Interest Reversal - Provision -- computed live off
-// uriFor() so it reacts to the editable field; Provision itself doesn't
-// depend on Interest Reversal (it's O/S x asset-code rate), so s.provision
-// stays valid as-is.
-function totalPLFor(s){
-  return (s.os!=='' && s.provision!=='') ? s.os - uriFor(s) - s.provision : '';
+// Total Dues = O/S + UCI@8.5% + Interest Reversal -- computed live off
+// uriFor() so it reacts to the editable field. Total P&L (O/S - Provision)
+// does NOT depend on Interest Reversal, so it stays a static computeSlot()
+// value and needs no live helper.
+function totalDuesFor(s){
+  return (s.os!=='' && s.uci!=='') ? s.os + s.uci + uriFor(s) : '';
 }
 /* Locked OTS amounts are also persisted on DATA.lockedOts and, as of the
    "sync to everyone immediately" change, ALSO written straight to
@@ -502,6 +502,10 @@ function drawDetailBody(custRow, slots, prevOts){
   const totalDues = slots.reduce((a,s)=>a+((s.totalDues!=='')?s.totalDues:0),0);
   const totalNetOS = slots.reduce((a,s)=>a+((s.netOutstanding!=='')?s.netOutstanding:0),0);
   const totalContractualDues = slots.reduce((a,s)=>a+((s.totalContractualDues!=='')?s.totalContractualDues:0),0);
+  // Total P&L (O/S - Provision) no longer depends on Interest Reversal, so
+  // it's a stable per-render snapshot again -- only Total Dues needs live
+  // recomputation (recalcAggregate), since Interest Reversal folds into it.
+  const totalPL = slots.reduce((a,s)=>a+((s.totalPL!=='')?s.totalPL:0),0);
 
   body.innerHTML = `
     <div class="card borrower-card">
@@ -531,6 +535,7 @@ function drawDetailBody(custRow, slots, prevOts){
 
   window.__slots = slots;
   window.__totalDues = totalDues;
+  window.__totalPL = totalPL;
   window.__totalNetOS = totalNetOS;
   window.__totalContractualDues = totalContractualDues;
   window.__totalOS = totalOS;
@@ -582,7 +587,7 @@ function loanTableHTML(slots){
           aria-label="Interest reversal for account ${esc(String(s.acctNo))}"
           oninput="onUriInput(${i},'${esc(String(s.acctNo))}')">
       </div></td>`).join('')}</tr>`;
-  const totalPLRow = () => `<tr class="lt-strong lt-divider"><th scope="row" class="lt-label">Total P&amp;L</th>${slots.map((s,i)=>`<td id="totalPL-${i}">—</td>`).join('')}</tr>`;
+  const totalDuesRow = () => `<tr class="lt-strong"><th scope="row" class="lt-label">Total Dues</th>${slots.map((s,i)=>`<td id="totalDues-${i}">—</td>`).join('')}</tr>`;
   const eligRow = slots.some(s=>s.notEligible) ? `<tr><th scope="row" class="lt-label"></th>${slots.map(s=>`<td>${s.notEligible?'<span class="eligibility-warn">⚠ Not aged 6mo</span>':''}</td>`).join('')}</tr>` : '';
 
   return `
@@ -598,14 +603,13 @@ function loanTableHTML(slots){
       ${row('O/S Balance', s=>fmtINR2(s.os), 'lt-strong')}
       ${group('Dues &amp; Provisioning')}
       ${row('UCI @ 8.5%', s=>fmtINR2(s.uci))}
-      ${row('Total Dues', s=>fmtINR2(s.totalDues), 'lt-strong')}
+      ${totalDuesRow()}
       ${row('Total Contractual Dues', s=>fmtINR2(s.totalContractualDues), 'lt-strong lt-divider')}
-      ${uriRow()}
-      ${row('Net O/S', s=>fmtINR2(s.netOutstanding))}
       ${row('Provision', s=>fmtINR2(s.provision))}
-      ${totalPLRow()}
+      ${row('Total P&amp;L', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
       ${group('Settlement &amp; Impact')}
       ${otsRow()}
+      ${uriRow()}
       ${statRow('Total Sacrifice','totalSac')}
       ${statRow('Ledger Sacrifice (BDWO Amount)','ledgerSac')}
       ${statRow('P&amp;L Impact','impact')}
@@ -674,16 +678,13 @@ function recalcLoan(i){
   const ledgerEl = document.getElementById('ledgerSac-'+i);
   const impactEl = document.getElementById('impact-'+i);
   const pctEl = document.getElementById('pctNetOs-'+i);
-  const totalPLEl = document.getElementById('totalPL-'+i);
+  const totalDuesEl = document.getElementById('totalDues-'+i);
 
-  // Total P&L depends on Interest Reversal, not on OTS Amount, so it must
-  // update unconditionally -- even while OTS Amount is still blank.
-  const uri = uriFor(s);
-  const totalPL = totalPLFor(s);
-  if(totalPLEl){
-    const ratio = (totalPL!=='' && s.os) ? Math.max(0,totalPL)/s.os : '';
-    totalPLEl.innerHTML = fmtINR2(totalPL) + (ratio!==''?` <span class="pct-tag">(${(ratio*100).toFixed(1)}%)</span>`:'');
-  }
+  // Total Dues (O/S + UCI + Interest Reversal) depends on Interest Reversal,
+  // not on OTS Amount, so it must update unconditionally -- even while OTS
+  // Amount is still blank.
+  const totalDues = totalDuesFor(s);
+  if(totalDuesEl) totalDuesEl.textContent = fmtINR2(totalDues);
 
   if(ots===''||isNaN(ots)){
     [totalSacEl,ledgerEl,impactEl].forEach(e=>e.textContent='—');
@@ -692,16 +693,15 @@ function recalcLoan(i){
     if(pctEl) pctEl.textContent='';
     return;
   }
-  // Total Sacrifice = Total Dues - OTS Amount + Interest Reversal (equivalently
-  // Ledger Sacrifice + UCI@8.5% + Interest Reversal) -- previously used Total
-  // Contractual Dues (@12.5%) instead of Total Dues (@8.5%), corrected per
-  // Alok's annotated review of the printed sheet.
-  const totalSac = (s.totalDues!=='') ? s.totalDues-ots+uri : '';
+  // Total Sacrifice = Total Dues - OTS Amount (Interest Reversal is already
+  // folded into Total Dues above); Ledger Sacrifice (BDWO Amount) = O/S -
+  // OTS Amount; Impact on P&L = OTS Amount - Total P&L.
+  const totalSac = (totalDues!=='') ? totalDues-ots : '';
   const ledgerSac = s.os!=='' ? s.os-ots : ''; // also shown as "(BDWO Amount)" -- same figure
-  const impact = totalPL!=='' ? ots - totalPL : '';
+  const impact = s.totalPL!=='' ? ots - s.totalPL : '';
   totalSacEl.textContent = fmtINR2(totalSac);
   ledgerEl.textContent = fmtINR2(ledgerSac);
-  if(pctEl) pctEl.textContent = (s.netOutstanding && s.netOutstanding!=='') ? (ots/s.netOutstanding*100).toFixed(1)+'%' : '—';
+  if(pctEl) pctEl.textContent = (s.os) ? (ots/s.os*100).toFixed(1)+'%' : '—';
   impactEl.classList.remove('pos','neg');
   if(impact!=='' && !isNaN(impact)){
     const prev = (typeof impactEl.__val==='number') ? impactEl.__val : 0;
@@ -727,26 +727,25 @@ function recalcAggregate(){
     const v = otsAmounts[s.acctNo];
     if(v!==undefined && v!=='' && !isNaN(parseFloat(v))){ totalOts+=parseFloat(v); any=true; }
   });
-  // Live sums (not the static per-render snapshot) since Interest Reversal,
-  // and therefore Total P&L, can change any time via its editable field.
-  let liveTotalURI=0, liveTotalPL=0;
-  slots.forEach(s=>{
-    liveTotalURI += uriFor(s);
-    const pl = totalPLFor(s);
-    liveTotalPL += (pl!==''?pl:0);
-  });
-  // Total Sacrifice = Total Dues - OTS Amount + Interest Reversal (matches
-  // the per-account formula in recalcLoan()), not Total Contractual Dues.
-  const aggTotalSac = window.__totalDues + liveTotalURI - totalOts;
+  // Total Dues is live (Interest Reversal is editable and folds into it),
+  // so the aggregate sum must be recomputed fresh, not read from a stale
+  // snapshot. Total P&L no longer depends on Interest Reversal, so
+  // window.__totalPL (the static per-render snapshot) stays valid as-is.
+  let liveTotalDues=0;
+  slots.forEach(s=>{ const td = totalDuesFor(s); liveTotalDues += (td!==''?td:0); });
+  // Total Sacrifice = Total Dues - OTS Amount (matches the per-account
+  // formula in recalcLoan()); Interest Reversal is already folded into
+  // Total Dues, so it isn't added again here.
+  const aggTotalSac = liveTotalDues - totalOts;
   document.getElementById('aggOts') && (document.getElementById('aggOts').textContent = any?fmtINR2(totalOts):'—');
   document.getElementById('aggSac') && (document.getElementById('aggSac').textContent = any?fmtINR2(aggTotalSac):'—');
   const otsTxt = any?fmtINR2(totalOts):'—';
   const railOts = document.getElementById('railOts'); if(railOts) railOts.textContent = otsTxt;
   const railOts2 = document.getElementById('railOts2'); if(railOts2) railOts2.textContent = otsTxt;
-  const railDues = document.getElementById('railDues'); if(railDues) railDues.textContent = fmtINR2(window.__totalDues);
+  const railDues = document.getElementById('railDues'); if(railDues) railDues.textContent = fmtINR2(liveTotalDues);
   const railPLLeft = document.getElementById('railPLLeft');
   if(railPLLeft){
-    const impact = any ? (totalOts - liveTotalPL) : '';
+    const impact = any ? (totalOts - window.__totalPL) : '';
     railPLLeft.textContent = impact===''?'—':(impact>0?'+':(impact<0?'−':'')) + fmtINR2(Math.abs(impact));
     railPLLeft.classList.remove('pos','neg');
     if(impact!==''){ if(impact>0) railPLLeft.classList.add('pos'); else if(impact<0) railPLLeft.classList.add('neg'); }
@@ -755,7 +754,7 @@ function recalcAggregate(){
   // Live aggregate summary panel (shown for multi-account borrowers)
   const aggBarEl = document.getElementById('aggBar');
   if(aggBarEl){
-    const pct = (any && window.__totalDues>0) ? Math.max(0,Math.min(100,(totalOts/window.__totalDues)*100)) : 0;
+    const pct = (any && liveTotalDues>0) ? Math.max(0,Math.min(100,(totalOts/liveTotalDues)*100)) : 0;
     aggBarEl.style.setProperty('--pct', pct.toFixed(1));
   }
   const aggOtsEl = document.getElementById('aggTotOts');
@@ -764,12 +763,12 @@ function recalcAggregate(){
     const aggNetOsEl = document.getElementById('aggTotNetOs');
     if(aggNetOsEl) aggNetOsEl.textContent = fmtINR2(window.__totalNetOS);
     const aggPLEl = document.getElementById('aggTotPL');
-    if(aggPLEl) aggPLEl.textContent = fmtINR2(liveTotalPL);
+    if(aggPLEl) aggPLEl.textContent = fmtINR2(window.__totalPL);
     const aggSacEl = document.getElementById('aggTotSac');
     if(aggSacEl) aggSacEl.textContent = any?fmtINR2(aggTotalSac):'—';
     const aggImpEl = document.getElementById('aggTotImpact');
     if(aggImpEl){
-      const impact = any ? (totalOts - liveTotalPL) : '';
+      const impact = any ? (totalOts - window.__totalPL) : '';
       aggImpEl.classList.remove('pos','neg');
       if(impact===''){ aggImpEl.textContent='—'; }
       else {
@@ -785,7 +784,10 @@ function renderPrintView(){
   const slots = window.__slots; const custRow = window.__custRow;
   if(!slots || !custRow) return;
   const totalOS = slots.reduce((a,s)=>a+((s.os!=='')?s.os:0),0);
-  const totalDues = window.__totalDues;
+  // Total Dues is live (Interest Reversal folds into it), so it's summed
+  // fresh here rather than read from the static window.__totalDues snapshot.
+  let totalDues = 0;
+  slots.forEach(s=>{ const td = totalDuesFor(s); totalDues += (td!==''?td:0); });
 
   function otsFor(s){
     const raw = otsAmounts[s.acctNo];
@@ -794,8 +796,6 @@ function renderPrintView(){
   }
   let totalOtsSum = 0, anyOts = false;
   slots.forEach(s=>{ const v = otsFor(s); if(v!==null){ totalOtsSum+=v; anyOts=true; } });
-  let liveTotalURI = 0;
-  slots.forEach(s=>{ liveTotalURI += uriFor(s); });
 
   // Rows the sheet is actually read for -- bolded/enlarged in print (see
   // .pv-table tr.pv-strong in styles.css) so they stand out from the
@@ -813,15 +813,15 @@ function renderPrintView(){
     ['Days in NPA', s=>s.daysNpa!==''?s.daysNpa.toLocaleString('en-IN')+' days':'—'],
     ['O/S Balance', s=>fmtINR2(s.os)],
     ['UCI @ 8.5%', s=>fmtINR2(s.uci)],
-    ['Total Dues', s=>fmtINR2(s.totalDues)],
+    ['Total Dues', s=>fmtINR2(totalDuesFor(s))],
     ['Interest Reversal', s=>fmtINR2(uriFor(s))],
     ['Net O/S', s=>fmtINR2(s.netOutstanding)],
     ['Provision', s=>fmtINR2(s.provision)],
-    ['Total P&L', s=>{const pl=totalPLFor(s); const ratio=(pl!==''&&s.os)?Math.max(0,pl)/s.os:''; return fmtINR2(pl) + (ratio!==''?` (${(ratio*100).toFixed(1)}%)`:'');}],
+    ['Total P&L', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'')],
     ['OTS Amount', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v);}],
-    ['Total Sacrifice', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.totalDues-v+uriFor(s));}],
+    ['Total Sacrifice', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(totalDuesFor(s)-v);}],
     ['Ledger Sacrifice (BDWO Amount)', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.os-v);}],
-    ['Impact on P&L', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v-totalPLFor(s));}],
+    ['Impact on P&L', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v-s.totalPL);}],
   ];
   const tableRows = rows.map(([label,fn])=>`<tr${STRONG_ROWS.has(label)?' class="pv-strong"':''}><td class="pv-label">${label}</td>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('');
 
@@ -855,7 +855,7 @@ function renderPrintView(){
       <div class="pv-agg-row"><span>Total O/S Balance</span><span>${fmtINR2(totalOS)}</span></div>
       <div class="pv-agg-row"><span>Total Dues</span><span>${fmtINR2(totalDues)}</span></div>
       <div class="pv-agg-row"><span>Total OTS Amount</span><span>${anyOts?fmtINR2(totalOtsSum):'—'}</span></div>
-      <div class="pv-agg-row"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(window.__totalDues+liveTotalURI-totalOtsSum):'—'}</span></div>
+      <div class="pv-agg-row"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(totalDues-totalOtsSum):'—'}</span></div>
     </div>
     <div class="pv-footer">Designed &amp; Developed by ALOK MITTAL · Uttar Pradesh Gramin Bank</div>
     <div class="pv-schemes">${slots.map(s=>`<span>${esc(s.scheme)||''} · ${esc(custRow[C.SOL_DESC])||''}</span>`).join('')}</div>
