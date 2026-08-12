@@ -123,6 +123,34 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: pulled back the badge colors to one restrained accent (2026-08-12, same day)
+
+Alok's reaction to the badge colors just shipped: *"TABLE K COLORS KUCH
+PROPER LAG NAHI RAHE CLAUDE TYPE. LOOKING LIKE SOME YOUNG BOY CREATE
+THIS."* Fair critique -- the previous change gave each table section
+(Loan Terms/Dues & Provisioning/Settlement & Impact) and each sidebar
+stat its own hue (blue/amber/green/gold), which read as decorative
+rainbow-coding rather than an intentional design choice -- a genuinely
+common "AI-generated design" tell: color spent everywhere instead of
+reserved for what actually means something.
+
+Collapsed every `.lt-icon-badge` (table) and `#aggBar .agg-stat .ak-icon`
+(sidebar) to ONE consistent tone -- the app's own existing gold/accent
+language already used for group headers, the OTS row, the freeze chip,
+and the currency symbol -- instead of inventing new section colors.
+Color now appears in exactly two places with real meaning: the existing
+blue "strong" row values (the few genuinely key figures), and the P&L
+Impact figure's live positive/negative state (the one number whose color
+actually signals something). Also removed the now-unused `grp` parameter
+threaded through `ltIconBadge()`/`row()`/`statRow()` and every call site,
+rather than leaving dead per-section arguments that no longer do
+anything.
+
+**Verified** via the same Playwright screenshots as the previous entry
+(2-account borrower, both themes; 4-account borrower with large OTS
+Amounts) -- every icon across the sidebar and table now reads as one
+calm, consistent accent, with color reserved for the P&L Impact signal.
+
 ### OTS Calculator: table icons matched to sidebar's colored badges, Impact box overflow fixed (2026-08-12, same day)
 
 Alok shared a screenshot and asked directly: *"KYA YE VISUALLY
