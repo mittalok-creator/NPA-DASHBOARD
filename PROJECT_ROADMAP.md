@@ -123,6 +123,55 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: corrected the whole formula chain per Alok's re-derivation (2026-08-12, same day)
+
+The Interest Reversal change shipped just before this (previous entry below)
+had the wrong formula shape. Alok re-derived the entire calculation chain
+from scratch and corrected it:
+
+- **Total Dues = O/S + UCI@8.5% + Interest Reversal** (was O/S + UCI only,
+  with Interest Reversal added separately downstream in Total Sacrifice).
+  Since Interest Reversal is editable, Total Dues is now the reactive/live
+  row in the interactive table (`totalDuesFor(s)` helper, `recalcLoan()`
+  updates it unconditionally, independent of OTS Amount).
+- **Net O/S row removed from the Particulars table entirely** — it's always
+  identical to O/S Balance, so it was dropped rather than kept as a
+  duplicate row (the underlying field stays in the data model since it's
+  still used harmlessly elsewhere — search cards, the aggregate sidebar —
+  which weren't in scope for this pass).
+- **Provision is calculated directly on O/S Balance** (by asset code) —
+  previously it read a `netOutstanding` variable that, post-decoupling,
+  was already always equal to O/S anyway; now it's direct, no indirection.
+- **Total P&L = O/S - Provision** (was O/S - Interest Reversal - Provision).
+  This means Total P&L no longer reacts to Interest Reversal at all — it
+  reverted to a plain static value computed once in `computeSlot()`, and
+  the `totalPLFor()` live helper from the previous change was removed as
+  now-unnecessary.
+- **Total Sacrifice = Total Dues - OTS Amount** (Interest Reversal is
+  already folded into Total Dues, so it's not added a second time).
+- **Ledger Sacrifice (BDWO Amount) = O/S - OTS Amount** and **Impact on
+  P&L = OTS Amount - Total P&L** — unchanged, confirmed already correct.
+- OTS Amount and Interest Reversal (both manual inputs, both defaulting to
+  blank/0) were moved to sit together under "Settlement & Impact", ahead of
+  Total Sacrifice/Ledger Sacrifice/Impact which read off them.
+
+Scope for this pass was the interactive app only, per Alok's instruction —
+`renderPrintView()` was patched just enough to use the corrected formulas
+and not crash/go stale (Total Dues and Total Sacrifice now compute live off
+the same helpers), but its layout still carries the old Net O/S row for now.
+`exportOtsExcel()`'s formulas were **not** touched this round — Alok wants
+a full Excel/PDF redesign as a separate follow-up once the app's own
+calculation logic is confirmed correct.
+
+**Verified** on RAM PRAKASH S/O NARAYAN SINGH (Cust ID 704531033, both
+accounts asset code LOSS — 100% provision, a good stress test since O/S -
+Provision = 0 exactly): confirmed the Net O/S row no longer renders; typed
+OTS ₹3,60,000 then Interest Reversal ₹5,000 — Total Dues moved from
+₹5,80,804.33 to ₹5,85,804.33 (exactly +5,000), Provision and Total P&L
+stayed byte-identical before/after (₹5,00,699.30 / ₹0.00), Total Sacrifice
+moved by exactly the same +5,000, and Ledger Sacrifice/Impact on P&L stayed
+completely unchanged (correctly independent of Interest Reversal now).
+
 ### OTS Calculator: Interest Reversal made editable, Net O/S decoupled from it (2026-08-12, same day)
 
 Alok: *"OUTSTANDING AND NET OUTSTANDING ALWAYS BE SAME EVEN AFTER INTEREST
