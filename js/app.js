@@ -811,45 +811,80 @@ const OTS_XL_ROW_LABELS = [
   'Total Dues','Total Contractual Dues','Net O/S','Provision','Total P&L',
   'OTS Amount (edit me)','Total Sacrifice','Ledger Sacrifice','BDWO Amount','Impact on P&L',
 ];
-function exportOtsExcel(){
+/* SheetJS (the "xlsx" global used elsewhere in this file, e.g. Daily NPA
+   Projection's export) is the free Community Edition, which can only
+   READ cell styles, not write them -- .z (number format) writes fine, but
+   fonts/fills/borders are silently dropped, so a SheetJS-built workbook
+   always comes out plain black-on-white regardless of what's set on the
+   cell object. ExcelJS (window.ExcelJS, js/vendor/exceljs.min.js) writes
+   real styling, so this export uses it instead, matching the print
+   sheet's own look (near-black text, solid borders, highlighted key
+   rows) rather than a bare, unstyled grid of numbers. */
+const XL_BORDER_THIN = {style:'thin', color:{argb:'FF555555'}};
+const XL_BORDER_ALL = {top:XL_BORDER_THIN, bottom:XL_BORDER_THIN, left:XL_BORDER_THIN, right:XL_BORDER_THIN};
+const XL_INR_FMT = '"₹"#,##,##0.00;[Red]-"₹"#,##,##0.00';
+const XL_DATE_FMT = 'dd-mm-yyyy';
+
+async function exportOtsExcel(){
   const slots = window.__slots; const custRow = window.__custRow;
   if(!slots || !custRow) return;
 
-  const INR_FMT = '"₹"#,##,##0.00;[Red]-"₹"#,##,##0.00';
-  const DATE_FMT = 'dd-mm-yyyy';
-  const cell = (addr, obj) => { ws[addr] = obj; };
-  const num = (addr, v, fmt) => cell(addr, fmt ? {t:'n', v, z:fmt} : {t:'n', v});
-  const str = (addr, v) => cell(addr, {t:'s', v: v===''||v===null||v===undefined ? '' : String(v)});
-  const dateCell = (addr, jsDate) => cell(addr, jsDate ? {t:'n', v: dateToExcelSerial(jsDate), z: DATE_FMT} : {t:'s', v:''});
-  const formula = (addr, f, fmt) => cell(addr, fmt ? {t:'n', f, z:fmt} : {t:'n', f});
-
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('OTS Calculator', { views: [{showGridLines:false}] });
   const colLetter = i => XLSX.utils.encode_col(i+1); // account 0 -> B, 1 -> C, ...
   const cols = slots.map((s,i)=>colLetter(i));
+  const lastCol = cols[cols.length-1];
+  const lastColIdx = cols.length + 1; // 1-indexed: A=1, B=2...
 
-  const aoa = [
-    [`UPGB OTS Calculator — ${custRow[C.NAME]||''}`],
-    [`Uttar Pradesh Gramin Bank · Branch: ${custRow[C.SOL_DESC]||''}`],
-    [],
-    ['Report Date', new Date(), '', 'Editable -- every UCI/dues figure below recalculates off this date'],
-    [],
+  const set = (addr, value, opts={}) => {
+    const cell = ws.getCell(addr);
+    cell.value = value;
+    if(opts.numFmt) cell.numFmt = opts.numFmt;
+    if(opts.font) cell.font = opts.font;
+    if(opts.fill) cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:opts.fill}};
+    if(opts.align) cell.alignment = opts.align;
+    if(opts.border!==false) cell.border = opts.border || XL_BORDER_ALL;
+    return cell;
+  };
+  const dateVal = jsDate => jsDate || null;
+  const formula = f => ({formula: f});
+
+  // ---- Header ----
+  ws.mergeCells(1,1,1,Math.max(lastColIdx,4));
+  set('A1', `UPGB OTS CALCULATOR — ${custRow[C.NAME]||''}`, {font:{bold:true, size:16, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
+  ws.mergeCells(2,1,2,Math.max(lastColIdx,4));
+  set('A2', `Uttar Pradesh Gramin Bank · Branch: ${custRow[C.SOL_DESC]||''}`, {font:{size:11, color:{argb:'FF333333'}}, align:{horizontal:'center'}, border:false});
+  ws.getRow(1).height = 24;
+
+  const reportDateRow = 4;
+  set(`A${reportDateRow}`, 'Report Date', {font:{bold:true}, border:false});
+  set(`B${reportDateRow}`, dateVal(new Date()), {numFmt:XL_DATE_FMT, font:{bold:true, color:{argb:'FF000000'}}, fill:'FFFFF3CD', border:XL_BORDER_ALL});
+  ws.mergeCells(reportDateRow,4,reportDateRow,Math.max(lastColIdx,6));
+  set(`D${reportDateRow}`, 'Editable — every UCI/dues figure below recalculates off this date', {font:{italic:true, size:10, color:{argb:'FF666666'}}, border:false});
+  const reportDateRef = `$B$${reportDateRow}`;
+
+  const infoPairs = [
     ['Cust ID', String(custRow[C.CUST_ID]||''), 'Sol ID', String(custRow[C.SOL_ID]||'')],
     ['Mobile', String(custRow[C.PHONE]||''), 'Aadhar', String(custRow[C.AADHAR]||'')],
     ['PAN', String(custRow[C.PAN]||''), 'SB A/c', String(custRow[C.SB_ACCT]||'')],
-    ['SB Balance', custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL]],
-    [],
-    ['Particulars', ...slots.map(s=>String(s.acctNo))],
-    ...OTS_XL_ROW_LABELS.map(l=>[l]),
-    [],
-    ['AGGREGATE TOTALS'],
-    ['Total O/S Balance'],
-    ['Total Dues'],
-    ['Total OTS Amount'],
-    ['Total Sacrifice'],
+    ['SB Balance', custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL], '', ''],
   ];
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  infoPairs.forEach((row,i)=>{
+    const r = 6+i;
+    set(`A${r}`, row[0], {font:{bold:true, color:{argb:'FF333333'}}, border:false});
+    set(`B${r}`, row[1], {font:{color:{argb:'FF000000'}}, numFmt: row[0]==='SB Balance'?XL_INR_FMT:undefined, border:false});
+    if(row[2]){
+      set(`C${r}`, row[2], {font:{bold:true, color:{argb:'FF333333'}}, border:false});
+      set(`D${r}`, row[3], {font:{color:{argb:'FF000000'}}, border:false});
+    }
+  });
 
-  const reportDateRow = 4; // 1-indexed Excel row for "Report Date"
+  // ---- Particulars table ----
   const headerRow = 11;
+  set(`A${headerRow}`, 'Particulars', {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFC9C9C9'});
+  slots.forEach((s,i)=>set(`${cols[i]}${headerRow}`, s.acctNo, {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFC9C9C9', align:{horizontal:'center'}}));
+
+  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total Contractual Dues','Total P&L','OTS Amount (edit me)','Total Sacrifice','Impact on P&L']);
   const rowOf = label => headerRow + 1 + OTS_XL_ROW_LABELS.indexOf(label);
   const R = {
     sanctionDate: rowOf('Sanction Date'), sanctionLimit: rowOf('Sanction Limit'), assetCode: rowOf('Asset Code'),
@@ -861,29 +896,37 @@ function exportOtsExcel(){
     totalSac: rowOf('Total Sacrifice'), ledgerSac: rowOf('Ledger Sacrifice'), bdwo: rowOf('BDWO Amount'),
     impact: rowOf('Impact on P&L'),
   };
-  const aggRow = { title: headerRow + OTS_XL_ROW_LABELS.length + 2 };
+
+  OTS_XL_ROW_LABELS.forEach((label,i)=>{
+    const r = headerRow + 1 + i;
+    const strong = STRONG_ROWS.has(label);
+    const isOts = label==='OTS Amount (edit me)';
+    set(`A${r}`, label, {font:{bold:true, color:{argb:'FF000000'}}, fill: strong?'FFD8DEEE':'FFE2E2E2'});
+  });
 
   // Provision-rate lookup table, off to the side (columns H/I) next to the
   // top of the main table -- clear of the up-to-4 account columns (B..E).
   const RATE_ROWS = [['SUB_STD',0.10],['DA1',0.20],['DA2',0.30],['DA3',1],['LOSS',1]];
   const rateHeadRow = headerRow;
   const rateTable = `$H$${rateHeadRow+1}:$I$${rateHeadRow+RATE_ROWS.length}`;
-  str(`H${rateHeadRow}`, 'Asset Code'); str(`I${rateHeadRow}`, 'Provision Rate');
-  RATE_ROWS.forEach(([code,rate],i)=>{ str(`H${rateHeadRow+1+i}`, code); num(`I${rateHeadRow+1+i}`, rate, '0%'); });
-
-  dateCell(`B${reportDateRow}`, new Date());
-  const reportDateRef = `$B$${reportDateRow}`;
+  set(`H${rateHeadRow}`, 'Asset Code', {font:{bold:true}, fill:'FFC9C9C9'});
+  set(`I${rateHeadRow}`, 'Provision Rate', {font:{bold:true}, fill:'FFC9C9C9'});
+  RATE_ROWS.forEach(([code,rate],i)=>{
+    set(`H${rateHeadRow+1+i}`, code, {font:{color:{argb:'FF000000'}}});
+    set(`I${rateHeadRow+1+i}`, rate, {numFmt:'0%', font:{color:{argb:'FF000000'}}});
+  });
 
   slots.forEach((s,i)=>{
     const c = cols[i];
-    dateCell(`${c}${R.sanctionDate}`, toDate(s.sanctionDate));
-    num(`${c}${R.sanctionLimit}`, s.sanctionLimit===''?0:s.sanctionLimit, INR_FMT);
-    str(`${c}${R.assetCode}`, s.assetCode);
-    str(`${c}${R.scheme}`, s.scheme);
-    dateCell(`${c}${R.npaDate}`, toDate(s.npaDate));
-    formula(`${c}${R.daysNpa}`, `${reportDateRef}-${c}${R.npaDate}`, '0');
-    num(`${c}${R.os}`, s.os===''?0:s.os, INR_FMT);
-    num(`${c}${R.uri}`, s.uri===''?0:s.uri, INR_FMT);
+    const rowStyle = r => ({border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}, bold:STRONG_ROWS.has(OTS_XL_ROW_LABELS[r-headerRow-1])}, fill: STRONG_ROWS.has(OTS_XL_ROW_LABELS[r-headerRow-1])?'FFEEF1F8':undefined});
+    set(`${c}${R.sanctionDate}`, dateVal(toDate(s.sanctionDate)), {...rowStyle(R.sanctionDate), numFmt:XL_DATE_FMT});
+    set(`${c}${R.sanctionLimit}`, s.sanctionLimit===''?0:s.sanctionLimit, {...rowStyle(R.sanctionLimit), numFmt:XL_INR_FMT});
+    set(`${c}${R.assetCode}`, s.assetCode, rowStyle(R.assetCode));
+    set(`${c}${R.scheme}`, s.scheme, rowStyle(R.scheme));
+    set(`${c}${R.npaDate}`, dateVal(toDate(s.npaDate)), {...rowStyle(R.npaDate), numFmt:XL_DATE_FMT});
+    set(`${c}${R.daysNpa}`, formula(`${reportDateRef}-${c}${R.npaDate}`), {...rowStyle(R.daysNpa), numFmt:'0'});
+    set(`${c}${R.os}`, s.os===''?0:s.os, {...rowStyle(R.os), numFmt:XL_INR_FMT});
+    set(`${c}${R.uri}`, s.uri===''?0:s.uri, {...rowStyle(R.uri), numFmt:XL_INR_FMT});
     // Anchor date replicates computeUCI()'s scheme-dependent rule exactly:
     // CC004 (KCC) uses fixed 24-Mar/24-Sep half-year edges; every other
     // scheme anchors to end of NPA month (or the previous month's end, if
@@ -893,37 +936,59 @@ function exportOtsExcel(){
       `IF(${npaRef}>DATE(YEAR(${npaRef}),9,24),DATE(YEAR(${npaRef}),9,24),`+
         `IF(${npaRef}>DATE(YEAR(${npaRef}),3,24),DATE(YEAR(${npaRef}),3,24),DATE(YEAR(${npaRef})-1,9,24))),`+
       `IF(${npaRef}=EOMONTH(${npaRef},0),DATE(YEAR(${npaRef}),MONTH(${npaRef}),29),EOMONTH(${npaRef},-1)))`;
-    formula(`${c}${R.anchor}`, anchorF, DATE_FMT);
-    formula(`${c}${R.uci85}`, `${c}${R.os}*8.5/100*((${reportDateRef}-${c}${R.anchor})/365)`, INR_FMT);
-    formula(`${c}${R.uci125}`, `${c}${R.os}*12.5/100*((${reportDateRef}-${c}${R.anchor})/365)`, INR_FMT);
-    formula(`${c}${R.totalDues}`, `${c}${R.os}+${c}${R.uci85}`, INR_FMT);
-    formula(`${c}${R.totalContractual}`, `${c}${R.os}+${c}${R.uci125}`, INR_FMT);
-    formula(`${c}${R.netOs}`, `${c}${R.os}-${c}${R.uri}`, INR_FMT);
-    formula(`${c}${R.provision}`, `${c}${R.netOs}*VLOOKUP(${c}${R.assetCode},${rateTable},2,FALSE)`, INR_FMT);
-    formula(`${c}${R.totalPL}`, `${c}${R.netOs}-${c}${R.provision}`, INR_FMT);
+    set(`${c}${R.anchor}`, formula(anchorF), {...rowStyle(R.anchor), numFmt:XL_DATE_FMT});
+    set(`${c}${R.uci85}`, formula(`${c}${R.os}*8.5/100*((${reportDateRef}-${c}${R.anchor})/365)`), {...rowStyle(R.uci85), numFmt:XL_INR_FMT});
+    set(`${c}${R.uci125}`, formula(`${c}${R.os}*12.5/100*((${reportDateRef}-${c}${R.anchor})/365)`), {...rowStyle(R.uci125), numFmt:XL_INR_FMT});
+    set(`${c}${R.totalDues}`, formula(`${c}${R.os}+${c}${R.uci85}`), {...rowStyle(R.totalDues), numFmt:XL_INR_FMT});
+    set(`${c}${R.totalContractual}`, formula(`${c}${R.os}+${c}${R.uci125}`), {...rowStyle(R.totalContractual), numFmt:XL_INR_FMT});
+    set(`${c}${R.netOs}`, formula(`${c}${R.os}-${c}${R.uri}`), {...rowStyle(R.netOs), numFmt:XL_INR_FMT});
+    set(`${c}${R.provision}`, formula(`${c}${R.netOs}*VLOOKUP(${c}${R.assetCode},${rateTable},2,FALSE)`), {...rowStyle(R.provision), numFmt:XL_INR_FMT});
+    set(`${c}${R.totalPL}`, formula(`${c}${R.netOs}-${c}${R.provision}`), {...rowStyle(R.totalPL), numFmt:XL_INR_FMT});
     const otsVal = otsAmounts[s.acctNo];
     const otsNum = (otsVal===''||otsVal===undefined) ? null : parseFloat(otsVal);
-    num(`${c}${R.ots}`, otsNum===null||isNaN(otsNum) ? 0 : otsNum, INR_FMT);
-    formula(`${c}${R.totalSac}`, `${c}${R.totalContractual}-${c}${R.ots}`, INR_FMT);
-    formula(`${c}${R.ledgerSac}`, `${c}${R.os}-${c}${R.ots}`, INR_FMT);
-    formula(`${c}${R.bdwo}`, `${c}${R.ledgerSac}-${c}${R.uri}`, INR_FMT);
-    formula(`${c}${R.impact}`, `${c}${R.ots}-${c}${R.totalPL}`, INR_FMT);
+    set(`${c}${R.ots}`, otsNum===null||isNaN(otsNum) ? 0 : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, fill:'FFFFF3CD', numFmt:XL_INR_FMT});
+    set(`${c}${R.totalSac}`, formula(`${c}${R.totalContractual}-${c}${R.ots}`), {...rowStyle(R.totalSac), numFmt:XL_INR_FMT});
+    set(`${c}${R.ledgerSac}`, formula(`${c}${R.os}-${c}${R.ots}`), {...rowStyle(R.ledgerSac), numFmt:XL_INR_FMT});
+    set(`${c}${R.bdwo}`, formula(`${c}${R.ledgerSac}-${c}${R.uri}`), {...rowStyle(R.bdwo), numFmt:XL_INR_FMT});
+    set(`${c}${R.impact}`, formula(`${c}${R.ots}-${c}${R.totalPL}`), {...rowStyle(R.impact), numFmt:XL_INR_FMT});
   });
 
-  const lastCol = cols[cols.length-1];
+  // ---- Aggregate totals ----
+  const aggTitleRow = headerRow + OTS_XL_ROW_LABELS.length + 2;
+  ws.mergeCells(aggTitleRow,1,aggTitleRow,Math.max(lastColIdx,4));
+  set(`A${aggTitleRow}`, 'A G G R E G A T E   T O T A L S', {font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
   const sumRange = row => `SUM(B${row}:${lastCol}${row})`;
-  formula(`B${aggRow.title+1}`, sumRange(R.os), INR_FMT);
-  formula(`B${aggRow.title+2}`, sumRange(R.totalDues), INR_FMT);
-  formula(`B${aggRow.title+3}`, sumRange(R.ots), INR_FMT);
-  formula(`B${aggRow.title+4}`, sumRange(R.totalSac), INR_FMT);
+  const AGG_LABELS = ['Total O/S Balance','Total Dues','Total OTS Amount','Total Sacrifice'];
+  const AGG_ROWS = [R.os, R.totalDues, R.ots, R.totalSac];
+  AGG_LABELS.forEach((label,i)=>{
+    const r = aggTitleRow+1+i;
+    set(`A${r}`, label, {font:{bold:true, color:{argb:'FF000000'}}, border:false, fill:'FFF4F6FA'});
+    ws.mergeCells(r,2,r,Math.max(lastColIdx,4));
+    set(`B${r}`, formula(sumRange(AGG_ROWS[i])), {numFmt:XL_INR_FMT, font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'right'}, border:false, fill:'FFF4F6FA'});
+  });
 
-  ws['!cols'] = [{wch:22}, ...cols.map(()=>({wch:18})), {wch:2}, {wch:2}, {wch:2}, {wch:2}, {wch:2}, {wch:16}, {wch:12}];
-  ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:Math.max(cols.length, 8)}});
+  const footerRow = aggTitleRow + AGG_LABELS.length + 2;
+  ws.mergeCells(footerRow,1,footerRow,Math.max(lastColIdx,4));
+  set(`A${footerRow}`, 'Designed & Developed by ALOK MITTAL · Uttar Pradesh Gramin Bank', {font:{italic:true, size:9.5, color:{argb:'FF666666'}}, align:{horizontal:'center'}, border:false});
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'OTS Calculator');
+  // ---- Column widths + freeze header row/label column ----
+  ws.getColumn(1).width = 30;
+  cols.forEach((c,i)=>{ ws.getColumn(2+i).width = 17; });
+  ws.getColumn(7).width = 3;
+  ws.getColumn(8).width = 12;
+  ws.getColumn(9).width = 13;
+  ws.views = [{state:'frozen', xSplit:1, ySplit:headerRow, topLeftCell:`B${headerRow+1}`, showGridLines:false}];
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const safeName = String(custRow[C.NAME]||'borrower').replace(/[\\/:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,40);
-  XLSX.writeFile(wb, `OTS_${safeName}_${dateToInputValue(new Date())}.xlsx`);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `OTS_${safeName}_${dateToInputValue(new Date())}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
 }
 window.exportOtsExcel = exportOtsExcel;
 

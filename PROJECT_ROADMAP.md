@@ -496,6 +496,53 @@ the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
 
+### OTS Calculator Excel export: real cell formatting, not a bare grid (2026-08-12, same day)
+
+You tried the new Excel export (above) and said it should stay "properly
+formatted" like the PDF — not something plain/different: "EXCEL PROPER
+FORMATED RAHE PDF JAISE KUCH AUR ALAG NAHI CHAHIYE". Root cause: the
+export used `XLSX` (SheetJS), the same library already vendored for
+reading uploaded files and for the Daily NPA Projection export — but the
+free Community Edition of SheetJS can only **write** number formats
+(`.z`), not actual cell styling. Any `font`/`fill`/`border` set on a cell
+object is silently dropped on write; only Pro (paid) SheetJS writes real
+styles. So the first version of this export came out as plain black
+text on a bare grid — technically correct formulas, but visually nothing
+like the print sheet.
+
+- **Vendored ExcelJS** (`js/vendor/exceljs.min.js`, MIT licensed, the
+  official browser UMD build) specifically for this export — it writes
+  real OOXML styling (fonts, fills, borders, alignment, merged cells,
+  frozen panes), verified directly against a fresh SheetJS smoke test
+  first (built a cell with bold/color/fill/border, wrote it, inspected
+  the resulting `xl/styles.xml` — SheetJS wrote only the default empty
+  style; the identical test through ExcelJS wrote the real font/fill/
+  border XML). `js/vendor/xlsx.full.min.js` (SheetJS) stays exactly as
+  it was for everything else (upload parsing, Daily NPA Projection
+  export) — this is additive, not a replacement.
+- Rewrote `exportOtsExcel()` on ExcelJS's API, keeping every formula from
+  the first version byte-for-byte (re-verified against the same
+  independent Python cross-check used before — still an exact match),
+  now with real visual formatting mirroring the print sheet's own
+  language: bold near-black title/headers, gray header-row fill,
+  bordered table, and the same "key rows" highlight convention (O/S
+  Balance, Total Dues, Total Contractual Dues, Total P&L, OTS Amount,
+  Total Sacrifice, Impact on P&L get a light blue-gray tint + bold) —
+  plus one addition print doesn't have: the **OTS Amount** input cells
+  get a distinct amber highlight, since that's the one cell meant to
+  actually be edited here.
+- Frozen header row + label column (`ws.views` frozen pane at the first
+  data row/column) so the table stays readable while scrolling on a
+  wider multi-account export.
+- **Verified**: re-ran the exact same download-and-inspect Playwright
+  test as before (KAMLA DEVI, 2 linked accounts, OTS Amount entered) —
+  formulas unchanged and still numerically correct, plus now confirmed
+  via `openpyxl` that key cells actually carry `bold=True`/the right
+  fill colors/borders (e.g. the header row's `FFC9C9C9` fill, strong
+  rows' `FFEEF1F8`/`FFD8DEEE` tint, the OTS input's `FFFFF3CD` amber),
+  while plain rows correctly stay unstyled. Re-checked the single-account
+  case too (frozen pane, self-range `SUM`, styling) — still clean.
+
 ### OTS Calculator: Export to Excel with live formulas, alongside Print/PDF (2026-08-12)
 
 You asked for an Excel export next to the existing PDF/Print option —
