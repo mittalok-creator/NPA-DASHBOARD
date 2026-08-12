@@ -123,6 +123,39 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: table icons matched to sidebar's colored badges, Impact box overflow fixed (2026-08-12, same day)
+
+Alok shared a screenshot and asked directly: *"KYA YE VISUALLY
+PROFESSIONAL HAI?"* Two concrete gaps identified and confirmed with him
+before fixing: (1) the loan table's row icons were plain thin gray
+outlines, while the sidebar's stat icons were bold colored circle badges
+-- two different icon "languages" on the same screen; (2) the sidebar's
+"Total P&L Impact" figure was crowding right up against its highlighted
+box's edge for large values.
+
+Fix 1: new `ltIconBadge()` helper (`js/app.js`) wraps a row icon in a
+colored circular badge, same visual language as the aggregate sidebar's
+`.ak-icon`. Colored by section rather than a unique color per row (which
+would read as arbitrary/rainbow across 14+ rows) -- Loan Terms is blue,
+Dues & Provisioning is amber, Settlement & Impact is green -- so the
+color also reinforces which group a row belongs to, on top of the
+existing section-header bands. `loanTableHTML()`'s `row()`/`statRow()`
+builders take a new `grp` parameter for this; `group()` (the section
+header rows) intentionally keeps its plain-icon treatment since those
+rows already carry their own full-width tinted background.
+
+Fix 2: `#aggBar .agg-stat.impact .av` font size dropped from 21px to
+17px and padding increased, with `word-break:break-word` added -- 21px
+bold text had no headroom for real loan accounts running into crores,
+where the formatted rupee string can run past 12-13 characters.
+
+**Verified** via Playwright screenshots: the earlier 2-account borrower
+in both themes (icons now read as one coherent colored system across
+sidebar and table), and a 4-account borrower with deliberately large OTS
+Amounts entered (up to ₹46,00,000) to force an 8-figure P&L Impact value
+(₹98,87,590.71) -- confirmed it now wraps cleanly onto two lines inside
+its box instead of touching the edge.
+
 ### OTS Calculator: aggregate sidebar alignment + color fix (2026-08-12, same day)
 
 Alok flagged a real bug in a screenshot: in the `#aggBar` account-totals
