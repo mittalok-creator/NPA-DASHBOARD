@@ -123,6 +123,38 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: stripped icons out of the Excel export (2026-08-12, same day)
+
+Alok, via the excel-master-pro skill: *"GAVE ME A PROPER EXCEL DASHBOARD
+EXPORT FILE WITH PROPER FORMATED LIKE PDF FILE NO NEED ICON AND FANCY
+ITEMS IN EXCEL."* The per-row icon images and borrower avatar added to
+`exportOtsExcel()` a couple of entries above were the wrong call for a
+spreadsheet a banker needs to actually edit and hand around -- removed
+them entirely rather than trying to make them more restrained, since
+Excel isn't the right medium for that treatment at all (unlike the app
+and print sheet, which are rendered by the browser and can draw real
+inline SVG).
+
+Removed: the 13 rasterized row-icon PNGs and their embedding loop, the
+borrower avatar image, the `XL_ROW_ICONS` label-to-icon map, and the
+two-leading-spaces hack on row labels that existed only to leave room for
+those icons. Also deleted `rasterizeLtIcon()` itself, since nothing else
+in the codebase used it -- Excel was its only caller.
+
+Kept everything that makes this "proper formatted like PDF": real
+ExcelJS cell styling (bold headers, borders, fill-highlighted key rows),
+live formulas that recalculate when any cell is edited, the A4
+fit-to-page print setup from the previous entry, and the bank logo in
+the header (kept as the letterhead, not a decorative icon -- it's the
+same logo the printed PDF itself carries).
+
+**Verified**: re-downloaded the export via Playwright with no console
+errors; unzipped the raw `.xlsx` and confirmed exactly one image remains
+(`xl/media/image1.png`, the logo) versus 18 before; `openpyxl` confirms
+the A4 page setup is untouched and every formula (`Total Dues`, `Total
+P&L`, `Total Sacrifice`, etc.) still reads exactly as corrected two
+entries above.
+
 ### OTS Calculator: pulled back the badge colors to one restrained accent (2026-08-12, same day)
 
 Alok's reaction to the badge colors just shipped: *"TABLE K COLORS KUCH
