@@ -748,7 +748,8 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
    to a faint, washed-out result on laser printers, especially in a shared-
    office/toner-saver setting -- everything meant to be read easily is
    near-black text on solid (not dotted) dark borders instead. */
-.pv-header{text-align:center;border-bottom:2.5px solid #000;padding-bottom:6px;margin-bottom:10px}
+.pv-header{position:relative;text-align:center;border-bottom:2.5px solid #000;padding-bottom:6px;margin-bottom:10px}
+.pv-logo{position:absolute;left:0;top:0;width:40px;height:40px;object-fit:contain}
 .pv-title{font-size:17px;font-weight:800;letter-spacing:.6px;color:#000}
 .pv-sub{font-size:10.5px;color:#000;margin-top:2px;font-weight:600}
 .pv-meta{display:flex;justify-content:center;gap:24px;font-size:10.5px;color:#000;margin-top:4px;font-weight:600}

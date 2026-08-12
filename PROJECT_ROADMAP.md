@@ -496,6 +496,70 @@ the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
 
+### OTS Calculator: corrected Total Sacrifice formula, merged BDWO row, logo + Regional Office on print/Excel, Total Contractual Dues hidden from print/Excel only (2026-08-12, same day)
+
+You sent a scanned, hand-annotated printout (Adobe Scan) of a real OTS
+sheet with checkmarks/✗ marks and margin notes, plus typed instructions:
+apply the annotated changes to the app AND the print/PDF; Excel should
+match the PDF exactly, with any extra helper values that don't belong on
+the printed sheet moved to a **second Excel sheet**; and **Total
+Contractual Dues should be hidden from PDF and Excel only** — it stays
+on-screen in the app. A follow-up clarifying question about how to merge
+the annotated "Ledger Sacrifice (BDWO Amount)" row led to the exact
+corrected Total Sacrifice formula (previously it read off Total
+Contractual Dues).
+
+- **Total Sacrifice formula corrected** everywhere (app, print, Excel):
+  was `Total Contractual Dues − OTS Amount`, now
+  **`Total Dues − OTS Amount + Interest Reversal`** (algebraically
+  identical to `Ledger Sacrifice + UCI@8.5% + Interest Reversal`, which
+  is literally how it was described) — no longer depends on Total
+  Contractual Dues at all. Updated in `recalcLoan()` (per-account),
+  `recalcAggregate()` (aggregate rail/sidebar, `aggBar` progress %, all
+  now driven by a new `window.__totalURI`), `renderPrintView()`, and
+  `exportOtsExcel()`.
+- **"Ledger Sacrifice" and "BDWO Amount" merged into one row**, labelled
+  "Ledger Sacrifice (BDWO Amount)", keeping Ledger Sacrifice's own
+  formula (O/S Balance − OTS Amount) — in the app's loan table, the print
+  sheet, and Excel. The separate BDWO row/element is gone everywhere.
+- **Total Contractual Dues removed from print and Excel only** — the
+  app's interactive loan table (`loanTableHTML`) is untouched and still
+  shows it, per the explicit instruction that it "APP MAIN TO SHOW HOGA
+  HI".
+- **Logo + "(Regional Office Hathras)"** added to both the print header
+  (new `.pv-logo` positioned top-left, same base64 PNG already used for
+  the sidebar's own `nav-logo`) and the Excel export's header row
+  (`workbook.addImage()`), matching exactly where the annotation circled
+  a blank space for a logo and handwrote the regional office name next
+  to "Uttar Pradesh Gramin Bank".
+- **Excel restructured into two sheets** so the main sheet mirrors the
+  print layout exactly: "OTS Calculator" (visible rows only — the same
+  16 rows now shown on the PDF) and a new **"Calculation Details"**
+  sheet holding everything the PDF never showed but the formulas still
+  need — Scheme, UCI Anchor Date, and the Provision Rate lookup table.
+  Main-sheet formulas reference across sheets normally
+  (`='Calculation Details'!B6`, `VLOOKUP(B14,'Calculation
+  Details'!$A$9:$B$13,2,FALSE)`). UCI @ 12.5% and Total Contractual Dues
+  were dropped entirely from the workbook — once Total Sacrifice no
+  longer depends on them, nothing downstream needed them either.
+- **Verified against the exact borrower from the annotated scan** (RAM
+  PRAKASH S/O NARAYAN SINGH, Cust ID 704531033, two accounts on schemes
+  CC004 and CC043 — testing both branches of the UCI anchor-date rule):
+  entered the same OTS amounts as the annotation (₹3,60,000 /
+  ₹98,000) and confirmed the app, print, and Excel all show the
+  identical corrected Total Sacrifice figures, matching a fourth,
+  independent Python re-implementation of the formula chain. Notably,
+  account 2's Total Dues (₹1,59,870.70) landed byte-for-byte identical
+  to the value printed on Alok's own scanned reference sheet. Confirmed
+  via screenshot: logo renders, "(Regional Office Hathras)" shows,
+  Total Contractual Dues row is gone from print, Ledger Sacrifice/BDWO
+  are one row, and the sheet still fits one page (removing 2 rows only
+  added headroom to the earlier 1-page fit). Confirmed via `openpyxl`
+  that the Excel workbook has exactly the two sheets, the logo image is
+  embedded byte-identical to the source PNG, cross-sheet formulas
+  resolve correctly, and styling (bold/fills/borders) is unaffected by
+  the restructure.
+
 ### OTS Calculator Excel export: real cell formatting, not a bare grid (2026-08-12, same day)
 
 You tried the new Excel export (above) and said it should stay "properly
