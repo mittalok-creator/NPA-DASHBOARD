@@ -123,6 +123,55 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: icon-forward loan detail redesign (2026-08-12, same day)
+
+Alok shared a reference screenshot of a card-and-icon style loan detail
+layout and asked whether to adopt it, calling out that some borrowers have
+3 or 4 linked accounts. Built a review mockup first (published as an
+Artifact) that broke down what to keep from the reference (row icons,
+section-header icons, a borrower avatar card, an icon-tile summary strip,
+a plain-language hint banner) versus what didn't map onto this app (the
+reference's fixed desktop sidebar layout, its single-account-only design,
+and its missing OTS Amount/Interest Reversal/Total Sacrifice/Ledger
+Sacrifice/P&L Impact rows -- the actual core of this calculator). Alok
+approved the direction ("OK IMPLEMENT BUT USE PROFESSIONAL ENGLISH ONLY").
+
+Implemented in `js/app.js`/`css/styles.css`:
+- New `LT_ICONS`/`ltIcon()` helper -- a small stroke-icon set (calendar,
+  document, warning, coin, rotate, percent, layers, shield, trend, badge,
+  bars, list) rendered next to every Particulars row label and section
+  group header (Loan Terms / Dues & Provisioning / Settlement & Impact) in
+  `loanTableHTML()`, via `.lt-row-icon` and `display:flex` on `.lt-label`/
+  `.lt-group td`.
+- Borrower card in `drawDetailBody()` gets a circular avatar icon next to
+  the name/address (`.bcard-top`/`.bavatar`).
+- The existing `#aggBar` account-totals panel (sticky sidebar at
+  &gt;=860px, a 3-tile-per-row dock fixed to the bottom of the screen on
+  mobile -- this responsive split already existed, so no structural change
+  was needed there) gets the same icons on each stat label; its "Total Net
+  O/S" tile is renamed "Total O/S Balance" since the Net O/S row itself
+  was already removed from the Particulars table two entries above --
+  the old label was stale terminology for a figure that's simply the
+  account's O/S Balance.
+- A new hint banner under the loan table, in English: "Enter the OTS
+  Amount and Interest Reversal for each account to calculate Total
+  Sacrifice, Ledger Sacrifice, and P&amp;L Impact automatically."
+- Deliberately did NOT copy the reference's fixed sidebar/single-account
+  layout -- kept the existing side-by-side comparison table (rows =
+  particulars, columns = accounts), which already scales to any number of
+  linked accounts via horizontal scroll, layering the icon treatment on
+  top of it instead.
+
+**Verified** via Playwright screenshots at desktop width (dark + light
+theme, sidebar `#aggBar` layout) and mobile width (bottom-dock `#aggBar`
+layout), plus a real 4-linked-account borrower (NATVAR PANDEY S/O
+RAMESHWAR, Cust ID 710075639) to specifically confirm the concern Alok
+raised -- all 4 accounts render side-by-side with icons and the hint
+banner intact, no layout breakage. One issue caught and fixed during
+verification: `#aggBar .agg-stat .ak` needed `display:inline-flex` (not
+block-level `flex`) so the icon+label pair still centers correctly under
+the existing `text-align:center` rule in the mobile bottom-dock layout.
+
 ### OTS Calculator: Interest Reversal row repositioned above UCI (2026-08-12, same day)
 
 Alok: *"INTEREST REVERSAL KO UCI K UPAR PAHUNCHA DO WO US HEAD KA DATA HAI
