@@ -181,7 +181,11 @@ function computeSlot(slot){
   const uci125 = os!=='' ? computeUCI(os, slot.npaDate, slot.scheme, 12.5) : '';
   const totalDues = (os!=='' && uci!=='') ? os+uci : '';
   const totalContractualDues = (os!=='' && uci125!=='') ? os+uci125 : '';
-  const netOutstanding = os!=='' ? os-uri : '';
+  // Net O/S always mirrors O/S Balance -- Interest Reversal is editable and
+  // must flow into Total P&L/Total Sacrifice, but never changes what "Net
+  // O/S" itself displays (Alok: outstanding and net outstanding stay the
+  // same figure even after interest reversal).
+  const netOutstanding = os;
   let provision = '';
   if(netOutstanding!=='' && PROV_RATES[slot.assetCode]!==undefined) provision = netOutstanding*PROV_RATES[slot.assetCode];
   const totalPL = (os!==''&&provision!=='') ? os-uri-provision : '';
@@ -275,7 +279,7 @@ function renderResults(matches, mode){
       const npaDate = fmtDate(toDate(r[C.NPA_DT]));
       const os = typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : '';
       const uri = typeof r[C.URI]==='number' ? r[C.URI] : 0;
-      const netOutstanding = os!=='' ? os-uri : '';
+      const netOutstanding = os; // Net O/S always mirrors O/S Balance
       const provision = (netOutstanding!=='' && PROV_RATES[asset]!==undefined) ? netOutstanding*PROV_RATES[asset] : '';
       const totalPL = (os!==''&&provision!=='') ? os-uri-provision : '';
       const custId = String(r[C.CUST_ID]);
@@ -351,6 +355,22 @@ function renderResults(matches, mode){
 /* ---------- Detail view ---------- */
 let otsAmounts = {}; // key: acctNo -> value
 let frozen = {}; // key: acctNo -> bool
+let interestReversalOverrides = {}; // key: acctNo -> user-edited Interest Reversal value
+// Resolves the live Interest Reversal for a slot: the user's typed override
+// if present, else the value loaded from the daily NPA data.
+function uriFor(s){
+  const raw = interestReversalOverrides[s.acctNo];
+  if(raw===undefined) return s.uri;
+  const v = parseFloat(raw);
+  return (raw===''||isNaN(v)) ? 0 : v;
+}
+// Total P&L = O/S - Interest Reversal - Provision -- computed live off
+// uriFor() so it reacts to the editable field; Provision itself doesn't
+// depend on Interest Reversal (it's O/S x asset-code rate), so s.provision
+// stays valid as-is.
+function totalPLFor(s){
+  return (s.os!=='' && s.provision!=='') ? s.os - uriFor(s) - s.provision : '';
+}
 /* Locked OTS amounts are also persisted on DATA.lockedOts and, as of the
    "sync to everyone immediately" change, ALSO written straight to
    data/locked-ots.json via the lock-ots relay endpoint the moment anyone
@@ -480,10 +500,8 @@ function drawDetailBody(custRow, slots, prevOts){
   const body = document.getElementById('detailBody');
   const totalOS = slots.reduce((a,s)=>a+((s.os!=='')?s.os:0),0);
   const totalDues = slots.reduce((a,s)=>a+((s.totalDues!=='')?s.totalDues:0),0);
-  const totalPL = slots.reduce((a,s)=>a+((s.totalPL!=='')?s.totalPL:0),0);
   const totalNetOS = slots.reduce((a,s)=>a+((s.netOutstanding!=='')?s.netOutstanding:0),0);
   const totalContractualDues = slots.reduce((a,s)=>a+((s.totalContractualDues!=='')?s.totalContractualDues:0),0);
-  const totalURI = slots.reduce((a,s)=>a+((s.uri!=='')?s.uri:0),0);
 
   body.innerHTML = `
     <div class="card borrower-card">
@@ -513,10 +531,8 @@ function drawDetailBody(custRow, slots, prevOts){
 
   window.__slots = slots;
   window.__totalDues = totalDues;
-  window.__totalPL = totalPL;
   window.__totalNetOS = totalNetOS;
   window.__totalContractualDues = totalContractualDues;
-  window.__totalURI = totalURI;
   window.__totalOS = totalOS;
   window.__custRow = custRow;
   window.__prevOts = prevOts;
@@ -559,6 +575,14 @@ function loanTableHTML(slots){
           oninput="onOtsInput(${i},'${esc(String(s.acctNo))}')" ${frozen[s.acctNo]?'disabled':''}>
         <span class="pct-tag" id="pctNetOs-${i}"></span>
       </div></td>`).join('')}</tr>`;
+  const uriRow = () => `<tr><th scope="row" class="lt-label">Interest Reversal</th>${slots.map((s,i)=>`
+      <td><div class="lt-ots-cell">
+        <span class="lt-cur">₹</span>
+        <input type="number" class="lt-ots-input" id="uriInput-${i}" placeholder="0" value="${uriFor(s)||''}"
+          aria-label="Interest reversal for account ${esc(String(s.acctNo))}"
+          oninput="onUriInput(${i},'${esc(String(s.acctNo))}')">
+      </div></td>`).join('')}</tr>`;
+  const totalPLRow = () => `<tr class="lt-strong lt-divider"><th scope="row" class="lt-label">Total P&amp;L</th>${slots.map((s,i)=>`<td id="totalPL-${i}">—</td>`).join('')}</tr>`;
   const eligRow = slots.some(s=>s.notEligible) ? `<tr><th scope="row" class="lt-label"></th>${slots.map(s=>`<td>${s.notEligible?'<span class="eligibility-warn">⚠ Not aged 6mo</span>':''}</td>`).join('')}</tr>` : '';
 
   return `
@@ -576,10 +600,10 @@ function loanTableHTML(slots){
       ${row('UCI @ 8.5%', s=>fmtINR2(s.uci))}
       ${row('Total Dues', s=>fmtINR2(s.totalDues), 'lt-strong')}
       ${row('Total Contractual Dues', s=>fmtINR2(s.totalContractualDues), 'lt-strong lt-divider')}
-      ${row('Interest Reversal', s=>fmtINR2(s.uri))}
+      ${uriRow()}
       ${row('Net O/S', s=>fmtINR2(s.netOutstanding))}
       ${row('Provision', s=>fmtINR2(s.provision))}
-      ${row('Total P&amp;L', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
+      ${totalPLRow()}
       ${group('Settlement &amp; Impact')}
       ${otsRow()}
       ${statRow('Total Sacrifice','totalSac')}
@@ -598,6 +622,14 @@ function onOtsInput(i, acctNo){
   recalcLoan(i);
   recalcAggregate();
 }
+
+function onUriInput(i, acctNo){
+  const v = document.getElementById('uriInput-'+i).value;
+  interestReversalOverrides[acctNo] = v;
+  recalcLoan(i);
+  recalcAggregate();
+}
+window.onUriInput = onUriInput;
 
 function toggleFreeze(i, acctNo){
   const isFrozen = !!frozen[acctNo];
@@ -642,6 +674,17 @@ function recalcLoan(i){
   const ledgerEl = document.getElementById('ledgerSac-'+i);
   const impactEl = document.getElementById('impact-'+i);
   const pctEl = document.getElementById('pctNetOs-'+i);
+  const totalPLEl = document.getElementById('totalPL-'+i);
+
+  // Total P&L depends on Interest Reversal, not on OTS Amount, so it must
+  // update unconditionally -- even while OTS Amount is still blank.
+  const uri = uriFor(s);
+  const totalPL = totalPLFor(s);
+  if(totalPLEl){
+    const ratio = (totalPL!=='' && s.os) ? Math.max(0,totalPL)/s.os : '';
+    totalPLEl.innerHTML = fmtINR2(totalPL) + (ratio!==''?` <span class="pct-tag">(${(ratio*100).toFixed(1)}%)</span>`:'');
+  }
+
   if(ots===''||isNaN(ots)){
     [totalSacEl,ledgerEl,impactEl].forEach(e=>e.textContent='—');
     impactEl.classList.remove('pos','neg');
@@ -653,9 +696,9 @@ function recalcLoan(i){
   // Ledger Sacrifice + UCI@8.5% + Interest Reversal) -- previously used Total
   // Contractual Dues (@12.5%) instead of Total Dues (@8.5%), corrected per
   // Alok's annotated review of the printed sheet.
-  const totalSac = (s.totalDues!=='' && s.uri!=='') ? s.totalDues-ots+s.uri : '';
+  const totalSac = (s.totalDues!=='') ? s.totalDues-ots+uri : '';
   const ledgerSac = s.os!=='' ? s.os-ots : ''; // also shown as "(BDWO Amount)" -- same figure
-  const impact = s.totalPL!=='' ? ots - s.totalPL : '';
+  const impact = totalPL!=='' ? ots - totalPL : '';
   totalSacEl.textContent = fmtINR2(totalSac);
   ledgerEl.textContent = fmtINR2(ledgerSac);
   if(pctEl) pctEl.textContent = (s.netOutstanding && s.netOutstanding!=='') ? (ots/s.netOutstanding*100).toFixed(1)+'%' : '—';
@@ -684,9 +727,17 @@ function recalcAggregate(){
     const v = otsAmounts[s.acctNo];
     if(v!==undefined && v!=='' && !isNaN(parseFloat(v))){ totalOts+=parseFloat(v); any=true; }
   });
+  // Live sums (not the static per-render snapshot) since Interest Reversal,
+  // and therefore Total P&L, can change any time via its editable field.
+  let liveTotalURI=0, liveTotalPL=0;
+  slots.forEach(s=>{
+    liveTotalURI += uriFor(s);
+    const pl = totalPLFor(s);
+    liveTotalPL += (pl!==''?pl:0);
+  });
   // Total Sacrifice = Total Dues - OTS Amount + Interest Reversal (matches
   // the per-account formula in recalcLoan()), not Total Contractual Dues.
-  const aggTotalSac = window.__totalDues + window.__totalURI - totalOts;
+  const aggTotalSac = window.__totalDues + liveTotalURI - totalOts;
   document.getElementById('aggOts') && (document.getElementById('aggOts').textContent = any?fmtINR2(totalOts):'—');
   document.getElementById('aggSac') && (document.getElementById('aggSac').textContent = any?fmtINR2(aggTotalSac):'—');
   const otsTxt = any?fmtINR2(totalOts):'—';
@@ -695,7 +746,7 @@ function recalcAggregate(){
   const railDues = document.getElementById('railDues'); if(railDues) railDues.textContent = fmtINR2(window.__totalDues);
   const railPLLeft = document.getElementById('railPLLeft');
   if(railPLLeft){
-    const impact = any ? (totalOts - window.__totalPL) : '';
+    const impact = any ? (totalOts - liveTotalPL) : '';
     railPLLeft.textContent = impact===''?'—':(impact>0?'+':(impact<0?'−':'')) + fmtINR2(Math.abs(impact));
     railPLLeft.classList.remove('pos','neg');
     if(impact!==''){ if(impact>0) railPLLeft.classList.add('pos'); else if(impact<0) railPLLeft.classList.add('neg'); }
@@ -713,12 +764,12 @@ function recalcAggregate(){
     const aggNetOsEl = document.getElementById('aggTotNetOs');
     if(aggNetOsEl) aggNetOsEl.textContent = fmtINR2(window.__totalNetOS);
     const aggPLEl = document.getElementById('aggTotPL');
-    if(aggPLEl) aggPLEl.textContent = fmtINR2(window.__totalPL);
+    if(aggPLEl) aggPLEl.textContent = fmtINR2(liveTotalPL);
     const aggSacEl = document.getElementById('aggTotSac');
     if(aggSacEl) aggSacEl.textContent = any?fmtINR2(aggTotalSac):'—';
     const aggImpEl = document.getElementById('aggTotImpact');
     if(aggImpEl){
-      const impact = any ? (totalOts - window.__totalPL) : '';
+      const impact = any ? (totalOts - liveTotalPL) : '';
       aggImpEl.classList.remove('pos','neg');
       if(impact===''){ aggImpEl.textContent='—'; }
       else {
@@ -743,6 +794,8 @@ function renderPrintView(){
   }
   let totalOtsSum = 0, anyOts = false;
   slots.forEach(s=>{ const v = otsFor(s); if(v!==null){ totalOtsSum+=v; anyOts=true; } });
+  let liveTotalURI = 0;
+  slots.forEach(s=>{ liveTotalURI += uriFor(s); });
 
   // Rows the sheet is actually read for -- bolded/enlarged in print (see
   // .pv-table tr.pv-strong in styles.css) so they stand out from the
@@ -761,14 +814,14 @@ function renderPrintView(){
     ['O/S Balance', s=>fmtINR2(s.os)],
     ['UCI @ 8.5%', s=>fmtINR2(s.uci)],
     ['Total Dues', s=>fmtINR2(s.totalDues)],
-    ['Interest Reversal', s=>fmtINR2(s.uri)],
+    ['Interest Reversal', s=>fmtINR2(uriFor(s))],
     ['Net O/S', s=>fmtINR2(s.netOutstanding)],
     ['Provision', s=>fmtINR2(s.provision)],
-    ['Total P&L', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'')],
+    ['Total P&L', s=>{const pl=totalPLFor(s); const ratio=(pl!==''&&s.os)?Math.max(0,pl)/s.os:''; return fmtINR2(pl) + (ratio!==''?` (${(ratio*100).toFixed(1)}%)`:'');}],
     ['OTS Amount', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v);}],
-    ['Total Sacrifice', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.totalDues-v+s.uri);}],
+    ['Total Sacrifice', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.totalDues-v+uriFor(s));}],
     ['Ledger Sacrifice (BDWO Amount)', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.os-v);}],
-    ['Impact on P&L', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v-s.totalPL);}],
+    ['Impact on P&L', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v-totalPLFor(s));}],
   ];
   const tableRows = rows.map(([label,fn])=>`<tr${STRONG_ROWS.has(label)?' class="pv-strong"':''}><td class="pv-label">${label}</td>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('');
 
@@ -802,7 +855,7 @@ function renderPrintView(){
       <div class="pv-agg-row"><span>Total O/S Balance</span><span>${fmtINR2(totalOS)}</span></div>
       <div class="pv-agg-row"><span>Total Dues</span><span>${fmtINR2(totalDues)}</span></div>
       <div class="pv-agg-row"><span>Total OTS Amount</span><span>${anyOts?fmtINR2(totalOtsSum):'—'}</span></div>
-      <div class="pv-agg-row"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(window.__totalDues+window.__totalURI-totalOtsSum):'—'}</span></div>
+      <div class="pv-agg-row"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(window.__totalDues+liveTotalURI-totalOtsSum):'—'}</span></div>
     </div>
     <div class="pv-footer">Designed &amp; Developed by ALOK MITTAL · Uttar Pradesh Gramin Bank</div>
     <div class="pv-schemes">${slots.map(s=>`<span>${esc(s.scheme)||''} · ${esc(custRow[C.SOL_DESC])||''}</span>`).join('')}</div>
@@ -973,10 +1026,15 @@ async function exportOtsExcel(){
     set(`${c}${R.os}`, s.os===''?0:s.os, {...rowStyle(R.os), numFmt:XL_INR_FMT});
     set(`${c}${R.uci85}`, formula(`${c}${R.os}*8.5/100*((${reportDateRef}-${anchorRefCalc})/365)`), {...rowStyle(R.uci85), numFmt:XL_INR_FMT});
     set(`${c}${R.totalDues}`, formula(`${c}${R.os}+${c}${R.uci85}`), {...rowStyle(R.totalDues), numFmt:XL_INR_FMT});
-    set(`${c}${R.uri}`, s.uri===''?0:s.uri, {...rowStyle(R.uri), numFmt:XL_INR_FMT});
-    set(`${c}${R.netOs}`, formula(`${c}${R.os}-${c}${R.uri}`), {...rowStyle(R.netOs), numFmt:XL_INR_FMT});
+    set(`${c}${R.uri}`, uriFor(s), {...rowStyle(R.uri), numFmt:XL_INR_FMT});
+    // Net O/S always mirrors O/S Balance -- Interest Reversal is editable and
+    // must flow into Total P&L, but never changes what Net O/S itself shows.
+    set(`${c}${R.netOs}`, formula(`${c}${R.os}`), {...rowStyle(R.netOs), numFmt:XL_INR_FMT});
     set(`${c}${R.provision}`, formula(`${c}${R.netOs}*VLOOKUP(${c}${R.assetCode},${rateTable},2,FALSE)`), {...rowStyle(R.provision), numFmt:XL_INR_FMT});
-    set(`${c}${R.totalPL}`, formula(`${c}${R.netOs}-${c}${R.provision}`), {...rowStyle(R.totalPL), numFmt:XL_INR_FMT});
+    // Total P&L reads Interest Reversal directly (not via Net O/S, which no
+    // longer reflects it) so editing the Interest Reversal cell in Excel
+    // still recalculates this figure.
+    set(`${c}${R.totalPL}`, formula(`${c}${R.os}-${c}${R.uri}-${c}${R.provision}`), {...rowStyle(R.totalPL), numFmt:XL_INR_FMT});
     const otsVal = otsAmounts[s.acctNo];
     const otsNum = (otsVal===''||otsVal===undefined) ? null : parseFloat(otsVal);
     set(`${c}${R.ots}`, otsNum===null||isNaN(otsNum) ? 0 : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, fill:'FFFFF3CD', numFmt:XL_INR_FMT});
