@@ -123,6 +123,19 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: Interest Reversal row repositioned above UCI (2026-08-12, same day)
+
+Alok: *"INTEREST REVERSAL KO UCI K UPAR PAHUNCHA DO WO US HEAD KA DATA HAI
+WAHIIN SAHI LAGEGA"* — Interest Reversal is a data-entry figure for that
+"Dues & Provisioning" head, same category as UCI, so it reads more
+naturally sitting right above UCI@8.5% (immediately after O/S Balance)
+than down in Settlement & Impact next to OTS Amount. Pure row reorder in
+`loanTableHTML()` — the `uriRow()` editable input and all of its formula
+wiring (Total Dues, Total Sacrifice) are unchanged, only its position in
+the Particulars table moved. Verified via screenshot on the same RAM
+PRAKASH test account — Interest Reversal now renders as the first row
+under "Dues & Provisioning", values unaffected.
+
 ### OTS Calculator: corrected the whole formula chain per Alok's re-derivation (2026-08-12, same day)
 
 The Interest Reversal change shipped just before this (previous entry below)

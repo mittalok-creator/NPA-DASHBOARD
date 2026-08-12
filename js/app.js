@@ -602,6 +602,7 @@ function loanTableHTML(slots){
       ${row('NPA Date', s=>fmtDate(toDate(s.npaDate)))}
       ${row('O/S Balance', s=>fmtINR2(s.os), 'lt-strong')}
       ${group('Dues &amp; Provisioning')}
+      ${uriRow()}
       ${row('UCI @ 8.5%', s=>fmtINR2(s.uci))}
       ${totalDuesRow()}
       ${row('Total Contractual Dues', s=>fmtINR2(s.totalContractualDues), 'lt-strong lt-divider')}
@@ -609,7 +610,6 @@ function loanTableHTML(slots){
       ${row('Total P&amp;L', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
       ${group('Settlement &amp; Impact')}
       ${otsRow()}
-      ${uriRow()}
       ${statRow('Total Sacrifice','totalSac')}
       ${statRow('Ledger Sacrifice (BDWO Amount)','ledgerSac')}
       ${statRow('P&amp;L Impact','impact')}
