@@ -618,7 +618,15 @@ main{padding:20px 16px 40px}
 .lt-row-icon{flex-shrink:0;color:var(--sub);opacity:.85}
 .loan-table thead .lt-label .lt-row-icon{color:rgba(255,255,255,.7)}
 .loan-table tr.lt-group .lt-row-icon{color:var(--gold-l);opacity:1}
-.loan-table tr.lt-strong .lt-row-icon,.loan-table tr.lt-ots-row .lt-row-icon{color:var(--gold-l);opacity:1}
+/* Data-row icons sit in a colored circular badge (matching the aggregate
+   sidebar's per-stat treatment) instead of a bare gray outline icon --
+   colored by section so the whole table reads as one system: Loan Terms
+   (blue), Dues & Provisioning (amber), Settlement & Impact (green). */
+.lt-icon-badge{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lt-icon-badge .lt-row-icon{opacity:1}
+.lt-icon-badge.grp-terms{background:var(--accent-soft);color:var(--accent-2)}
+.lt-icon-badge.grp-dues{background:var(--amber-soft);color:var(--amber)}
+.lt-icon-badge.grp-settle{background:var(--green-soft);color:var(--green)}
 .lt-hint{display:flex;gap:9px;align-items:flex-start;background:var(--accent-soft);border:1px solid var(--gold-soft);border-radius:var(--radius-md);padding:11px 13px;font-size:11.5px;color:var(--ink);margin-top:12px;line-height:1.5}
 .lt-hint svg{color:var(--accent);flex-shrink:0;margin-top:1px}
 .loan-table tr.lt-ots-row td{background:var(--gold-soft);padding:11px 12px}
@@ -855,8 +863,12 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 #aggBar .agg-stat .ak-icon.c-imp.pos{background:var(--pos-soft);color:#5fe0a3}
 #aggBar .agg-stat .ak-icon.c-imp.neg{background:var(--neg-soft);color:#ff8a80}
 #aggBar .agg-stat .av{display:block;font-size:18px;font-weight:800;color:#fff;margin-top:3px;letter-spacing:-.3px}
-#aggBar .agg-stat.impact{margin-top:4px;background:rgba(255,255,255,.06);border-radius:11px;padding:11px 12px;border:1px solid rgba(255,255,255,.10)}
-#aggBar .agg-stat.impact .av{font-size:21px}
+#aggBar .agg-stat.impact{margin-top:4px;background:rgba(255,255,255,.06);border-radius:11px;padding:12px 14px;border:1px solid rgba(255,255,255,.10)}
+/* Was 21px -- large positive/negative impact figures (crores possible on
+   real loan accounts) were crowding right up against the box's own edge
+   in the sidebar's fixed ~190px width. 17px plus the extra padding above
+   gives every figure room to breathe regardless of digit count. */
+#aggBar .agg-stat.impact .av{font-size:17px;word-break:break-word}
 #aggBar .agg-stat.impact .av.pos{color:#5fe0a3}
 #aggBar .agg-stat.impact .av.neg{color:#ff8a80}
 /* mobile: dock at the bottom of the screen */
