@@ -496,6 +496,63 @@ the branch rows reflow into a stacked layout (label + big % on top, bar
 below, detail stats below that) rather than cramming a 4-column row into a
 narrow screen.
 
+### OTS Calculator: Export to Excel with live formulas, alongside Print/PDF (2026-08-12)
+
+You asked for an Excel export next to the existing PDF/Print option —
+"WITH ALL CALCULATION AND FORMULAS jisse ki main bhi kuch changes karne
+hain to baki figures bhi change ho jayen" (with all calculations and
+formulas, so if I make changes myself, the other figures update too).
+The existing Daily NPA Projection Excel export (2026-07-23) writes
+static computed values, not formulas — this needed to be a genuinely
+live spreadsheet instead, so a loan officer can tweak OTS Amount (or
+O/S Balance, if a real payment changes it) and watch every dependent
+figure recalculate in Excel itself, the same way the on-screen
+calculator does.
+
+- New `exportOtsExcel()`, wired to a second header icon button next to
+  Print/Share (`.share-btn`, table icon) in the detail view. Only the
+  true source-data fields are plain values (Sanction Date/Limit, Asset
+  Code, Scheme, NPA Date, O/S Balance, Interest Reversal, OTS Amount) —
+  every other figure is a real `=formula` cell:
+  - **UCI Anchor Date** replicates `computeUCI()`'s scheme-dependent rule
+    exactly as nested `IF`/`DATE`/`EOMONTH`/`YEAR`/`MONTH` formulas — CC004
+    (KCC) anchors to fixed 24-Mar/24-Sep half-year edges, every other
+    scheme anchors to end of NPA month (or the previous month's end if
+    the NPA date itself isn't a month-end).
+  - UCI @ 8.5% / 12.5%, Total Dues, Total Contractual Dues, Net O/S,
+    Total P&L all chain off O/S Balance, Interest Reversal, and the
+    anchor date — a single **Report Date** cell (defaults to `=TODAY()`
+    equivalent, editable) drives every UCI calculation.
+  - **Provision** looks up the rate for the row's Asset Code via
+    `VLOOKUP` against a small reference table placed off to the side
+    (columns H/I) rather than hardcoding rates per row.
+  - **Total Sacrifice, Ledger Sacrifice, BDWO Amount, Impact on P&L** —
+    the figures that actually change when you edit OTS Amount — are all
+    formulas referencing the OTS input cell directly.
+  - **Aggregate Totals** (Total O/S, Total Dues, Total OTS, Total
+    Sacrifice) are `SUM()` formulas across however many linked accounts
+    print as columns, not hardcoded sums.
+- Dates use `dd-mm-yyyy` number formatting throughout (new
+  `dateToExcelSerial()` helper alongside the existing
+  `excelSerialToDate()`), not Excel's locale-dependent default — same
+  DD-MM-YYYY rule the rest of the app follows.
+- **Verified two ways**: (1) Playwright downloaded a real export for the
+  exact KAMLA DEVI test borrower (2 linked accounts, one with a test OTS
+  Amount entered) and captured the app's own on-screen computed values as
+  ground truth. (2) Since LibreOffice headless recalculation isn't
+  available in this sandbox (`soffice --headless` fails to load any file
+  here, even a trivial one — a sandbox limitation, not a file problem),
+  independently re-implemented the exact same anchor-date/UCI/dues chain
+  in a standalone Python script reading only the exported file's raw
+  input values (no formulas), and compared its output against the app's
+  ground truth: **every figure matched exactly** (Total Contractual Dues,
+  UCI @ 8.5%, Total Dues, Total Sacrifice, Ledger Sacrifice, BDWO, Impact
+  all identical to the displayed values). Also confirmed a single-account
+  borrower exports cleanly (`SUM(B18:B18)`-style self-range formulas,
+  no errors).
+- Print/PDF export is unchanged — this is a genuine "also", not a
+  replacement, per the request.
+
 ### New "smart edge panel": Branch / Sol ID reference list, reachable from every tab (2026-08-05, same day)
 
 You sent `SOL_ID.xlsx` (Old Sol ID / New Sol ID / Branch, 57 rows —
