@@ -33,6 +33,7 @@ DATA.branchAdvances = DATA.branchAdvances || {};
 /* ---------- Date helpers (NPA dates are raw Excel serials) ---------- */
 const XL_EPOCH = new Date(1899,11,30);
 function excelSerialToDate(n){ return new Date(XL_EPOCH.getTime() + n*86400000); }
+function dateToExcelSerial(d){ return Math.round((d.getTime()-XL_EPOCH.getTime())/86400000); }
 function toDate(v){
   if(v===''||v===null||v===undefined) return null;
   if(v instanceof Date) return isNaN(v.getTime()) ? null : v;
@@ -436,6 +437,9 @@ function openDetail(custId, jumpAcct){
           <h2>${esc(custRow[C.NAME])||'—'}</h2>
           <p>${esc(custRow[C.SOL_DESC])||''} · Cust ID ${esc(custRow[C.CUST_ID])}</p>
         </div>
+        <button class="share-btn" onclick="exportOtsExcel()" title="Export to Excel (live formulas — edit OTS Amount and everything else recalculates)" aria-label="Export to Excel with formulas">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v18M16 3v18M3 9h18M3 15h18"/></svg>
+        </button>
         <button class="share-btn" onclick="printOtsSheet()" title="Print / Share" aria-label="Print or share this report">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
         </button>
@@ -792,6 +796,136 @@ function renderPrintView(){
     <div class="pv-schemes">${slots.map(s=>`<span>${esc(s.scheme)||''} · ${esc(custRow[C.SOL_DESC])||''}</span>`).join('')}</div>
   `;
 }
+
+/* Excel export with LIVE formulas, not just the computed snapshot printed
+   above -- every figure that depends on another cell (UCI, Total Dues,
+   Provision, Total P&L, and everything downstream of the OTS Amount you
+   type in) is a real =formula, so editing OTS Amount (or O/S Balance, if
+   a payment changes it) recalculates every dependent cell in Excel itself,
+   exactly like the on-screen calculator does. Only the true source-data
+   fields (Sanction Date/Limit, Asset Code, Scheme, NPA Date, O/S Balance,
+   Interest Reversal) are plain values -- everything else is derived. */
+const OTS_XL_ROW_LABELS = [
+  'Sanction Date','Sanction Limit','Asset Code','Scheme','NPA Date','Days in NPA',
+  'O/S Balance','Interest Reversal','UCI Anchor Date','UCI @ 8.5%','UCI @ 12.5% (for Total Contractual Dues)',
+  'Total Dues','Total Contractual Dues','Net O/S','Provision','Total P&L',
+  'OTS Amount (edit me)','Total Sacrifice','Ledger Sacrifice','BDWO Amount','Impact on P&L',
+];
+function exportOtsExcel(){
+  const slots = window.__slots; const custRow = window.__custRow;
+  if(!slots || !custRow) return;
+
+  const INR_FMT = '"₹"#,##,##0.00;[Red]-"₹"#,##,##0.00';
+  const DATE_FMT = 'dd-mm-yyyy';
+  const cell = (addr, obj) => { ws[addr] = obj; };
+  const num = (addr, v, fmt) => cell(addr, fmt ? {t:'n', v, z:fmt} : {t:'n', v});
+  const str = (addr, v) => cell(addr, {t:'s', v: v===''||v===null||v===undefined ? '' : String(v)});
+  const dateCell = (addr, jsDate) => cell(addr, jsDate ? {t:'n', v: dateToExcelSerial(jsDate), z: DATE_FMT} : {t:'s', v:''});
+  const formula = (addr, f, fmt) => cell(addr, fmt ? {t:'n', f, z:fmt} : {t:'n', f});
+
+  const colLetter = i => XLSX.utils.encode_col(i+1); // account 0 -> B, 1 -> C, ...
+  const cols = slots.map((s,i)=>colLetter(i));
+
+  const aoa = [
+    [`UPGB OTS Calculator — ${custRow[C.NAME]||''}`],
+    [`Uttar Pradesh Gramin Bank · Branch: ${custRow[C.SOL_DESC]||''}`],
+    [],
+    ['Report Date', new Date(), '', 'Editable -- every UCI/dues figure below recalculates off this date'],
+    [],
+    ['Cust ID', String(custRow[C.CUST_ID]||''), 'Sol ID', String(custRow[C.SOL_ID]||'')],
+    ['Mobile', String(custRow[C.PHONE]||''), 'Aadhar', String(custRow[C.AADHAR]||'')],
+    ['PAN', String(custRow[C.PAN]||''), 'SB A/c', String(custRow[C.SB_ACCT]||'')],
+    ['SB Balance', custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL]],
+    [],
+    ['Particulars', ...slots.map(s=>String(s.acctNo))],
+    ...OTS_XL_ROW_LABELS.map(l=>[l]),
+    [],
+    ['AGGREGATE TOTALS'],
+    ['Total O/S Balance'],
+    ['Total Dues'],
+    ['Total OTS Amount'],
+    ['Total Sacrifice'],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  const reportDateRow = 4; // 1-indexed Excel row for "Report Date"
+  const headerRow = 11;
+  const rowOf = label => headerRow + 1 + OTS_XL_ROW_LABELS.indexOf(label);
+  const R = {
+    sanctionDate: rowOf('Sanction Date'), sanctionLimit: rowOf('Sanction Limit'), assetCode: rowOf('Asset Code'),
+    scheme: rowOf('Scheme'), npaDate: rowOf('NPA Date'), daysNpa: rowOf('Days in NPA'),
+    os: rowOf('O/S Balance'), uri: rowOf('Interest Reversal'), anchor: rowOf('UCI Anchor Date'),
+    uci85: rowOf('UCI @ 8.5%'), uci125: rowOf('UCI @ 12.5% (for Total Contractual Dues)'),
+    totalDues: rowOf('Total Dues'), totalContractual: rowOf('Total Contractual Dues'), netOs: rowOf('Net O/S'),
+    provision: rowOf('Provision'), totalPL: rowOf('Total P&L'), ots: rowOf('OTS Amount (edit me)'),
+    totalSac: rowOf('Total Sacrifice'), ledgerSac: rowOf('Ledger Sacrifice'), bdwo: rowOf('BDWO Amount'),
+    impact: rowOf('Impact on P&L'),
+  };
+  const aggRow = { title: headerRow + OTS_XL_ROW_LABELS.length + 2 };
+
+  // Provision-rate lookup table, off to the side (columns H/I) next to the
+  // top of the main table -- clear of the up-to-4 account columns (B..E).
+  const RATE_ROWS = [['SUB_STD',0.10],['DA1',0.20],['DA2',0.30],['DA3',1],['LOSS',1]];
+  const rateHeadRow = headerRow;
+  const rateTable = `$H$${rateHeadRow+1}:$I$${rateHeadRow+RATE_ROWS.length}`;
+  str(`H${rateHeadRow}`, 'Asset Code'); str(`I${rateHeadRow}`, 'Provision Rate');
+  RATE_ROWS.forEach(([code,rate],i)=>{ str(`H${rateHeadRow+1+i}`, code); num(`I${rateHeadRow+1+i}`, rate, '0%'); });
+
+  dateCell(`B${reportDateRow}`, new Date());
+  const reportDateRef = `$B$${reportDateRow}`;
+
+  slots.forEach((s,i)=>{
+    const c = cols[i];
+    dateCell(`${c}${R.sanctionDate}`, toDate(s.sanctionDate));
+    num(`${c}${R.sanctionLimit}`, s.sanctionLimit===''?0:s.sanctionLimit, INR_FMT);
+    str(`${c}${R.assetCode}`, s.assetCode);
+    str(`${c}${R.scheme}`, s.scheme);
+    dateCell(`${c}${R.npaDate}`, toDate(s.npaDate));
+    formula(`${c}${R.daysNpa}`, `${reportDateRef}-${c}${R.npaDate}`, '0');
+    num(`${c}${R.os}`, s.os===''?0:s.os, INR_FMT);
+    num(`${c}${R.uri}`, s.uri===''?0:s.uri, INR_FMT);
+    // Anchor date replicates computeUCI()'s scheme-dependent rule exactly:
+    // CC004 (KCC) uses fixed 24-Mar/24-Sep half-year edges; every other
+    // scheme anchors to end of NPA month (or the previous month's end, if
+    // the NPA date itself isn't a month-end).
+    const npaRef = `${c}${R.npaDate}`;
+    const anchorF = `IF(${c}${R.scheme}="CC004",`+
+      `IF(${npaRef}>DATE(YEAR(${npaRef}),9,24),DATE(YEAR(${npaRef}),9,24),`+
+        `IF(${npaRef}>DATE(YEAR(${npaRef}),3,24),DATE(YEAR(${npaRef}),3,24),DATE(YEAR(${npaRef})-1,9,24))),`+
+      `IF(${npaRef}=EOMONTH(${npaRef},0),DATE(YEAR(${npaRef}),MONTH(${npaRef}),29),EOMONTH(${npaRef},-1)))`;
+    formula(`${c}${R.anchor}`, anchorF, DATE_FMT);
+    formula(`${c}${R.uci85}`, `${c}${R.os}*8.5/100*((${reportDateRef}-${c}${R.anchor})/365)`, INR_FMT);
+    formula(`${c}${R.uci125}`, `${c}${R.os}*12.5/100*((${reportDateRef}-${c}${R.anchor})/365)`, INR_FMT);
+    formula(`${c}${R.totalDues}`, `${c}${R.os}+${c}${R.uci85}`, INR_FMT);
+    formula(`${c}${R.totalContractual}`, `${c}${R.os}+${c}${R.uci125}`, INR_FMT);
+    formula(`${c}${R.netOs}`, `${c}${R.os}-${c}${R.uri}`, INR_FMT);
+    formula(`${c}${R.provision}`, `${c}${R.netOs}*VLOOKUP(${c}${R.assetCode},${rateTable},2,FALSE)`, INR_FMT);
+    formula(`${c}${R.totalPL}`, `${c}${R.netOs}-${c}${R.provision}`, INR_FMT);
+    const otsVal = otsAmounts[s.acctNo];
+    const otsNum = (otsVal===''||otsVal===undefined) ? null : parseFloat(otsVal);
+    num(`${c}${R.ots}`, otsNum===null||isNaN(otsNum) ? 0 : otsNum, INR_FMT);
+    formula(`${c}${R.totalSac}`, `${c}${R.totalContractual}-${c}${R.ots}`, INR_FMT);
+    formula(`${c}${R.ledgerSac}`, `${c}${R.os}-${c}${R.ots}`, INR_FMT);
+    formula(`${c}${R.bdwo}`, `${c}${R.ledgerSac}-${c}${R.uri}`, INR_FMT);
+    formula(`${c}${R.impact}`, `${c}${R.ots}-${c}${R.totalPL}`, INR_FMT);
+  });
+
+  const lastCol = cols[cols.length-1];
+  const sumRange = row => `SUM(B${row}:${lastCol}${row})`;
+  formula(`B${aggRow.title+1}`, sumRange(R.os), INR_FMT);
+  formula(`B${aggRow.title+2}`, sumRange(R.totalDues), INR_FMT);
+  formula(`B${aggRow.title+3}`, sumRange(R.ots), INR_FMT);
+  formula(`B${aggRow.title+4}`, sumRange(R.totalSac), INR_FMT);
+
+  ws['!cols'] = [{wch:22}, ...cols.map(()=>({wch:18})), {wch:2}, {wch:2}, {wch:2}, {wch:2}, {wch:2}, {wch:16}, {wch:12}];
+  ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length-1, c:Math.max(cols.length, 8)}});
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'OTS Calculator');
+  const safeName = String(custRow[C.NAME]||'borrower').replace(/[\\/:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,40);
+  XLSX.writeFile(wb, `OTS_${safeName}_${dateToInputValue(new Date())}.xlsx`);
+}
+window.exportOtsExcel = exportOtsExcel;
 
 function toggleUpdateModal(show){
   document.getElementById('updateModalOverlay').classList.toggle('show', show);
