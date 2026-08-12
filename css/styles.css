@@ -1680,3 +1680,46 @@ header.app-head::before,.detail-head::before{
 #dashboardArea.no-card-anim .chart-card,
 #dashboardArea.no-card-anim .kpi-tile,
 #dashboardArea.no-card-anim .dash-table-wrap{animation:none!important;opacity:1!important;transform:none!important}
+
+/* ---------- Smart edge panel: Branch / Sol ID list ----------
+   A pull-tab pinned to the right edge, reachable from every tab (fixed
+   positioning, siblings of #app so no view's own layout/overflow can
+   clip or hide it) -- tap to slide the panel in from the edge, tap again
+   / tap the backdrop / Esc to slide it back out, same interaction as an
+   Android edge panel or the Edge browser's side panel. z-index sits above
+   modals (100) and the command palette (120) so it's reachable from
+   anywhere, matching "kisi bhi tab par bas click karte hi" from the ask. */
+.edge-handle{
+  position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:150;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:14px 8px;border:1px solid var(--glass-border);border-right:none;border-radius:14px 0 0 14px;
+  background:var(--glass-fill);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
+  color:var(--chrome-ink);box-shadow:var(--shadow);cursor:pointer;
+  transition:padding-right .18s var(--ease),background .18s var(--ease),color .18s var(--ease);
+}
+.edge-handle span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase}
+.edge-handle:hover{padding-right:14px;color:var(--accent-2)}
+.edge-handle.active{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border-color:transparent}
+.edge-backdrop{position:fixed;inset:0;z-index:149;background:var(--scrim);opacity:0;pointer-events:none;transition:opacity .22s var(--ease)}
+.edge-backdrop.open{opacity:1;pointer-events:auto}
+.edge-panel{
+  position:fixed;top:0;right:0;bottom:0;z-index:150;width:min(340px,86vw);
+  background:var(--card);border-left:1px solid var(--line);box-shadow:-14px 0 40px rgba(0,0,0,.28);
+  display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s var(--ease);
+}
+.edge-panel.open{transform:translateX(0)}
+.edge-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 16px 14px;border-bottom:1px solid var(--line);flex-shrink:0}
+.edge-panel-head h3{margin:0;font-size:15px;font-weight:800;color:var(--ink);letter-spacing:-.2px}
+.edge-panel-search{display:flex;align-items:center;gap:8px;margin:14px 16px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink-mute);flex-shrink:0}
+.edge-panel-search input{flex:1;border:none;background:none;outline:none;color:var(--ink);font-size:13px;font-family:inherit}
+.edge-panel-body{flex:1;overflow-y:auto;padding:0 16px 16px;display:flex;flex-direction:column;gap:6px}
+.edge-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:10px;background:var(--stripe)}
+.edge-row-branch{font-size:13px;font-weight:700;color:var(--ink)}
+.edge-row-ids{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}
+.edge-solid{font-size:11.5px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+.edge-oldid{font-size:9.5px;color:var(--sub);font-weight:600}
+.edge-empty{padding:30px 10px;text-align:center;color:var(--sub);font-size:12.5px}
+@media (max-width:699px){
+  .edge-handle{padding:12px 6px}
+  .edge-handle span{font-size:9.5px}
+}
