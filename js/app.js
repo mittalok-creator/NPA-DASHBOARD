@@ -473,11 +473,11 @@ function openDetail(custId, jumpAcct){
     <div class="detail-inner${slots.length>=1?' has-agg':''}">
       ${slots.length>=1?`<aside id="aggBar" aria-label="Account totals">
         <div class="agg-title">${slots.length>1?`All ${slots.length} Accounts`:'This Account'}</div>
-        <div class="agg-stat"><span class="ak">Total OTS Amount</span><span class="av" id="aggTotOts">—</span></div>
-        <div class="agg-stat"><span class="ak">Total Net O/S</span><span class="av" id="aggTotNetOs">—</span></div>
-        <div class="agg-stat"><span class="ak">Total P&amp;L</span><span class="av" id="aggTotPL">—</span></div>
-        <div class="agg-stat"><span class="ak">Total Sacrifice</span><span class="av" id="aggTotSac">—</span></div>
-        <div class="agg-stat impact"><span class="ak">Total P&amp;L Impact</span><span class="av" id="aggTotImpact">—</span></div>
+        <div class="agg-stat"><span class="ak">${ltIcon('coin')}Total OTS Amount</span><span class="av" id="aggTotOts">—</span></div>
+        <div class="agg-stat"><span class="ak">${ltIcon('shield')}Total O/S Balance</span><span class="av" id="aggTotNetOs">—</span></div>
+        <div class="agg-stat"><span class="ak">${ltIcon('trend')}Total P&amp;L</span><span class="av" id="aggTotPL">—</span></div>
+        <div class="agg-stat"><span class="ak">${ltIcon('percent')}Total Sacrifice</span><span class="av" id="aggTotSac">—</span></div>
+        <div class="agg-stat impact"><span class="ak">${ltIcon('bars')}Total P&amp;L Impact</span><span class="av" id="aggTotImpact">—</span></div>
       </aside>`:''}
       <div id="detailBody" style="padding-top:14px"></div>
     </div>
@@ -509,8 +509,13 @@ function drawDetailBody(custRow, slots, prevOts){
 
   body.innerHTML = `
     <div class="card borrower-card">
-      <div class="bname">${esc(custRow[C.NAME])||'—'}</div>
-      <div class="baddr">${esc(custRow[C.ADDR])||'—'}</div>
+      <div class="bcard-top">
+        <div class="bavatar" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.6-3.6 4.8-5.5 7.5-5.5s5.9 1.9 7.5 5.5"/></svg></div>
+        <div>
+          <div class="bname">${esc(custRow[C.NAME])||'—'}</div>
+          <div class="baddr">${esc(custRow[C.ADDR])||'—'}</div>
+        </div>
+      </div>
       <div class="info-grid">
         <div><div class="k">Cust ID</div><div class="v">${esc(custRow[C.CUST_ID])||'—'}</div></div>
         <div><div class="k">Sol ID</div><div class="v">${esc(custRow[C.SOL_ID])||'—'}</div></div>
@@ -556,6 +561,30 @@ function drawDetailBody(custRow, slots, prevOts){
   }
 }
 
+// Small stroke-icon library for the loan table's row/section labels --
+// purely visual (aria-hidden), makes a long particulars list scannable
+// instead of reading like a plain spreadsheet.
+const LT_ICONS = {
+  loanTerms: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+  dues: '<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M3 13l9 5 9-5" opacity=".55"/>',
+  settlement: '<path d="M9 11 12 14l7-7"/><circle cx="12" cy="12" r="9"/>',
+  calendar: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+  doc: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+  warn: '<path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17h.01"/>',
+  coin: '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4.5a1.8 1.8 0 0 1 0 3.6H10a1.8 1.8 0 0 0 0 3.6H15"/>',
+  rotate: '<path d="M4 12a8 8 0 0 1 14.9-4M20 12a8 8 0 0 1-14.9 4"/><path d="M18 4v4h-4M6 20v-4h4"/>',
+  percent: '<circle cx="12" cy="12" r="9"/><path d="M9 15l6-6M9.5 9h.01M14.5 15h.01"/>',
+  layers: '<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M3 13l9 5 9-5" opacity=".55"/>',
+  shield: '<path d="M12 3l7 3v6c0 5-3.2 7.6-7 9-3.8-1.4-7-4-7-9V6l7-3Z"/>',
+  trend: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
+  badge: '<circle cx="12" cy="9" r="5"/><path d="M8.5 13.5 7 21l5-2.5L17 21l-1.5-7.5"/>',
+  bars: '<path d="M4 20V10m6 10V4m6 16v-7"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+};
+function ltIcon(name){
+  return `<svg class="lt-row-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${LT_ICONS[name]}</svg>`;
+}
+
 function loanTableHTML(slots){
   const cols = slots.map(s=>`
     <th scope="col">
@@ -563,10 +592,10 @@ function loanTableHTML(slots){
       <div class="lt-scheme">${esc(s.scheme)||''}</div>
       ${s.assetCode?`<span class="badge-pill ${esc(s.assetCode)}" title="${esc(assetLabel(s.assetCode))}">${esc(s.assetCode)}</span>`:''}
     </th>`).join('');
-  const group = (label) => `<tr class="lt-group"><td colspan="${slots.length+1}">${label}</td></tr>`;
-  const row = (label, fn, cls='') => `<tr class="${cls}"><th scope="row" class="lt-label">${label}</th>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`;
-  const statRow = (label, idPrefix) => `<tr><th scope="row" class="lt-label">${label}</th>${slots.map((s,i)=>`<td id="${idPrefix}-${i}">—</td>`).join('')}</tr>`;
-  const otsRow = () => `<tr class="lt-ots-row"><th scope="row" class="lt-label">Settlement (OTS) Amount</th>${slots.map((s,i)=>`
+  const group = (label, icon) => `<tr class="lt-group"><td colspan="${slots.length+1}">${ltIcon(icon)}${label}</td></tr>`;
+  const row = (label, icon, fn, cls='') => `<tr class="${cls}"><th scope="row" class="lt-label">${ltIcon(icon)}${label}</th>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`;
+  const statRow = (label, icon, idPrefix) => `<tr><th scope="row" class="lt-label">${ltIcon(icon)}${label}</th>${slots.map((s,i)=>`<td id="${idPrefix}-${i}">—</td>`).join('')}</tr>`;
+  const otsRow = () => `<tr class="lt-ots-row"><th scope="row" class="lt-label">${ltIcon('coin')}Settlement (OTS) Amount</th>${slots.map((s,i)=>`
       <td><div class="lt-ots-cell">
         <button type="button" class="freeze-chip lt-freeze${frozen[s.acctNo]?' frozen':(otsAmounts[s.acctNo]?' ready':'')}" id="freezeBtn-${i}"
           onclick="toggleFreeze(${i},'${esc(String(s.acctNo))}')"
@@ -580,41 +609,45 @@ function loanTableHTML(slots){
           oninput="onOtsInput(${i},'${esc(String(s.acctNo))}')" ${frozen[s.acctNo]?'disabled':''}>
         <span class="pct-tag" id="pctNetOs-${i}"></span>
       </div></td>`).join('')}</tr>`;
-  const uriRow = () => `<tr><th scope="row" class="lt-label">Interest Reversal</th>${slots.map((s,i)=>`
+  const uriRow = () => `<tr><th scope="row" class="lt-label">${ltIcon('rotate')}Interest Reversal</th>${slots.map((s,i)=>`
       <td><div class="lt-ots-cell">
         <span class="lt-cur">₹</span>
         <input type="number" class="lt-ots-input" id="uriInput-${i}" placeholder="0" value="${uriFor(s)||''}"
           aria-label="Interest reversal for account ${esc(String(s.acctNo))}"
           oninput="onUriInput(${i},'${esc(String(s.acctNo))}')">
       </div></td>`).join('')}</tr>`;
-  const totalDuesRow = () => `<tr class="lt-strong"><th scope="row" class="lt-label">Total Dues</th>${slots.map((s,i)=>`<td id="totalDues-${i}">—</td>`).join('')}</tr>`;
+  const totalDuesRow = () => `<tr class="lt-strong"><th scope="row" class="lt-label">${ltIcon('layers')}Total Dues</th>${slots.map((s,i)=>`<td id="totalDues-${i}">—</td>`).join('')}</tr>`;
   const eligRow = slots.some(s=>s.notEligible) ? `<tr><th scope="row" class="lt-label"></th>${slots.map(s=>`<td>${s.notEligible?'<span class="eligibility-warn">⚠ Not aged 6mo</span>':''}</td>`).join('')}</tr>` : '';
 
   return `
   <div class="loan-table-wrap">
   <table class="loan-table">
-    <thead><tr><th scope="col" class="lt-label">Particulars</th>${cols}</tr></thead>
+    <thead><tr><th scope="col" class="lt-label">${ltIcon('list')}Particulars</th>${cols}</tr></thead>
     <tbody>
       ${eligRow}
-      ${group('Loan Terms')}
-      ${row('Sanction Date', s=>fmtDate(toDate(s.sanctionDate)))}
-      ${row('Sanction Limit', s=>fmtINR2(s.sanctionLimit))}
-      ${row('NPA Date', s=>fmtDate(toDate(s.npaDate)))}
-      ${row('O/S Balance', s=>fmtINR2(s.os), 'lt-strong')}
-      ${group('Dues &amp; Provisioning')}
+      ${group('Loan Terms', 'loanTerms')}
+      ${row('Sanction Date', 'calendar', s=>fmtDate(toDate(s.sanctionDate)))}
+      ${row('Sanction Limit', 'doc', s=>fmtINR2(s.sanctionLimit))}
+      ${row('NPA Date', 'warn', s=>fmtDate(toDate(s.npaDate)))}
+      ${row('O/S Balance', 'coin', s=>fmtINR2(s.os), 'lt-strong')}
+      ${group('Dues &amp; Provisioning', 'dues')}
       ${uriRow()}
-      ${row('UCI @ 8.5%', s=>fmtINR2(s.uci))}
+      ${row('UCI @ 8.5%', 'percent', s=>fmtINR2(s.uci))}
       ${totalDuesRow()}
-      ${row('Total Contractual Dues', s=>fmtINR2(s.totalContractualDues), 'lt-strong lt-divider')}
-      ${row('Provision', s=>fmtINR2(s.provision))}
-      ${row('Total P&amp;L', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
-      ${group('Settlement &amp; Impact')}
+      ${row('Total Contractual Dues', 'layers', s=>fmtINR2(s.totalContractualDues), 'lt-strong lt-divider')}
+      ${row('Provision', 'shield', s=>fmtINR2(s.provision))}
+      ${row('Total P&amp;L', 'trend', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
+      ${group('Settlement &amp; Impact', 'settlement')}
       ${otsRow()}
-      ${statRow('Total Sacrifice','totalSac')}
-      ${statRow('Ledger Sacrifice (BDWO Amount)','ledgerSac')}
-      ${statRow('P&amp;L Impact','impact')}
+      ${statRow('Total Sacrifice', 'percent', 'totalSac')}
+      ${statRow('Ledger Sacrifice (BDWO Amount)', 'badge', 'ledgerSac')}
+      ${statRow('P&amp;L Impact', 'bars', 'impact')}
     </tbody>
   </table>
+  </div>
+  <div class="lt-hint">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+    <span>Enter the OTS Amount and Interest Reversal for each account to calculate Total Sacrifice, Ledger Sacrifice, and P&amp;L Impact automatically.</span>
   </div>`;
 }
 
