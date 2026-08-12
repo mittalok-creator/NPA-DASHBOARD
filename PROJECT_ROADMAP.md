@@ -123,6 +123,61 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: Excel export redesigned -- corrected formulas, A4 print setup, icons (2026-08-12, same day)
+
+Alok: *"SAME PDF KO EXCEL DASHBOARD MAIN PUSH KARO EXCEL DASHBOARD PROPER
+DASHBOARD HONA CHAHIYE WITH ALL CALCULATION AND FORMULAS TO EDIT ANYTHING
+TO PRINT A4 SHEET"* -- three concrete things came out of this, in
+`exportOtsExcel()` (`js/app.js`):
+
+1. **Formulas were stale.** `exportOtsExcel()` hadn't been touched during
+   the big formula correction two entries above (task: remove Net O/S
+   row, Total Dues includes Interest Reversal, Total P&L goes static) --
+   Excel was still computing Total Dues as O/S+UCI only, Total P&L as
+   O/S-Interest Reversal-Provision, and Total Sacrifice as Total
+   Dues-OTS+Interest Reversal. Fixed all three formulas to match the
+   corrected chain exactly: `Total Dues = OS+UCI+URI`, `Total P&L =
+   OS-Provision`, `Total Sacrifice = TotalDues-OTS`.
+2. **A4 print setup**, so the sheet can be printed straight from Excel
+   like the PDF: `ws.pageSetup = {paperSize:9 (A4), orientation:
+   'portrait', fitToPage:true, fitToWidth:1, fitToHeight:1, ...}` plus an
+   explicit `ws.pageSetup.printArea` scoped to the "OTS Calculator" sheet
+   only (the "Calculation Details" helper sheet isn't meant to be
+   printed). Caught one API-name mistake before shipping: ExcelJS wants
+   `printArea` nested under `pageSetup`, not `worksheet.printArea`
+   directly -- the first attempt silently wrote nothing (confirmed via
+   openpyxl reading back an empty `print_area`), found and fixed by
+   grepping the vendored ExcelJS source for how it actually reads the
+   property.
+3. **Icons**, matching the print sheet. Excel can't render inline SVG
+   into a cell the way the browser can, so added `rasterizeLtIcon()` --
+   renders one of the existing `LT_ICONS` paths to an offscreen `<canvas>`
+   and returns a PNG data URI, which gets embedded via ExcelJS's
+   `addImage()` (the same technique already used for the bank logo). Each
+   of the 16 particulars rows gets its icon (rasterized once per unique
+   icon and reused across every row/account that needs it, not
+   re-rendered per cell), plus a small borrower avatar in the header.
+   Since Excel has no way to lay out an icon and text inline in one cell,
+   two leading spaces were added to the label text to leave visual room
+   for the icon at the cell's left edge.
+
+**Verified**: `node --check`; a Playwright-downloaded export produced no
+console errors (confirming the new async rasterization pipeline
+completes correctly before the workbook is written); `openpyxl` confirms
+`paperSize=9`, `orientation=portrait`, `fitToWidth=fitToHeight=1`, and
+`print_area='OTS Calculator'!$A$1:$D$36` after the fix. `openpyxl`'s own
+image reader reported 0 embedded images (a known limitation of its
+DrawingML support, already flagged by its own warning), so verified the
+real file directly instead: unzipped the `.xlsx` and confirmed 18 PNGs
+under `xl/media/` (logo + avatar + 13 unique row icons) with
+`xl/drawings/drawing1.xml` anchors landing on the correct 0-indexed rows
+(11-26, i.e. Excel rows 12-27 -- exactly the 16 particulars rows). Raw
+formula cells (`B19=B17+B18+B20`, `B23=B17-B22`, `B25=B19-B24`, etc.)
+cross-checked by hand against the row-to-`R`-index map and match the
+already-verified app values from the earlier correction (Interest
+Reversal ₹5,000 on account 1 → Total Dues ₹5,85,804.33, unchanged
+Provision/Total P&L).
+
 ### OTS Calculator: icon-forward redesign extended to the print/PDF sheet (2026-08-12, same day)
 
 Alok: *"OK AB SAME PUSH KR DO PDF MAIN"* -- extend the icon treatment just
