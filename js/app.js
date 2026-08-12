@@ -473,11 +473,11 @@ function openDetail(custId, jumpAcct){
     <div class="detail-inner${slots.length>=1?' has-agg':''}">
       ${slots.length>=1?`<aside id="aggBar" aria-label="Account totals">
         <div class="agg-title">${slots.length>1?`All ${slots.length} Accounts`:'This Account'}</div>
-        <div class="agg-stat"><span class="ak">${ltIcon('coin')}Total OTS Amount</span><span class="av" id="aggTotOts">—</span></div>
-        <div class="agg-stat"><span class="ak">${ltIcon('shield')}Total O/S Balance</span><span class="av" id="aggTotNetOs">—</span></div>
-        <div class="agg-stat"><span class="ak">${ltIcon('trend')}Total P&amp;L</span><span class="av" id="aggTotPL">—</span></div>
-        <div class="agg-stat"><span class="ak">${ltIcon('percent')}Total Sacrifice</span><span class="av" id="aggTotSac">—</span></div>
-        <div class="agg-stat impact"><span class="ak">${ltIcon('bars')}Total P&amp;L Impact</span><span class="av" id="aggTotImpact">—</span></div>
+        <div class="agg-stat"><div class="ak-row"><span class="ak-icon c-ots">${ltIcon('coin')}</span><span class="ak">Total OTS Amount</span></div><span class="av" id="aggTotOts">—</span></div>
+        <div class="agg-stat"><div class="ak-row"><span class="ak-icon c-os">${ltIcon('shield')}</span><span class="ak">Total O/S Balance</span></div><span class="av" id="aggTotNetOs">—</span></div>
+        <div class="agg-stat"><div class="ak-row"><span class="ak-icon c-pl">${ltIcon('trend')}</span><span class="ak">Total P&amp;L</span></div><span class="av" id="aggTotPL">—</span></div>
+        <div class="agg-stat"><div class="ak-row"><span class="ak-icon c-sac">${ltIcon('percent')}</span><span class="ak">Total Sacrifice</span></div><span class="av" id="aggTotSac">—</span></div>
+        <div class="agg-stat impact"><div class="ak-row"><span class="ak-icon c-imp" id="aggTotImpactIcon">${ltIcon('bars')}</span><span class="ak">Total P&amp;L Impact</span></div><span class="av" id="aggTotImpact">—</span></div>
       </aside>`:''}
       <div id="detailBody" style="padding-top:14px"></div>
     </div>
@@ -823,13 +823,16 @@ function recalcAggregate(){
     const aggSacEl = document.getElementById('aggTotSac');
     if(aggSacEl) aggSacEl.textContent = any?fmtINR2(aggTotalSac):'—';
     const aggImpEl = document.getElementById('aggTotImpact');
+    const aggImpIconEl = document.getElementById('aggTotImpactIcon');
     if(aggImpEl){
       const impact = any ? (totalOts - window.__totalPL) : '';
       aggImpEl.classList.remove('pos','neg');
+      if(aggImpIconEl) aggImpIconEl.classList.remove('pos','neg');
       if(impact===''){ aggImpEl.textContent='—'; }
       else {
         aggImpEl.textContent = (impact>0?'+':(impact<0?'−':'')) + fmtINR2(Math.abs(impact));
-        aggImpEl.classList.add(impact>0?'pos':(impact<0?'neg':''));
+        const sign = impact>0?'pos':(impact<0?'neg':'');
+        if(sign){ aggImpEl.classList.add(sign); if(aggImpIconEl) aggImpIconEl.classList.add(sign); }
       }
     }
   }
