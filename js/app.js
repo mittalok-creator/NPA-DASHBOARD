@@ -582,10 +582,30 @@ const LT_ICONS = {
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   tag: '<path d="M20.6 12.6 12.6 20.6a2 2 0 0 1-2.8 0l-7.4-7.4a2 2 0 0 1 0-2.8L10.4 2.4A2 2 0 0 1 11.8 2H18a2 2 0 0 1 2 2v6.2a2 2 0 0 1-.6 1.4Z"/><path d="M14 8h.01"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+  avatar: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.6-3.6 4.8-5.5 7.5-5.5s5.9 1.9 7.5 5.5"/>',
 };
 function ltIcon(name, size){
   const s = size||13;
   return `<svg class="lt-row-icon" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${LT_ICONS[name]}</svg>`;
+}
+// Rasterizes one of the stroke icons above into a PNG data URI, so it can
+// be embedded as an image in the Excel export (ExcelJS has no way to draw
+// inline SVG into a cell the way the browser/print view can).
+function rasterizeLtIcon(name, pxSize, color){
+  return new Promise((resolve, reject)=>{
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${pxSize}" height="${pxSize}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2">${LT_ICONS[name]}</svg>`;
+    const url = URL.createObjectURL(new Blob([svg], {type:'image/svg+xml'}));
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = pxSize; canvas.height = pxSize;
+      canvas.getContext('2d').drawImage(img, 0, 0, pxSize, pxSize);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
 }
 
 function loanTableHTML(slots){
@@ -919,6 +939,17 @@ const OTS_XL_ROW_LABELS = [
   'O/S Balance','UCI @ 8.5%','Total Dues','Interest Reversal','Net O/S','Provision','Total P&L',
   'OTS Amount (edit me)','Total Sacrifice','Ledger Sacrifice (BDWO Amount)','Impact on P&L',
 ];
+// Same icon per row as the print sheet (renderPrintView) -- Excel can't
+// draw inline SVG into a cell, so these get rasterized to PNG and
+// embedded as images (see rasterizeLtIcon), matching the row labels
+// exactly (not the account-value cells, which stay plain numbers/formulas).
+const XL_ROW_ICONS = {
+  'Sanction Date':'calendar', 'Sanction Limit':'doc', 'Asset Code':'tag', 'NPA Date':'warn',
+  'Days in NPA':'clock', 'O/S Balance':'coin', 'UCI @ 8.5%':'percent', 'Total Dues':'layers',
+  'Interest Reversal':'rotate', 'Net O/S':'coin', 'Provision':'shield', 'Total P&L':'trend',
+  'OTS Amount (edit me)':'coin', 'Total Sacrifice':'percent', 'Ledger Sacrifice (BDWO Amount)':'badge',
+  'Impact on P&L':'bars',
+};
 const OTS_XL_CALC_ROW_LABELS = ['Scheme','UCI Anchor Date'];
 /* SheetJS (the "xlsx" global used elsewhere in this file, e.g. Daily NPA
    Projection's export) is the free Community Edition, which can only
@@ -970,6 +1001,12 @@ async function exportOtsExcel(){
   ws.mergeCells(2,1,2,Math.max(lastColIdx,4));
   set('A2', `Uttar Pradesh Gramin Bank (Regional Office Hathras) · Branch: ${custRow[C.SOL_DESC]||''}`, {font:{size:11, color:{argb:'FF333333'}}, align:{horizontal:'center'}, border:false});
   ws.getRow(1).height = 30;
+  // Small borrower avatar, matching the print sheet's icon next to the
+  // name -- placed in row 3's empty spacer band so it can't collide with
+  // any existing text.
+  const avatarPng = await rasterizeLtIcon('avatar', 40, '#000000');
+  const avatarId = wb.addImage({ base64: avatarPng, extension: 'png' });
+  ws.addImage(avatarId, { tl:{col:0, row:2}, ext:{width:14, height:14} });
 
   const reportDateRow = 4;
   set(`A${reportDateRow}`, 'Report Date', {font:{bold:true}, border:false});
@@ -1031,10 +1068,27 @@ async function exportOtsExcel(){
     ledgerSac: rowOf('Ledger Sacrifice (BDWO Amount)'), impact: rowOf('Impact on P&L'),
   };
 
+  // Pre-rasterize each unique row icon once (several rows reuse the same
+  // icon, e.g. O/S Balance/Net O/S/OTS Amount all use "coin") and register
+  // it with the workbook once -- the same registered image can be placed
+  // at multiple cell anchors without re-rasterizing or re-registering.
+  const uniqueRowIcons = [...new Set(Object.values(XL_ROW_ICONS))];
+  const rowIconImageIds = {};
+  for(const name of uniqueRowIcons){
+    const png = await rasterizeLtIcon(name, 28, '#333333');
+    rowIconImageIds[name] = wb.addImage({ base64: png, extension: 'png' });
+  }
   OTS_XL_ROW_LABELS.forEach((label,i)=>{
     const r = headerRow + 1 + i;
     const strong = STRONG_ROWS.has(label);
-    set(`A${r}`, label, {font:{bold:true, color:{argb:'FF000000'}}, fill: strong?'FFD8DEEE':'FFE2E2E2'});
+    const iconName = XL_ROW_ICONS[label];
+    // Two leading spaces make room for the icon at the cell's left edge --
+    // Excel has no way to lay out an icon and text inline in one cell the
+    // way the browser's flexbox-based row labels do.
+    set(`A${r}`, iconName ? `  ${label}` : label, {font:{bold:true, color:{argb:'FF000000'}}, fill: strong?'FFD8DEEE':'FFE2E2E2'});
+    if(iconName){
+      ws.addImage(rowIconImageIds[iconName], { tl:{col:0.05, row:r-1+0.18}, ext:{width:11, height:11} });
+    }
   });
 
   slots.forEach((s,i)=>{
@@ -1064,24 +1118,22 @@ async function exportOtsExcel(){
     set(`${c}${R.daysNpa}`, formula(`${reportDateRef}-${c}${R.npaDate}`), {...rowStyle(R.daysNpa), numFmt:'0'});
     set(`${c}${R.os}`, s.os===''?0:s.os, {...rowStyle(R.os), numFmt:XL_INR_FMT});
     set(`${c}${R.uci85}`, formula(`${c}${R.os}*8.5/100*((${reportDateRef}-${anchorRefCalc})/365)`), {...rowStyle(R.uci85), numFmt:XL_INR_FMT});
-    set(`${c}${R.totalDues}`, formula(`${c}${R.os}+${c}${R.uci85}`), {...rowStyle(R.totalDues), numFmt:XL_INR_FMT});
     set(`${c}${R.uri}`, uriFor(s), {...rowStyle(R.uri), numFmt:XL_INR_FMT});
+    // Total Dues = O/S + UCI@8.5% + Interest Reversal.
+    set(`${c}${R.totalDues}`, formula(`${c}${R.os}+${c}${R.uci85}+${c}${R.uri}`), {...rowStyle(R.totalDues), numFmt:XL_INR_FMT});
     // Net O/S always mirrors O/S Balance -- Interest Reversal is editable and
-    // must flow into Total P&L, but never changes what Net O/S itself shows.
+    // must flow into Total Dues, but never changes what Net O/S itself shows.
     set(`${c}${R.netOs}`, formula(`${c}${R.os}`), {...rowStyle(R.netOs), numFmt:XL_INR_FMT});
     set(`${c}${R.provision}`, formula(`${c}${R.netOs}*VLOOKUP(${c}${R.assetCode},${rateTable},2,FALSE)`), {...rowStyle(R.provision), numFmt:XL_INR_FMT});
-    // Total P&L reads Interest Reversal directly (not via Net O/S, which no
-    // longer reflects it) so editing the Interest Reversal cell in Excel
-    // still recalculates this figure.
-    set(`${c}${R.totalPL}`, formula(`${c}${R.os}-${c}${R.uri}-${c}${R.provision}`), {...rowStyle(R.totalPL), numFmt:XL_INR_FMT});
+    // Total P&L = O/S - Provision (Interest Reversal already flows into
+    // Total Dues above, not into Total P&L).
+    set(`${c}${R.totalPL}`, formula(`${c}${R.os}-${c}${R.provision}`), {...rowStyle(R.totalPL), numFmt:XL_INR_FMT});
     const otsVal = otsAmounts[s.acctNo];
     const otsNum = (otsVal===''||otsVal===undefined) ? null : parseFloat(otsVal);
     set(`${c}${R.ots}`, otsNum===null||isNaN(otsNum) ? 0 : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, fill:'FFFFF3CD', numFmt:XL_INR_FMT});
-    // Total Sacrifice = Total Dues - OTS Amount + Interest Reversal
-    // (equivalently Ledger Sacrifice + UCI@8.5% + Interest Reversal) --
-    // previously read off Total Contractual Dues (@12.5%); corrected per
-    // Alok's annotated review of the printed sheet.
-    set(`${c}${R.totalSac}`, formula(`${c}${R.totalDues}-${c}${R.ots}+${c}${R.uri}`), {...rowStyle(R.totalSac), numFmt:XL_INR_FMT});
+    // Total Sacrifice = Total Dues - OTS Amount (Interest Reversal is
+    // already folded into Total Dues above, not added a second time).
+    set(`${c}${R.totalSac}`, formula(`${c}${R.totalDues}-${c}${R.ots}`), {...rowStyle(R.totalSac), numFmt:XL_INR_FMT});
     set(`${c}${R.ledgerSac}`, formula(`${c}${R.os}-${c}${R.ots}`), {...rowStyle(R.ledgerSac), numFmt:XL_INR_FMT});
     set(`${c}${R.impact}`, formula(`${c}${R.ots}-${c}${R.totalPL}`), {...rowStyle(R.impact), numFmt:XL_INR_FMT});
   });
@@ -1114,6 +1166,21 @@ async function exportOtsExcel(){
   ws.views = [{state:'frozen', xSplit:1, ySplit:headerRow, topLeftCell:`B${headerRow+1}`, showGridLines:false}];
   wsCalc.getColumn(1).width = 30;
   cols.forEach((c,i)=>{ wsCalc.getColumn(2+i).width = 17; });
+
+  // ---- A4 print setup, so this sheet prints exactly like the PDF -- one
+  // page, portrait, scaled to fit regardless of how many accounts (2-4)
+  // are linked. Only the "OTS Calculator" sheet is set up this way; the
+  // "Calculation Details" sheet is helper data, not meant to be printed.
+  ws.pageSetup = {
+    paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1,
+    horizontalCentered: true, printTitlesRow: `${headerRow}:${headerRow}`,
+    margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
+  };
+  // The aggregate/header/footer rows merge out to column D even when
+  // fewer than 3 accounts are linked (see Math.max(lastColIdx,4) above),
+  // so the print area must cover that width too, not just the account columns.
+  const printLastCol = XLSX.utils.encode_col(Math.max(lastColIdx,4)-1);
+  ws.pageSetup.printArea = `A1:${printLastCol}${footerRow}`;
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
