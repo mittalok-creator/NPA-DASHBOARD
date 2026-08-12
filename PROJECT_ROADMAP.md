@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-08-05
+Last updated: 2026-08-12
 
 ---
 
@@ -122,6 +122,84 @@ Vercel first**, see notes below).
 **Current milestone**: none — ready to start M7 (fast search) or M9 (UI/UX
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
+
+### OTS Calculator: loan detail screen redesigned around a hero stat + one honest progress bar (2026-08-12, same day)
+
+Alok, via the ui-ux-designer-pro skill: *"GUIDE ME WHAT TO MORE CHANGES
+REQUIRE TO LOOKS VISUALLY GUD AND IMPRESIVE FIRST GUIDE ME MAKE A
+MOCKUPS THEN AFTER FINALIZING WE WILL IMPLEMENT."* A design audit was
+given first (five equal-weight sidebar stats meant nothing stood out as
+the headline figure; zero data visualization anywhere on the screen; a
+border under every single table row read as a spreadsheet, not a
+dashboard; no hint that a wide multi-account table had more columns off
+to the right) and a mockup built showing the fix, reusing the app's exact
+existing CSS tokens throughout -- no new colors, per the restraint rule
+established two entries below. Alok then asked *"AND FOR BROWSER?"*,
+pointing out the mockup only covered the narrow mobile width even though
+real usage is mostly the desktop sticky-sidebar layout -- the mockup was
+extended with a Browser/Mobile toggle before Alok gave the final
+go-ahead: *"OK IMPLEMENT THIS."*
+
+Implemented in `js/app.js` / `css/styles.css`:
+
+- **Hero stat**: `#aggBar`'s flat list of 5 same-size stats replaced with
+  one headline card -- "Net Settlement Impact" at real size (21px),
+  colored green/red by sign, with a settlement-progress ring next to it
+  (the ring reuses the same conic-gradient + radial-mask technique the
+  old unlabeled `#aggBar::after` ring already used, so the "hole" stays
+  naturally transparent instead of needing a hardcoded fill color) --
+  and, unlike the old ring, now prints its own percentage inside it.
+  The other 4 stats (Total OTS/O-S/P&L/Sacrifice) drop to a quieter 2x2
+  `.agg-mini-grid` below it.
+- **Settlement Progress row**: a new row in the loan table, one per
+  account -- a thin fill-bar plus a printed percentage (OTS Amount as a
+  share of Total Dues), the one real data-viz element on the screen,
+  live-updating in `recalcLoan()` on every OTS/Interest Reversal edit,
+  showing a dash when OTS is still blank.
+- **Lighter table borders**: removed the per-row `border-bottom` that
+  ran under every single row (read as a spreadsheet); dividers now only
+  mark real boundaries -- a new group starting, or the line under a
+  strong/key row -- with the existing even-row stripe doing the rest of
+  the separating.
+- **Scroll-fade cue**: `.loan-table-wrap` gets a right-edge gradient that
+  fades out once actually scrolled to the table's end (`.at-end`,
+  toggled by a scroll listener wired up in `drawDetailBody()`), so a
+  4-account table hints there's more to scroll to.
+- **Sidebar widened** 210px→260px (`@media(min-width:860px)`) and
+  190px→240px (`@media(min-width:1200px)`) so the hero number has real
+  room -- the old width was sized for a list of small stat labels, not a
+  21px headline figure.
+
+Two real bugs caught and fixed during Playwright verification, not just
+cosmetic tuning:
+1. The mini-grid's 2-column layout clipped (not wrapped) long rupee
+   figures like ₹1,04,50,000.00 -- a classic CSS grid gotcha where a grid
+   item won't shrink below its content's intrinsic width without
+   `min-width:0`, so the overflow silently clipped against the grid's own
+   `overflow:hidden` (needed for the rounded corners) instead of
+   wrapping. Fixed by adding `min-width:0` to `.agg-mini`.
+2. The mobile bottom-dock's `padding-bottom` reservation (meant to keep
+   the fixed dock from covering the last table rows) was silently losing
+   a CSS specificity fight against `#detailPane .detail-inner{padding:0
+   16px 40px}` -- an ID selector beats any number of plain classes, so
+   `.detail-inner.has-agg{padding-bottom:210px}` never actually applied,
+   and the taller new dock (up from ~120px to ~193px) overlapped the
+   table's last two rows and the hint banner. Fixed by prefixing the
+   override with `#detailPane` to win on specificity, not just source
+   order.
+
+**Verified** via Playwright across the full matrix: 4-account borrower
+(NATVAR PANDEY) and 2-account borrower (RAM PRAKASH) with large OTS
+figures entered, dark and light themes, three widths (390px mobile dock,
+1000px tablet sidebar at 260px, 1400px desktop sidebar at 240px) -- ring
+percentage renders correctly and stays legible in both themes (a light-
+theme contrast bug on the ring's percentage text, hardcoded white, was
+caught and fixed too), mini-grid figures no longer clip, the Settlement
+Progress bar/percentage updates live and shows a dash for an unfilled
+OTS account, the mobile dock no longer overlaps the table when scrolled
+to the very bottom, and the scroll-fade class toggles correctly on an
+artificially narrowed table wrapper. Zero console/page errors across all
+runs.
 
 ### OTS Calculator: stripped icons out of the Excel export (2026-08-12, same day)
 

@@ -473,11 +473,22 @@ function openDetail(custId, jumpAcct){
     <div class="detail-inner${slots.length>=1?' has-agg':''}">
       ${slots.length>=1?`<aside id="aggBar" aria-label="Account totals">
         <div class="agg-title">${slots.length>1?`All ${slots.length} Accounts`:'This Account'}</div>
-        <div class="agg-stat"><div class="ak-row"><span class="ak-icon c-ots">${ltIcon('coin')}</span><span class="ak">Total OTS Amount</span></div><span class="av" id="aggTotOts">—</span></div>
-        <div class="agg-stat"><div class="ak-row"><span class="ak-icon c-os">${ltIcon('shield')}</span><span class="ak">Total O/S Balance</span></div><span class="av" id="aggTotNetOs">—</span></div>
-        <div class="agg-stat"><div class="ak-row"><span class="ak-icon c-pl">${ltIcon('trend')}</span><span class="ak">Total P&amp;L</span></div><span class="av" id="aggTotPL">—</span></div>
-        <div class="agg-stat"><div class="ak-row"><span class="ak-icon c-sac">${ltIcon('percent')}</span><span class="ak">Total Sacrifice</span></div><span class="av" id="aggTotSac">—</span></div>
-        <div class="agg-stat impact"><div class="ak-row"><span class="ak-icon c-imp" id="aggTotImpactIcon">${ltIcon('bars')}</span><span class="ak">Total P&amp;L Impact</span></div><span class="av" id="aggTotImpact">—</span></div>
+        <div class="agg-hero">
+          <div class="agg-hero-top">
+            <div>
+              <div class="agg-hero-label">Net Settlement Impact</div>
+              <div class="agg-hero-value" id="aggTotImpact">—</div>
+              <div class="agg-hero-sub" id="aggHeroSub">—</div>
+            </div>
+            <div class="agg-hero-ring" id="aggHeroRing" style="--pct:0"><span id="aggHeroRingPct">—</span></div>
+          </div>
+        </div>
+        <div class="agg-mini-grid">
+          <div class="agg-mini"><div class="k">Total OTS Amount</div><div class="v" id="aggTotOts">—</div></div>
+          <div class="agg-mini"><div class="k">Total O/S Balance</div><div class="v" id="aggTotNetOs">—</div></div>
+          <div class="agg-mini"><div class="k">Total P&amp;L</div><div class="v" id="aggTotPL">—</div></div>
+          <div class="agg-mini"><div class="k">Total Sacrifice</div><div class="v" id="aggTotSac">—</div></div>
+        </div>
       </aside>`:''}
       <div id="detailBody" style="padding-top:14px"></div>
     </div>
@@ -538,6 +549,13 @@ function drawDetailBody(custRow, slots, prevOts){
   </div>
   `;
 
+  const tableWrap = body.querySelector('.loan-table-wrap');
+  if(tableWrap){
+    const updateFade = () => tableWrap.classList.toggle('at-end', tableWrap.scrollLeft + tableWrap.clientWidth >= tableWrap.scrollWidth - 4);
+    tableWrap.addEventListener('scroll', updateFade);
+    updateFade();
+  }
+
   window.__slots = slots;
   window.__totalDues = totalDues;
   window.__totalPL = totalPL;
@@ -583,6 +601,7 @@ const LT_ICONS = {
   tag: '<path d="M20.6 12.6 12.6 20.6a2 2 0 0 1-2.8 0l-7.4-7.4a2 2 0 0 1 0-2.8L10.4 2.4A2 2 0 0 1 11.8 2H18a2 2 0 0 1 2 2v6.2a2 2 0 0 1-.6 1.4Z"/><path d="M14 8h.01"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   avatar: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.6-3.6 4.8-5.5 7.5-5.5s5.9 1.9 7.5 5.5"/>',
+  gauge: '<path d="M12 3a9 9 0 0 0-7.6 13.9M12 3a9 9 0 0 1 7.6 13.9"/><path d="M12 12 16 8"/>',
 };
 function ltIcon(name, size){
   const s = size||13;
@@ -629,6 +648,10 @@ function loanTableHTML(slots){
           oninput="onUriInput(${i},'${esc(String(s.acctNo))}')">
       </div></td>`).join('')}</tr>`;
   const totalDuesRow = () => `<tr class="lt-strong"><th scope="row" class="lt-label">${ltIconBadge('layers')}Total Dues</th>${slots.map((s,i)=>`<td id="totalDues-${i}">—</td>`).join('')}</tr>`;
+  // Settlement Progress: OTS Amount as a share of Total Dues, drawn as a
+  // thin fill bar plus a printed percentage -- lets four accounts be
+  // compared by eye instead of reading six-figure numbers column by column.
+  const settleRow = () => `<tr><th scope="row" class="lt-label">${ltIconBadge('gauge')}Settlement Progress</th>${slots.map((s,i)=>`<td id="settleCell-${i}"><span class="dash">—</span></td>`).join('')}</tr>`;
   const eligRow = slots.some(s=>s.notEligible) ? `<tr><th scope="row" class="lt-label"></th>${slots.map(s=>`<td>${s.notEligible?'<span class="eligibility-warn">⚠ Not aged 6mo</span>':''}</td>`).join('')}</tr>` : '';
 
   return `
@@ -651,6 +674,7 @@ function loanTableHTML(slots){
       ${row('Total P&amp;L', 'trend', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
       ${group('Settlement &amp; Impact', 'settlement')}
       ${otsRow()}
+      ${settleRow()}
       ${statRow('Total Sacrifice', 'percent', 'totalSac')}
       ${statRow('Ledger Sacrifice (BDWO Amount)', 'badge', 'ledgerSac')}
       ${statRow('P&amp;L Impact', 'bars', 'impact')}
@@ -724,6 +748,7 @@ function recalcLoan(i){
   const impactEl = document.getElementById('impact-'+i);
   const pctEl = document.getElementById('pctNetOs-'+i);
   const totalDuesEl = document.getElementById('totalDues-'+i);
+  const settleCellEl = document.getElementById('settleCell-'+i);
 
   // Total Dues (O/S + UCI + Interest Reversal) depends on Interest Reversal,
   // not on OTS Amount, so it must update unconditionally -- even while OTS
@@ -736,7 +761,12 @@ function recalcLoan(i){
     impactEl.classList.remove('pos','neg');
     impactEl.__val = 0;
     if(pctEl) pctEl.textContent='';
+    if(settleCellEl) settleCellEl.innerHTML = '<span class="dash">—</span>';
     return;
+  }
+  if(settleCellEl){
+    const settlePct = (totalDues && totalDues>0) ? Math.max(0,Math.min(100,(ots/totalDues)*100)) : 0;
+    settleCellEl.innerHTML = `<div class="settle-cell"><div class="settle-bar"><span style="width:${settlePct.toFixed(1)}%"></span></div><span class="settle-pct">${settlePct.toFixed(1)}% of dues</span></div>`;
   }
   // Total Sacrifice = Total Dues - OTS Amount (Interest Reversal is already
   // folded into Total Dues above); Ledger Sacrifice (BDWO Amount) = O/S -
@@ -796,12 +826,18 @@ function recalcAggregate(){
     if(impact!==''){ if(impact>0) railPLLeft.classList.add('pos'); else if(impact<0) railPLLeft.classList.add('neg'); }
   }
   const railSac = document.getElementById('railSac'); if(railSac) railSac.textContent = any?fmtINR2(aggTotalSac):'—';
-  // Live aggregate summary panel (shown for multi-account borrowers)
-  const aggBarEl = document.getElementById('aggBar');
-  if(aggBarEl){
-    const pct = (any && liveTotalDues>0) ? Math.max(0,Math.min(100,(totalOts/liveTotalDues)*100)) : 0;
-    aggBarEl.style.setProperty('--pct', pct.toFixed(1));
-  }
+  // Live aggregate summary panel (shown for multi-account borrowers) --
+  // the hero ring shows settlement progress (OTS as a share of Total
+  // Dues), the same figure the old unlabeled #aggBar::after ring drove,
+  // now with a real percentage printed inside it.
+  const pct = (any && liveTotalDues>0) ? Math.max(0,Math.min(100,(totalOts/liveTotalDues)*100)) : 0;
+  const heroRingEl = document.getElementById('aggHeroRing');
+  if(heroRingEl) heroRingEl.style.setProperty('--pct', pct.toFixed(1));
+  const heroRingPctEl = document.getElementById('aggHeroRingPct');
+  if(heroRingPctEl) heroRingPctEl.textContent = (any && liveTotalDues>0) ? pct.toFixed(0)+'%' : '—';
+  const heroSubEl = document.getElementById('aggHeroSub');
+  if(heroSubEl) heroSubEl.textContent = `across ${slots.length} account${slots.length>1?'s':''} · O/S ${fmtCr(window.__totalOS)}`;
+
   const aggOtsEl = document.getElementById('aggTotOts');
   if(aggOtsEl){
     aggOtsEl.textContent = otsTxt;
@@ -812,16 +848,14 @@ function recalcAggregate(){
     const aggSacEl = document.getElementById('aggTotSac');
     if(aggSacEl) aggSacEl.textContent = any?fmtINR2(aggTotalSac):'—';
     const aggImpEl = document.getElementById('aggTotImpact');
-    const aggImpIconEl = document.getElementById('aggTotImpactIcon');
     if(aggImpEl){
       const impact = any ? (totalOts - window.__totalPL) : '';
       aggImpEl.classList.remove('pos','neg');
-      if(aggImpIconEl) aggImpIconEl.classList.remove('pos','neg');
       if(impact===''){ aggImpEl.textContent='—'; }
       else {
         aggImpEl.textContent = (impact>0?'+':(impact<0?'−':'')) + fmtINR2(Math.abs(impact));
         const sign = impact>0?'pos':(impact<0?'neg':'');
-        if(sign){ aggImpEl.classList.add(sign); if(aggImpIconEl) aggImpIconEl.classList.add(sign); }
+        if(sign) aggImpEl.classList.add(sign);
       }
     }
   }
