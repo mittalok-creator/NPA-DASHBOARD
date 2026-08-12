@@ -358,7 +358,7 @@
   --gold:#3A7BFF; --gold-l:#7FB0FF; --gold-d:#245BFF; --gold-soft:rgba(58,123,255,.12);
 
   /* freeze/confirm "seal" moment — ceremonial brass, unchanged in meaning */
-  --seal:#D4A544; --seal-l:#EDCF8C; --seal-d:#B3812A;
+  --seal:#D4A544; --seal-l:#EDCF8C; --seal-d:#B3812A; --seal-soft:rgba(212,165,68,.16);
 
   /* aggregate progress gauge ring */
   --gauge:#36D7FF; --gauge-track:rgba(255,255,255,.10);
@@ -838,8 +838,22 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 }
 #aggBar .agg-stat{padding:9px 0;border-top:1px solid rgba(255,255,255,.12)}
 #aggBar .agg-stat:first-of-type{border-top:none}
-#aggBar .agg-stat .ak{display:inline-flex;align-items:center;gap:6px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--head-sub)}
-#aggBar .agg-stat .ak .lt-row-icon{color:var(--head-sub);opacity:.9}
+/* Icon lives in its own fixed-size colored badge, on its own row above the
+   value -- previously the icon sat inline with the label text, which broke
+   in the sidebar's narrow width: long labels ("TOTAL O/S BALANCE") wrapped
+   to two lines, and the icon (vertically centered against the whole flex
+   row) ended up floating between the two lines instead of next to either. */
+#aggBar .agg-stat .ak-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;min-width:0}
+#aggBar .agg-stat .ak{min-width:0;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--head-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#aggBar .agg-stat .ak-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+#aggBar .agg-stat .ak-icon .lt-row-icon{width:11px;height:11px}
+#aggBar .agg-stat .ak-icon.c-ots{background:var(--accent-soft);color:var(--accent-2)}
+#aggBar .agg-stat .ak-icon.c-os{background:var(--seal-soft);color:var(--seal-l)}
+#aggBar .agg-stat .ak-icon.c-pl{background:var(--amber-soft);color:var(--amber)}
+#aggBar .agg-stat .ak-icon.c-sac{background:var(--green-soft);color:var(--green)}
+#aggBar .agg-stat .ak-icon.c-imp{background:rgba(255,255,255,.12);color:var(--head-sub)}
+#aggBar .agg-stat .ak-icon.c-imp.pos{background:var(--pos-soft);color:#5fe0a3}
+#aggBar .agg-stat .ak-icon.c-imp.neg{background:var(--neg-soft);color:#ff8a80}
 #aggBar .agg-stat .av{display:block;font-size:18px;font-weight:800;color:#fff;margin-top:3px;letter-spacing:-.3px}
 #aggBar .agg-stat.impact{margin-top:4px;background:rgba(255,255,255,.06);border-radius:11px;padding:11px 12px;border:1px solid rgba(255,255,255,.10)}
 #aggBar .agg-stat.impact .av{font-size:21px}
@@ -853,6 +867,8 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
     box-shadow:0 -12px 34px rgba(8,6,20,.32);animation:paneUp .3s var(--ease)}
   #aggBar .agg-title{display:none}
   #aggBar .agg-stat{border-top:none;padding:0;text-align:center}
+  #aggBar .agg-stat .ak-row{justify-content:center}
+  #aggBar .agg-stat .ak{text-align:left}
   #aggBar .agg-stat .av{font-size:15px}
   #aggBar .agg-stat.impact{background:none;border:none;padding:0;margin:0}
   #aggBar .agg-stat.impact .av{font-size:15px}

@@ -123,6 +123,43 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: aggregate sidebar alignment + color fix (2026-08-12, same day)
+
+Alok flagged a real bug in a screenshot: in the `#aggBar` account-totals
+panel, each stat's icon appeared to float misaligned above/between the
+label text instead of sitting next to it, and the whole panel read as
+flat grayscale. Root cause: the icon and label shared one
+`display:inline-flex` row (`align-items:center`); in the sidebar's narrow
+width, long labels like "TOTAL O/S BALANCE" wrapped to two lines, and the
+icon -- centered against the *whole* flex row's height -- ended up
+floating between the two text lines instead of next to either one.
+
+Restructured each `.agg-stat` so the icon lives in its own fixed-size
+circular badge, on a dedicated row above the value, with `min-width:0` on
+the row/label so `text-overflow:ellipsis` actually has room to trigger
+if a label still doesn't fit (a common flexbox gotcha -- without it,
+`overflow:hidden` alone does nothing because flex items refuse to shrink
+below their content's intrinsic width by default). This removes any
+possibility of a wrapped multi-line label warping the icon's position,
+regardless of sidebar width.
+
+Also colored each badge, reusing existing design tokens rather than
+inventing new ones (per the project's own "honor what's already there"
+convention): Total OTS Amount → accent/teal, Total O/S Balance → the
+existing brass "seal" tone (new `--seal-soft` token added alongside the
+already-defined `--seal`, since no soft variant existed yet), Total P&L →
+amber, Total Sacrifice → green, and Total P&L Impact → dynamically
+green/red matching its own value's sign (new `aggTotImpactIcon` id,
+toggled in `recalcAggregate()` alongside the existing `pos`/`neg` class
+logic on the value itself).
+
+**Verified** via Playwright screenshots of just the `#aggBar` element in
+dark theme, light theme, and the mobile bottom-dock layout (a
+structurally different CSS mode -- 3-column grid, centered content) --
+all three show icon and label cleanly aligned on one line, five visibly
+distinct badge colors, and the Impact badge picking up green to match its
+positive value.
+
 ### OTS Calculator: Excel export redesigned -- corrected formulas, A4 print setup, icons (2026-08-12, same day)
 
 Alok: *"SAME PDF KO EXCEL DASHBOARD MAIN PUSH KARO EXCEL DASHBOARD PROPER
