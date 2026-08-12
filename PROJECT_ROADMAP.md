@@ -123,6 +123,39 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: icon-forward redesign extended to the print/PDF sheet (2026-08-12, same day)
+
+Alok: *"OK AB SAME PUSH KR DO PDF MAIN"* -- extend the icon treatment just
+shipped for the app's loan table to the print/PDF sheet too.
+
+`renderPrintView()`'s `rows` array (in `js/app.js`) now carries an icon
+name per particulars row, reusing the same `LT_ICONS`/`ltIcon()` set built
+for the app (plus two new icons added for rows the app table doesn't have:
+`tag` for Asset Code, `clock` for Days in NPA). The borrower name also
+gets a small avatar icon, matching the app's borrower card. Scoped
+narrowly to the icon/avatar visual treatment only -- did not touch the
+print sheet's row set or formulas (e.g. Net O/S is still shown there,
+even though it was dropped from the app's table two entries above); a
+full content redesign of the print/Excel output remains a separate,
+not-yet-started follow-up.
+
+New CSS in `css/styles.css`: `.pv-name-row`/`.pv-avatar` for the borrower
+header, `.pv-table td.pv-label{display:flex}` plus `.lt-row-icon` color
+rules so the icons render in the print sheet's near-black, laser-safe
+palette (the contrast fix from the earlier "laser-printer contrast" entry)
+rather than the app's colored tokens.
+
+**Verified** the two things this change could plausibly have broken: (1)
+the print sheet's laser contrast/near-black styling -- icons render in
+#333/#000 depending on row strength, not app-theme colors; (2) the
+1-page-fit tuning from the "compress print CSS" entry above -- Playwright
+print-media screenshots of both a 2-account and a 4-account borrower show
+the sheet comfortably under one A4 page (~772px content height against
+roughly 1050px available), with all table borders/row alignment intact
+despite `display:flex` on the label cells (confirmed empirically in
+Chromium's print rendering, same pattern already proven safe in the app's
+own loan table).
+
 ### OTS Calculator: icon-forward loan detail redesign (2026-08-12, same day)
 
 Alok shared a reference screenshot of a card-and-icon style loan detail

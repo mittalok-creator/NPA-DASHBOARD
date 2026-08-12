@@ -580,9 +580,12 @@ const LT_ICONS = {
   badge: '<circle cx="12" cy="9" r="5"/><path d="M8.5 13.5 7 21l5-2.5L17 21l-1.5-7.5"/>',
   bars: '<path d="M4 20V10m6 10V4m6 16v-7"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  tag: '<path d="M20.6 12.6 12.6 20.6a2 2 0 0 1-2.8 0l-7.4-7.4a2 2 0 0 1 0-2.8L10.4 2.4A2 2 0 0 1 11.8 2H18a2 2 0 0 1 2 2v6.2a2 2 0 0 1-.6 1.4Z"/><path d="M14 8h.01"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
 };
-function ltIcon(name){
-  return `<svg class="lt-row-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${LT_ICONS[name]}</svg>`;
+function ltIcon(name, size){
+  const s = size||13;
+  return `<svg class="lt-row-icon" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${LT_ICONS[name]}</svg>`;
 }
 
 function loanTableHTML(slots){
@@ -839,24 +842,24 @@ function renderPrintView(){
   // Sacrifice below reads off Total Dues (+ Interest Reversal), not it.
   const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amount','Total Sacrifice','Impact on P&L']);
   const rows = [
-    ['Sanction Date', s=>fmtDate(toDate(s.sanctionDate))],
-    ['Sanction Limit', s=>fmtINR2(s.sanctionLimit)],
-    ['Asset Code', s=>esc(s.assetCode)||'—'],
-    ['NPA Date', s=>fmtDate(toDate(s.npaDate))],
-    ['Days in NPA', s=>s.daysNpa!==''?s.daysNpa.toLocaleString('en-IN')+' days':'—'],
-    ['O/S Balance', s=>fmtINR2(s.os)],
-    ['UCI @ 8.5%', s=>fmtINR2(s.uci)],
-    ['Total Dues', s=>fmtINR2(totalDuesFor(s))],
-    ['Interest Reversal', s=>fmtINR2(uriFor(s))],
-    ['Net O/S', s=>fmtINR2(s.netOutstanding)],
-    ['Provision', s=>fmtINR2(s.provision)],
-    ['Total P&L', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'')],
-    ['OTS Amount', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v);}],
-    ['Total Sacrifice', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(totalDuesFor(s)-v);}],
-    ['Ledger Sacrifice (BDWO Amount)', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.os-v);}],
-    ['Impact on P&L', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v-s.totalPL);}],
+    ['Sanction Date', 'calendar', s=>fmtDate(toDate(s.sanctionDate))],
+    ['Sanction Limit', 'doc', s=>fmtINR2(s.sanctionLimit)],
+    ['Asset Code', 'tag', s=>esc(s.assetCode)||'—'],
+    ['NPA Date', 'warn', s=>fmtDate(toDate(s.npaDate))],
+    ['Days in NPA', 'clock', s=>s.daysNpa!==''?s.daysNpa.toLocaleString('en-IN')+' days':'—'],
+    ['O/S Balance', 'coin', s=>fmtINR2(s.os)],
+    ['UCI @ 8.5%', 'percent', s=>fmtINR2(s.uci)],
+    ['Total Dues', 'layers', s=>fmtINR2(totalDuesFor(s))],
+    ['Interest Reversal', 'rotate', s=>fmtINR2(uriFor(s))],
+    ['Net O/S', 'coin', s=>fmtINR2(s.netOutstanding)],
+    ['Provision', 'shield', s=>fmtINR2(s.provision)],
+    ['Total P&L', 'trend', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'')],
+    ['OTS Amount', 'coin', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v);}],
+    ['Total Sacrifice', 'percent', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(totalDuesFor(s)-v);}],
+    ['Ledger Sacrifice (BDWO Amount)', 'badge', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.os-v);}],
+    ['Impact on P&L', 'bars', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v-s.totalPL);}],
   ];
-  const tableRows = rows.map(([label,fn])=>`<tr${STRONG_ROWS.has(label)?' class="pv-strong"':''}><td class="pv-label">${label}</td>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('');
+  const tableRows = rows.map(([label,icon,fn])=>`<tr${STRONG_ROWS.has(label)?' class="pv-strong"':''}><td class="pv-label">${ltIcon(icon,10)}${label}</td>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('');
 
   document.getElementById('printArea').innerHTML = `
     <div class="pv-header">
@@ -866,7 +869,10 @@ function renderPrintView(){
       <div class="pv-meta"><span>Report Date: ${fmtDate(new Date())}</span><span>Branch: ${esc(custRow[C.SOL_DESC])||''}</span></div>
     </div>
     <div class="pv-borrower">
-      <div class="pv-name">${esc(custRow[C.NAME])||'—'}</div>
+      <div class="pv-name-row">
+        <svg class="pv-avatar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.6-3.6 4.8-5.5 7.5-5.5s5.9 1.9 7.5 5.5"/></svg>
+        <div class="pv-name">${esc(custRow[C.NAME])||'—'}</div>
+      </div>
       <div class="pv-addr">${esc(custRow[C.ADDR])||'—'}</div>
       <div class="pv-info-grid">
         <div><span class="k">Cust ID</span><span class="v">${esc(custRow[C.CUST_ID])||'—'}</span></div>

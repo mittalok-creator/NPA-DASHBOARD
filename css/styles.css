@@ -762,6 +762,8 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 .pv-sub{font-size:10.5px;color:#000;margin-top:2px;font-weight:600}
 .pv-meta{display:flex;justify-content:center;gap:24px;font-size:10.5px;color:#000;margin-top:4px;font-weight:600}
 .pv-borrower{margin-bottom:10px}
+.pv-name-row{display:flex;align-items:center;gap:6px}
+.pv-avatar{color:#000;flex-shrink:0}
 .pv-name{font-size:14.5px;font-weight:800;color:#000}
 .pv-addr{font-size:10.5px;color:#222;margin-top:1px}
 .pv-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;margin-top:6px}
@@ -770,7 +772,9 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 .pv-info-grid .v{font-weight:800;color:#000}
 .pv-table{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:10px}
 .pv-table th,.pv-table td{border:1px solid #555;padding:3px 8px;text-align:right;line-height:1.2;color:#000}
-.pv-table th:first-child,.pv-table td.pv-label{text-align:left;font-weight:700;background:#e2e2e2;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.pv-table th:first-child,.pv-table td.pv-label{text-align:left;font-weight:700;background:#e2e2e2;print-color-adjust:exact;-webkit-print-color-adjust:exact;display:flex;align-items:center;gap:5px}
+.pv-table td.pv-label .lt-row-icon{color:#333;flex-shrink:0}
+.pv-table tr.pv-strong td.pv-label .lt-row-icon{color:#000}
 .pv-table thead th{background:#c9c9c9;font-weight:800;padding:5px 8px;color:#000;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 /* Key settlement figures (O/S Balance, Total Dues, Total Contractual Dues,
    Total P&L, OTS Amount, Total Sacrifice, Impact on P&L) -- the numbers
