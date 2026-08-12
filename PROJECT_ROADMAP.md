@@ -123,6 +123,63 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: Interest Reversal made editable, Net O/S decoupled from it (2026-08-12, same day)
+
+Alok: *"OUTSTANDING AND NET OUTSTANDING ALWAYS BE SAME EVEN AFTER INTEREST
+REVERSAL AND MAKE A EDITABLE FIELD FOR INTEREST REVERSABLE AND ALL
+CALCULATION WILL BE DONE"*
+
+Two changes, both applied consistently across the app, the print/PDF sheet,
+and the Excel export:
+
+1. **Net O/S now always equals O/S Balance.** Previously `netOutstanding`
+   was computed as `O/S − Interest Reversal`, so it silently drifted away
+   from O/S Balance whenever Interest Reversal was non-zero. That formula
+   was wrong per Alok's instruction — Net O/S is meant to always be the
+   same figure as O/S Balance, full stop. `computeSlot()` in `js/app.js`
+   now sets `netOutstanding = os` directly (was `os - uri`); the same
+   inline calculation in the search-result-card renderer was fixed to
+   match. Excel's Net O/S cell formula changed from `=OS-URI` to just
+   `=OS` (a direct cell reference), so it self-corrects even if someone
+   edits the URI cell in Excel.
+
+2. **Interest Reversal is now a live-editable field**, mirroring the
+   existing OTS Amount input pattern (plain typed value, not frozen/locked).
+   A new `interestReversalOverrides` map (keyed by account no.) holds
+   session-typed edits; `uriFor(s)` resolves override-or-data-default.
+   Because Total P&L legitimately depends on Interest Reversal (and Total
+   P&L no longer flows through Net O/S, now that Net O/S is decoupled),
+   Total P&L had to become reactive too — added `totalPLFor(s)` (=
+   `O/S − Interest Reversal − Provision`, Provision itself unaffected since
+   it's O/S × asset-rate) and converted the on-screen Total P&L row from a
+   static value to a live cell (`totalPL-${i}`) that `recalcLoan()` now
+   updates **unconditionally**, not just when OTS Amount is filled in
+   (Interest Reversal edits happen independently of OTS). Total Sacrifice,
+   Ledger Sacrifice, and P&L Impact — all of which read Total P&L/Interest
+   Reversal — were re-wired to use the live helpers everywhere: the
+   interactive table, `recalcAggregate()`'s multi-account totals panel,
+   `renderPrintView()`'s per-account rows and aggregate Total Sacrifice
+   line, and `exportOtsExcel()`'s Total P&L formula (`=OS-URI-Provision`,
+   now reading Interest Reversal directly since it can no longer ride on
+   Net O/S). The Excel export's Interest Reversal starting value was also
+   switched from the raw data field to `uriFor(s)`, so exporting after
+   editing the field in-app carries that edit into the spreadsheet — it
+   was silently exporting the original data value before this fix, same
+   bug class as the decoupling this feature was about.
+
+**Verified** end-to-end against RAM PRAKASH S/O NARAYAN SINGH (Cust ID
+704531033, accounts on schemes CC004/CC043, both asset code LOSS — a case
+where Provision = O/S 100%, so Total P&L is fully sensitive to Interest
+Reversal, a good stress test): typed ₹5,000 into the new Interest Reversal
+field via Playwright — O/S Balance and Net O/S stayed byte-identical
+(₹5,00,699.30) before and after; Total P&L moved from ₹0.00 to
+−₹5,000.00 live; Total Sacrifice and P&L Impact updated live and matched
+hand-computed values exactly once animation settled; the print view and
+the downloaded Excel file (checked via `openpyxl`, raw formulas inspected
+directly — `Net O/S: =B17`, `Total P&L: =B17-B20-B22`, `Interest Reversal:
+5000` as a plain editable value) both reflected the same edited figures
+consistently with the app.
+
 ### M5 + M6 completion notes (2026-07-22) — real one-click Publish
 
 Until now, "Update Data → Apply" only updated the data in the Admin's own
