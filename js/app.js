@@ -596,25 +596,6 @@ function ltIcon(name, size){
 function ltIconBadge(name, extraId){
   return `<span class="lt-icon-badge"${extraId?` id="${extraId}"`:''}>${ltIcon(name,10)}</span>`;
 }
-// Rasterizes one of the stroke icons above into a PNG data URI, so it can
-// be embedded as an image in the Excel export (ExcelJS has no way to draw
-// inline SVG into a cell the way the browser/print view can).
-function rasterizeLtIcon(name, pxSize, color){
-  return new Promise((resolve, reject)=>{
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${pxSize}" height="${pxSize}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2">${LT_ICONS[name]}</svg>`;
-    const url = URL.createObjectURL(new Blob([svg], {type:'image/svg+xml'}));
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = pxSize; canvas.height = pxSize;
-      canvas.getContext('2d').drawImage(img, 0, 0, pxSize, pxSize);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
-}
 
 function loanTableHTML(slots){
   const cols = slots.map(s=>`
@@ -950,17 +931,6 @@ const OTS_XL_ROW_LABELS = [
   'O/S Balance','UCI @ 8.5%','Total Dues','Interest Reversal','Net O/S','Provision','Total P&L',
   'OTS Amount (edit me)','Total Sacrifice','Ledger Sacrifice (BDWO Amount)','Impact on P&L',
 ];
-// Same icon per row as the print sheet (renderPrintView) -- Excel can't
-// draw inline SVG into a cell, so these get rasterized to PNG and
-// embedded as images (see rasterizeLtIcon), matching the row labels
-// exactly (not the account-value cells, which stay plain numbers/formulas).
-const XL_ROW_ICONS = {
-  'Sanction Date':'calendar', 'Sanction Limit':'doc', 'Asset Code':'tag', 'NPA Date':'warn',
-  'Days in NPA':'clock', 'O/S Balance':'coin', 'UCI @ 8.5%':'percent', 'Total Dues':'layers',
-  'Interest Reversal':'rotate', 'Net O/S':'coin', 'Provision':'shield', 'Total P&L':'trend',
-  'OTS Amount (edit me)':'coin', 'Total Sacrifice':'percent', 'Ledger Sacrifice (BDWO Amount)':'badge',
-  'Impact on P&L':'bars',
-};
 const OTS_XL_CALC_ROW_LABELS = ['Scheme','UCI Anchor Date'];
 /* SheetJS (the "xlsx" global used elsewhere in this file, e.g. Daily NPA
    Projection's export) is the free Community Edition, which can only
@@ -1012,12 +982,6 @@ async function exportOtsExcel(){
   ws.mergeCells(2,1,2,Math.max(lastColIdx,4));
   set('A2', `Uttar Pradesh Gramin Bank (Regional Office Hathras) · Branch: ${custRow[C.SOL_DESC]||''}`, {font:{size:11, color:{argb:'FF333333'}}, align:{horizontal:'center'}, border:false});
   ws.getRow(1).height = 30;
-  // Small borrower avatar, matching the print sheet's icon next to the
-  // name -- placed in row 3's empty spacer band so it can't collide with
-  // any existing text.
-  const avatarPng = await rasterizeLtIcon('avatar', 40, '#000000');
-  const avatarId = wb.addImage({ base64: avatarPng, extension: 'png' });
-  ws.addImage(avatarId, { tl:{col:0, row:2}, ext:{width:14, height:14} });
 
   const reportDateRow = 4;
   set(`A${reportDateRow}`, 'Report Date', {font:{bold:true}, border:false});
@@ -1079,27 +1043,10 @@ async function exportOtsExcel(){
     ledgerSac: rowOf('Ledger Sacrifice (BDWO Amount)'), impact: rowOf('Impact on P&L'),
   };
 
-  // Pre-rasterize each unique row icon once (several rows reuse the same
-  // icon, e.g. O/S Balance/Net O/S/OTS Amount all use "coin") and register
-  // it with the workbook once -- the same registered image can be placed
-  // at multiple cell anchors without re-rasterizing or re-registering.
-  const uniqueRowIcons = [...new Set(Object.values(XL_ROW_ICONS))];
-  const rowIconImageIds = {};
-  for(const name of uniqueRowIcons){
-    const png = await rasterizeLtIcon(name, 28, '#333333');
-    rowIconImageIds[name] = wb.addImage({ base64: png, extension: 'png' });
-  }
   OTS_XL_ROW_LABELS.forEach((label,i)=>{
     const r = headerRow + 1 + i;
     const strong = STRONG_ROWS.has(label);
-    const iconName = XL_ROW_ICONS[label];
-    // Two leading spaces make room for the icon at the cell's left edge --
-    // Excel has no way to lay out an icon and text inline in one cell the
-    // way the browser's flexbox-based row labels do.
-    set(`A${r}`, iconName ? `  ${label}` : label, {font:{bold:true, color:{argb:'FF000000'}}, fill: strong?'FFD8DEEE':'FFE2E2E2'});
-    if(iconName){
-      ws.addImage(rowIconImageIds[iconName], { tl:{col:0.05, row:r-1+0.18}, ext:{width:11, height:11} });
-    }
+    set(`A${r}`, label, {font:{bold:true, color:{argb:'FF000000'}}, fill: strong?'FFD8DEEE':'FFE2E2E2'});
   });
 
   slots.forEach((s,i)=>{
