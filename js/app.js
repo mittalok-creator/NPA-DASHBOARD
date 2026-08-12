@@ -589,12 +589,12 @@ function ltIcon(name, size){
   return `<svg class="lt-row-icon" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${LT_ICONS[name]}</svg>`;
 }
 // Icon in a colored circular badge, matching the aggregate sidebar's
-// per-stat treatment -- grp param picks the section color (grp-terms,
-// grp-dues, grp-settle) so the whole table reads as one coherent color
-// system instead of the sidebar's bold badges vs. the table's plain gray
+// per-stat treatment -- one consistent tone for every row (see
+// .lt-icon-badge in styles.css) so the whole table reads as one coherent
+// system instead of the sidebar's badges vs. the table's plain gray
 // outline icons looking like two different designs.
-function ltIconBadge(name, grp, extraId){
-  return `<span class="lt-icon-badge ${grp}"${extraId?` id="${extraId}"`:''}>${ltIcon(name,10)}</span>`;
+function ltIconBadge(name, extraId){
+  return `<span class="lt-icon-badge"${extraId?` id="${extraId}"`:''}>${ltIcon(name,10)}</span>`;
 }
 // Rasterizes one of the stroke icons above into a PNG data URI, so it can
 // be embedded as an image in the Excel export (ExcelJS has no way to draw
@@ -624,9 +624,9 @@ function loanTableHTML(slots){
       ${s.assetCode?`<span class="badge-pill ${esc(s.assetCode)}" title="${esc(assetLabel(s.assetCode))}">${esc(s.assetCode)}</span>`:''}
     </th>`).join('');
   const group = (label, icon) => `<tr class="lt-group"><td colspan="${slots.length+1}">${ltIcon(icon)}${label}</td></tr>`;
-  const row = (label, icon, grp, fn, cls='') => `<tr class="${cls}"><th scope="row" class="lt-label">${ltIconBadge(icon,grp)}${label}</th>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`;
-  const statRow = (label, icon, grp, idPrefix, iconId) => `<tr><th scope="row" class="lt-label">${ltIconBadge(icon,grp,iconId)}${label}</th>${slots.map((s,i)=>`<td id="${idPrefix}-${i}">—</td>`).join('')}</tr>`;
-  const otsRow = () => `<tr class="lt-ots-row"><th scope="row" class="lt-label">${ltIconBadge('coin','grp-settle')}Settlement (OTS) Amount</th>${slots.map((s,i)=>`
+  const row = (label, icon, fn, cls='') => `<tr class="${cls}"><th scope="row" class="lt-label">${ltIconBadge(icon)}${label}</th>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`;
+  const statRow = (label, icon, idPrefix, iconId) => `<tr><th scope="row" class="lt-label">${ltIconBadge(icon,iconId)}${label}</th>${slots.map((s,i)=>`<td id="${idPrefix}-${i}">—</td>`).join('')}</tr>`;
+  const otsRow = () => `<tr class="lt-ots-row"><th scope="row" class="lt-label">${ltIconBadge('coin')}Settlement (OTS) Amount</th>${slots.map((s,i)=>`
       <td><div class="lt-ots-cell">
         <button type="button" class="freeze-chip lt-freeze${frozen[s.acctNo]?' frozen':(otsAmounts[s.acctNo]?' ready':'')}" id="freezeBtn-${i}"
           onclick="toggleFreeze(${i},'${esc(String(s.acctNo))}')"
@@ -640,14 +640,14 @@ function loanTableHTML(slots){
           oninput="onOtsInput(${i},'${esc(String(s.acctNo))}')" ${frozen[s.acctNo]?'disabled':''}>
         <span class="pct-tag" id="pctNetOs-${i}"></span>
       </div></td>`).join('')}</tr>`;
-  const uriRow = () => `<tr><th scope="row" class="lt-label">${ltIconBadge('rotate','grp-dues')}Interest Reversal</th>${slots.map((s,i)=>`
+  const uriRow = () => `<tr><th scope="row" class="lt-label">${ltIconBadge('rotate')}Interest Reversal</th>${slots.map((s,i)=>`
       <td><div class="lt-ots-cell">
         <span class="lt-cur">₹</span>
         <input type="number" class="lt-ots-input" id="uriInput-${i}" placeholder="0" value="${uriFor(s)||''}"
           aria-label="Interest reversal for account ${esc(String(s.acctNo))}"
           oninput="onUriInput(${i},'${esc(String(s.acctNo))}')">
       </div></td>`).join('')}</tr>`;
-  const totalDuesRow = () => `<tr class="lt-strong"><th scope="row" class="lt-label">${ltIconBadge('layers','grp-dues')}Total Dues</th>${slots.map((s,i)=>`<td id="totalDues-${i}">—</td>`).join('')}</tr>`;
+  const totalDuesRow = () => `<tr class="lt-strong"><th scope="row" class="lt-label">${ltIconBadge('layers')}Total Dues</th>${slots.map((s,i)=>`<td id="totalDues-${i}">—</td>`).join('')}</tr>`;
   const eligRow = slots.some(s=>s.notEligible) ? `<tr><th scope="row" class="lt-label"></th>${slots.map(s=>`<td>${s.notEligible?'<span class="eligibility-warn">⚠ Not aged 6mo</span>':''}</td>`).join('')}</tr>` : '';
 
   return `
@@ -657,22 +657,22 @@ function loanTableHTML(slots){
     <tbody>
       ${eligRow}
       ${group('Loan Terms', 'loanTerms')}
-      ${row('Sanction Date', 'calendar', 'grp-terms', s=>fmtDate(toDate(s.sanctionDate)))}
-      ${row('Sanction Limit', 'doc', 'grp-terms', s=>fmtINR2(s.sanctionLimit))}
-      ${row('NPA Date', 'warn', 'grp-terms', s=>fmtDate(toDate(s.npaDate)))}
-      ${row('O/S Balance', 'coin', 'grp-terms', s=>fmtINR2(s.os), 'lt-strong')}
+      ${row('Sanction Date', 'calendar', s=>fmtDate(toDate(s.sanctionDate)))}
+      ${row('Sanction Limit', 'doc', s=>fmtINR2(s.sanctionLimit))}
+      ${row('NPA Date', 'warn', s=>fmtDate(toDate(s.npaDate)))}
+      ${row('O/S Balance', 'coin', s=>fmtINR2(s.os), 'lt-strong')}
       ${group('Dues &amp; Provisioning', 'dues')}
       ${uriRow()}
-      ${row('UCI @ 8.5%', 'percent', 'grp-dues', s=>fmtINR2(s.uci))}
+      ${row('UCI @ 8.5%', 'percent', s=>fmtINR2(s.uci))}
       ${totalDuesRow()}
-      ${row('Total Contractual Dues', 'layers', 'grp-dues', s=>fmtINR2(s.totalContractualDues), 'lt-strong lt-divider')}
-      ${row('Provision', 'shield', 'grp-dues', s=>fmtINR2(s.provision))}
-      ${row('Total P&amp;L', 'trend', 'grp-dues', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
+      ${row('Total Contractual Dues', 'layers', s=>fmtINR2(s.totalContractualDues), 'lt-strong lt-divider')}
+      ${row('Provision', 'shield', s=>fmtINR2(s.provision))}
+      ${row('Total P&amp;L', 'trend', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
       ${group('Settlement &amp; Impact', 'settlement')}
       ${otsRow()}
-      ${statRow('Total Sacrifice', 'percent', 'grp-settle', 'totalSac')}
-      ${statRow('Ledger Sacrifice (BDWO Amount)', 'badge', 'grp-settle', 'ledgerSac')}
-      ${statRow('P&amp;L Impact', 'bars', 'grp-settle', 'impact')}
+      ${statRow('Total Sacrifice', 'percent', 'totalSac')}
+      ${statRow('Ledger Sacrifice (BDWO Amount)', 'badge', 'ledgerSac')}
+      ${statRow('P&amp;L Impact', 'bars', 'impact')}
     </tbody>
   </table>
   </div>

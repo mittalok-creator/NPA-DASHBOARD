@@ -622,11 +622,14 @@ main{padding:20px 16px 40px}
    sidebar's per-stat treatment) instead of a bare gray outline icon --
    colored by section so the whole table reads as one system: Loan Terms
    (blue), Dues & Provisioning (amber), Settlement & Impact (green). */
-.lt-icon-badge{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+/* One consistent badge tone across every row -- ties into the app's own
+   existing gold/accent language (group headers, OTS row, freeze chip,
+   the currency symbol) rather than a different hue per section, which
+   read as decorative rainbow-coding instead of a real design choice.
+   Color stays reserved for what actually carries meaning: the blue
+   "strong" row values, and P&L Impact's live positive/negative state. */
+.lt-icon-badge{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--gold-soft);color:var(--gold-l)}
 .lt-icon-badge .lt-row-icon{opacity:1}
-.lt-icon-badge.grp-terms{background:var(--accent-soft);color:var(--accent-2)}
-.lt-icon-badge.grp-dues{background:var(--amber-soft);color:var(--amber)}
-.lt-icon-badge.grp-settle{background:var(--green-soft);color:var(--green)}
 .lt-hint{display:flex;gap:9px;align-items:flex-start;background:var(--accent-soft);border:1px solid var(--gold-soft);border-radius:var(--radius-md);padding:11px 13px;font-size:11.5px;color:var(--ink);margin-top:12px;line-height:1.5}
 .lt-hint svg{color:var(--accent);flex-shrink:0;margin-top:1px}
 .loan-table tr.lt-ots-row td{background:var(--gold-soft);padding:11px 12px}
@@ -855,10 +858,14 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 #aggBar .agg-stat .ak{min-width:0;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--head-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #aggBar .agg-stat .ak-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 #aggBar .agg-stat .ak-icon .lt-row-icon{width:11px;height:11px}
-#aggBar .agg-stat .ak-icon.c-ots{background:var(--accent-soft);color:var(--accent-2)}
-#aggBar .agg-stat .ak-icon.c-os{background:var(--seal-soft);color:var(--seal-l)}
-#aggBar .agg-stat .ak-icon.c-pl{background:var(--amber-soft);color:var(--amber)}
-#aggBar .agg-stat .ak-icon.c-sac{background:var(--green-soft);color:var(--green)}
+/* Same reasoning as the table's .lt-icon-badge -- one consistent tone for
+   every stat instead of a different hue each (blue/gold/amber/green read
+   as decorative, not designed). Only P&L Impact stays dynamic, since
+   that's the one figure whose color genuinely means something. */
+#aggBar .agg-stat .ak-icon.c-ots,
+#aggBar .agg-stat .ak-icon.c-os,
+#aggBar .agg-stat .ak-icon.c-pl,
+#aggBar .agg-stat .ak-icon.c-sac{background:var(--gold-soft);color:var(--gold-l)}
 #aggBar .agg-stat .ak-icon.c-imp{background:rgba(255,255,255,.12);color:var(--head-sub)}
 #aggBar .agg-stat .ak-icon.c-imp.pos{background:var(--pos-soft);color:#5fe0a3}
 #aggBar .agg-stat .ak-icon.c-imp.neg{background:var(--neg-soft);color:#ff8a80}
