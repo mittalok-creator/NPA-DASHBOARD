@@ -123,6 +123,40 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Search: switched from big result cards to a compact account list, matching the other tabs (2026-08-14, same day)
+
+Alok's follow-up after the live-search change: *"Ye keval 8 match hi kyun
+show kr rha hai and pure cards kyun show ho rHe hain jaise baki 2 jo
+dashboard hain unamin account ki list aati hai to search main type karne
+oar vaise hi list aaye accoring to typed fir select karen to card open ho
+ya pura module."*
+
+Two things, both fixed:
+
+**"Keval 8 kyun"** — live-typing was deliberately capped at 8 (to keep
+the old, tall result cards from overwhelming the screen on every
+keystroke). Now that the list itself is compact (see below), that
+special cap is gone -- live typing and Enter/Search both return the same
+up-to-60 matches.
+
+**"Baki 2 dashboard jaisi list"** — the Search screen's results were
+still the old big `.result-card` blocks (O/S/Net O/S/P&L grid, multi-
+account breakdown, badges). Replaced with the exact same compact,
+scrollable account-list table already used on the Bank Dashboard's "All
+Accounts" list and the KCC Overdue/PNPA account lists: Account No.,
+Customer, Branch, Asset code, O/S Balance, one row per match. Tapping a
+row opens the full OTS Calculator detail (`openDetail`) exactly like
+before -- nothing about what opens on selection changed, only how the
+list looks and behaves while choosing from it. An 🔒 marker still shows
+next to an account whose OTS is already locked/communicated, carried
+over from the old cards.
+
+**Verified** via Playwright: search list now renders as `.dash-table`
+rows (Account/Customer/Branch/Asset/O/S Balance columns, no `.result-card`
+markup left), returns up to 60 matches while live-typing (not capped at
+8 anymore), and clicking a row opens the OTS Calculator detail with that
+account's OTS input present. No console errors.
+
 ### Search: results now appear live as you type, no Enter/Search tap needed (2026-08-14, same day)
 
 Alok: *"Theek hai ab 1 major integration. Jab ots calculator main account no
