@@ -123,6 +123,54 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Perf: found and fixed the real cause of the slow, WiFi-every-time load (2026-08-14, same day)
+
+The parallel-fetch tweak (previous entry) was flagged as unlikely to
+fully explain a 1-minute+ load. Alok confirmed: WiFi, and slow *every*
+single time, refresh included -- ruling out a one-off network blip or a
+mobile-signal issue, and pointing at something that reloads on every
+visit regardless of caching. Two real, substantial finds:
+
+**`css/styles.css` was 1.34MB, and 90% of that was embedded fonts.**
+The self-hosted webfonts added earlier today (Manrope, Caveat, Archivo,
+IBM Plex Mono, all inlined as base64 so the print/PDF path doesn't
+depend on what's installed on the machine opening it) had been pasted in
+straight from Google Fonts' CSS output, which splits every weight into
+multiple `@font-face` blocks by unicode-range (latin, latin-ext,
+cyrillic, cyrillic-ext, greek, vietnamese, ...) so a browser can fetch
+*only* the subset it needs -- from a normal `url()` reference. Inlined as
+`data:` URIs instead, that per-subset selectivity is defeated entirely:
+every subset's full base64 payload ships inside the CSS on every load,
+including Cyrillic, Greek and Vietnamese script data that this
+Hathras-region NPA app will never render a single character of. Removed
+those 24 non-Latin `@font-face` blocks (668KB) — `styles.css` drops from
+1.34MB to 782KB, a 42% cut, with zero visual change (Latin + Latin-ext,
+the only scripts actually used, are untouched).
+
+**The Service Worker's shell-asset precache had drifted out of sync and
+was eagerly downloading a 1.1MB file nobody needed yet.** `SHELL_ASSETS`
+in `sw.js` still pointed at `?v=20260724c` for every JS/CSS file, while
+`index.html`'s real `<script>`/`<link>` tags had moved through many
+later version bumps (today alone: `f` through `n`) -- so every one of
+those precached URLs was already dead weight, never actually served,
+just wasted install-time bandwidth. Worse, `pdf.worker.min.js` (~1.1MB)
+was in that eager list even though it's only used by the PDF-upload
+feature (`parseBankPdf`, an occasional Admin action) -- meaning *every*
+single Service Worker update, including several shipped today, forced a
+~1.1MB download in the background regardless of whether anyone touched
+that feature. Synced the version strings and dropped
+`pdf.worker.min.js` from the eager list entirely -- it still caches
+normally the first time the PDF-upload feature is actually used, nothing
+lost, just no longer forced on every load.
+
+**Verified** via Playwright: Cache Storage after a fresh install now
+holds only the `?v=20260814n`-tagged files (no stale entries),
+`pdf.worker.min.js` is confirmed absent from the precache, `styles.css`'s
+brace count stays balanced (781,599 bytes, syntactically valid), fonts
+still render correctly (Manrope on the dashboard, Caveat/Archivo/IBM
+Plex Mono on the OTS Calculator detail — screenshotted both, no visual
+regression), and no console errors.
+
 ### Perf: boot-time data fetches now run in parallel, not one after another (2026-08-14, same day)
 
 Alok, after the Service Worker cache-bloat fix: *"Now working fine but
