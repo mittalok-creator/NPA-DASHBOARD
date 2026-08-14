@@ -123,6 +123,45 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: Recovery Scale now animates live as OTS is typed (2026-08-14, same day)
+
+Alok: *"Ok gud ab recovery scale main % ots amount feed karte hi live
+animations show ho with bar and amount."* The needle and the waterfall
+bar both jumped instantly to their new position on every keystroke, with
+no visible motion, and there was no number on the scale itself showing
+what OTS amount the needle's current position actually represented.
+
+- Needle and the safe/loss band split now transition smoothly
+  (`left`/`width`, 450ms cubic-bezier) instead of snapping.
+- Added a floating value bubble that rides on the needle, showing the
+  current Total OTS Amount, using the same `animateNumber()` count-up
+  treatment the P&L Impact figure already gets elsewhere in this screen.
+  Re-anchors itself inward (instead of centering) within 10% of either
+  end of the track, so it can't hang off the sidebar's edge when OTS is
+  ₹0 or close to Total Dues -- both very common states.
+- Waterfall bar segments and the 3 key-row amounts (cash recovered,
+  ledger sacrifice, unrealised interest) also transition/count-up now.
+
+**One real bug caught while wiring this up**: the waterfall bar and key
+row were being rebuilt via `innerHTML =` on every `recalcAggregate()`
+call -- destroying and recreating the `<span>`/`<b>` elements each time.
+A CSS transition needs the *same* element's style to change to animate;
+a freshly-created element just appears at its final width/value with no
+motion, and `animateNumber()`'s per-element `__val` tracking (a property
+cached directly on the DOM node) would have been wiped every render too,
+silently breaking the count-up before it ever ran. Rebuilt both blocks
+with stable, pre-created elements (`#aggWf1/2/3`, `#aggWfCash/Ledger/Uci`)
+that get their `style`/`textContent` updated in place instead.
+
+**Verified** via Playwright: confirmed `getComputedStyle(...).transition`
+is actually present on all 4 animated elements (not just declared and
+silently overridden); typed OTS from ₹0 up through an extreme value that
+pins the needle at 100%, confirming the bubble's text updates correctly
+at each step and its anchor point switches from left-aligned to centered
+to right-aligned exactly at the two 10%/90% thresholds, staying fully
+visible (not clipped) at both track extremes in both themes. Zero
+console/page errors.
+
 ### OTS Calculator: fixed group-header text scrolling off-screen, dropped Recovery Scale from mobile (2026-08-14, same day)
 
 Alok sent two mobile screenshots: scrolling the loan table horizontally
