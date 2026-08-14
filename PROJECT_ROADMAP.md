@@ -123,6 +123,38 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: Recovery Scale bar was nearly invisible on the light/brass theme (2026-08-14, same day)
+
+Alok sent a screenshot: the "Recovery Scale" bar in the OTS Calculator's
+aggregate sidebar was basically unreadable -- just a faint pale-green
+watermark with no visible red zone at all. Two separate bugs, not one:
+
+**1. The loss (pre-break-even) zone had no width at all.** `.agg-band.loss`
+was `left:0` with no `right`/`width` set and no JS ever touching it --
+an empty, unsized `<div>` collapses to 0×0, so the red zone never
+rendered, at any opacity, in any theme. Fixed by making it `left:0;right:0`
+(the full track, as a base layer), with the safe band painted over it
+from break-even rightward -- exactly mirroring how the two zones are
+meant to divide the track.
+
+**2. Both bands used a diagonal-hatch pattern at 18-24% opacity of the
+dark-theme hex values, regardless of theme.** On the near-white "brass
+paper" background the light-theme OTS reskin introduced, that's nearly
+imperceptible -- confirmed exactly matching Alok's screenshot. Replaced
+the hatch with solid fills + a solid 1.5px border, and made the color
+theme-aware: dark theme keeps the bright `--pos`/`--neg`-adjacent hex at
+moderate opacity, light theme switches to the same darker, more-saturated
+`--pos`/`--neg` tokens already used elsewhere in light mode for positive/
+negative figures (a dark color needs less alpha to read clearly on white
+than a bright one does).
+
+**Verified**: live screenshot in both themes with an account whose OTS
+Amount sits below break-even (so both zones + the needle are all
+exercised) -- red/green bands and the needle position are now clearly
+visible with real width and solid color in both. Zero console errors;
+print/Excel export/aggregate totals regression-tested unaffected (this
+block is desktop/tablet-only -- already hidden on mobile).
+
 ### Removed the OTS lock/freeze feature entirely (2026-08-14, same day)
 
 Alok reported the OTS Amount field sometimes refused input, with the
