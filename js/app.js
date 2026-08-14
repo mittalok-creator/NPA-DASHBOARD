@@ -359,17 +359,192 @@ function runSearch(){
   renderResults(matches, mode);
 }
 
+/* ---------- OTS start screen (the Search tab before anything is searched)
+   Replaces what used to be a bare icon + one line of text on an otherwise
+   empty screen. Approved "Action Hub" layout: recently-opened borrowers
+   first (the overwhelmingly common next action -- back to yesterday's
+   account), then top branches by O/S, then a small portfolio line for
+   context. Deliberately kept lighter than the Dashboard tab so it informs
+   without duplicating it. ---------- */
+
+/* Recently-opened borrowers, newest first, capped at RECENT_MAX. Stored
+   only in this browser's localStorage -- never published, never sent
+   anywhere -- so it stays per-person even though the app itself needs no
+   login. Keyed by custId so re-opening the same borrower moves it back to
+   the top instead of adding a duplicate row. */
+const RECENT_KEY = 'upgb-recent-borrowers';
+const RECENT_MAX = 5;
+function getRecentBorrowers(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter(r=>r && r.custId).slice(0,RECENT_MAX) : [];
+  }catch(e){ return []; }
+}
+function rememberBorrower(custRow){
+  if(!custRow) return;
+  const custId = String(custRow[C.CUST_ID]||'');
+  if(!custId) return;
+  /* O/S is summed across the borrower's linked loan accounts, the same way
+     openDetail() builds its slots -- storing only custRow's own balance
+     would under-report a multi-account household (e.g. showing one loan's
+     38k for a borrower whose two loans total 1.19 L). */
+  const slots = [1,2,3,4].map(n=>lookupLoanSlot(custId,n)).filter(Boolean);
+  const totalOs = slots.reduce((a,s)=>a+(typeof s.osBalance==='number'?s.osBalance:0),0);
+  const entry = {
+    custId,
+    acctNo: String(custRow[C.ACCT_NO]||''),
+    name: custRow[C.NAME]||'',
+    branch: custRow[C.SOL_DESC]||'',
+    asset: custRow[C.ASSET]||'',
+    os: slots.length ? totalOs : (typeof custRow[C.OUTBAL]==='number' ? custRow[C.OUTBAL] : ''),
+    n: slots.length,
+  };
+  try{
+    const list = getRecentBorrowers().filter(r=>String(r.custId)!==custId);
+    list.unshift(entry);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0,RECENT_MAX)));
+  }catch(e){ /* private mode / quota -- recents are a convenience, not critical */ }
+}
+function initialsOf(name){
+  const parts = String(name||'').trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return '—';
+  return ((parts[0][0]||'') + (parts.length>1 ? (parts[1][0]||'') : '')).toUpperCase();
+}
+
+/* Branch totals for the start screen's chips, computed once off the raw
+   NPA rows rather than off currentDashStats -- that only exists after the
+   Dashboard tab has rendered, and this screen is often the very first
+   thing opened. Invalidated whenever the dataset itself changes. */
+let __startBranchStats = null;
+/* Asset classes in regulatory severity order (least to most impaired), not
+   by count -- so the bar reads left-to-right as a severity ramp, matching
+   the green->red color language the .badge-pill.<code> classes already use
+   everywhere else in the app. */
+const START_ASSET_ORDER = ['SUB_STD','DA1','DA2','DA3','LOSS'];
+function startBranchStats(){
+  if(__startBranchStats) return __startBranchStats;
+  const by = new Map();
+  const byAsset = new Map();
+  DATA.npa.rows.forEach(r=>{
+    const os = typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : 0;
+    const br = r[C.SOL_DESC]||'';
+    if(br){
+      const cur = by.get(br) || {branch:br, os:0, count:0};
+      cur.os += os; cur.count++;
+      by.set(br, cur);
+    }
+    const code = r[C.ASSET]||'';
+    if(code){
+      const cur = byAsset.get(code) || {code, os:0, count:0};
+      cur.os += os; cur.count++;
+      byAsset.set(code, cur);
+    }
+  });
+  const list = [...by.values()].sort((a,b)=>b.os-a.os);
+  const assets = START_ASSET_ORDER.map(c=>byAsset.get(c)).filter(Boolean);
+  __startBranchStats = {
+    list,
+    assets,
+    assetTotal: assets.reduce((a,b)=>a+b.count,0),
+    totalOs: list.reduce((a,b)=>a+b.os,0),
+    totalAccounts: DATA.npa.rows.length,
+  };
+  return __startBranchStats;
+}
+/* Same shared account-list modal as the branch chips, filtered by asset
+   classification instead. */
+function showStartAssetList(code){
+  const list = DATA.npa.rows
+    .filter(r=>(r[C.ASSET]||'')===code)
+    .map(r=>({
+      acctNo:String(r[C.ACCT_NO]||''), custId:String(r[C.CUST_ID]||''),
+      name:r[C.NAME]||'', branch:r[C.SOL_DESC]||'',
+      os: typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : 0, asset:r[C.ASSET]||'',
+    }))
+    .sort((a,b)=>b.os-a.os);
+  showAcctListModal(assetLabel(code)+' — Accounts', list.length.toLocaleString('en-IN')+' account(s)', list);
+}
+window.showStartAssetList = showStartAssetList;
+/* Opens every account of one branch in the shared account-list modal --
+   same list/sort/lazy-batch machinery the Dashboard's own drill-downs use,
+   built straight off the raw rows so it works before the Dashboard has
+   ever been opened. */
+function showStartBranchList(branch){
+  const list = DATA.npa.rows
+    .filter(r=>(r[C.SOL_DESC]||'')===branch)
+    .map(r=>({
+      acctNo:String(r[C.ACCT_NO]||''), custId:String(r[C.CUST_ID]||''),
+      name:r[C.NAME]||'', branch:r[C.SOL_DESC]||'',
+      os: typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : 0, asset:r[C.ASSET]||'',
+    }))
+    .sort((a,b)=>b.os-a.os);
+  showAcctListModal(branch+' — Accounts', list.length.toLocaleString('en-IN')+' account(s)', list);
+}
+window.showStartBranchList = showStartBranchList;
+function openRecentBorrower(custId, acctNo){
+  openDetail(String(custId), acctNo ? String(acctNo) : undefined);
+}
+window.openRecentBorrower = openRecentBorrower;
+
 function renderEmpty(){
   const mode = SEARCH_MODES.find(m=>m.id===searchMode);
+  const recents = getRecentBorrowers();
+  const st = startBranchStats();
+
+  // Before anything has been opened there's nothing to put in the Recent
+  // block, so that slot carries the search hint instead -- the screen
+  // still opens with a clear next step rather than a gap.
+  const recentBlock = recents.length ? `
+    <div class="start-block">
+      <div class="start-lbl">Waapas wahin se</div>
+      ${recents.map(r=>`
+        <button type="button" class="start-rec" onclick="openRecentBorrower('${esc(r.custId)}','${esc(r.acctNo||'')}')">
+          <span class="start-rec-av">${esc(initialsOf(r.name))}</span>
+          <span class="start-rec-txt">
+            <span class="start-rec-nm">${esc(r.name)||'—'}</span>
+            <span class="start-rec-sub">${esc(r.branch)||'—'}${r.asset?' · '+esc(r.asset):''}${r.n>1?' · '+r.n+' loans':''}</span>
+          </span>
+          <span class="start-rec-amt">${r.os===''?'—':fmtCr(r.os)}</span>
+        </button>`).join('')}
+    </div>` : `
+    <div class="start-block">
+      <div class="start-hint">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>Upar <b>${esc(mode.label)}</b> se search karein — jo borrower kholenge woh yahan save ho jaayenge.</span>
+      </div>
+    </div>`;
+
+  const topBranches = st.list.slice(0,4);
   document.getElementById('mainArea').innerHTML = `
-    <div class="empty-state">
-      <svg class="logo-big" width="76" height="76" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-        <path d="M3 10.5 12 4l9 6.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M4.5 10.5V19a1 1 0 0 0 1 1H8v-5.2a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1V20h2.5a1 1 0 0 0 1-1v-8.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <line x1="2.5" y1="20" x2="21.5" y2="20" stroke-linecap="round"/>
-      </svg>
-      <h2>OTS Calculator</h2>
-      <p>Search by ${esc(mode.label)} to view borrower details</p>
+    <div class="ots-start">
+      ${recentBlock}
+      <div class="start-block">
+        <div class="start-lbl">Branch se kholo</div>
+        <div class="start-chips">
+          ${topBranches.map(b=>`
+            <button type="button" class="start-chip" onclick="showStartBranchList('${jsq(b.branch)}')">
+              ${esc(b.branch)}<b>${fmtCr(b.os)}</b>
+            </button>`).join('')}
+          <button type="button" class="start-chip all" onclick="switchView('dashboard')">Saari ${st.list.length} &rsaquo;</button>
+        </div>
+      </div>
+      ${st.assets.length ? `
+      <div class="start-block">
+        <div class="start-lbl">Asset classification</div>
+        <div class="start-assetbar">
+          ${st.assets.map(a=>`<span class="seg ${esc(a.code)}" style="width:${(a.count/st.assetTotal*100).toFixed(2)}%" title="${esc(assetLabel(a.code))} — ${a.count.toLocaleString('en-IN')} account(s)"></span>`).join('')}
+        </div>
+        <div class="start-legend">
+          ${st.assets.map(a=>`
+            <button type="button" class="start-leg" onclick="showStartAssetList('${esc(a.code)}')" title="${esc(assetLabel(a.code))}">
+              <i class="${esc(a.code)}"></i>${esc(a.code)}<b>${a.count.toLocaleString('en-IN')}</b>
+            </button>`).join('')}
+        </div>
+      </div>` : ''}
+      <div class="start-stats">
+        <div class="start-stat"><span class="k">NPA Accounts</span><span class="v">${st.totalAccounts.toLocaleString('en-IN')}</span></div>
+        <div class="start-stat"><span class="k">Total O/S</span><span class="v">${fmtCr(st.totalOs)}</span></div>
+      </div>
     </div>`;
 }
 
@@ -434,6 +609,7 @@ function totalDuesFor(s){
 function openDetail(custId, jumpAcct){
   const custRow = byCustId.get(custId);
   if(!custRow) return;
+  rememberBorrower(custRow);
   switchView('search');
   const slots = [1,2,3,4].map(n=>{
     const s = lookupLoanSlot(custId, n);
@@ -1973,6 +2149,7 @@ function applyNewDataNow(){
   DATA.npa = { headers: __pendingData.npa.headers, rows: newRows };
   if(__pendingData.oldots) DATA.oldots = __pendingData.oldots;
   if(__pendingAsOnDate) DATA.asOnDate = __pendingAsOnDate;
+  __startBranchStats = null; // start screen's branch totals are now stale
 
   npaByAcct.clear(); npaByHelper.clear(); byCustId.clear(); oldOtsByAcct.clear();
   DATA.npa.rows.forEach(r=>{
