@@ -123,6 +123,25 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Search: live-typing now waits for 6 characters, and the list is never capped (2026-08-14, same day)
+
+Alok: *"OK search main pahle 2 digit k jagah pahle 6 digit k baad account
+list show karo and han 60 search ki jagah puri list aani chahiye."* Two
+small tweaks to the live search shipped earlier today:
+
+- Live-typing now waits for **6 characters** before showing results
+  (was 2) — narrows the first list a lot before it appears, since a real
+  account number's first couple of digits alone matches far too many
+  rows to be a useful "quick suggestion."
+- The result list is **no longer capped at 60** — whether triggered by
+  live-typing or Enter/Search, every matching row now renders, not just
+  the first 60.
+
+**Verified** via Playwright: typing 5 characters shows no results
+(still gated), the 6th character fires the live list, and a broad query
+("16") now returns the full uncapped match count (4,590 rows) instead of
+stopping at 60. No console errors.
+
 ### Bug fix: Service Worker was silently filling up Cache Storage from the 3s/45s live-sync polls, slowing the whole app down (2026-08-14, same day)
 
 Once the missing `LOCK_OTS_GITHUB_TOKEN` Vercel env var (see previous entry)
