@@ -735,6 +735,19 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
      resets padding-bottom to 40px and lets the fixed dock overlap the last
      table rows. */
   #detailPane .detail-inner.has-agg{padding-bottom:330px}
+  /* padding-bottom above only guarantees the LAST table row can be
+     scrolled clear of the fixed dock at max scroll -- it does nothing for
+     a row scrolled to some earlier, arbitrary position along the way. Any
+     browser or library scroll-into-view call (native "bring focused input
+     above the keyboard" behavior included) stops as soon as the target is
+     merely within the raw viewport rectangle, with no idea a fixed dock
+     is sitting on top of the bottom ~220px of that rectangle -- so OTS
+     Amount/Interest Reversal could end up positioned right behind it,
+     visible or not, un-tappable either way. scroll-margin-bottom teaches
+     that call where the *real* usable bottom edge is, so it always leaves
+     genuine clearance above the dock instead of just inside the raw
+     viewport. */
+  .lt-ots-input,.freeze-chip{scroll-margin-bottom:240px}
   #aggBar{position:fixed;left:0;right:0;bottom:0;z-index:85;border-radius:18px 18px 0 0;
     padding:12px 16px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;
     box-shadow:0 -12px 34px rgba(8,6,20,.32);animation:paneUp .3s var(--ease)}

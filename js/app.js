@@ -2463,6 +2463,21 @@ document.addEventListener('keydown', (e)=>{
   th.click();
 });
 
+/* On mobile, #aggBar is a fixed-position dock pinned to the bottom of the
+   screen (see styles.css) sitting on top of whatever loan-table content
+   happens to be scrolled underneath it -- so tapping into OTS Amount (or
+   any lt-ots-input) right after Interest Reversal, when the row had only
+   been scrolled minimally into view, could land the field's screen
+   position right behind the dock, silently swallowing every further tap
+   there. Re-center any of these inputs on focus so they're never left
+   sitting in that dead zone, regardless of what scroll position got them
+   into view in the first place. */
+document.addEventListener('focusin', (e)=>{
+  if(e.target && e.target.classList && e.target.classList.contains('lt-ots-input')){
+    e.target.scrollIntoView({block:'center', behavior:'smooth'});
+  }
+});
+
 /* ---------- Dashboard: "All Accounts" table (sortable, lazy-scrolled) ---------- */
 let acctListState = {list:[], sort:{key:'os',dir:'desc'}};
 function renderAcctListTable(resetScroll){

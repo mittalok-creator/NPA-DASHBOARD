@@ -123,6 +123,48 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Bug fix: OTS Amount unreachable on mobile right after Interest Reversal (2026-08-14, same day)
+
+Alok: *"App main interest reveral type karne k baad ots amount feed nahi
+karne de raha."* Reproduced in a headless browser with a real click, not
+guessed from reading code -- confirmed the exact failure Playwright's own
+retry log showed: taps meant for the OTS Amount field were landing on
+`#aggBar`, the fixed-position aggregate dock at the bottom of the mobile
+screen, instead.
+
+**Root cause**: `#aggBar` is `position:fixed;bottom:0` on mobile, sitting
+on top of the last ~220px of whatever loan-table content is scrolled
+underneath it. A `padding-bottom:330px` rule already existed specifically
+to guarantee the *last* table row could clear the dock at full scroll --
+but it does nothing for a row scrolled to some *earlier*, in-between
+position, which is exactly what happens the moment a field is focused:
+the browser's native "bring the focused input above the keyboard"
+auto-scroll (the same mechanism Interest Reversal's own focus had just
+triggered) stops as soon as the target is merely inside the raw viewport
+rectangle -- it has no way to know a fixed dock covers the bottom slice
+of that rectangle, so OTS Amount could land right behind it, focused or
+not, untappable either way.
+
+**Fix**: added `scroll-margin-bottom:240px` to the OTS Amount/Interest
+Reversal input fields (mobile only) -- this tells the browser's own
+scroll-into-view logic where the *real* usable bottom edge is, so
+focusing either field always leaves genuine clearance above the dock
+instead of stopping the moment it's technically inside the raw viewport.
+Also added a `focusin` listener as a second line of defense, re-centering
+any of these fields on focus regardless of what triggered it.
+
+**Verified**: the exact failing repro (Interest Reversal typed first,
+then click+type OTS Amount, on a real 2-account borrower at a 420px
+mobile viewport) now succeeds cleanly on both account slots, with no
+retry/interception. No console errors.
+
+**Noted but not fixed here** -- while testing, ran into a *separate*,
+narrower issue: the freeze/lock button next to OTS Amount can also get
+blocked by the sticky first-column label on very narrow screens (a
+different mechanism -- horizontal sticky-column overlap, not the fixed
+dock). Alok didn't report this one; flagging it here rather than
+silently expanding scope, in case it turns out to affect real use too.
+
 ### Print/PDF: dropped a repeated branch name, moved scheme code into the table, removed a duplicate O/S row (2026-08-14, same day)
 
 Alok sent a real exported PDF (BHAGWATI_PRASAD) and pointed out three
