@@ -326,7 +326,11 @@ main{padding:20px 16px 40px}
    split) rather than a single message. */
 .ots-start{display:flex;flex-direction:column;gap:16px;padding:6px 2px 22px;animation:riseIn .4s var(--ease)}
 .ots-start .start-block{display:flex;flex-direction:column}
-.ots-start .start-lbl{font-size:9.5px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--sub);margin-bottom:9px}
+.ots-start .start-lbl{font-size:9.5px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--sub)}
+.ots-start .start-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px}
+.ots-start .start-clear{background:none;border:none;padding:2px 4px;cursor:pointer;font-family:inherit;
+  font-size:10.5px;font-weight:700;color:var(--sub);letter-spacing:.3px;border-radius:6px}
+.ots-start .start-clear:hover,.ots-start .start-clear:focus-visible{color:var(--accent);background:var(--accent-soft)}
 
 /* Recent borrowers -- <button> not <div> so it's keyboard-reachable and
    announces as an action, same as the branch/asset chips below. */
@@ -341,45 +345,18 @@ main{padding:20px 16px 40px}
 .ots-start .start-rec-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
 .ots-start .start-rec-nm{font-size:12.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ots-start .start-rec-sub{font-size:10px;color:var(--sub);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ots-start .start-rec-amt{font-size:11.5px;font-weight:800;color:var(--ink);font-family:var(--font-mono);flex-shrink:0}
+/* Right-hand figures: O/S on top, and beneath it the OTS Amount saved on
+   this device for that borrower -- only rendered when one has actually
+   been typed, so untouched rows stay a single clean line. */
+.ots-start .start-rec-figs{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}
+.ots-start .start-rec-amt{font-size:11.5px;font-weight:800;color:var(--ink);font-family:var(--font-mono)}
+.ots-start .start-rec-ots{font-size:9.5px;font-weight:800;color:var(--accent);font-family:var(--font-mono);white-space:nowrap}
 
 /* Shown in the Recent slot only until the first borrower is opened. */
 .ots-start .start-hint{display:flex;align-items:flex-start;gap:9px;padding:12px 13px;border-radius:11px;
   background:var(--accent-soft);border:1px solid var(--line);color:var(--sub);font-size:12.5px;line-height:1.5}
 .ots-start .start-hint svg{flex-shrink:0;margin-top:1px;color:var(--accent)}
 .ots-start .start-hint b{color:var(--ink);font-weight:700}
-
-.ots-start .start-chips{display:flex;flex-wrap:wrap;gap:6px}
-.ots-start .start-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;
-  border:1px solid var(--line);background:var(--card);color:var(--sub);
-  font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;
-  transition:background .15s var(--ease),border-color .15s var(--ease),color .15s var(--ease)}
-.ots-start .start-chip b{font-family:var(--font-mono);font-weight:800;color:var(--ink);font-size:10.5px}
-.ots-start .start-chip:hover,.ots-start .start-chip:focus-visible{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
-.ots-start .start-chip.all{color:var(--accent);border-color:var(--accent);border-style:dashed}
-
-/* Asset split -- one segment per class, width by account count, colored on
-   the same green->red severity ramp as .badge-pill.<code> elsewhere. */
-.ots-start .start-assetbar{display:flex;height:11px;border-radius:6px;overflow:hidden;border:1px solid var(--line);margin-bottom:9px}
-.ots-start .start-assetbar .seg{display:block;min-width:2px}
-.ots-start .seg.SUB_STD,.ots-start .start-leg i.SUB_STD{background:var(--green)}
-.ots-start .seg.DA1,.ots-start .start-leg i.DA1{background:var(--amber)}
-.ots-start .seg.DA2,.ots-start .start-leg i.DA2{background:#C2691C}
-.ots-start .seg.DA3,.ots-start .start-leg i.DA3{background:var(--red)}
-.ots-start .seg.LOSS,.ots-start .start-leg i.LOSS{background:#7A2B26}
-.ots-start .start-legend{display:flex;flex-wrap:wrap;gap:5px 6px}
-.ots-start .start-leg{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:8px;
-  border:1px solid var(--line);background:var(--card);color:var(--sub);
-  font-family:inherit;font-size:10px;font-weight:700;cursor:pointer;
-  transition:background .15s var(--ease),border-color .15s var(--ease)}
-.ots-start .start-leg:hover,.ots-start .start-leg:focus-visible{background:var(--accent-soft);border-color:var(--accent)}
-.ots-start .start-leg i{width:8px;height:8px;border-radius:2px;flex-shrink:0}
-.ots-start .start-leg b{font-family:var(--font-mono);font-weight:800;color:var(--ink)}
-
-.ots-start .start-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.ots-start .start-stat{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 13px;min-width:0}
-.ots-start .start-stat .k{display:block;font-size:9px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--sub)}
-.ots-start .start-stat .v{display:block;font-size:17px;font-weight:800;color:var(--ink);font-family:var(--font-mono);letter-spacing:-.3px;margin-top:3px}
 
 /* No footer row here on purpose -- the report date already prints in the
    page header, and the signature in .app-foot/.mobile-sig, so anything
