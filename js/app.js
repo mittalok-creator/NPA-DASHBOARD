@@ -1113,12 +1113,17 @@ async function exportOtsExcel(){
   ws.mergeCells(1,1,1,Math.max(lastColIdx,4));
   set('A1', `UPGB OTS CALCULATOR — ${custRow[C.NAME]||''}`, {font:{bold:true, size:16, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
   ws.mergeCells(2,1,2,Math.max(lastColIdx,4));
-  set('A2', `Uttar Pradesh Gramin Bank (Regional Office Hathras) · Branch: ${custRow[C.SOL_DESC]||''}`, {font:{size:11, color:{argb:'FF333333'}}, align:{horizontal:'center'}, border:false});
+  // Brass letterhead rule under the bank name, matching the print sheet's
+  // .pv-header border -- same accent language, reused wherever the target
+  // format can reliably render a real border (Excel can; unlike a custom
+  // font, a colored border isn't dependent on what's installed on the
+  // machine that opens the file).
+  set('A2', `Uttar Pradesh Gramin Bank (Regional Office Hathras) · Branch: ${custRow[C.SOL_DESC]||''}`, {font:{size:11, color:{argb:'FF333333'}}, align:{horizontal:'center'}, border:{bottom:{style:'medium', color:{argb:'FFB3812A'}}}});
   ws.getRow(1).height = 30;
 
   const reportDateRow = 4;
   set(`A${reportDateRow}`, 'Report Date', {font:{bold:true}, border:false});
-  set(`B${reportDateRow}`, dateVal(new Date()), {numFmt:XL_DATE_FMT, font:{bold:true, color:{argb:'FF000000'}}, fill:'FFFFF3CD', border:XL_BORDER_ALL});
+  set(`B${reportDateRow}`, dateVal(new Date()), {numFmt:XL_DATE_FMT, font:{bold:true, color:{argb:'FF000000'}}, fill:'FFFCE8B8', border:XL_BORDER_ALL});
   ws.mergeCells(reportDateRow,4,reportDateRow,Math.max(lastColIdx,6));
   set(`D${reportDateRow}`, 'Editable — every UCI/dues figure below recalculates off this date', {font:{italic:true, size:10, color:{argb:'FF666666'}}, border:false});
   const reportDateRef = `$B$${reportDateRow}`;
@@ -1146,10 +1151,10 @@ async function exportOtsExcel(){
   wsCalc.mergeCells(2,1,2,Math.max(lastColIdx,4));
   setCalc('A2', 'Helper values feeding the "OTS Calculator" sheet\'s formulas -- not shown on the printed sheet.', {font:{italic:true, size:10, color:{argb:'FF666666'}}, border:false});
   const calcHeaderRow = 4;
-  setCalc(`A${calcHeaderRow}`, 'Particulars', {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFC9C9C9'});
-  slots.forEach((s,i)=>setCalc(`${cols[i]}${calcHeaderRow}`, s.acctNo, {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFC9C9C9', align:{horizontal:'center'}}));
+  setCalc(`A${calcHeaderRow}`, 'Particulars', {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFE9D2A0'});
+  slots.forEach((s,i)=>setCalc(`${cols[i]}${calcHeaderRow}`, s.acctNo, {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFE9D2A0', align:{horizontal:'center'}}));
   const RC = { scheme: calcHeaderRow+1, anchor: calcHeaderRow+2 };
-  OTS_XL_CALC_ROW_LABELS.forEach((label,i)=>setCalc(`A${calcHeaderRow+1+i}`, label, {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFE2E2E2'}));
+  OTS_XL_CALC_ROW_LABELS.forEach((label,i)=>setCalc(`A${calcHeaderRow+1+i}`, label, {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFF3E6C8'}));
 
   const RATE_ROWS = [['SUB_STD',0.10],['DA1',0.20],['DA2',0.30],['DA3',1],['LOSS',1]];
   const rateHeadRow = calcHeaderRow + OTS_XL_CALC_ROW_LABELS.length + 2;
@@ -1162,8 +1167,8 @@ async function exportOtsExcel(){
 
   // ---- Particulars table (main sheet) ----
   const headerRow = 11;
-  set(`A${headerRow}`, 'Particulars', {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFC9C9C9'});
-  slots.forEach((s,i)=>set(`${cols[i]}${headerRow}`, s.acctNo, {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFC9C9C9', align:{horizontal:'center'}}));
+  set(`A${headerRow}`, 'Particulars', {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFE9D2A0'});
+  slots.forEach((s,i)=>set(`${cols[i]}${headerRow}`, s.acctNo, {font:{bold:true, color:{argb:'FF000000'}}, fill:'FFE9D2A0', align:{horizontal:'center'}}));
 
   const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amount (edit me)','Total Sacrifice','Impact on P&L']);
   const rowOf = label => headerRow + 1 + OTS_XL_ROW_LABELS.indexOf(label);
@@ -1179,12 +1184,12 @@ async function exportOtsExcel(){
   OTS_XL_ROW_LABELS.forEach((label,i)=>{
     const r = headerRow + 1 + i;
     const strong = STRONG_ROWS.has(label);
-    set(`A${r}`, label, {font:{bold:true, color:{argb:'FF000000'}}, fill: strong?'FFD8DEEE':'FFE2E2E2'});
+    set(`A${r}`, label, {font:{bold:true, color:{argb:'FF000000'}}, fill: strong?'FFF0DCB0':'FFF3E6C8'});
   });
 
   slots.forEach((s,i)=>{
     const c = cols[i];
-    const rowStyle = r => ({border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}, bold:STRONG_ROWS.has(OTS_XL_ROW_LABELS[r-headerRow-1])}, fill: STRONG_ROWS.has(OTS_XL_ROW_LABELS[r-headerRow-1])?'FFEEF1F8':undefined});
+    const rowStyle = r => ({border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}, bold:STRONG_ROWS.has(OTS_XL_ROW_LABELS[r-headerRow-1])}, fill: STRONG_ROWS.has(OTS_XL_ROW_LABELS[r-headerRow-1])?'FFFBF3E1':undefined});
 
     // Calculation Details sheet: Scheme (plain value) + UCI Anchor Date
     // (formula) for this account -- referenced by this sheet's UCI@8.5% below.
@@ -1221,7 +1226,7 @@ async function exportOtsExcel(){
     set(`${c}${R.totalPL}`, formula(`${c}${R.os}-${c}${R.provision}`), {...rowStyle(R.totalPL), numFmt:XL_INR_FMT});
     const otsVal = otsAmounts[s.acctNo];
     const otsNum = (otsVal===''||otsVal===undefined) ? null : parseFloat(otsVal);
-    set(`${c}${R.ots}`, otsNum===null||isNaN(otsNum) ? 0 : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, fill:'FFFFF3CD', numFmt:XL_INR_FMT});
+    set(`${c}${R.ots}`, otsNum===null||isNaN(otsNum) ? 0 : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, fill:'FFFCE8B8', numFmt:XL_INR_FMT});
     // Total Sacrifice = Total Dues - OTS Amount (Interest Reversal is
     // already folded into Total Dues above, not added a second time).
     set(`${c}${R.totalSac}`, formula(`${c}${R.totalDues}-${c}${R.ots}`), {...rowStyle(R.totalSac), numFmt:XL_INR_FMT});
@@ -1232,15 +1237,15 @@ async function exportOtsExcel(){
   // ---- Aggregate totals ----
   const aggTitleRow = headerRow + OTS_XL_ROW_LABELS.length + 2;
   ws.mergeCells(aggTitleRow,1,aggTitleRow,Math.max(lastColIdx,4));
-  set(`A${aggTitleRow}`, 'A G G R E G A T E   T O T A L S', {font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
+  set(`A${aggTitleRow}`, 'A G G R E G A T E   T O T A L S', {font:{bold:true, size:12, color:{argb:'FF8A6114'}}, align:{horizontal:'center'}, border:false});
   const sumRange = row => `SUM(B${row}:${lastCol}${row})`;
   const AGG_LABELS = ['Total O/S Balance','Total Dues','Total OTS Amount','Total Sacrifice'];
   const AGG_ROWS = [R.os, R.totalDues, R.ots, R.totalSac];
   AGG_LABELS.forEach((label,i)=>{
     const r = aggTitleRow+1+i;
-    set(`A${r}`, label, {font:{bold:true, color:{argb:'FF000000'}}, border:false, fill:'FFF4F6FA'});
+    set(`A${r}`, label, {font:{bold:true, color:{argb:'FF000000'}}, border:false, fill:'FFF7F0DE'});
     ws.mergeCells(r,2,r,Math.max(lastColIdx,4));
-    set(`B${r}`, formula(sumRange(AGG_ROWS[i])), {numFmt:XL_INR_FMT, font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'right'}, border:false, fill:'FFF4F6FA'});
+    set(`B${r}`, formula(sumRange(AGG_ROWS[i])), {numFmt:XL_INR_FMT, font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'right'}, border:false, fill:'FFF7F0DE'});
   });
 
   const schemeLineRow = aggTitleRow + AGG_LABELS.length + 1;
