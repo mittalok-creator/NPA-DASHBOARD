@@ -123,6 +123,53 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Excel export: colors stripped back to plain, Impact-on-P&L gets a profit/loss arrow (2026-08-14, same day)
+
+Alok, after the logo-overlap fix, still rated the exported Excel file
+6/10: *"Ye abhi bhi 6/10 hi hai a  and b column ki har row ko merge kar
+lo na to thoda space bhi mileva and data bji proper set ho jayeva ya khcb
+aur hai dimag main to wo karo ismain se colors hata do bas last mai.
+Profit aa raha hai ya loss wahan arrow set karna."*
+
+Three asks, handled as follows:
+
+**"Colors hata do bas"** — every brass fill color in the Excel export
+removed: the Report Date cell, both header-row bands (main sheet +
+Calculation Details sheet), row-label bands, the OTS Amount editable
+cell, the strong-row highlight tint, and both Aggregate Totals cells.
+Also reverted the brass letterhead border (back to the same neutral grey
+used everywhere else) and the "AGGREGATE TOTALS" title's brass font
+color (back to black). This is a return to, and reinforcement of, the
+existing project rule that Excel stays functional/plain — bold text,
+real borders, live formulas — while the color/brass treatment is
+reserved for the app screen and the print/PDF sheet, which the user did
+not ask to change here.
+
+**"Profit aa raha hai ya loss wahan arrow set karna"** — the "Impact on
+P&L" row now uses its own Excel number format
+(`XL_INR_FMT_PL = '[Green]"▲ ₹"#,##,##0.00;[Red]"▼ -₹"#,##,##0.00'`)
+instead of the shared currency format used by every other row. Because
+this is a number *format*, not a static label, the arrow flips live off
+the formula's own sign as the OTS Amount is edited — ▲ green when the
+account is in profit, ▼ red when it's a loss — with no extra
+conditional-formatting rule needed. Every other currency cell keeps the
+plain black/red format, unaffected.
+
+**"A/B column merge for space"** — not done as literally merging cells.
+Every label/value pair in this sheet is a distinct editable cell on
+purpose (that's the live-formula export feature itself); merging A and B
+row-by-row would destroy the ability to have a separate, independently
+addressable numeric cell next to each label. Flagging this back rather
+than guessing silently at a change that could break the sheet's core
+feature.
+
+**Verified**: re-exported via Playwright + inspected with openpyxl —
+zero solid fills remain on either sheet (`OTS Calculator` and
+`Calculation Details`), all formulas and cell references are unchanged,
+and the "Impact on P&L" row's `number_format` confirmed as the new
+arrow format on every account column. Embedded image count still 1 (the
+logo only, no colors reintroduced as images).
+
 ### Bug fix: Excel export's bank logo overlapped the title text (2026-08-14, same day)
 
 Alok sent a real screenshot from his phone (Google Sheets/mobile Excel)
