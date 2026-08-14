@@ -118,6 +118,12 @@ function titleCase(s){ return String(s||'').toLowerCase().replace(/\b\w/g,c=>c.t
    the NPA dataset -- one row per branch, "R O Hathras" (the Regional
    Office) listed first same as in the source file, rest in Sol ID order. */
 const BRANCH_LIST = [[15990,9269,"R O Hathras"],[15010,9270,"Agsauli"],[15020,9271,"Bamnai"],[15030,9272,"Bandhnoo"],[15040,9273,"Baraus"],[15050,9274,"Bastoi"],[15060,9275,"Bisawar"],[15070,9276,"Chandpa"],[15080,9277,"Chhonda Gadua"],[15090,9278,"Devinagar"],[15100,9279,"Eihan"],[15110,9280,"Agra Road"],[15120,9281,"Aligarh Road"],[15130,9282,"Mursan Gate"],[15140,9283,"Service Branch"],[15150,9284,"Hatisa"],[15160,9285,"Jarera"],[15170,9286,"Komari"],[15180,9287,"Kota"],[15190,9288,"Ladpur"],[15200,9289,"Mahow"],[15210,9290,"Meetai"],[15220,9291,"Mendu"],[15230,9292,"Mughal Garhi"],[15240,9293,"Mursan"],[15250,9294,"Parsara"],[15260,9295,"Pora"],[15270,9296,"Purdil Nagar"],[15280,9297,"Ratibhanpur"],[15290,9298,"Ruheri"],[15300,9299,"Sadabad"],[15310,9300,"Sahpau"],[15320,9301,"Salempur"],[15330,9302,"Sasni"],[15340,9303,"Sikandra Rao"],[15350,9304,"Tuksan"],[15360,9305,"Wazidpur"],[15370,9306,"Adarshnagar"],[15380,9307,"Hasayan"],[15390,9308,"Jaleser Road"],[15400,9309,"Naugaon"],[16010,9310,"Bajna"],[16020,9311,"Baldev"],[16030,9312,"Bati"],[16040,9313,"Damodarpura"],[16050,9314,"Farah"],[16060,9315,"Goverdhan"],[16070,9316,"Maant"],[16080,9317,"Mathura City"],[16090,9318,"Laxmi Nagar"],[16100,9319,"Pali Kheda"],[16110,9320,"Raya"],[16120,9321,"Ronchi Bangar"],[16130,9322,"Sonai"],[16140,9323,"Tarsi"],[16150,9324,"Vrindavan"],[16160,9325,"Jajan Patti"]];
+/* Branch manager contacts, collected by Alok via a filled-in Excel
+   template and shipped as a code update (same pattern as BRANCH_LIST
+   above -- small, occasionally-updated reference data, not part of the
+   published NPA data). Keyed by Sol ID (BRANCH_LIST's newId); every
+   field is optional since collection is still ongoing. */
+const MANAGER_CONTACTS = {"9270":{"mgr":"HARENDRA","mgrMobile":"9870838125","altName":"MUNISH","altMobile":"9368947674"},"9271":{"mgr":"HITENDRA CHAUDHARY","mgrMobile":"9758808188","altName":"PRADEEP","altMobile":"8755599276"},"9272":{"mgr":"ANKUR","mgrMobile":"9456626924"},"9273":{"mgr":"SUMAN","mgrMobile":"8224018807"},"9274":{"mgr":"ARVIND","mgrMobile":"9639010421"},"9275":{"mgr":"UMESH","mgrMobile":"8871257114"},"9276":{"mgr":"KAPIL","mgrMobile":"9897390040"},"9277":{"mgr":"ANIL RANA","mgrMobile":"9759487665"},"9278":{"mgr":"LALIT","mgrMobile":"8318450498"},"9279":{"mgr":"JASRAM"},"9280":{"mgr":"ANURADHA"},"9281":{"mgr":"JAGMOHAN"},"9282":{"mgr":"VIKAS"},"9284":{"mgr":"RANVEER"},"9285":{"mgr":"K.P."},"9286":{"mgr":"PUSHPENDRA"},"9287":{"mgr":"ANJUL"},"9288":{"mgr":"SEEMA"},"9289":{"mgr":"MANVENDRA"},"9290":{"mgr":"VIRENDRA"},"9291":{"mgr":"HANSRAJ"},"9292":{"mgr":"PRASHANT"},"9293":{"mgr":"RAJESH"},"9294":{"mgr":"ANKIT"},"9295":{"mgr":"RAJAN"},"9296":{"mgr":"LOKENDRA"},"9297":{"mgr":"JITENDRA"},"9298":{"mgr":"SHAMBHU DAYAL"},"9299":{"mgr":"BABITA"},"9300":{"mgr":"RAHUL"},"9301":{"mgr":"LALA RAM"},"9302":{"mgr":"VIVEK PRATAP"},"9303":{"mgr":"LAKHAN"},"9304":{"mgr":"RAMESH"},"9305":{"mgr":"MOHIT"},"9306":{"mgr":"KHUSHBOO"},"9307":{"mgr":"GAURAV"},"9308":{"mgr":"R.K.GUPTA"},"9309":{"mgr":"VIJAY"},"9310":{"mgr":"MUKESH"},"9311":{"mgr":"ANSHUL"},"9312":{"mgr":"PRASHANT"},"9313":{"mgr":"DEEKSHA"},"9314":{"mgr":"RAJAT"},"9315":{"mgr":"ABHISHEK"},"9316":{"mgr":"BANEE"},"9317":{"mgr":"AASHISH"},"9318":{"mgr":"MUDIT"},"9319":{"mgr":"RAMRAS"},"9320":{"mgr":"CHANDRASHEKAR"},"9321":{"mgr":"YATEENDRA"},"9322":{"mgr":"SHASHANK"},"9323":{"mgr":"YATEENDRA"},"9324":{"mgr":"SURAJ"},"9325":{"mgr":"TANMAY"}};
 
 // Bank logo, reused from the sidebar's own nav-logo (same base64 PNG) --
 // used in the OTS Calculator print sheet and Excel export headers, which
@@ -129,13 +135,24 @@ function renderBranchList(filter){
   const body = document.getElementById('branchListBody');
   if(!body) return;
   const rows = q ? BRANCH_LIST.filter(([oldId,newId,name])=>
-    String(newId).includes(q) || String(oldId).includes(q) || name.toLowerCase().includes(q)
+    String(newId).includes(q) || String(oldId).includes(q) || name.toLowerCase().includes(q) ||
+    (MANAGER_CONTACTS[newId]?.mgr||'').toLowerCase().includes(q)
   ) : BRANCH_LIST;
-  body.innerHTML = rows.length ? rows.map(([oldId,newId,name])=>`
+  body.innerHTML = rows.length ? rows.map(([oldId,newId,name])=>{
+    const mc = MANAGER_CONTACTS[newId];
+    const contact = mc ? `<div class="edge-row-contact">
+        <span class="edge-row-mgr">${esc(mc.mgr)||'—'}</span>
+        ${mc.mgrMobile?`<a href="tel:${esc(mc.mgrMobile)}" onclick="event.stopPropagation()">${esc(mc.mgrMobile)}</a>`:''}
+      </div>` : '';
+    return `
     <div class="edge-row">
-      <div class="edge-row-branch">${esc(name)}</div>
-      <div class="edge-row-ids"><span class="edge-solid">Sol ID ${esc(newId)}</span><span class="edge-oldid">Old ${esc(oldId)}</span></div>
-    </div>`).join('') : `<div class="edge-empty">No branch matches "${esc(filter)}"</div>`;
+      <div class="edge-row-top">
+        <div class="edge-row-branch">${esc(name)}</div>
+        <div class="edge-row-ids"><span class="edge-solid">Sol ID ${esc(newId)}</span><span class="edge-oldid">Old ${esc(oldId)}</span></div>
+      </div>
+      ${contact}
+    </div>`;
+  }).join('') : `<div class="edge-empty">No branch matches "${esc(filter)}"</div>`;
 }
 function filterBranchList(){ renderBranchList(document.getElementById('branchListSearch').value); }
 window.filterBranchList = filterBranchList;
