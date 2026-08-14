@@ -1638,16 +1638,24 @@ header.app-head::before,.detail-head::before{
 .edge-panel-search{display:flex;align-items:center;gap:8px;margin:14px 16px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink-mute);flex-shrink:0}
 .edge-panel-search input{flex:1;border:none;background:none;outline:none;color:var(--ink);font-size:13px;font-family:inherit}
 .edge-panel-body{flex:1;overflow-y:auto;padding:0 16px 16px;display:flex;flex-direction:column;gap:6px}
-.edge-row{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;background:var(--stripe)}
+/* Whole row is clickable now (opens the full branch contact card via
+   showBranchCard) -- cursor + hover state signal that. */
+.edge-row{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;background:var(--stripe);cursor:pointer;transition:background .15s var(--ease)}
+.edge-row:hover,.edge-row:focus-visible{background:var(--accent-soft)}
+.edge-row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .edge-row-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .edge-row-branch{font-size:13px;font-weight:700;color:var(--ink)}
 .edge-row-ids{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}
 .edge-solid{font-size:11.5px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
 .edge-oldid{font-size:9.5px;color:var(--sub);font-weight:600}
-/* Branch Manager contact line -- only rendered when MANAGER_CONTACTS has
-   an entry for that Sol ID, so branches not yet collected show no gap. */
-.edge-row-contact{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:6px;border-top:1px dashed var(--line);font-size:11.5px}
-.edge-row-mgr{color:var(--sub);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Manager + Recovery Officer lines -- only rendered when
+   DATA.branchContacts has an entry for that Sol ID, so branches not yet
+   collected show no gap; each role only shows its own line if it has a
+   name or mobile on file. */
+.edge-row-contact{display:flex;flex-direction:column;gap:4px;padding-top:6px;border-top:1px dashed var(--line)}
+.edge-row-contact-line{display:flex;align-items:center;gap:6px;font-size:11.5px}
+.edge-row-contact-line .role{font-size:8.5px;font-weight:800;letter-spacing:.04em;color:var(--sub);text-transform:uppercase;flex-shrink:0;width:24px}
+.edge-row-mgr{flex:1;min-width:0;color:var(--sub);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .edge-row-contact a{color:var(--accent);font-weight:800;text-decoration:none;font-variant-numeric:tabular-nums;flex-shrink:0}
 .edge-row-contact a:hover{text-decoration:underline}
 .edge-empty{padding:30px 10px;text-align:center;color:var(--sub);font-size:12.5px}
