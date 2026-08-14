@@ -966,17 +966,23 @@ function renderPrintView(){
   // it stays on-screen only (loanTableHTML) per Alok's review; Total
   // Sacrifice below reads off Total Dues (+ Interest Reversal), not it.
   const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amount','Total Sacrifice','Impact on P&L']);
+  // Scheme moved here from the page footer (was repeating the branch name a
+  // third time alongside the header and the borrower info grid) -- one row
+  // per account, right above O/S Balance where the settlement figures start.
+  // Net O/S is deliberately NOT a separate row -- it's always identical to
+  // O/S Balance (Net O/S = O/S Balance, no exceptions), so showing both was
+  // just the same number twice; O/S Balance is the one that stays.
   const rows = [
     ['Sanction Date', 'calendar', s=>fmtDate(toDate(s.sanctionDate))],
     ['Sanction Limit', 'doc', s=>fmtINR2(s.sanctionLimit)],
     ['Asset Code', 'tag', s=>esc(s.assetCode)||'—'],
     ['NPA Date', 'warn', s=>fmtDate(toDate(s.npaDate))],
     ['Days in NPA', 'clock', s=>s.daysNpa!==''?s.daysNpa.toLocaleString('en-IN')+' days':'—'],
+    ['Scheme', 'tag', s=>esc(s.scheme)||'—'],
     ['O/S Balance', 'coin', s=>fmtINR2(s.os)],
     ['UCI @ 8.5%', 'percent', s=>fmtINR2(s.uci)],
     ['Total Dues', 'layers', s=>fmtINR2(totalDuesFor(s))],
     ['Interest Reversal', 'rotate', s=>fmtINR2(uriFor(s))],
-    ['Net O/S', 'coin', s=>fmtINR2(s.netOutstanding)],
     ['Provision', 'shield', s=>fmtINR2(s.provision)],
     ['Total P&L', 'trend', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'')],
     ['OTS Amount', 'coin', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v);}],
@@ -1002,7 +1008,6 @@ function renderPrintView(){
         <div><span class="k">Mobile</span><span class="v">${esc(custRow[C.PHONE])||'—'}</span></div>
         <div><span class="k">Aadhar</span><span class="v">${esc(custRow[C.AADHAR])||'—'}</span></div>
         <div><span class="k">PAN</span><span class="v">${esc(custRow[C.PAN])||'—'}</span></div>
-        <div><span class="k">Branch</span><span class="v">${esc(custRow[C.SOL_DESC])||'—'}</span></div>
         <div><span class="k">SB A/c</span><span class="v">${esc(custRow[C.SB_ACCT])||'—'}</span></div>
         <div><span class="k">SB Balance</span><span class="v">${fmtINR2(custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL])}</span></div>
       </div>
@@ -1019,7 +1024,6 @@ function renderPrintView(){
       <div class="pv-agg-row"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(totalDues-totalOtsSum):'—'}</span></div>
     </div>
     <div class="pv-footer">Designed &amp; Developed by ALOK MITTAL · Uttar Pradesh Gramin Bank</div>
-    <div class="pv-schemes">${slots.map(s=>`<span>${esc(s.scheme)||''} · ${esc(custRow[C.SOL_DESC])||''}</span>`).join('')}</div>
   `;
 }
 
