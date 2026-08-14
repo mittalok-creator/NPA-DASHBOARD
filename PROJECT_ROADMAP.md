@@ -123,6 +123,40 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Print/PDF: stripped back to a plain, professional sheet (2026-08-14, same day)
+
+Alok: *"Pdf thoda clean and profesional banao icon wagerah hata do colours
+hata do jo main show karne hain unhe bold kar do and act as per your
+knowledge."* Same direction as the earlier Excel cleanup, now applied to
+the print/PDF sheet (this one had kept the brass reskin from earlier
+today, per an explicit "premium look, background light hi rahe" ask —
+that request is now superseded by this one, which is more specific:
+plain and professional over decorative).
+
+- Removed every icon: the row-label icons in the particulars table
+  (`ltIcon(...)` per row) and the person-silhouette icon next to the
+  borrower's name. Text-only labels now.
+- Removed every accent color: the brass header rule (`#B3812A`), the
+  header-band and strong-row fills (`#E9D2A0`/`#F3E6C8`/`#FBF3E1`/
+  `#F0DCB0`), and the "AGGREGATE TOTALS" title's brass tint (`#8a6114`)
+  are all gone — replaced with black rules and black text throughout.
+- The rows that actually matter (O/S Balance, Total Dues, Total P&L,
+  OTS Amount, Total Sacrifice, Impact on P&L) stay visually distinct
+  through **bold weight + a hair larger size + a heavier top border**
+  only — no fill color needed to tell them apart from the plainer rows
+  around them, same "which numbers matter" idea as before, done purely
+  typographically now (closer to how a real settlement letter or bank
+  statement is set).
+
+**Verified** via Playwright with print-media emulation: 0 SVG icons
+remain anywhere in `#printArea`, `getComputedStyle` confirms every text
+color and border in the sheet is black/dark-gray (no brass/color values
+left), and a zoomed screenshot confirms clean black-on-white rendering
+throughout (an earlier low-res screenshot looked like it had a bluish
+tint on the numbers — a compression artifact in the thumbnail, not a
+real rendering issue; getComputedStyle and a zoomed crop both confirmed
+pure black). No console errors.
+
 ### OTS Calculator: "Where The Dues Go" made collapsible on mobile (2026-08-14, same day)
 
 Alok sent a screenshot of the mobile aggregate dock and asked to either

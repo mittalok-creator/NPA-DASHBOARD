@@ -619,27 +619,18 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
    descendant that doesn't set its own font-family (.pv-table/.pv-meta/
    .pv-agg-row's *value* span still layer IBM Plex Mono on top). */
 #printArea{font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif}
-/* Brass reskin (2026-08-14) -- same typography/accent language as the
-   on-screen loan-detail redesign, applied to structure only: headings,
-   rules, header bands and the strong-row highlight tints. Body text
-   stays near-black (per the print-contrast note above this block) --
-   colored text is legible on screen but a mid-tone brass would halftone
-   toward gray on a laser printer exactly like the mid-grays this file
-   already avoids, so the numbers people actually read stay pure black
-   for guaranteed legibility regardless of printer/toner quality. Archivo
-   self-hosted the same way as the app (see @font-face near the top of
-   this file) renders fine here too -- browser print/Save-as-PDF uses
-   the same rendering engine as the screen, unlike an Excel file (which
-   can only reference a font by name and has no way to embed one, so the
-   Excel export below keeps a safe universal font instead). */
-.pv-header{position:relative;text-align:center;border-bottom:2.5px solid #B3812A;padding-bottom:6px;margin-bottom:10px}
+/* Plain/professional print sheet (2026-08-14) -- no icons, no accent
+   color anywhere; every visual distinction (header band, strong-row
+   emphasis) comes from weight, size and border alone, the way a real
+   bank statement or settlement letter is typeset. This also sidesteps
+   the print-contrast note above entirely -- pure black-on-white never
+   halftones on a laser printer, unlike any tint ever could. */
+.pv-header{position:relative;text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px}
 .pv-logo{position:absolute;left:0;top:0;width:40px;height:40px;object-fit:contain}
 .pv-title{font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:17px;font-weight:800;letter-spacing:.6px;color:#000}
 .pv-sub{font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:10.5px;color:#000;margin-top:2px;font-weight:600}
 .pv-meta{display:flex;justify-content:center;gap:24px;font-size:10.5px;color:#000;margin-top:4px;font-weight:600}
 .pv-borrower{margin-bottom:10px}
-.pv-name-row{display:flex;align-items:center;gap:6px}
-.pv-avatar{color:#B3812A;flex-shrink:0}
 .pv-name{font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14.5px;font-weight:800;color:#000}
 .pv-addr{font-size:10.5px;color:#222;margin-top:1px}
 .pv-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;margin-top:6px}
@@ -648,20 +639,18 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 .pv-info-grid .v{font-weight:800;color:#000;font-family:'IBM Plex Mono',ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace}
 .pv-table{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:10px;font-family:'IBM Plex Mono',ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace}
 .pv-table th,.pv-table td{border:1px solid #555;padding:3px 8px;text-align:right;line-height:1.2;color:#000}
-.pv-table th:first-child,.pv-table td.pv-label{text-align:left;font-weight:700;background:#F3E6C8;print-color-adjust:exact;-webkit-print-color-adjust:exact;display:flex;align-items:center;gap:5px;font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif}
-.pv-table td.pv-label .lt-row-icon{color:#B3812A;flex-shrink:0}
-.pv-table tr.pv-strong td.pv-label .lt-row-icon{color:#8a6114}
-.pv-table thead th{background:#E9D2A0;font-weight:800;padding:5px 8px;color:#000;print-color-adjust:exact;-webkit-print-color-adjust:exact;font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif}
-/* Key settlement figures (O/S Balance, Total Dues, Total Contractual Dues,
-   Total P&L, OTS Amount, Total Sacrifice, Impact on P&L) -- the numbers
-   someone actually reads this sheet for -- get bolder + a hair larger and
-   a light fill so they read at a glance against the plainer rows around
-   them, same "which rows matter" convention as the on-screen loan table's
-   own lt-strong rows (see loanTableHTML). */
-.pv-table tr.pv-strong td{font-weight:800;font-size:11.5px;background:#FBF3E1;print-color-adjust:exact;-webkit-print-color-adjust:exact}
-.pv-table tr.pv-strong td.pv-label{background:#F0DCB0;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.pv-table th:first-child,.pv-table td.pv-label{text-align:left;font-weight:700;font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif}
+.pv-table thead th{font-weight:800;padding:5px 8px;color:#000;border-bottom:2px solid #000;font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif}
+/* Key settlement figures (O/S Balance, Total Dues, Total P&L, OTS Amount,
+   Total Sacrifice, Impact on P&L) -- the numbers someone actually reads
+   this sheet for -- get bolder and a hair larger so they read at a glance
+   against the plainer rows around them. No fill color; a slightly heavier
+   top border marks where the emphasis starts, same "which rows matter"
+   convention as the on-screen loan table's own lt-strong rows, done with
+   weight/size/rule instead of a tint. */
+.pv-table tr.pv-strong td{font-weight:800;font-size:11.5px;border-top:1.5px solid #000}
 .pv-agg{margin-bottom:8px}
-.pv-agg-title{font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;text-align:center;margin-bottom:5px;color:#8a6114}
+.pv-agg-title{font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;text-align:center;margin-bottom:5px;color:#000}
 .pv-agg-row{display:flex;justify-content:space-between;font-size:12.5px;font-weight:800;padding:4px 6px;border-bottom:1px solid #999;color:#000}
 .pv-agg-row span:last-child{font-family:'IBM Plex Mono',ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace}
 .pv-footer{text-align:center;font-size:9.5px;color:#333;letter-spacing:.6px;margin-top:8px}

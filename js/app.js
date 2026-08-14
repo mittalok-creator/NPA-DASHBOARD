@@ -984,7 +984,7 @@ function renderPrintView(){
     ['Ledger Sacrifice (BDWO Amount)', 'badge', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.os-v);}],
     ['Impact on P&L', 'bars', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v-s.totalPL);}],
   ];
-  const tableRows = rows.map(([label,icon,fn])=>`<tr${STRONG_ROWS.has(label)?' class="pv-strong"':''}><td class="pv-label">${ltIcon(icon,10)}${label}</td>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('');
+  const tableRows = rows.map(([label,icon,fn])=>`<tr${STRONG_ROWS.has(label)?' class="pv-strong"':''}><td class="pv-label">${label}</td>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('');
 
   document.getElementById('printArea').innerHTML = `
     <div class="pv-header">
@@ -994,10 +994,7 @@ function renderPrintView(){
       <div class="pv-meta"><span>Report Date: ${fmtDate(new Date())}</span><span>Branch: ${esc(custRow[C.SOL_DESC])||''}</span></div>
     </div>
     <div class="pv-borrower">
-      <div class="pv-name-row">
-        <svg class="pv-avatar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.6-3.6 4.8-5.5 7.5-5.5s5.9 1.9 7.5 5.5"/></svg>
-        <div class="pv-name">${esc(custRow[C.NAME])||'—'}</div>
-      </div>
+      <div class="pv-name">${esc(custRow[C.NAME])||'—'}</div>
       <div class="pv-addr">${esc(custRow[C.ADDR])||'—'}</div>
       <div class="pv-info-grid">
         <div><span class="k">Cust ID</span><span class="v">${esc(custRow[C.CUST_ID])||'—'}</span></div>
