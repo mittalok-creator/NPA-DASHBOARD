@@ -123,6 +123,90 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: brass/paper reskin + Recovery Scale and Where The Dues Go (2026-08-14, same day)
+
+Alok shared two HTML mockups he'd had Claude Opus build ("Ye main claude
+opos ne redesign karaye hain dekho aur batao practically kitna possible
+hai") and asked for a practical feasibility read before deciding
+anything. Assessment given: the typography/color language and lighter
+table borders were a genuine drop-in reskin, but the mockups' 3-screen
+mobile flow and 3-column desktop shell (branch rail + sticky right
+panel) were real architecture changes, not "visual only" -- and the
+mockups were single-account-first, never showing how the recovery-scale
+gauge would work for this app's real 2-4-linked-account case. Built a
+feasibility mockup applying the reskin to the app's actual multi-account
+table/formulas/headings (unchanged) with a portable/engineering/
+architecture-change legend on each new piece, published for review.
+Alok: *"Han dono implement karne hain"* -- both the reskin and the two
+"bonus" pieces (recovery-scale gauge, waterfall chart) approved for real
+implementation.
+
+**Scope**: the loan-detail screen only (`#detailPane`), via CSS custom-
+property overrides -- Dashboard, Bank Dashboard, KCC Overdue, and search
+results keep their existing blue/cyan accent untouched. Headings and
+every formula are byte-for-byte unchanged, exactly as Alok specified.
+
+- **Self-hosted Archivo + IBM Plex Mono** the same way Manrope/Caveat
+  already are (base64-embedded `@font-face`, no live Google Fonts CDN
+  dependency) -- fetched real Google Fonts `.woff2` files, verified
+  Archivo ships as a single variable-font file covering weights 400-700.
+- **Brass accent**, reusing the app's own existing `--seal`/`--seal-l`/
+  `--seal-d` ceremonial-gold tokens (already the freeze-chip's "ready"
+  pulse color) rather than inventing a new hex -- `--accent`/`--gold-*`
+  overridden to this family inside `#detailPane`, both themes, plus a
+  handful of higher-specificity patches for the few rules that used a
+  literal blue rgba() instead of a token (group-header tint, OTS-row
+  tint, the sidebar's glass-blur gradient).
+- **Tabular-figure treatment**: `.loan-table td`, account numbers, and
+  the borrower-card KYC grid switch to the mono face.
+- **New: Recovery Scale** -- an aggregate-level needle gauge (loss/safe
+  bands split at the break-even OTS, i.e. `O/S − Provision`, already
+  computed each render as `window.__totalPL`) with a needle at the
+  current Total OTS position, scaled against live Total Dues. Built at
+  the sidebar/aggregate level rather than per table column -- the
+  reason the idea works at all for a 2-4-account borrower, unlike the
+  single-account gauge in the original mockups.
+- **New: Where The Dues Go** -- a 3-segment waterfall (cash recovered /
+  ledger sacrifice / unrealised interest) as one honest breakdown of
+  where the settlement amount actually goes.
+
+**Three real bugs caught during Playwright verification, not just
+cosmetic tuning**:
+1. `font-family` is an inherited CSS property -- `body` had already set
+   its own *computed* value to Manrope, so descendants inherited that
+   resolved value rather than re-running `var(--font-body)` in their own
+   scope. Only elements with an explicit `font-family:var(...)` rule of
+   their own (headings, table cells) picked up Archivo; every plain
+   label/paragraph silently stayed Manrope. Fixed by re-declaring
+   `font-family:var(--font-body)` directly on `#detailPane` itself,
+   restarting the inheritance chain for everything under it.
+2. The Recovery Scale's three tick labels (Break-even/O-S/Dues),
+   positioned along the track by percentage with `translateX(-50%)`,
+   collided constantly in the ~208px-wide sidebar -- O/S is normally a
+   large share of Total Dues, so its tick sits close to the Dues tick in
+   most real cases, not just edge cases. A collision-avoidance algorithm
+   was tried first and discarded as too fragile at this width; replaced
+   entirely with a plain 3-column legend row below the track, which
+   carries the same 3 numbers with zero overlap risk regardless of value.
+3. Found (not introduced by this change, but now visible in testing at
+   the tablet breakpoint) that `.loan-table`'s sticky label column used
+   near-transparent backgrounds (`.58` opacity base, `.03` opacity on
+   even rows) meant to be softened by `backdrop-filter: blur`, but at
+   this width the scrolled-under column's text showed through sharply
+   rather than blurring -- unreadable overlapping text. Raised both to
+   near-opaque (~.94), matching the header row's already-legible opacity,
+   in both themes.
+
+**Verified** via Playwright across the full matrix: 4-account and
+2-account borrowers, dark and light themes, three widths (390px mobile
+dock, 1000px tablet sidebar, 1400px desktop sidebar), the mobile dock's
+`padding-bottom` reservation bumped to 410px for the taller stack and
+confirmed with no overlap even scrolled to the absolute bottom of the
+table. Confirmed via `getComputedStyle` that `#detailPane` resolves to
+Archivo/IBM Plex Mono while a heading *outside* `#detailPane` (Dashboard)
+still resolves to Manrope -- the scoping holds. Zero console/page errors
+across every run.
+
 ### Daily PNPA + Daily NPA Projection modules hidden from live nav (2026-08-14)
 
 Alok: *"Ab 1 yp daily pnpa and projection module hata do chahe memory main

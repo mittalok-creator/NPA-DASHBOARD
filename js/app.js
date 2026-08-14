@@ -489,6 +489,24 @@ function openDetail(custId, jumpAcct){
           <div class="agg-mini"><div class="k">Total P&amp;L</div><div class="v" id="aggTotPL">—</div></div>
           <div class="agg-mini"><div class="k">Total Sacrifice</div><div class="v" id="aggTotSac">—</div></div>
         </div>
+        <div class="agg-scale">
+          <div class="agg-block-head">${ltIcon('gauge')}Recovery Scale</div>
+          <div class="agg-scale-track">
+            <div class="agg-band loss"></div>
+            <div class="agg-band safe" id="aggBandSafe"></div>
+            <div class="agg-needle" id="aggNeedle"></div>
+          </div>
+          <div class="agg-scale-labels">
+            <div class="agg-slab be" id="aggLabBE">Break-even<b id="aggBEVal">—</b></div>
+            <div class="agg-slab" id="aggLabOS">O/S<b id="aggOSVal">—</b></div>
+            <div class="agg-slab" id="aggLabDues">Dues<b id="aggDuesVal">—</b></div>
+          </div>
+        </div>
+        <div class="agg-wf">
+          <div class="agg-block-head">${ltIcon('list')}Where The Dues Go</div>
+          <div class="agg-wf-bar" id="aggWfBar"></div>
+          <div class="agg-wf-key" id="aggWfKey"></div>
+        </div>
       </aside>`:''}
       <div id="detailBody" style="padding-top:14px"></div>
     </div>
@@ -859,6 +877,46 @@ function recalcAggregate(){
       }
     }
   }
+
+  // Bonus: Recovery scale (aggregate-level needle gauge) + Where The Dues
+  // Go (waterfall). Break-even = O/S - Provision, i.e. the same figure
+  // already computed per-render as window.__totalPL -- OTS above this
+  // point means the settlement is P&L-positive, below it means an
+  // additional charge. Scale ceiling is live Total Dues.
+  const totalOs = window.__totalOS;
+  const BE = window.__totalPL;
+  const scaleMax = liveTotalDues;
+  const bePct = scaleMax>0 ? Math.max(0,Math.min(100,(BE/scaleMax)*100)) : 0;
+  const needlePct = scaleMax>0 ? Math.max(0,Math.min(100,(totalOts/scaleMax)*100)) : 0;
+  const bandSafeEl = document.getElementById('aggBandSafe');
+  if(bandSafeEl){ bandSafeEl.style.left = bePct+'%'; bandSafeEl.style.width = (100-bePct)+'%'; }
+  const needleEl = document.getElementById('aggNeedle');
+  if(needleEl) needleEl.style.left = 'calc('+needlePct+'% - 1px)';
+  const beValEl = document.getElementById('aggBEVal'); if(beValEl) beValEl.textContent = fmtCr(BE);
+  const osValEl = document.getElementById('aggOSVal'); if(osValEl) osValEl.textContent = fmtCr(totalOs);
+  const duesValEl = document.getElementById('aggDuesVal'); if(duesValEl) duesValEl.textContent = fmtCr(liveTotalDues);
+
+  const ledgerSac = Math.max(totalOs-totalOts,0);
+  const uci = slots.reduce((a,s)=>a+((s.uci!=='')?s.uci:0),0);
+  const wA = liveTotalDues>0 ? Math.max(0,Math.min(100,totalOts/liveTotalDues*100)) : 0;
+  const wB = liveTotalDues>0 ? Math.max(0,Math.min(100-wA,ledgerSac/liveTotalDues*100)) : 0;
+  const wC = Math.max(100-wA-wB,0);
+  // Fixed (non-theme-flipping) chart swatches -- a UI token like --ink
+  // inverts between dark/light themes, which would make one segment's
+  // text unreadable in one of the two themes (caught in the feasibility
+  // mockup review). Chart categories get literal colors instead.
+  const WF1='#1B2A44', WF2='#D4A544', WF3='#7A8798';
+  const wfBarEl = document.getElementById('aggWfBar');
+  if(wfBarEl) wfBarEl.innerHTML =
+    `<span style="width:${wA.toFixed(1)}%;background:${WF1};color:#fff">${wA>7?wA.toFixed(0)+'%':''}</span>`+
+    `<span style="width:${wB.toFixed(1)}%;background:${WF2};color:#241d08">${wB>7?wB.toFixed(0)+'%':''}</span>`+
+    `<span style="width:${wC.toFixed(1)}%;background:${WF3};color:#fff">${wC>7?wC.toFixed(0)+'%':''}</span>`;
+  const wfKeyEl = document.getElementById('aggWfKey');
+  if(wfKeyEl) wfKeyEl.innerHTML =
+    `<div><span class="agg-wf-dot" style="background:${WF1}"></span>Recovered in cash (OTS)<b>${any?fmtINR2(totalOts):'—'}</b></div>`+
+    `<div><span class="agg-wf-dot" style="background:${WF2}"></span>Ledger sacrifice (BDWO)<b>${any?fmtINR2(ledgerSac):'—'}</b></div>`+
+    `<div><span class="agg-wf-dot" style="background:${WF3}"></span>Unrealised interest (UCI)<b>${fmtINR2(uci)}</b></div>`;
+
   renderPrintView();
 }
 
