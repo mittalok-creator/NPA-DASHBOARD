@@ -123,6 +123,35 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Bug fix: Excel export's bank logo overlapped the title text (2026-08-14, same day)
+
+Alok sent a real screenshot from his phone (Google Sheets/mobile Excel)
+of an exported file for a single-account borrower and asked for an
+honest rating -- the bank logo was visibly sitting on top of the "U" in
+"UPGB OTS CALCULATOR", overlapping the title instead of sitting cleanly
+to its left.
+
+**Root cause**: the logo image is anchored at column A, row 1
+(`tl:{col:0,row:0}`), and the title/subtitle merges also *started* at
+column A (`ws.mergeCells(1,1,1,...)`), centered across the merge. On a
+narrow export (few linked accounts, so a narrow total merge width), the
+centered text's horizontal midpoint lands close enough to the top-left
+corner that it visually collides with the 40x40px logo sitting there --
+worse the fewer accounts are linked, which is exactly the single-account
+case in the screenshot.
+
+**Fix**: title and subtitle merges now start at column B instead of A
+(`ws.mergeCells(1,2,1,...)` / `set('B1', ...)`), leaving column A
+reserved for the logo alone, with no text ever sharing that column
+regardless of how many accounts are linked or how narrow the export is.
+
+**Verified**: re-exported and confirmed via openpyxl that `A1` is now
+empty and the title's merged range is `B1:F1` (was `A1:D1`) -- the logo
+and title text can no longer occupy the same column. (LibreOffice
+headless rendering wasn't cooperating in this sandbox to produce a pixel
+screenshot, so this was confirmed structurally rather than visually --
+flagged here rather than glossed over.)
+
 ### OTS Calculator: brass reskin extended to Print/PDF and Excel export (2026-08-14, same day)
 
 Alok: *"Pdf and excel sahi and redesign krna bahut achhe se and print bhi
