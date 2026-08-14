@@ -1710,6 +1710,15 @@ header.app-head::before,.detail-head::before{
 :root[data-theme="light"] #detailPane .loan-table tr.lt-ots-row td.lt-label{background:rgba(212,165,68,.07)}
 :root[data-theme="light"] #detailPane .loan-table tr.lt-group td,:root[data-theme="light"] #detailPane .loan-table tr.lt-group th.lt-label{background:rgba(212,165,68,.07)!important}
 :root[data-theme="light"] #detailPane #aggBar{background:linear-gradient(160deg,rgba(255,255,255,.92),rgba(250,244,231,.90))}
+/* Recovery Scale bands: the near-white brass background needs the
+   darker, more saturated --pos/--neg pair (already used for positive/
+   negative figures in light mode) rather than the bright hex tuned for
+   a dark background -- and less fill alpha, since a darker color reads
+   clearly at a lower opacity than a bright one does on white. */
+:root[data-theme="light"] #detailPane #aggBar .agg-scale-track{
+  --scale-loss-fill:rgba(209,54,44,.20); --scale-loss-border:rgba(209,54,44,.85);
+  --scale-safe-fill:rgba(12,128,73,.20); --scale-safe-border:rgba(12,128,73,.85);
+}
 
 /* ---------- Bonus: Recovery scale + Where the dues go (aggregate,
    sidebar-level only -- not per table column, which is what made the
@@ -1717,15 +1726,27 @@ header.app-head::before,.detail-head::before{
    gauge in the original mockups) ---------- */
 #aggBar .agg-scale{margin-top:10px;padding-top:2px}
 #aggBar .agg-block-head{display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--head-sub);margin-bottom:8px}
-/* overflow:visible so the needle's floating value bubble (.agg-needle-val)
-   isn't clipped when it pokes above the track's own box */
-#aggBar .agg-scale-track{position:relative;height:30px;overflow:visible}
-#aggBar .agg-band{position:absolute;top:9px;height:11px;border-radius:2px}
-#aggBar .agg-band.loss{left:0;background:repeating-linear-gradient(135deg,rgba(255,90,95,.18) 0 4px,transparent 4px 8px);border:1px solid rgba(255,90,95,.24)}
+/* Solid semantic fills (not the old faint diagonal hatch, which read as
+   barely-there on the light/cream brass background). Loss/safe use the
+   same --neg/--pos hex the rest of the app already uses for negative/
+   positive figures, at an opacity tuned per theme below -- default here
+   assumes #aggBar's own dark background (see #detailPane #aggBar above);
+   the light-theme override further down swaps in darker, more saturated
+   values since the ~white brass background needs less alpha for the
+   same perceived contrast. overflow:visible so the needle's floating
+   value bubble (.agg-needle-val) isn't clipped when it pokes above the
+   track's own box. */
+#aggBar .agg-scale-track{position:relative;height:30px;overflow:visible;--scale-loss-fill:rgba(255,90,95,.30);--scale-loss-border:rgba(255,90,95,.8);--scale-safe-fill:rgba(34,197,94,.30);--scale-safe-border:rgba(34,197,94,.8)}
+#aggBar .agg-band{position:absolute;top:8px;height:13px;border-radius:3px}
+/* Was left:0 with no width/right -- an empty div with no explicit size
+   collapses to 0 width, so the loss (pre-break-even) zone never actually
+   rendered at all. left:0;right:0 makes it the full-track base layer;
+   .safe then paints over it from break-even rightward, in DOM-order. */
+#aggBar .agg-band.loss{left:0;right:0;background:var(--scale-loss-fill);border:1.5px solid var(--scale-loss-border)}
 /* Break-even doesn't move with OTS input (it's O/S - Provision, fixed
    per loan), but the needle does on every keystroke -- both get a
    smooth transition so a typed OTS amount reads as motion, not a jump. */
-#aggBar .agg-band.safe{background:repeating-linear-gradient(135deg,rgba(34,197,94,.18) 0 4px,transparent 4px 8px);border:1px solid rgba(34,197,94,.24);transition:left .45s cubic-bezier(.4,0,.2,1),width .45s cubic-bezier(.4,0,.2,1)}
+#aggBar .agg-band.safe{background:var(--scale-safe-fill);border:1.5px solid var(--scale-safe-border);transition:left .45s cubic-bezier(.4,0,.2,1),width .45s cubic-bezier(.4,0,.2,1)}
 #aggBar .agg-needle{position:absolute;top:1px;width:2px;height:21px;background:var(--gold-l);border-radius:1px;transition:left .45s cubic-bezier(.4,0,.2,1)}
 #aggBar .agg-needle::after{content:"";position:absolute;top:-4px;left:-3.5px;width:9px;height:9px;background:var(--gold-l);border-radius:2px;transform:rotate(45deg)}
 /* Floating live value bubble that rides along with the needle, showing
