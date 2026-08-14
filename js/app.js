@@ -4516,22 +4516,26 @@ function fetchJson(url){
   return fetch(url).then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
 }
 function loadNpaData(isRetry){
-  fetchJson('data/latest.json?t=' + Date.now())
-    .then(data => {
-      // data/locked-ots.json is the live, always-current source for locked
-      // OTS amounts (see syncLockToServer/refreshLocksFromServer) -- it can
-      // be ahead of whatever was baked into data/latest.json at the last
-      // Admin Publish, so it wins on merge. A failure here (e.g. the file
-      // briefly missing) shouldn't block the whole app from loading --
-      // fall back to data/latest.json's own lockedOts in that case.
-      return fetchJson('data/locked-ots.json?t=' + Date.now())
-        .catch(() => ({}))
-        .then(liveLocks => {
-          data.lockedOts = Object.assign({}, data.lockedOts||{}, liveLocks||{});
-          const overlay = document.getElementById('dataLoadingOverlay');
-          if(overlay) overlay.classList.add('hidden');
-          initApp(data);
-        });
+  // The main dataset and the live-locks file are independent requests --
+  // firing them in parallel (instead of waiting for the ~4MB latest.json to
+  // land before even starting the tiny locked-ots.json fetch) shaves a full
+  // round trip off boot time, which matters most on the high-latency mobile
+  // connections this app is actually used over.
+  Promise.all([
+    fetchJson('data/latest.json?t=' + Date.now()),
+    // data/locked-ots.json is the live, always-current source for locked
+    // OTS amounts (see syncLockToServer/refreshLocksFromServer) -- it can
+    // be ahead of whatever was baked into data/latest.json at the last
+    // Admin Publish, so it wins on merge. A failure here (e.g. the file
+    // briefly missing) shouldn't block the whole app from loading --
+    // fall back to data/latest.json's own lockedOts in that case.
+    fetchJson('data/locked-ots.json?t=' + Date.now()).catch(() => ({})),
+  ])
+    .then(([data, liveLocks]) => {
+      data.lockedOts = Object.assign({}, data.lockedOts||{}, liveLocks||{});
+      const overlay = document.getElementById('dataLoadingOverlay');
+      if(overlay) overlay.classList.add('hidden');
+      initApp(data);
     })
     .catch(err => {
       // A single blip (phone switching towers/wifi) shouldn't scare a non-technical
