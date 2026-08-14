@@ -496,13 +496,13 @@ function renderEmpty(){
   // still opens with a clear next step rather than a gap.
   const recentBlock = recents.length ? `
     <div class="start-block">
-      <div class="start-lbl">Waapas wahin se</div>
+      <div class="start-lbl">Recently Opened</div>
       ${recents.map(r=>`
         <button type="button" class="start-rec" onclick="openRecentBorrower('${esc(r.custId)}','${esc(r.acctNo||'')}')">
           <span class="start-rec-av">${esc(initialsOf(r.name))}</span>
           <span class="start-rec-txt">
             <span class="start-rec-nm">${esc(r.name)||'—'}</span>
-            <span class="start-rec-sub">${esc(r.branch)||'—'}${r.asset?' · '+esc(r.asset):''}${r.n>1?' · '+r.n+' loans':''}</span>
+            <span class="start-rec-sub">${esc(r.branch)||'—'}${r.asset?' · '+esc(r.asset):''}${r.n>1?' · '+r.n+' accounts':''}</span>
           </span>
           <span class="start-rec-amt">${r.os===''?'—':fmtCr(r.os)}</span>
         </button>`).join('')}
@@ -510,7 +510,7 @@ function renderEmpty(){
     <div class="start-block">
       <div class="start-hint">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <span>Upar <b>${esc(mode.label)}</b> se search karein — jo borrower kholenge woh yahan save ho jaayenge.</span>
+        <span>Search by <b>${esc(mode.label)}</b> above. Borrowers you open will be listed here for quick access.</span>
       </div>
     </div>`;
 
@@ -519,13 +519,13 @@ function renderEmpty(){
     <div class="ots-start">
       ${recentBlock}
       <div class="start-block">
-        <div class="start-lbl">Branch se kholo</div>
+        <div class="start-lbl">Open by Branch</div>
         <div class="start-chips">
           ${topBranches.map(b=>`
             <button type="button" class="start-chip" onclick="showStartBranchList('${jsq(b.branch)}')">
               ${esc(b.branch)}<b>${fmtCr(b.os)}</b>
             </button>`).join('')}
-          <button type="button" class="start-chip all" onclick="switchView('dashboard')">Saari ${st.list.length} &rsaquo;</button>
+          <button type="button" class="start-chip all" onclick="switchView('dashboard')">All ${st.list.length} &rsaquo;</button>
         </div>
       </div>
       ${st.assets.length ? `
