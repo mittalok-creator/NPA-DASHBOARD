@@ -123,6 +123,33 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Feature: Branch Manager contacts added to the Branch/Sol ID panel (2026-08-14, same day)
+
+Alok asked for an Excel template to collect Branch Manager Name/Mobile/
+Email for all 55 Hathras region branches, then filled it in (manager name
+for every branch, mobile numbers for the first 6) and sent it back asking
+where this shows up in the app -- it didn't, since the template was a
+standalone deliverable, not wired into the app. Asked where he wanted it
+shown; he picked the existing Branch/Sol ID edge panel.
+
+Added `MANAGER_CONTACTS`, a small object keyed by Sol ID (same pattern as
+the existing hardcoded `BRANCH_LIST` right above it -- occasional
+reference data updated via a code ship, not part of the daily-published
+NPA dataset), holding whatever fields have been collected so far (manager
+name/mobile now; email/alternate contact/landline/category/address/IFSC/
+remarks as they come in later, per the Excel template's columns). Each
+branch row in the panel now shows the manager's name and a tap-to-call
+mobile link underneath, only when that branch has data -- branches not
+yet collected (or the Regional Office / Service Branch rows, which have
+no manager) show no extra line. Branch search now also matches on
+manager name.
+
+**Verified**: live Playwright pass -- all 55 branches with a manager name
+render correctly, tap-to-call links use `tel:`, searching "harendra"
+correctly narrows to just Agsauli, and the 2 rows with no manager data
+(R O Hathras, Service Branch) render with no gap. Zero console errors;
+full OTS/print/Excel regression still passing.
+
 ### Fix: Recovery Scale bar was nearly invisible on the light/brass theme (2026-08-14, same day)
 
 Alok sent a screenshot: the "Recovery Scale" bar in the OTS Calculator's
