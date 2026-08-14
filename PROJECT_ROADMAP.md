@@ -123,6 +123,45 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: fixed group-header text scrolling off-screen, dropped Recovery Scale from mobile (2026-08-14, same day)
+
+Alok sent two mobile screenshots: scrolling the loan table horizontally
+made the "LOAN TERMS" / "DUES & PROVISIONING" section headers cut off
+("OAN TERMS", "UES & PROVISIONING") instead of staying readable like
+every other row's label. Also asked to drop the Recovery Scale gauge
+from the mobile view specifically.
+
+**Root cause**: `group()` in `loanTableHTML()` built section-header rows
+as one `<td colspan="N+1">` spanning the whole row -- unlike every other
+row, which uses `<th class="lt-label">` (`position:sticky;left:0`) for
+its label cell. Every other row's label correctly stayed pinned while
+scrolling; the group headers, having no sticky cell at all, scrolled
+away exactly like an ordinary unpinned table cell would, clipping their
+own icon+text as soon as the scroll position moved past it.
+
+Fixed by rebuilding `group()` to emit the same sticky `<th class="lt-label">`
+pattern as every other row, with empty `<td>`s for the remaining
+columns so the colored group-header band still spans the full row width.
+Updated all 5 places the group row's background/border color was set
+(base dark, base light, the dark "glass" pass, and both `#detailPane`-
+scoped brass overrides from the reskin two entries above) to target
+`th.lt-label` alongside the existing `td` selector.
+
+Recovery Scale hidden on mobile only (`@media(max-width:859px){#aggBar
+.agg-scale{display:none}}`) -- Where The Dues Go stays, one chart instead
+of two in the fixed-height bottom dock. Mobile `padding-bottom` reservation
+on `.detail-inner.has-agg` reduced from 410px to 330px to match the now-
+shorter dock (measured ~300px) instead of leaving unnecessary empty
+scroll space below the table.
+
+**Verified** via Playwright: a group-header `th.lt-label`'s bounding box
+is now identical before and after `scrollLeft`, and its text reads the
+full "Loan Terms" (not truncated) at both a narrow tablet width and the
+exact mobile scroll position from Alok's screenshots; `.agg-scale`
+confirmed hidden on a 390px viewport and still visible at 1400px;
+`.agg-wf` (the waterfall) confirmed still visible on mobile. Zero
+console/page errors.
+
 ### OTS Calculator: brass/paper reskin + Recovery Scale and Where The Dues Go (2026-08-14, same day)
 
 Alok shared two HTML mockups he'd had Claude Opus build ("Ye main claude

@@ -641,7 +641,12 @@ function loanTableHTML(slots){
       <div class="lt-scheme">${esc(s.scheme)||''}</div>
       ${s.assetCode?`<span class="badge-pill ${esc(s.assetCode)}" title="${esc(assetLabel(s.assetCode))}">${esc(s.assetCode)}</span>`:''}
     </th>`).join('');
-  const group = (label, icon) => `<tr class="lt-group"><td colspan="${slots.length+1}">${ltIcon(icon)}${label}</td></tr>`;
+  // Sticky, like every other row's label cell (th.lt-label) -- previously
+  // a single colspan'd td, which isn't sticky, so the group heading text
+  // (LOAN TERMS / DUES & PROVISIONING / SETTLEMENT & IMPACT) scrolled off
+  // to the left as soon as the table was scrolled horizontally, while
+  // every other row's label correctly stayed pinned in view.
+  const group = (label, icon) => `<tr class="lt-group"><th scope="row" class="lt-label">${ltIcon(icon)}${label}</th>${slots.map(()=>'<td></td>').join('')}</tr>`;
   const row = (label, icon, fn, cls='') => `<tr class="${cls}"><th scope="row" class="lt-label">${ltIconBadge(icon)}${label}</th>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`;
   const statRow = (label, icon, idPrefix, iconId) => `<tr><th scope="row" class="lt-label">${ltIconBadge(icon,iconId)}${label}</th>${slots.map((s,i)=>`<td id="${idPrefix}-${i}">—</td>`).join('')}</tr>`;
   const otsRow = () => `<tr class="lt-ots-row"><th scope="row" class="lt-label">${ltIconBadge('coin')}Settlement (OTS) Amount</th>${slots.map((s,i)=>`

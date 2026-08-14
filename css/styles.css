@@ -666,7 +666,7 @@ main{padding:20px 16px 40px}
 .loan-table td{color:var(--ink);font-weight:700}
 .loan-table tr.lt-strong td:not(.lt-label){font-weight:800;color:var(--accent)}
 .loan-table tr.lt-divider td{border-bottom:2px solid var(--accent);padding-bottom:13px}
-.loan-table tr.lt-group td{background:var(--gold-soft)!important;color:var(--gold-l);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;padding:8px 14px;border-bottom:1px solid rgba(58,123,255,.20);display:flex;align-items:center;gap:7px}
+.loan-table tr.lt-group td,.loan-table tr.lt-group th.lt-label{background:var(--gold-soft)!important;color:var(--gold-l);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;padding:8px 14px;border-bottom:1px solid rgba(58,123,255,.20);display:flex;align-items:center;gap:7px}
 .lt-row-icon{flex-shrink:0;color:var(--sub);opacity:.85}
 .loan-table thead .lt-label .lt-row-icon{color:rgba(255,255,255,.7)}
 .loan-table tr.lt-group .lt-row-icon{color:var(--gold-l);opacity:1}
@@ -940,7 +940,7 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
      40px}" above (an ID beats any number of plain classes), which silently
      resets padding-bottom to 40px and lets the fixed dock overlap the last
      table rows. */
-  #detailPane .detail-inner.has-agg{padding-bottom:410px}
+  #detailPane .detail-inner.has-agg{padding-bottom:330px}
   #aggBar{position:fixed;left:0;right:0;bottom:0;z-index:85;border-radius:18px 18px 0 0;
     padding:12px 16px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;
     box-shadow:0 -12px 34px rgba(8,6,20,.32);animation:paneUp .3s var(--ease)}
@@ -1542,7 +1542,7 @@ header.app-head::before,.detail-head::before{
    above. Same near-opaque treatment, with a touch of extra lightness for
    the stripe to still read as a stripe. */
 .loan-table tbody tr:nth-child(even):not(:hover) td.lt-label{background:rgba(20,19,32,.94)}
-.loan-table tr.lt-group td{background:rgba(58,123,255,.09)!important}
+.loan-table tr.lt-group td,.loan-table tr.lt-group th.lt-label{background:rgba(58,123,255,.09)!important}
 .loan-table tr.lt-ots-row td{background:rgba(58,123,255,.06)}
 .loan-table tr.lt-ots-row td.lt-label{background:rgba(58,123,255,.08)}
 
@@ -1643,7 +1643,7 @@ header.app-head::before,.detail-head::before{
 :root[data-theme="light"] .loan-table tbody tr:nth-child(even):not(:hover) td.lt-label{background:rgba(240,240,244,.94)}
 :root[data-theme="light"] .loan-table tr.lt-ots-row td{background:rgba(27,79,224,.05)}
 :root[data-theme="light"] .loan-table tr.lt-ots-row td.lt-label{background:rgba(27,79,224,.07)}
-:root[data-theme="light"] .loan-table tr.lt-group td{background:rgba(27,79,224,.07)!important;color:var(--gold-d)}
+:root[data-theme="light"] .loan-table tr.lt-group td,:root[data-theme="light"] .loan-table tr.lt-group th.lt-label{background:rgba(27,79,224,.07)!important;color:var(--gold-d)}
 :root[data-theme="light"] .loan-table .lt-acc{color:var(--gold-d)}
 :root[data-theme="light"] .lt-cur{color:var(--gold-d)}
 :root[data-theme="light"] .lt-ots-cell .pct-tag{color:var(--gold-d)}
@@ -1887,7 +1887,7 @@ header.app-head::before,.detail-head::before{
    ".loan-table ..."/"#aggBar" rules on specificity (an ID always wins
    over any number of plain classes -- the same rule that caused the
    mobile-dock overlap bug fixed earlier today). */
-#detailPane .loan-table tr.lt-group td{background:var(--gold-soft)!important;border-bottom-color:rgba(212,165,68,.20)}
+#detailPane .loan-table tr.lt-group td,#detailPane .loan-table tr.lt-group th.lt-label{background:var(--gold-soft)!important;border-bottom-color:rgba(212,165,68,.20)}
 #detailPane .loan-table tr.lt-ots-row td{background:rgba(212,165,68,.06)}
 #detailPane .loan-table tr.lt-ots-row td.lt-label{background:rgba(212,165,68,.08)}
 #detailPane #aggBar{background:linear-gradient(160deg,rgba(48,36,14,.76),rgba(14,10,4,.80))}
@@ -1907,7 +1907,7 @@ header.app-head::before,.detail-head::before{
 }
 :root[data-theme="light"] #detailPane .loan-table tr.lt-ots-row td{background:rgba(212,165,68,.05)}
 :root[data-theme="light"] #detailPane .loan-table tr.lt-ots-row td.lt-label{background:rgba(212,165,68,.07)}
-:root[data-theme="light"] #detailPane .loan-table tr.lt-group td{background:rgba(212,165,68,.07)!important}
+:root[data-theme="light"] #detailPane .loan-table tr.lt-group td,:root[data-theme="light"] #detailPane .loan-table tr.lt-group th.lt-label{background:rgba(212,165,68,.07)!important}
 :root[data-theme="light"] #detailPane #aggBar{background:linear-gradient(160deg,rgba(255,255,255,.92),rgba(250,244,231,.90))}
 
 /* ---------- Bonus: Recovery scale + Where the dues go (aggregate,
@@ -1951,13 +1951,12 @@ header.app-head::before,.detail-head::before{
    dock grew from ~193px (hero+mini-grid only) to a taller stack, see the
    matching padding-bottom bump on .detail-inner.has-agg in JS/markup. */
 @media (max-width:859px){
-  #aggBar .agg-scale{margin-top:8px}
+  /* Recovery Scale dropped from the mobile dock on Alok's request --
+     the fixed-height bottom bar reads as cluttered with 4 stacked
+     blocks (hero, mini-grid, scale, waterfall) on a phone screen.
+     Where The Dues Go stays -- one chart, not two, on mobile. */
+  #aggBar .agg-scale{display:none}
   #aggBar .agg-block-head{font-size:8.5px;margin-bottom:6px}
-  #aggBar .agg-scale-track{height:24px}
-  #aggBar .agg-band{top:7px;height:9px}
-  #aggBar .agg-needle{height:17px}
-  #aggBar .agg-slab{font-size:7.5px}
-  #aggBar .agg-slab b{font-size:8px}
   #aggBar .agg-wf{margin-top:8px}
   #aggBar .agg-wf-bar{height:18px}
   #aggBar .agg-wf-key{gap:4px;margin-top:6px}
