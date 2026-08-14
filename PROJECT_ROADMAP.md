@@ -123,6 +123,44 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Print/PDF: aggregate order, Sol ID next to branch, info-grid grouping, logo removed, P&L arrow (2026-08-14, same day)
+
+Alok reviewed the print/PDF sheet again and asked for five specific layout
+fixes:
+
+**1. Aggregate Totals reordered** to O/S Balance → Total Dues → Total OTS
+Amount → Total Ledger Sacrifice → Total Sacrifice. The aggregate block
+previously stopped at Total Sacrifice without a Ledger Sacrifice line at
+all (only the per-account table row had it) -- added a `totalLedgerSac`
+sum (Σ O/S − OTS Amount across all frozen/entered slots) so the aggregate
+now carries the same figure the per-account rows do.
+
+**2. Sol ID moved into the branch line** in the header ("Branch: MENDU
+(9291)") instead of repeating as its own row in the borrower info grid --
+same one-mention-only convention as the earlier branch-name dedup fix.
+
+**3. Borrower info grid split into two explicit columns**: Cust ID /
+Mobile / PAN / Aadhar on the left, SB A/c / SB Balance on the right --
+previously a single auto-interleaving 2-column grid that mixed the two
+groups row by row (Cust ID | Sol ID, Mobile | Aadhar, PAN | SB A/c, ...).
+
+**4. Bank logo removed from the print header.** It wasn't fitting the
+header band cleanly at print size and Alok said it isn't actually needed
+on this sheet; removed the `<img class="pv-logo">` and its absolute-
+positioning CSS. (The logo is untouched in the Excel export, which is a
+separate code path with its own use for it.)
+
+**5. Impact on P&L now shows a directional arrow** (▲ for positive, ▼ for
+negative) before the rupee figure, matching the up/down icon-set
+convention Excel's conditional formatting uses -- so the sign reads at a
+glance instead of only from a minus sign inside the number.
+
+**Verified**: live Playwright pass against a real account (152235110000753)
+at two different OTS Amounts -- confirmed the aggregate order, the "MENDU
+(9291)" branch line, the two-column info-grid split, no logo in the
+rendered header, and both ▲ (OTS above break-even) and ▼ (OTS below
+break-even) arrow directions render correctly. Zero console errors.
+
 ### Forensic audit: 3 real defects found and fixed (2026-08-14, same day)
 
 Alok asked for a full forensic audit of the entire application, OTS

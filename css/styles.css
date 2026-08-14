@@ -625,16 +625,19 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
    bank statement or settlement letter is typeset. This also sidesteps
    the print-contrast note above entirely -- pure black-on-white never
    halftones on a laser printer, unlike any tint ever could. */
-.pv-header{position:relative;text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px}
-.pv-logo{position:absolute;left:0;top:0;width:40px;height:40px;object-fit:contain}
+.pv-header{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px}
 .pv-title{font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:17px;font-weight:800;letter-spacing:.6px;color:#000}
 .pv-sub{font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:10.5px;color:#000;margin-top:2px;font-weight:600}
 .pv-meta{display:flex;justify-content:center;gap:24px;font-size:10.5px;color:#000;margin-top:4px;font-weight:600}
 .pv-borrower{margin-bottom:10px}
 .pv-name{font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14.5px;font-weight:800;color:#000}
 .pv-addr{font-size:10.5px;color:#222;margin-top:1px}
-.pv-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;margin-top:6px}
-.pv-info-grid div{display:flex;justify-content:space-between;font-size:10.5px;border-bottom:1px solid #999;padding:2px 0}
+/* Two explicit side-by-side columns -- Mobile/PAN/Aadhar on the left,
+   SB A/c/Balance on the right -- instead of a single interleaved grid,
+   so each group of fields stays visually together on its own side. */
+.pv-info-grid{display:flex;gap:24px;margin-top:6px}
+.pv-info-col{flex:1;min-width:0}
+.pv-info-col div{display:flex;justify-content:space-between;font-size:10.5px;border-bottom:1px solid #999;padding:2px 0}
 .pv-info-grid .k{color:#333;font-weight:600}
 .pv-info-grid .v{font-weight:800;color:#000;font-family:'IBM Plex Mono',ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace}
 .pv-table{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:10px;font-family:'IBM Plex Mono',ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace}

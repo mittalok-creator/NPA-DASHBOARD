@@ -989,8 +989,8 @@ function renderPrintView(){
   function otsFor(s){
     return parseOtsAmount(otsAmounts[s.acctNo]);
   }
-  let totalOtsSum = 0, anyOts = false;
-  slots.forEach(s=>{ const v = otsFor(s); if(v!==null){ totalOtsSum+=v; anyOts=true; } });
+  let totalOtsSum = 0, totalLedgerSac = 0, anyOts = false;
+  slots.forEach(s=>{ const v = otsFor(s); if(v!==null){ totalOtsSum+=v; totalLedgerSac+=(s.os-v); anyOts=true; } });
 
   // Rows the sheet is actually read for -- bolded/enlarged in print (see
   // .pv-table tr.pv-strong in styles.css) so they stand out from the
@@ -1022,28 +1022,39 @@ function renderPrintView(){
     ['OTS Amount', 'coin', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v);}],
     ['Total Sacrifice', 'percent', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(totalDuesFor(s)-v);}],
     ['Ledger Sacrifice (BDWO Amount)', 'badge', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.os-v);}],
-    ['Impact on P&L', 'bars', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v-s.totalPL);}],
+    // Arrow mirrors the up/down icon-set convention from Excel's conditional
+    // formatting -- up for a positive (better-than-booked) P&L impact, down
+    // for a negative one -- so the sign reads at a glance, not just from the
+    // minus sign buried in the number.
+    ['Impact on P&L', 'bars', s=>{const v=otsFor(s); if(v===null) return '—'; const impact=v-s.totalPL; const arrow=impact>0?'▲ ':(impact<0?'▼ ':''); return arrow+fmtINR2(impact);}],
   ];
   const tableRows = rows.map(([label,icon,fn])=>`<tr${STRONG_ROWS.has(label)?' class="pv-strong"':''}><td class="pv-label">${label}</td>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('');
 
+  // Sol ID now rides along with the branch name in the header ("Branch:
+  // MENDU (9291)") instead of repeating as its own row in the info grid
+  // below -- same one-mention-only convention as the earlier branch-name
+  // dedup fix.
+  const solId = esc(custRow[C.SOL_ID])||'';
   document.getElementById('printArea').innerHTML = `
     <div class="pv-header">
-      <img class="pv-logo" src="${OTS_LOGO_DATA_URI}" alt="UPGB logo">
       <div class="pv-title">UPGB OTS CALCULATOR</div>
       <div class="pv-sub">Uttar Pradesh Gramin Bank (Regional Office Hathras)</div>
-      <div class="pv-meta"><span>Report Date: ${fmtDate(new Date())}</span><span>Branch: ${esc(custRow[C.SOL_DESC])||''}</span></div>
+      <div class="pv-meta"><span>Report Date: ${fmtDate(new Date())}</span><span>Branch: ${esc(custRow[C.SOL_DESC])||''}${solId?` (${solId})`:''}</span></div>
     </div>
     <div class="pv-borrower">
       <div class="pv-name">${esc(custRow[C.NAME])||'—'}</div>
       <div class="pv-addr">${esc(custRow[C.ADDR])||'—'}</div>
       <div class="pv-info-grid">
-        <div><span class="k">Cust ID</span><span class="v">${esc(custRow[C.CUST_ID])||'—'}</span></div>
-        <div><span class="k">Sol ID</span><span class="v">${esc(custRow[C.SOL_ID])||'—'}</span></div>
-        <div><span class="k">Mobile</span><span class="v">${esc(custRow[C.PHONE])||'—'}</span></div>
-        <div><span class="k">Aadhar</span><span class="v">${esc(custRow[C.AADHAR])||'—'}</span></div>
-        <div><span class="k">PAN</span><span class="v">${esc(custRow[C.PAN])||'—'}</span></div>
-        <div><span class="k">SB A/c</span><span class="v">${esc(custRow[C.SB_ACCT])||'—'}</span></div>
-        <div><span class="k">SB Balance</span><span class="v">${fmtINR2(custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL])}</span></div>
+        <div class="pv-info-col">
+          <div><span class="k">Cust ID</span><span class="v">${esc(custRow[C.CUST_ID])||'—'}</span></div>
+          <div><span class="k">Mobile</span><span class="v">${esc(custRow[C.PHONE])||'—'}</span></div>
+          <div><span class="k">PAN</span><span class="v">${esc(custRow[C.PAN])||'—'}</span></div>
+          <div><span class="k">Aadhar</span><span class="v">${esc(custRow[C.AADHAR])||'—'}</span></div>
+        </div>
+        <div class="pv-info-col">
+          <div><span class="k">SB A/c</span><span class="v">${esc(custRow[C.SB_ACCT])||'—'}</span></div>
+          <div><span class="k">SB Balance</span><span class="v">${fmtINR2(custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL])}</span></div>
+        </div>
       </div>
     </div>
     <table class="pv-table">
@@ -1055,6 +1066,7 @@ function renderPrintView(){
       <div class="pv-agg-row"><span>Total O/S Balance</span><span>${fmtINR2(totalOS)}</span></div>
       <div class="pv-agg-row"><span>Total Dues</span><span>${fmtINR2(totalDues)}</span></div>
       <div class="pv-agg-row"><span>Total OTS Amount</span><span>${anyOts?fmtINR2(totalOtsSum):'—'}</span></div>
+      <div class="pv-agg-row"><span>Total Ledger Sacrifice</span><span>${anyOts?fmtINR2(totalLedgerSac):'—'}</span></div>
       <div class="pv-agg-row"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(totalDues-totalOtsSum):'—'}</span></div>
     </div>
     <div class="pv-footer">Designed &amp; Developed by ALOK MITTAL · Uttar Pradesh Gramin Bank</div>
