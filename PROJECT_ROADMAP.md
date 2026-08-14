@@ -123,6 +123,28 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Feature: WhatsApp link alongside every Manager/Recovery Officer phone number (2026-08-14, same day)
+
+Alok tapped a phone number in the new branch contact card and noticed the
+Android "Open with" chooser only offered Phone/Truecaller/Zoom -- no
+WhatsApp. That's expected, not a bug: WhatsApp doesn't register itself as
+a handler for `tel:` links on Android/iOS, so it can never appear in that
+chooser no matter what the link looks like. The real fix is a separate,
+dedicated WhatsApp link.
+
+Added `waIconLink()` -- builds a `https://wa.me/91<10-digit-number>` deep
+link (wa.me needs the full international number, no `+`/spaces; a bare
+10-digit Indian mobile gets "91" prefixed) rendered as a small green
+WhatsApp-brand icon sitting right next to the phone number, both in the
+Branch/Sol ID panel's row and in the full branch card -- tapping it opens
+a WhatsApp chat with that number directly, same as any other app that
+shows a WhatsApp icon beside a phone number.
+
+**Verified**: live Playwright pass on a real mobile viewport (390x844) --
+panel row and card both render the tel: link and WhatsApp icon side by
+side on one line, hrefs correctly formed (`https://wa.me/919870838125`),
+zero console errors, full OTS/print/Excel regression still passing.
+
 ### Feature: Branch Contacts becomes a real upload (Manager + Recovery Officer), with a full-detail card (2026-08-14, same day)
 
 Alok asked for three things on top of yesterday's branch-contact panel: (1)

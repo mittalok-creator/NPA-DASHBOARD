@@ -1656,8 +1656,16 @@ header.app-head::before,.detail-head::before{
 .edge-row-contact-line{display:flex;align-items:center;gap:6px;font-size:11.5px}
 .edge-row-contact-line .role{font-size:8.5px;font-weight:800;letter-spacing:.04em;color:var(--sub);text-transform:uppercase;flex-shrink:0;width:24px}
 .edge-row-mgr{flex:1;min-width:0;color:var(--sub);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.edge-row-contact a{color:var(--accent);font-weight:800;text-decoration:none;font-variant-numeric:tabular-nums;flex-shrink:0}
-.edge-row-contact a:hover{text-decoration:underline}
+.edge-row-contact a:not(.wa-link){color:var(--accent);font-weight:800;text-decoration:none;font-variant-numeric:tabular-nums;flex-shrink:0}
+.edge-row-contact a:not(.wa-link):hover{text-decoration:underline}
+/* WhatsApp deep link icon -- brand green regardless of theme, same as the
+   phone/mail links it sits beside get the app's accent color. tel: links
+   don't offer WhatsApp in the OS "Open with" chooser (it isn't a
+   registered tel: handler), so this is its own icon rather than relying
+   on that chooser. */
+.wa-link{color:#25D366;display:inline-flex;align-items:center;flex-shrink:0}
+.wa-link:hover{opacity:.75}
+.v-with-wa{display:inline-flex;align-items:center;gap:7px}
 .edge-empty{padding:30px 10px;text-align:center;color:var(--sub);font-size:12.5px}
 @media (max-width:699px){
   .edge-handle{padding:12px 6px}
