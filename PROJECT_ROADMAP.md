@@ -123,6 +123,65 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Forensic audit: 3 real defects found and fixed (2026-08-14, same day)
+
+Alok asked for a full forensic audit of the entire application, OTS
+calculation especially, treating nothing as correct-by-assumption. Full
+findings are in the audit report delivered separately; the three real,
+fixable defects found are documented here.
+
+**1. `toDate()` silently misparsed malformed date strings as wrong
+dates instead of failing.** Any date string not matching plain
+`DD-MM-YYYY` (stray whitespace, ISO `YYYY-MM-DD`, US `MM-DD-YYYY`, ...)
+fell through to `parseFloat()`, which parses a *leading* numeric prefix
+rather than the whole string -- so e.g. `"  22-07-2022  "` silently
+became "Excel serial day 22" (a date near January 1900) instead of
+failing or returning null. Rewrote to strictly validate `DD-MM-YYYY`
+with a full round-trip check (also now rejecting impossible calendar
+dates like 31 Feb), and only accept a numeric-string fallback when the
+*entire* trimmed string is numeric. Verified against all 13,925 real
+NPA_DT/SANCT_DT values in `data/latest.json` -- zero were in a format
+this stricter check doesn't already handle, so nothing real changes;
+only malformed input now fails safely instead of silently.
+
+**2. Negative OTS Amount was accepted with no validation anywhere.**
+Typing e.g. `-5000` into OTS Amount flowed straight through into Total
+Sacrifice, Ledger Sacrifice and Impact on P&L (producing nonsense
+figures like a "sacrifice" larger than Total Dues), and could even be
+frozen/locked as the amount communicated to the borrower -- across
+*seven* independent call sites (screen calc, freeze/lock, aggregate,
+print, Excel) that each re-parsed the raw typed value slightly
+differently, none checking sign. Added one shared `parseOtsAmount()`
+helper (mirroring the existing `uriFor()` pattern) that treats negative
+as invalid, same as blank -- used at all seven sites now, so a negative
+OTS Amount reads as "not yet entered" (dashes) everywhere consistently,
+and can no longer be frozen/locked.
+
+**3. The Daily NPA Projection live-sync relay validated an update's
+*shape* but not its *contents*.** `relay/api/daily-proj-live.js`
+checked `Array.isArray(u.row)` and nothing else -- a wrong-length row,
+wrong cell types, or an oversized string would have been written
+straight into the shared `data/daily-npa-projection.json` with no
+validation catching it, corrupting the live sheet for every viewer.
+Added a full per-cell shape/type check matching the file's real 8-column
+schema. Also documented (not changed without asking) that this endpoint
+and the OTS-lock endpoint have no authentication at all beyond a CORS
+header, which is a browser-only courtesy, not real authorization -- a
+direct (non-browser) API call bypasses it entirely. This is a deliberate
+trade-off from when the "no GitHub sign-in needed for field staff"
+design was chosen earlier this session, not an oversight, so it wasn't
+changed unilaterally -- flagged in the audit report for a decision.
+
+**Verified**: independent reference calculations built from scratch and
+cross-checked against two real accounts (a standard scheme + a KCC/CC004
+scheme) -- exact match to the cent on UCI, Total Dues, Provision, Total
+P&L. Formula consistency confirmed across screen/print/Excel (no drift
+between the three). XSS-escaping coverage checked for name/address/branch
+fields (all consistently escaped). 11/11 unit tests for the new relay
+row-validator, including rejecting NaN/Infinity/oversized-string/wrong-
+type payloads. Full regression pass: normal OTS flow, freeze/unfreeze,
+print render, Excel export -- all still working, no console errors.
+
 ### Bug fix: OTS Amount unreachable on mobile right after Interest Reversal (2026-08-14, same day)
 
 Alok: *"App main interest reveral type karne k baad ots amount feed nahi
