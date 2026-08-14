@@ -123,6 +123,54 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: brass reskin extended to Print/PDF and Excel export (2026-08-14, same day)
+
+Alok: *"Pdf and excel sahi and redesign krna bahut achhe se and print bhi
+dark aaye ye bhi dhyan rahe."* Asked a clarifying question before touching
+anything, since this print sheet was explicitly made light/white earlier
+this session specifically for laser-printer ink economy (bank branches
+print this daily) -- confirmed "dark" meant bold/strong key figures, not
+a literal dark background; the printer-friendly white background stays.
+
+**Print sheet** (`renderPrintView()` / `.pv-*` in `css/styles.css`):
+brass border under the bank-name letterhead line (was black), Archivo
+for headings/labels, IBM Plex Mono for every number, warm-gold header
+band and strong-row tints (replacing the old neutral-gray/pale-blue
+ones), row icons and the "AGGREGATE TOTALS" label tinted brass. Body
+figures stay pure black, not brass -- the file's own existing print-
+contrast rule (documented in a comment above this block) already
+established that a mid-tone color halftones toward gray on a laser
+printer exactly like the mid-grays it already avoids, so the numbers
+people actually read keep guaranteed legibility regardless of printer
+quality; brass is reserved for structure (rules, header bands, tint
+fills), same restraint principle as everywhere else in this reskin.
+
+**Excel export** (`exportOtsExcel()`): every fill color remapped to the
+same brass family -- header band, label column, strong-row tints,
+aggregate-totals row, and the editable-cell highlight (OTS Amount /
+Report Date) now a richer gold, clearly distinct from the paler
+structural tints. Added a medium brass border under the bank-name row
+as a letterhead rule (a real border renders reliably in Excel
+regardless of what's installed on the machine that opens the file --
+unlike a font). **Did not** set a custom font family on any cell: unlike
+the print sheet (rendered by the browser, which already has Archivo/
+IBM Plex Mono self-hosted), an .xlsx file can only *reference* a font by
+name -- it can't embed one -- so specifying 'Archivo' would silently
+fall back to whatever's installed on the recipient's machine (almost
+certainly not Archivo) the moment anyone else opens the file. Left the
+existing safe default instead of a change that would look right only on
+this machine.
+
+**Verified**: Playwright screenshot of the print view (emulated print
+media) confirms the new palette renders correctly with light background
+preserved; Excel file inspected with openpyxl confirms every fill color
+matches the new brass hex values, the bank-name row's brass border is
+present, all formulas are unchanged and correct (spot-checked Total
+Dues and Total Sacrifice), the "AGGREGATE TOTALS" label picked up the
+dark-brass font color, and exactly 1 image remains embedded (the logo --
+confirms this didn't reintroduce the decorative row icons removed
+earlier this session). Zero console/page errors.
+
 ### OTS Calculator: Recovery Scale now animates live as OTS is typed (2026-08-14, same day)
 
 Alok: *"Ok gud ab recovery scale main % ots amount feed karte hi live
