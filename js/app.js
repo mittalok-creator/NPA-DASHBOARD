@@ -464,15 +464,20 @@ function openDetail(custId, jumpAcct){
             <div class="agg-slab" id="aggLabDues">Dues<b id="aggDuesVal">—</b></div>
           </div>
         </div>
-        <div class="agg-wf">
-          <div class="agg-block-head">${ltIcon('list')}Where The Dues Go</div>
-          <div class="agg-wf-bar">
-            <span id="aggWf1"></span><span id="aggWf2"></span><span id="aggWf3"></span>
+        <div class="agg-wf collapsed" id="aggWfBlock">
+          <div class="agg-block-head agg-wf-toggle" onclick="toggleAggWf()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAggWf();}" role="button" tabindex="0" aria-expanded="false" aria-controls="aggWfBody">
+            ${ltIcon('list')}Where The Dues Go
+            <svg class="agg-wf-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
-          <div class="agg-wf-key">
-            <div><span class="agg-wf-dot" style="background:#1B2A44"></span>Recovered in cash (OTS)<b id="aggWfCash">—</b></div>
-            <div><span class="agg-wf-dot" style="background:#D4A544"></span>Ledger sacrifice (BDWO)<b id="aggWfLedger">—</b></div>
-            <div><span class="agg-wf-dot" style="background:#7A8798"></span>Unrealised interest (UCI)<b id="aggWfUci">—</b></div>
+          <div class="agg-wf-body" id="aggWfBody">
+            <div class="agg-wf-bar">
+              <span id="aggWf1"></span><span id="aggWf2"></span><span id="aggWf3"></span>
+            </div>
+            <div class="agg-wf-key">
+              <div><span class="agg-wf-dot" style="background:#1B2A44"></span>Recovered in cash (OTS)<b id="aggWfCash">—</b></div>
+              <div><span class="agg-wf-dot" style="background:#D4A544"></span>Ledger sacrifice (BDWO)<b id="aggWfLedger">—</b></div>
+              <div><span class="agg-wf-dot" style="background:#7A8798"></span>Unrealised interest (UCI)<b id="aggWfUci">—</b></div>
+            </div>
           </div>
         </div>
       </aside>`:''}
@@ -482,6 +487,19 @@ function openDetail(custId, jumpAcct){
   drawDetailBody(custRow, slots, prevOts);
   pane.scrollTop = 0;
 }
+
+// "Where The Dues Go" starts collapsed on mobile (Alok's request -- it was
+// eating too much of the fixed bottom dock) but stays permanently expanded
+// on desktop, where the sidebar has room -- the .collapsed class only has
+// any visual effect inside the mobile media query in styles.css.
+function toggleAggWf(){
+  const block = document.getElementById('aggWfBlock');
+  if(!block) return;
+  const collapsed = block.classList.toggle('collapsed');
+  const head = block.querySelector('.agg-wf-toggle');
+  if(head) head.setAttribute('aria-expanded', String(!collapsed));
+}
+window.toggleAggWf = toggleAggWf;
 
 function closeDetail(){
   const pane = document.getElementById('detailPane');
