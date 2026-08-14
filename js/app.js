@@ -34,15 +34,35 @@ DATA.branchAdvances = DATA.branchAdvances || {};
 const XL_EPOCH = new Date(1899,11,30);
 function excelSerialToDate(n){ return new Date(XL_EPOCH.getTime() + n*86400000); }
 function dateToExcelSerial(d){ return Math.round((d.getTime()-XL_EPOCH.getTime())/86400000); }
+// Strict on purpose: this app only ever produces/consumes date strings as
+// DD-MM-YYYY (see CLAUDE.md) or raw Excel serial numbers. The previous
+// version split on '-' and fell back to parseFloat() for anything that
+// didn't match -- parseFloat() parses a *leading* numeric prefix, not the
+// whole string, so a stray-whitespace date ("  22-07-2022  "), an ISO
+// date ("2022-07-22"), or a US-format date ("07-22-2022") all silently
+// parsed as a plausible-looking but WRONG date (an Excel serial number
+// near 1900, or a rolled-over invalid month) instead of failing loudly.
+// Every date is now validated end-to-end -- including a round-trip check
+// that rejects invalid calendar dates a naive constructor would otherwise
+// silently roll over (e.g. day 31 in a 30-day month) -- and returns null
+// rather than guessing when the input doesn't match exactly.
 function toDate(v){
   if(v===''||v===null||v===undefined) return null;
   if(v instanceof Date) return isNaN(v.getTime()) ? null : v;
-  if(typeof v==='number') return excelSerialToDate(v);
+  if(typeof v==='number') return isFinite(v) ? excelSerialToDate(v) : null;
   if(typeof v==='string'){
-    const m = v.split('-');
-    if(m.length===3 && m[2].length===4) return new Date(+m[2], +m[1]-1, +m[0]);
-    const n = parseFloat(v);
-    if(!isNaN(n)) return excelSerialToDate(n);
+    const s = v.trim();
+    const m = /^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(s);
+    if(m){
+      const day = +m[1], month = +m[2], year = +m[3];
+      if(month<1 || month>12 || day<1 || day>31) return null;
+      const d = new Date(year, month-1, day);
+      return (d.getFullYear()===year && d.getMonth()===month-1 && d.getDate()===day) ? d : null;
+    }
+    if(/^-?\d+(\.\d+)?$/.test(s)){
+      const n = parseFloat(s);
+      return isFinite(n) ? excelSerialToDate(n) : null;
+    }
   }
   return null;
 }
@@ -696,11 +716,26 @@ function loanTableHTML(slots){
   </div>`;
 }
 
+// Parses a raw typed OTS Amount into a valid, non-negative number, or null
+// if blank/invalid/negative. Centralizes what "a usable OTS Amount" means
+// so every consumer (freeze/lock, screen calc, aggregate, print, Excel)
+// agrees, instead of each re-parsing the raw value slightly differently.
+// A negative OTS Amount has no real-world meaning (a bank can't receive
+// negative money in a settlement) -- previously nothing rejected it, so
+// typing e.g. "-5000" flowed straight through into Total Sacrifice/Impact
+// on P&L (and could even be frozen/locked as the communicated amount)
+// with no validation anywhere catching it.
+function parseOtsAmount(raw){
+  if(raw===undefined || raw==='') return null;
+  const v = parseFloat(raw);
+  return (isNaN(v) || v<0) ? null : v;
+}
+
 function onOtsInput(i, acctNo){
   const v = document.getElementById('otsInput-'+i).value;
   otsAmounts[acctNo] = v;
   const btn = document.getElementById('freezeBtn-'+i);
-  if(btn && !frozen[acctNo]) btn.classList.toggle('ready', v!=='' && !isNaN(parseFloat(v)));
+  if(btn && !frozen[acctNo]) btn.classList.toggle('ready', parseOtsAmount(v)!==null);
   recalcLoan(i);
   recalcAggregate();
 }
@@ -716,7 +751,7 @@ window.onUriInput = onUriInput;
 function toggleFreeze(i, acctNo){
   const isFrozen = !!frozen[acctNo];
   const v = otsAmounts[acctNo];
-  if(!isFrozen && (v===undefined || v==='' || isNaN(parseFloat(v)))) return;
+  if(!isFrozen && parseOtsAmount(v)===null) return;
   frozen[acctNo] = !isFrozen;
   if(frozen[acctNo]) DATA.lockedOts[acctNo] = v; else delete DATA.lockedOts[acctNo];
   const btn = document.getElementById('freezeBtn-'+i);
@@ -727,7 +762,7 @@ function toggleFreeze(i, acctNo){
     if(btn){ btn.classList.remove('ready'); btn.classList.add('frozen'); btn.title='Frozen — click to edit'; }
     input.disabled=true;
   } else {
-    if(btn){ btn.classList.remove('frozen'); btn.classList.toggle('ready', v!==undefined && v!=='' && !isNaN(parseFloat(v))); btn.title='Freeze this OTS amount'; }
+    if(btn){ btn.classList.remove('frozen'); btn.classList.toggle('ready', parseOtsAmount(v)!==null); btn.title='Freeze this OTS amount'; }
     input.disabled=false; input.focus();
   }
   syncLockToServer(acctNo, frozen[acctNo], frozen[acctNo]?v:undefined, btn);
@@ -751,7 +786,8 @@ function animateNumber(el, from, to, render, dur){
 function recalcLoan(i){
   const s = window.__slots[i];
   const raw = otsAmounts[s.acctNo];
-  const ots = (raw==='' || raw===undefined) ? '' : parseFloat(raw);
+  const otsParsed = parseOtsAmount(raw);
+  const ots = otsParsed===null ? '' : otsParsed;
   const totalSacEl = document.getElementById('totalSac-'+i);
   const ledgerEl = document.getElementById('ledgerSac-'+i);
   const impactEl = document.getElementById('impact-'+i);
@@ -808,8 +844,8 @@ function recalcAggregate(){
   const slots = window.__slots;
   let totalOts=0, any=false;
   slots.forEach(s=>{
-    const v = otsAmounts[s.acctNo];
-    if(v!==undefined && v!=='' && !isNaN(parseFloat(v))){ totalOts+=parseFloat(v); any=true; }
+    const v = parseOtsAmount(otsAmounts[s.acctNo]);
+    if(v!==null){ totalOts+=v; any=true; }
   });
   // Total Dues is live (Interest Reversal is editable and folds into it),
   // so the aggregate sum must be recomputed fresh, not read from a stale
@@ -951,9 +987,7 @@ function renderPrintView(){
   slots.forEach(s=>{ const td = totalDuesFor(s); totalDues += (td!==''?td:0); });
 
   function otsFor(s){
-    const raw = otsAmounts[s.acctNo];
-    const v = (raw===''||raw===undefined) ? NaN : parseFloat(raw);
-    return isNaN(v) ? null : v;
+    return parseOtsAmount(otsAmounts[s.acctNo]);
   }
   let totalOtsSum = 0, anyOts = false;
   slots.forEach(s=>{ const v = otsFor(s); if(v!==null){ totalOtsSum+=v; anyOts=true; } });
@@ -1208,9 +1242,8 @@ async function exportOtsExcel(){
     // Total P&L = O/S - Provision (Interest Reversal already flows into
     // Total Dues above, not into Total P&L).
     set(`${c}${R.totalPL}`, formula(`${c}${R.os}-${c}${R.provision}`), {...rowStyle(R.totalPL), numFmt:XL_INR_FMT});
-    const otsVal = otsAmounts[s.acctNo];
-    const otsNum = (otsVal===''||otsVal===undefined) ? null : parseFloat(otsVal);
-    set(`${c}${R.ots}`, otsNum===null||isNaN(otsNum) ? 0 : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, numFmt:XL_INR_FMT});
+    const otsNum = parseOtsAmount(otsAmounts[s.acctNo]);
+    set(`${c}${R.ots}`, otsNum===null ? 0 : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, numFmt:XL_INR_FMT});
     // Total Sacrifice = Total Dues - OTS Amount (Interest Reversal is
     // already folded into Total Dues above, not added a second time).
     set(`${c}${R.totalSac}`, formula(`${c}${R.totalDues}-${c}${R.ots}`), {...rowStyle(R.totalSac), numFmt:XL_INR_FMT});
