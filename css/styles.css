@@ -1753,6 +1753,10 @@ header.app-head::before,.detail-head::before{
 #aggBar .agg-slab.be b{color:var(--gold-l)}
 
 #aggBar .agg-wf{margin-top:12px}
+/* Collapse/expand only matters on mobile (see the media query below) --
+   on desktop the chevron stays hidden and the toggle is inert, since the
+   sidebar already has room to show this block open at all times. */
+#aggBar .agg-wf-chev{display:none;flex-shrink:0;transition:transform .2s var(--ease)}
 #aggBar .agg-wf-bar{display:flex;height:22px;border-radius:5px;overflow:hidden;border:1px solid rgba(255,255,255,.10)}
 #aggBar .agg-wf-bar span{display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:8.5px;font-weight:700;transition:width .45s cubic-bezier(.4,0,.2,1)}
 #aggBar .agg-wf-key{display:flex;flex-direction:column;gap:5px;margin-top:8px}
@@ -1769,11 +1773,19 @@ header.app-head::before,.detail-head::before{
 @media (max-width:859px){
   /* Recovery Scale dropped from the mobile dock on Alok's request --
      the fixed-height bottom bar reads as cluttered with 4 stacked
-     blocks (hero, mini-grid, scale, waterfall) on a phone screen.
-     Where The Dues Go stays -- one chart, not two, on mobile. */
+     blocks (hero, mini-grid, scale, waterfall) on a phone screen. Where
+     The Dues Go stayed at first, but it was still eating too much of the
+     fixed dock on a phone -- now it's collapsed by default (just the
+     header + chevron) and expands on tap, so the space is only spent
+     when actually wanted. */
   #aggBar .agg-scale{display:none}
   #aggBar .agg-block-head{font-size:8.5px;margin-bottom:6px}
   #aggBar .agg-wf{margin-top:8px}
+  #aggBar .agg-wf-toggle{cursor:pointer;margin-bottom:0}
+  #aggBar .agg-wf-chev{display:block;margin-left:auto}
+  #aggBar .agg-wf.collapsed .agg-wf-chev{transform:rotate(-90deg)}
+  #aggBar .agg-wf-body{max-height:200px;overflow:hidden;margin-top:8px;transition:max-height .25s var(--ease),margin-top .25s var(--ease)}
+  #aggBar .agg-wf.collapsed .agg-wf-body{max-height:0;margin-top:0}
   #aggBar .agg-wf-bar{height:18px}
   #aggBar .agg-wf-key{gap:4px;margin-top:6px}
   #aggBar .agg-wf-key div{font-size:9px}

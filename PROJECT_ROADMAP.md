@@ -123,6 +123,28 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Calculator: "Where The Dues Go" made collapsible on mobile (2026-08-14, same day)
+
+Alok sent a screenshot of the mobile aggregate dock and asked to either
+remove the "Where The Dues Go" waterfall block or add auto-hide/unhide,
+since it was eating a lot of phone screen space in the fixed bottom dock.
+
+It had actually been kept on mobile deliberately earlier in the session
+("Recovery Scale dropped from the mobile dock... Where The Dues Go
+stays -- one chart, not two") -- real usage now shows even that one
+chart is too much permanently-visible space on a phone. Rather than
+remove the feature outright, made it collapsible: starts collapsed
+(just the header + a chevron) on mobile, taps open to the full bar +
+legend, taps again to close. Desktop is untouched -- the chevron stays
+hidden and the block stays permanently expanded there, since the
+sidebar already has the room.
+
+**Verified** via Playwright at a phone viewport: starts collapsed
+(0px body height), tapping the header expands it (72.5px, chevron
+rotates), tapping again collapses it back. At a desktop viewport the
+block stays expanded (85px) with the chevron hidden the whole time, as
+before. No console errors.
+
 ### Perf: found and fixed the real cause of the slow, WiFi-every-time load (2026-08-14, same day)
 
 The parallel-fetch tweak (previous entry) was flagged as unlikely to
