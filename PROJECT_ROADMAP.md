@@ -123,6 +123,35 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Search: results now appear live as you type, no Enter/Search tap needed (2026-08-14, same day)
+
+Alok: *"Theek hai ab 1 major integration. Jab ots calculator main account no
+type kare to tum khud apna logic use karo and list show ho and select bhi
+kar sake list main account no name branch name aur bhi kuch aana chahiye
+to dekhna."*
+
+The Search screen (the entry point into the OTS Calculator) already had
+result cards showing Account No., Name, Branch, asset code, O/S Balance,
+Net O/S and Total P&L — but that list only appeared after pressing Enter
+or tapping the Search button. The actual gap was that it wasn't *live*.
+
+**Fix**: typing into the search box (any mode — Account No., Cust ID,
+Mobile, Aadhar, PAN, SB No.) now triggers the search itself, debounced by
+~160ms so it doesn't refire on every keystroke, gated to 2+ characters so
+it doesn't try to match against a single stray digit. While live-typing,
+results are capped at 8 (reads like quick suggestions); pressing
+Enter or tapping Search still runs the same search uncapped (up to 60,
+unchanged). Every card is exactly the same clickable result card as
+before — tapping one opens the OTS Calculator detail view directly, same
+as it always did.
+
+**Verified** via Playwright: typing "1" alone shows 0 cards (gated),
+typing a 2nd character fires the live list (8 cards, each showing
+Account No., Name, Branch, asset badge, O/S/Net O/S/P&L), tapping a card
+opens the OTS Calculator with the account's OTS input field present,
+clearing the box returns to the empty state, and Enter still returns the
+full uncapped list (60 cards). No console errors.
+
 ### Excel export: colors stripped back to plain, Impact-on-P&L gets a profit/loss arrow (2026-08-14, same day)
 
 Alok, after the logo-overlap fix, still rated the exported Excel file

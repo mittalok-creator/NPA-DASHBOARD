@@ -224,11 +224,26 @@ SEARCH_MODES.forEach(m=>{
 
 const searchInput = document.getElementById('searchInput');
 const clearBtn = document.getElementById('clearBtn');
-searchInput.addEventListener('input', ()=>{ clearBtn.style.display = searchInput.value ? 'flex' : 'none'; });
-searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter') runSearch(); });
-function clearSearch(){ searchInput.value=''; clearBtn.style.display='none'; renderEmpty(); }
+// Live search: results now appear as the account no./name/etc is typed,
+// no need to press Enter or tap Search first -- the result cards already
+// carry Account No., Name and Branch (plus asset code, O/S, P&L...), so
+// typing lands straight on a selectable list. Capped tighter (8) while
+// live typing so it reads as quick suggestions; Enter/Search button still
+// runs the fuller, uncapped-at-60 search for the whole match set.
+let __liveSearchTimer = null;
+searchInput.addEventListener('input', ()=>{
+  clearBtn.style.display = searchInput.value ? 'flex' : 'none';
+  clearTimeout(__liveSearchTimer);
+  const q = searchInput.value.trim();
+  if(!q){ renderEmpty(); return; }
+  if(q.length<2) return; // wait for a couple characters before suggesting
+  __liveSearchTimer = setTimeout(()=>runSearch(8), 160);
+});
+searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ clearTimeout(__liveSearchTimer); runSearch(); } });
+function clearSearch(){ searchInput.value=''; clearBtn.style.display='none'; clearTimeout(__liveSearchTimer); renderEmpty(); }
 
-function runSearch(){
+function runSearch(limit){
+  limit = limit || 60;
   const q = searchInput.value.trim().toLowerCase();
   if(!q){ renderEmpty(); return; }
   const mode = SEARCH_MODES.find(m=>m.id===searchMode);
@@ -243,7 +258,7 @@ function runSearch(){
       if(seen.has(key)) continue;
       seen.add(key);
       matches.push(r);
-      if(matches.length>=60) break;
+      if(matches.length>=limit) break;
     }
   }
   renderResults(matches, mode);
