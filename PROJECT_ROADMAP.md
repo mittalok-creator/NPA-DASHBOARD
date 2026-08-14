@@ -123,6 +123,43 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Removed the OTS lock/freeze feature entirely (2026-08-14, same day)
+
+Alok reported the OTS Amount field sometimes refused input, with the
+account "freezing" unpredictably. Root cause was a race condition in the
+lock-sync design: `refreshLocksFromServer()` polled `data/locked-ots.json`
+every 45s to pick up freezes/unfreezes made from other devices, but the
+relay write behind a freeze/unfreeze is asynchronous -- if the poll landed
+in the few-second gap before the server file caught up, it would read a
+stale snapshot. Concretely: unfreeze an account to edit it → the poll
+fires before the relay's unfreeze write lands → the poll still sees the
+account locked at the old amount → it "helpfully" re-locks it and disables
+the input mid-edit. A first fix (a `pendingLockSync` grace window that
+lets a fresh local action override a stale server snapshot for ~90s) was
+built and verified working, but once the mechanism causing the problem was
+explained, Alok asked to remove the whole freeze/lock feature outright
+rather than keep maintaining a cross-device sync layer for it.
+
+Removed everywhere: the freeze/unfreeze chip button and its `disabled`
+state on the OTS Amount input (`js/app.js` `otsRow()`), all lock state
+(`frozen`, `pendingLockSync`, `DATA.lockedOts`) and its functions
+(`toggleFreeze`, `syncLockToServer`, `refreshLocksFromServer`), the 45s
+background poll, the `🔒` locked badge in search results, the
+`data/locked-ots.json` boot-time fetch and merge, the `lockedOts` field
+from the Admin Publish payload, and the freeze-chip CSS (including the
+now-unused `ringPulse`/`sealStamp` animations). Deleted the
+`relay/api/lock-ots.js` endpoint and the `data/locked-ots.json` data file
+outright -- nothing in the app calls or reads them anymore. OTS Amount is
+now purely a per-session typed value with no cross-device persistence or
+sync, same as Interest Reversal has always been.
+
+**Verified**: live Playwright pass confirms no freeze button/chip exists
+anywhere, the OTS input is never `disabled`, typing/re-typing an amount
+always works (including after waiting past the old 45s poll interval,
+with zero network calls to `locked-ots`/`lock-ots`), and print/Excel
+export/aggregate totals for a multi-account household all still compute
+correctly. Zero console errors.
+
 ### Print/PDF: aggregate order, Sol ID next to branch, info-grid grouping, logo removed, P&L arrow (2026-08-14, same day)
 
 Alok reviewed the print/PDF sheet again and asked for five specific layout

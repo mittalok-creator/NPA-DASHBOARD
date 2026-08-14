@@ -25,9 +25,9 @@ DATA.oldots.rows.forEach(r=>{
 });
 /* Branch-wise total advance, uploaded separately from the daily NPA file
    (see handleBranchAdvUpload) -- lets the Dashboard show NPA % (NPA
-   outstanding / total advance) per branch. Persisted through Publish like
-   lockedOts, but not reset/carried-forward on a daily NPA update since it
-   changes on its own, much slower schedule. */
+   outstanding / total advance) per branch. Persisted through Publish, but
+   not reset/carried-forward on a daily NPA update since it changes on its
+   own, much slower schedule. */
 DATA.branchAdvances = DATA.branchAdvances || {};
 
 /* ---------- Date helpers (NPA dates are raw Excel serials) ---------- */
@@ -314,9 +314,8 @@ function renderResults(matches, mode){
     const os = typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : '';
     const custId = String(r[C.CUST_ID]);
     const acctNoStr = String(r[C.ACCT_NO]);
-    const isLocked = !!frozen[acctNoStr];
     return `<tr class="clickable" onclick="openDetail('${esc(custId)}','${esc(acctNoStr)}')">
-      <td>${esc(acctNoStr)}${isLocked?` <span class="badge-pill locked mini" title="OTS already communicated to the borrower">🔒</span>`:''}</td>
+      <td>${esc(acctNoStr)}</td>
       <td class="tal">${esc(r[C.NAME])||'—'}</td>
       <td class="tal">${esc(r[C.SOL_DESC])||'—'}</td>
       <td>${asset?`<span class="badge-pill ${esc(asset)}" title="${esc(assetLabel(asset))}">${esc(asset)}</span>`:'—'}</td>
@@ -335,8 +334,7 @@ function renderResults(matches, mode){
 }
 
 /* ---------- Detail view ---------- */
-let otsAmounts = {}; // key: acctNo -> value
-let frozen = {}; // key: acctNo -> bool
+let otsAmounts = {}; // key: acctNo -> value, per-session only (no cross-device sync/lock)
 let interestReversalOverrides = {}; // key: acctNo -> user-edited Interest Reversal value
 // Resolves the live Interest Reversal for a slot: the user's typed override
 // if present, else the value loaded from the daily NPA data.
@@ -352,73 +350,6 @@ function uriFor(s){
 // value and needs no live helper.
 function totalDuesFor(s){
   return (s.os!=='' && s.uci!=='') ? s.os + s.uci + uriFor(s) : '';
-}
-/* Locked OTS amounts are also persisted on DATA.lockedOts and, as of the
-   "sync to everyone immediately" change, ALSO written straight to
-   data/locked-ots.json via the lock-ots relay endpoint the moment anyone
-   locks/unlocks one -- no GitHub sign-in or Admin Publish needed for this
-   specific action, since field staff using this app on their own phones
-   don't have repo access. (data/latest.json's own lockedOts field still
-   gets refreshed on every Admin Publish, as a durable snapshot -- but
-   data/locked-ots.json is the live, always-current source every viewer
-   merges in on load and on a periodic background check.) otsAmounts/frozen
-   below stay per-session scratch state for amounts still being worked out
-   and not yet locked. */
-DATA.lockedOts = DATA.lockedOts || {};
-Object.keys(DATA.lockedOts).forEach(acct => { otsAmounts[acct] = DATA.lockedOts[acct]; frozen[acct] = true; });
-
-const LOCK_OTS_RELAY_URL = 'https://npa-dashboard.vercel.app/api/lock-ots';
-function syncLockToServer(acctNo, locked, amount, btn){
-  if(btn){ btn.classList.remove('sync-err'); btn.classList.add('syncing'); }
-  fetch(LOCK_OTS_RELAY_URL, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ acctNo, locked, amount })
-  }).then(r => { if(!r.ok) throw new Error('sync_failed_'+r.status); })
-    .then(() => { if(btn) btn.classList.remove('syncing'); })
-    .catch(() => {
-      if(btn){
-        btn.classList.remove('syncing'); btn.classList.add('sync-err');
-        btn.title = 'Locked on this device, but could not sync to other devices -- check your internet connection.';
-      }
-    });
-}
-
-/* Merges in any lock/unlock made from another device since this page was
-   loaded. Only ever adds/removes entries actually present in the live file
-   -- never touches an in-progress unfrozen draft for an account nobody
-   else has locked, so it can't stomp on something the user is mid-typing. */
-function refreshLocksFromServer(){
-  fetchJson('data/locked-ots.json?t=' + Date.now()).then(liveLocks => {
-    if(!liveLocks || typeof liveLocks !== 'object') return;
-    let changed = false;
-    Object.keys(liveLocks).forEach(acct => {
-      if(frozen[acct]!==true || String(otsAmounts[acct])!==String(liveLocks[acct])){
-        frozen[acct] = true; otsAmounts[acct] = liveLocks[acct]; DATA.lockedOts[acct] = liveLocks[acct];
-        changed = true;
-      }
-    });
-    Object.keys(DATA.lockedOts).forEach(acct => {
-      if(!(acct in liveLocks)){ delete DATA.lockedOts[acct]; delete frozen[acct]; changed = true; }
-    });
-    if(!changed) return;
-    if(window.__slots){
-      window.__slots.forEach((s,i) => {
-        const btn = document.getElementById('freezeBtn-'+i);
-        const input = document.getElementById('otsInput-'+i);
-        if(!btn || !input) return;
-        const isFrozen = !!frozen[s.acctNo];
-        btn.classList.toggle('frozen', isFrozen);
-        btn.title = isFrozen ? 'Frozen — click to edit' : 'Freeze this OTS amount';
-        input.disabled = isFrozen;
-        if(isFrozen) input.value = otsAmounts[s.acctNo]||'';
-        recalcLoan(i);
-      });
-      recalcAggregate();
-    }
-    if(__lastSearchMatches && document.querySelector('.view.active')?.dataset.view==='search') renderResults(__lastSearchMatches, __lastSearchMode);
-    if(document.querySelector('.view.active')?.dataset.view==='dashboard') renderDashboard();
-  }).catch(()=>{});
 }
 
 function openDetail(custId, jumpAcct){
@@ -657,16 +588,10 @@ function loanTableHTML(slots){
   const statRow = (label, icon, idPrefix, iconId) => `<tr><th scope="row" class="lt-label">${ltIconBadge(icon,iconId)}${label}</th>${slots.map((s,i)=>`<td id="${idPrefix}-${i}">—</td>`).join('')}</tr>`;
   const otsRow = () => `<tr class="lt-ots-row"><th scope="row" class="lt-label">${ltIconBadge('coin')}Settlement (OTS) Amount</th>${slots.map((s,i)=>`
       <td><div class="lt-ots-cell">
-        <button type="button" class="freeze-chip lt-freeze${frozen[s.acctNo]?' frozen':(otsAmounts[s.acctNo]?' ready':'')}" id="freezeBtn-${i}"
-          onclick="toggleFreeze(${i},'${esc(String(s.acctNo))}')"
-          title="${frozen[s.acctNo]?'Frozen — click to edit':'Freeze this OTS amount'}"
-          aria-label="${frozen[s.acctNo]?'Unfreeze OTS amount':'Freeze OTS amount'} for account ${esc(String(s.acctNo))}">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-        </button>
         <span class="lt-cur">₹</span>
         <input type="number" class="lt-ots-input" id="otsInput-${i}" placeholder="0" value="${otsAmounts[s.acctNo]||''}"
           aria-label="OTS amount for account ${esc(String(s.acctNo))}"
-          oninput="onOtsInput(${i},'${esc(String(s.acctNo))}')" ${frozen[s.acctNo]?'disabled':''}>
+          oninput="onOtsInput(${i},'${esc(String(s.acctNo))}')">
         <span class="pct-tag" id="pctNetOs-${i}"></span>
       </div></td>`).join('')}</tr>`;
   const uriRow = () => `<tr><th scope="row" class="lt-label">${ltIconBadge('rotate')}Interest Reversal</th>${slots.map((s,i)=>`
@@ -718,13 +643,12 @@ function loanTableHTML(slots){
 
 // Parses a raw typed OTS Amount into a valid, non-negative number, or null
 // if blank/invalid/negative. Centralizes what "a usable OTS Amount" means
-// so every consumer (freeze/lock, screen calc, aggregate, print, Excel)
-// agrees, instead of each re-parsing the raw value slightly differently.
-// A negative OTS Amount has no real-world meaning (a bank can't receive
-// negative money in a settlement) -- previously nothing rejected it, so
-// typing e.g. "-5000" flowed straight through into Total Sacrifice/Impact
-// on P&L (and could even be frozen/locked as the communicated amount)
-// with no validation anywhere catching it.
+// so every consumer (screen calc, aggregate, print, Excel) agrees, instead
+// of each re-parsing the raw value slightly differently. A negative OTS
+// Amount has no real-world meaning (a bank can't receive negative money in
+// a settlement) -- previously nothing rejected it, so typing e.g. "-5000"
+// flowed straight through into Total Sacrifice/Impact on P&L with no
+// validation anywhere catching it.
 function parseOtsAmount(raw){
   if(raw===undefined || raw==='') return null;
   const v = parseFloat(raw);
@@ -734,8 +658,6 @@ function parseOtsAmount(raw){
 function onOtsInput(i, acctNo){
   const v = document.getElementById('otsInput-'+i).value;
   otsAmounts[acctNo] = v;
-  const btn = document.getElementById('freezeBtn-'+i);
-  if(btn && !frozen[acctNo]) btn.classList.toggle('ready', parseOtsAmount(v)!==null);
   recalcLoan(i);
   recalcAggregate();
 }
@@ -747,26 +669,6 @@ function onUriInput(i, acctNo){
   recalcAggregate();
 }
 window.onUriInput = onUriInput;
-
-function toggleFreeze(i, acctNo){
-  const isFrozen = !!frozen[acctNo];
-  const v = otsAmounts[acctNo];
-  if(!isFrozen && parseOtsAmount(v)===null) return;
-  frozen[acctNo] = !isFrozen;
-  if(frozen[acctNo]) DATA.lockedOts[acctNo] = v; else delete DATA.lockedOts[acctNo];
-  const btn = document.getElementById('freezeBtn-'+i);
-  const input = document.getElementById('otsInput-'+i);
-  if(!input) return;
-  if(navigator.vibrate){ try{ navigator.vibrate(frozen[acctNo]?[10,30,14]:12); }catch(e){} }
-  if(frozen[acctNo]){
-    if(btn){ btn.classList.remove('ready'); btn.classList.add('frozen'); btn.title='Frozen — click to edit'; }
-    input.disabled=true;
-  } else {
-    if(btn){ btn.classList.remove('frozen'); btn.classList.toggle('ready', parseOtsAmount(v)!==null); btn.title='Freeze this OTS amount'; }
-    input.disabled=false; input.focus();
-  }
-  syncLockToServer(acctNo, frozen[acctNo], frozen[acctNo]?v:undefined, btn);
-}
 
 const __reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 function animateNumber(el, from, to, render, dur){
@@ -1902,12 +1804,7 @@ function applyNewDataNow(){
     if(r[0]!=='' && !oldOtsByAcct.has(String(r[0]))) oldOtsByAcct.set(String(r[0]), {date:r[1], amount:r[2]});
   });
 
-  // Locked OTS amounts carry forward across a data update -- only drop the
-  // ones whose account no longer exists (regularized/closed), same rule as
-  // the NPA rows themselves.
-  Object.keys(DATA.lockedOts).forEach(acct => { if(!newAcctSet.has(acct)) delete DATA.lockedOts[acct]; });
-  otsAmounts = {}; frozen = {};
-  Object.keys(DATA.lockedOts).forEach(acct => { otsAmounts[acct] = DATA.lockedOts[acct]; frozen[acct] = true; });
+  otsAmounts = {};
   updateReportDateDisplay();
   const staleMsg = staleRemovedCount>0 ? ` (${staleRemovedCount.toLocaleString('en-IN')} account(s) from the previous data no longer appear — regularized/closed accounts removed.)` : '';
   const addedMsg = newAddedCount>0 ? ` (${newAddedCount.toLocaleString('en-IN')} new account(s) added.)` : '';
@@ -2018,7 +1915,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, lockedOts: DATA.lockedOts||{}, branchAdvances: DATA.branchAdvances||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -3913,11 +3810,10 @@ window.dailyProjUndo = dailyProjUndo;
 /* ---------- Live sync: every edit saves straight to everyone, no Publish
    step for this sheet -- it's edited by whoever's on shift, not just the
    Admin, and per the user's explicit ask this grid behaves like a shared
-   live spreadsheet. Writes go through a small Vercel relay (same repo-scoped
-   token as OTS-lock syncing) that merges just the changed row(s) into
+   live spreadsheet. Writes go through a small Vercel relay (a repo-scoped
+   token) that merges just the changed row(s) into
    data/daily-npa-projection.json on GitHub; reads are just the existing
-   fetchJson polled every few seconds while this tab is open, same pattern
-   as refreshLocksFromServer above. */
+   fetchJson polled every few seconds while this tab is open. */
 const DP_LIVE_RELAY_URL = 'https://npa-dashboard.vercel.app/api/daily-proj-live';
 const DP_POLL_MS = 3000;
 let dpLivePending = new Map(); // rowIndex -> row array, not yet confirmed saved
@@ -4576,13 +4472,8 @@ function toggleTheme(){
 renderEmpty();
 switchView('dashboard');
 
-// Pick up OTS locks/unlocks made from other devices without needing a full
-// page reload -- skips the check while the tab is backgrounded.
-setInterval(() => { if(document.visibilityState==='visible') refreshLocksFromServer(); }, 45000);
-
 window.openDetail = openDetail;
 window.closeDetail = closeDetail;
-window.toggleFreeze = toggleFreeze;
 window.onOtsInput = onOtsInput;
 }
 
@@ -4595,23 +4486,8 @@ function fetchJson(url){
   return fetch(url).then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
 }
 function loadNpaData(isRetry){
-  // The main dataset and the live-locks file are independent requests --
-  // firing them in parallel (instead of waiting for the ~4MB latest.json to
-  // land before even starting the tiny locked-ots.json fetch) shaves a full
-  // round trip off boot time, which matters most on the high-latency mobile
-  // connections this app is actually used over.
-  Promise.all([
-    fetchJson('data/latest.json?t=' + Date.now()),
-    // data/locked-ots.json is the live, always-current source for locked
-    // OTS amounts (see syncLockToServer/refreshLocksFromServer) -- it can
-    // be ahead of whatever was baked into data/latest.json at the last
-    // Admin Publish, so it wins on merge. A failure here (e.g. the file
-    // briefly missing) shouldn't block the whole app from loading --
-    // fall back to data/latest.json's own lockedOts in that case.
-    fetchJson('data/locked-ots.json?t=' + Date.now()).catch(() => ({})),
-  ])
-    .then(([data, liveLocks]) => {
-      data.lockedOts = Object.assign({}, data.lockedOts||{}, liveLocks||{});
+  fetchJson('data/latest.json?t=' + Date.now())
+    .then(data => {
       const overlay = document.getElementById('dataLoadingOverlay');
       if(overlay) overlay.classList.add('hidden');
       initApp(data);
