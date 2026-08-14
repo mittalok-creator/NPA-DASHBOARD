@@ -494,7 +494,7 @@ function openDetail(custId, jumpAcct){
           <div class="agg-scale-track">
             <div class="agg-band loss"></div>
             <div class="agg-band safe" id="aggBandSafe"></div>
-            <div class="agg-needle" id="aggNeedle"></div>
+            <div class="agg-needle" id="aggNeedle"><span class="agg-needle-val" id="aggNeedleVal">—</span></div>
           </div>
           <div class="agg-scale-labels">
             <div class="agg-slab be" id="aggLabBE">Break-even<b id="aggBEVal">—</b></div>
@@ -504,8 +504,14 @@ function openDetail(custId, jumpAcct){
         </div>
         <div class="agg-wf">
           <div class="agg-block-head">${ltIcon('list')}Where The Dues Go</div>
-          <div class="agg-wf-bar" id="aggWfBar"></div>
-          <div class="agg-wf-key" id="aggWfKey"></div>
+          <div class="agg-wf-bar">
+            <span id="aggWf1"></span><span id="aggWf2"></span><span id="aggWf3"></span>
+          </div>
+          <div class="agg-wf-key">
+            <div><span class="agg-wf-dot" style="background:#1B2A44"></span>Recovered in cash (OTS)<b id="aggWfCash">—</b></div>
+            <div><span class="agg-wf-dot" style="background:#D4A544"></span>Ledger sacrifice (BDWO)<b id="aggWfLedger">—</b></div>
+            <div><span class="agg-wf-dot" style="background:#7A8798"></span>Unrealised interest (UCI)<b id="aggWfUci">—</b></div>
+          </div>
         </div>
       </aside>`:''}
       <div id="detailBody" style="padding-top:14px"></div>
@@ -897,6 +903,22 @@ function recalcAggregate(){
   if(bandSafeEl){ bandSafeEl.style.left = bePct+'%'; bandSafeEl.style.width = (100-bePct)+'%'; }
   const needleEl = document.getElementById('aggNeedle');
   if(needleEl) needleEl.style.left = 'calc('+needlePct+'% - 1px)';
+  const needleValEl = document.getElementById('aggNeedleVal');
+  if(needleValEl){
+    // Bubble is centered on the needle by default (left:50%,
+    // translateX(-50%)) -- fine everywhere except right at the two ends
+    // of the track, where a centered bubble would hang half off the
+    // sidebar's edge. Re-anchor it inward there instead of clipping.
+    needleValEl.style.transform = needlePct<10 ? 'translateX(-6px)' : (needlePct>90 ? 'translateX(calc(-100% + 6px))' : 'translateX(-50%)');
+    const prev = (typeof needleValEl.__val==='number') ? needleValEl.__val : 0;
+    if(any){
+      needleValEl.__val = totalOts;
+      animateNumber(needleValEl, prev, totalOts, v=>fmtCr(v), 450);
+    } else {
+      needleValEl.__val = 0;
+      needleValEl.textContent = '—';
+    }
+  }
   const beValEl = document.getElementById('aggBEVal'); if(beValEl) beValEl.textContent = fmtCr(BE);
   const osValEl = document.getElementById('aggOSVal'); if(osValEl) osValEl.textContent = fmtCr(totalOs);
   const duesValEl = document.getElementById('aggDuesVal'); if(duesValEl) duesValEl.textContent = fmtCr(liveTotalDues);
@@ -911,16 +933,30 @@ function recalcAggregate(){
   // text unreadable in one of the two themes (caught in the feasibility
   // mockup review). Chart categories get literal colors instead.
   const WF1='#1B2A44', WF2='#D4A544', WF3='#7A8798';
-  const wfBarEl = document.getElementById('aggWfBar');
-  if(wfBarEl) wfBarEl.innerHTML =
-    `<span style="width:${wA.toFixed(1)}%;background:${WF1};color:#fff">${wA>7?wA.toFixed(0)+'%':''}</span>`+
-    `<span style="width:${wB.toFixed(1)}%;background:${WF2};color:#241d08">${wB>7?wB.toFixed(0)+'%':''}</span>`+
-    `<span style="width:${wC.toFixed(1)}%;background:${WF3};color:#fff">${wC>7?wC.toFixed(0)+'%':''}</span>`;
-  const wfKeyEl = document.getElementById('aggWfKey');
-  if(wfKeyEl) wfKeyEl.innerHTML =
-    `<div><span class="agg-wf-dot" style="background:${WF1}"></span>Recovered in cash (OTS)<b>${any?fmtINR2(totalOts):'—'}</b></div>`+
-    `<div><span class="agg-wf-dot" style="background:${WF2}"></span>Ledger sacrifice (BDWO)<b>${any?fmtINR2(ledgerSac):'—'}</b></div>`+
-    `<div><span class="agg-wf-dot" style="background:${WF3}"></span>Unrealised interest (UCI)<b>${fmtINR2(uci)}</b></div>`;
+  // Update the 3 segment spans in place (style.width + textContent) rather
+  // than rebuilding via innerHTML -- innerHTML replacement destroys and
+  // recreates the elements every render, which gives the CSS width
+  // transition nothing to animate from (a freshly-created element just
+  // appears at its final width, no motion). Same reasoning applies to the
+  // key row's <b> values below, using animateNumber() like the P&L Impact
+  // figure already does, instead of an innerHTML dump.
+  const wf1 = document.getElementById('aggWf1');
+  if(wf1){ wf1.style.width = wA.toFixed(1)+'%'; wf1.style.background = WF1; wf1.style.color = '#fff'; wf1.textContent = wA>7?wA.toFixed(0)+'%':''; }
+  const wf2 = document.getElementById('aggWf2');
+  if(wf2){ wf2.style.width = wB.toFixed(1)+'%'; wf2.style.background = WF2; wf2.style.color = '#241d08'; wf2.textContent = wB>7?wB.toFixed(0)+'%':''; }
+  const wf3 = document.getElementById('aggWf3');
+  if(wf3){ wf3.style.width = wC.toFixed(1)+'%'; wf3.style.background = WF3; wf3.style.color = '#fff'; wf3.textContent = wC>7?wC.toFixed(0)+'%':''; }
+
+  const animateWfVal = (el, newVal, active) => {
+    if(!el) return;
+    const prev = (typeof el.__val==='number') ? el.__val : 0;
+    if(active===false){ el.__val = 0; el.textContent = '—'; return; }
+    el.__val = newVal;
+    animateNumber(el, prev, newVal, v=>fmtINR2(v), 450);
+  };
+  animateWfVal(document.getElementById('aggWfCash'), totalOts, any);
+  animateWfVal(document.getElementById('aggWfLedger'), ledgerSac, any);
+  animateWfVal(document.getElementById('aggWfUci'), uci, true);
 
   renderPrintView();
 }
