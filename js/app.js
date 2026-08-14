@@ -225,11 +225,8 @@ SEARCH_MODES.forEach(m=>{
 const searchInput = document.getElementById('searchInput');
 const clearBtn = document.getElementById('clearBtn');
 // Live search: results now appear as the account no./name/etc is typed,
-// no need to press Enter or tap Search first -- the result cards already
-// carry Account No., Name and Branch (plus asset code, O/S, P&L...), so
-// typing lands straight on a selectable list. Capped tighter (8) while
-// live typing so it reads as quick suggestions; Enter/Search button still
-// runs the fuller, uncapped-at-60 search for the whole match set.
+// no need to press Enter or tap Search first -- same list, same cap (60),
+// whether triggered by typing or by Enter/Search.
 let __liveSearchTimer = null;
 searchInput.addEventListener('input', ()=>{
   clearBtn.style.display = searchInput.value ? 'flex' : 'none';
@@ -237,7 +234,7 @@ searchInput.addEventListener('input', ()=>{
   const q = searchInput.value.trim();
   if(!q){ renderEmpty(); return; }
   if(q.length<2) return; // wait for a couple characters before suggesting
-  __liveSearchTimer = setTimeout(()=>runSearch(8), 160);
+  __liveSearchTimer = setTimeout(()=>runSearch(), 160);
 });
 searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ clearTimeout(__liveSearchTimer); runSearch(); } });
 function clearSearch(){ searchInput.value=''; clearBtn.style.display='none'; clearTimeout(__liveSearchTimer); renderEmpty(); }
@@ -278,6 +275,11 @@ function renderEmpty(){
     </div>`;
 }
 
+// Compact, table-style result list -- matches the "All Accounts" list
+// already used on the Bank Dashboard / KCC Overdue / PNPA tabs (Account,
+// Customer, Branch, Asset, O/S Balance), so the search behaves the same
+// way as every other account list in the app: type -> a plain scrollable
+// list of matches -> tap a row -> the full OTS Calculator detail opens.
 function renderResults(matches, mode){
   __lastSearchMatches = matches; __lastSearchMode = mode;
   const el = document.getElementById('mainArea');
@@ -288,83 +290,29 @@ function renderResults(matches, mode){
       `<div>No borrower matches that ${esc(mode.label)}.<br>Try a different value or search mode.</div></div>`;
     return;
   }
-  el.innerHTML = `<div class="results-hint">${matches.length} match${matches.length>1?'es':''} found</div>` +
-    `<div class="results-grid">` +
-    matches.map(r=>{
-      const asset = r[C.ASSET]||'';
-      const npaDate = fmtDate(toDate(r[C.NPA_DT]));
-      const os = typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : '';
-      const netOutstanding = os; // Net O/S always mirrors O/S Balance
-      const provision = (os!=='' && PROV_RATES[asset]!==undefined) ? os*PROV_RATES[asset] : '';
-      const totalPL = (os!==''&&provision!=='') ? os-provision : '';
-      const custId = String(r[C.CUST_ID]);
-      const linkedSlots = [1,2,3,4].map(n=>lookupLoanSlot(custId,n)).filter(Boolean).map(computeSlot);
-      const linkedCount = linkedSlots.length;
-      const acctNoStr = String(r[C.ACCT_NO]);
-      const isLocked = !!frozen[acctNoStr];
-      const lockedAmt = otsAmounts[acctNoStr];
-      // A borrower with 2+ linked accounts used to show just the ONE row that
-      // happened to match the search, even though "N accounts linked" implied
-      // more -- now every linked account gets its own O/S Balance/Net O/S/P&L,
-      // plus a combined-total row across all of them (Total O/S/Total
-      // Dues/Total P&L), so the card is a genuine at-a-glance summary of the
-      // whole borrower without needing to open the detail view for it.
-      const multiBody = linkedCount>1 ? (()=>{
-        const totOs = linkedSlots.reduce((a,s)=>a+(s.os!==''?s.os:0),0);
-        const totDues = linkedSlots.reduce((a,s)=>a+(s.totalDues!==''?s.totalDues:0),0);
-        const totPL = linkedSlots.reduce((a,s)=>a+(s.totalPL!==''?s.totalPL:0),0);
-        return `
-        <div class="result-multi">
-          ${linkedSlots.map(s=>`
-          <div class="rm-row">
-            <div class="rm-acc">A/c · ${esc(s.acctNo)}${s.assetCode?`<span class="badge-pill mini ${esc(s.assetCode)}">${esc(s.assetCode)}</span>`:''}</div>
-            <div class="rm-vals">
-              <span><b>${s.os!==''?fmtINR2(s.os):'—'}</b><small>O/S</small></span>
-              <span><b>${s.netOutstanding!==''?fmtINR2(s.netOutstanding):'—'}</b><small>Net O/S</small></span>
-              <span class="v-pl"><b>${s.totalPL!==''?fmtINR2(s.totalPL):'—'}</b><small>P&amp;L</small></span>
-            </div>
-          </div>`).join('')}
-          <div class="rm-row rm-totals">
-            <div class="rm-acc">All ${linkedCount} Accounts</div>
-            <div class="rm-vals">
-              <span><b>${fmtINR2(totOs)}</b><small>Total O/S</small></span>
-              <span><b>${fmtINR2(totDues)}</b><small>Total Dues</small></span>
-              <span class="v-pl"><b>${fmtINR2(totPL)}</b><small>Total P&amp;L</small></span>
-            </div>
-          </div>
-        </div>
-        <div class="result-grid result-grid-sm">
-          <div><div class="k">NPA Date</div><div class="v">${npaDate}</div></div>
-          <div><div class="k">Branch</div><div class="v">${esc(r[C.SOL_DESC])||'—'}</div></div>
-        </div>`;
-      })() : `
-        <div class="result-grid">
-          <div><div class="k">O/S Balance</div><div class="v">${fmtINR(os)}</div></div>
-          <div><div class="k">Net O/S</div><div class="v">${netOutstanding!==''?fmtINR(netOutstanding):'—'}</div></div>
-          <div><div class="k">Total P&amp;L</div><div class="v v-pl">${totalPL!==''?fmtINR(totalPL):'—'}</div></div>
-          <div><div class="k">NPA Date</div><div class="v">${npaDate}</div></div>
-          <div><div class="k">Branch</div><div class="v">${esc(r[C.SOL_DESC])||'—'}</div></div>
-        </div>`;
-      return `
-      <div class="result-card${linkedCount>1?' result-card-multi':''}" data-asset="${esc(asset)}" onclick="openDetail('${esc(String(r[C.CUST_ID]))}','${esc(String(r[C.ACCT_NO]))}')">
-        <div class="result-top">
-          <div>
-            <div class="result-name">${esc(r[C.NAME])||'—'}</div>
-            <div class="result-acc">A/c · ${esc(r[C.ACCT_NO])}</div>
-            <div class="result-scheme">${esc(r[C.SOL_DESC])||''}</div>
-          </div>
-          <div class="result-badges">
-            ${asset?`<span class="badge-pill ${esc(asset)}" title="${esc(assetLabel(asset))}">${esc(asset)}</span>`:''}
-            ${isLocked?`<span class="badge-pill locked" title="OTS ${lockedAmt?fmtINR(parseFloat(lockedAmt)):''} locked and already communicated to the borrower">🔒 Already Told${lockedAmt?' · '+fmtINR(parseFloat(lockedAmt)):''}</span>`:''}
-          </div>
-        </div>
-        ${multiBody}
-        <div class="result-bottom">
-          <span>Cust ID: ${esc(r[C.CUST_ID])} · 🔗 ${linkedCount} account${linkedCount>1?'s':''} linked</span>
-          <span class="chev" aria-hidden="true">›</span>
-        </div>
-      </div>`;
-    }).join('') + `</div>`;
+  const rows = matches.map(r=>{
+    const asset = r[C.ASSET]||'';
+    const os = typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : '';
+    const custId = String(r[C.CUST_ID]);
+    const acctNoStr = String(r[C.ACCT_NO]);
+    const isLocked = !!frozen[acctNoStr];
+    return `<tr class="clickable" onclick="openDetail('${esc(custId)}','${esc(acctNoStr)}')">
+      <td>${esc(acctNoStr)}${isLocked?` <span class="badge-pill locked mini" title="OTS already communicated to the borrower">🔒</span>`:''}</td>
+      <td class="tal">${esc(r[C.NAME])||'—'}</td>
+      <td class="tal">${esc(r[C.SOL_DESC])||'—'}</td>
+      <td>${asset?`<span class="badge-pill ${esc(asset)}" title="${esc(assetLabel(asset))}">${esc(asset)}</span>`:'—'}</td>
+      <td>${fmtINR2(os)}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<div class="results-hint">${matches.length} match${matches.length>1?'es':''} found${matches.length>=60?' · showing first 60, refine your search for more':''}</div>` +
+    `<div class="dash-table-wrap acct-list-scroll">
+      <table class="dash-table">
+        <thead><tr>
+          <th>Account</th><th class="tal">Customer</th><th class="tal">Branch</th><th>Asset</th><th>O/S Balance</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 /* ---------- Detail view ---------- */
