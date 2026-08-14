@@ -1110,15 +1110,20 @@ async function exportOtsExcel(){
   // ---- Header (logo + bank name + Regional Office, matching the print sheet) ----
   const logoId = wb.addImage({ base64: OTS_LOGO_DATA_URI, extension: 'png' });
   ws.addImage(logoId, { tl:{col:0, row:0}, ext:{width:40, height:40} });
-  ws.mergeCells(1,1,1,Math.max(lastColIdx,4));
-  set('A1', `UPGB OTS CALCULATOR — ${custRow[C.NAME]||''}`, {font:{bold:true, size:16, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
-  ws.mergeCells(2,1,2,Math.max(lastColIdx,4));
+  // Title/subtitle merges start at column B, not A -- on a narrow (1-2
+  // account) export, a merge starting at A centers its text close enough
+  // to the top-left corner that the logo image (anchored at A1) visibly
+  // overlapped the title text on real devices (confirmed via a screenshot
+  // from Alok's phone). Column A is now reserved for the logo alone.
+  ws.mergeCells(1,2,1,Math.max(lastColIdx+1,5));
+  set('B1', `UPGB OTS CALCULATOR — ${custRow[C.NAME]||''}`, {font:{bold:true, size:16, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
+  ws.mergeCells(2,2,2,Math.max(lastColIdx+1,5));
   // Brass letterhead rule under the bank name, matching the print sheet's
   // .pv-header border -- same accent language, reused wherever the target
   // format can reliably render a real border (Excel can; unlike a custom
   // font, a colored border isn't dependent on what's installed on the
   // machine that opens the file).
-  set('A2', `Uttar Pradesh Gramin Bank (Regional Office Hathras) · Branch: ${custRow[C.SOL_DESC]||''}`, {font:{size:11, color:{argb:'FF333333'}}, align:{horizontal:'center'}, border:{bottom:{style:'medium', color:{argb:'FFB3812A'}}}});
+  set('B2', `Uttar Pradesh Gramin Bank (Regional Office Hathras) · Branch: ${custRow[C.SOL_DESC]||''}`, {font:{size:11, color:{argb:'FF333333'}}, align:{horizontal:'center'}, border:{bottom:{style:'medium', color:{argb:'FFB3812A'}}}});
   ws.getRow(1).height = 30;
 
   const reportDateRow = 4;
