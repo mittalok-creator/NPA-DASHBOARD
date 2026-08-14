@@ -654,7 +654,6 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
 .pv-agg-row{display:flex;justify-content:space-between;font-size:12.5px;font-weight:800;padding:4px 6px;border-bottom:1px solid #999;color:#000}
 .pv-agg-row span:last-child{font-family:'IBM Plex Mono',ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace}
 .pv-footer{text-align:center;font-size:9.5px;color:#333;letter-spacing:.6px;margin-top:8px}
-.pv-schemes{display:flex;justify-content:space-around;font-size:9.5px;color:#333;margin-top:3px}
 
 /* ---------- Cmd+K command palette ---------- */
 .cmdk-overlay{position:fixed;inset:0;z-index:120;background:var(--scrim);backdrop-filter:blur(6px);

@@ -123,6 +123,38 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Print/PDF: dropped a repeated branch name, moved scheme code into the table, removed a duplicate O/S row (2026-08-14, same day)
+
+Alok sent a real exported PDF (BHAGWATI_PRASAD) and pointed out three
+things: *"ismain branch ka naam ladpur 3 baar aa raha hai jabki 1 baar
+theek hai bar bar need nahi hai. niche CC004 jo ki scheme code hai use
+wahan se hata kar table main hi daal do outstanding row se upar. kahin
+outstanding and net os ek hi rahti hai hamesha to use wahi rehne do."*
+
+- **Branch name repetition**: was in the header ("Branch: LADPUR"), the
+  borrower info grid ("Branch: LADPUR"), and the footer scheme line
+  ("CC004 · LADPUR") — three times for one fact. Kept only the header
+  copy (the natural single "letterhead" spot); removed the info-grid row
+  entirely.
+- **Scheme code (CC004)**: was stuck in a small footer line alongside
+  the now-redundant branch name. Moved into the particulars table as its
+  own row, one per account, positioned right above O/S Balance where the
+  settlement figures start — and dropped the footer line altogether
+  (nothing left in it once branch and scheme both moved elsewhere).
+- **O/S Balance vs Net O/S**: these were two separate rows always
+  showing the exact same number (Net O/S is defined as always equal to
+  O/S Balance, no exceptions — the underlying rule from an earlier
+  session). Removed the Net O/S row; O/S Balance is the one that stays.
+
+**Verified** against the real PDF's data: reprinted the same borrower,
+confirmed the branch name (BALDEV in the test case) now appears exactly
+once as a labeled field (a second incidental appearance inside the
+postal address text, e.g. "PO BALDEV", is real address content, not a
+duplicate field, and was left alone), confirmed "Scheme" now renders
+right above "O/S Balance" showing the account's real scheme code, and
+confirmed "Net O/S" no longer appears anywhere in the row list. No
+console errors.
+
 ### Print/PDF: stripped back to a plain, professional sheet (2026-08-14, same day)
 
 Alok: *"Pdf thoda clean and profesional banao icon wagerah hata do colours
