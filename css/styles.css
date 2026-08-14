@@ -319,6 +319,72 @@ main{padding:20px 16px 40px}
 .empty-state h2{margin:0 0 6px;font-size:18px;color:var(--ink);font-weight:800;letter-spacing:-.3px}
 .empty-state p{margin:0;font-size:13.5px;color:var(--sub);max-width:280px}
 
+/* ---------- OTS start screen (Search tab, nothing searched yet) ----------
+   Replaced a centered icon + one line on an otherwise empty screen. Left-
+   aligned stack instead of .empty-state's centered layout, because it now
+   carries real scannable content (recent borrowers, branch chips, asset
+   split) rather than a single message. */
+.ots-start{display:flex;flex-direction:column;gap:16px;padding:6px 2px 22px;animation:riseIn .4s var(--ease)}
+.ots-start .start-block{display:flex;flex-direction:column}
+.ots-start .start-lbl{font-size:9.5px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--sub);margin-bottom:9px}
+
+/* Recent borrowers -- <button> not <div> so it's keyboard-reachable and
+   announces as an action, same as the branch/asset chips below. */
+.ots-start .start-rec{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:9px 11px;margin-bottom:6px;border-radius:11px;background:var(--card);
+  border:1px solid var(--line);cursor:pointer;font-family:inherit;
+  transition:background .15s var(--ease),border-color .15s var(--ease)}
+.ots-start .start-rec:hover,.ots-start .start-rec:focus-visible{background:var(--accent-soft);border-color:var(--accent)}
+.ots-start .start-rec-av{width:30px;height:30px;border-radius:9px;flex-shrink:0;
+  background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;letter-spacing:.3px}
+.ots-start .start-rec-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.ots-start .start-rec-nm{font-size:12.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ots-start .start-rec-sub{font-size:10px;color:var(--sub);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ots-start .start-rec-amt{font-size:11.5px;font-weight:800;color:var(--ink);font-family:var(--font-mono);flex-shrink:0}
+
+/* Shown in the Recent slot only until the first borrower is opened. */
+.ots-start .start-hint{display:flex;align-items:flex-start;gap:9px;padding:12px 13px;border-radius:11px;
+  background:var(--accent-soft);border:1px solid var(--line);color:var(--sub);font-size:12.5px;line-height:1.5}
+.ots-start .start-hint svg{flex-shrink:0;margin-top:1px;color:var(--accent)}
+.ots-start .start-hint b{color:var(--ink);font-weight:700}
+
+.ots-start .start-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ots-start .start-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;
+  border:1px solid var(--line);background:var(--card);color:var(--sub);
+  font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;
+  transition:background .15s var(--ease),border-color .15s var(--ease),color .15s var(--ease)}
+.ots-start .start-chip b{font-family:var(--font-mono);font-weight:800;color:var(--ink);font-size:10.5px}
+.ots-start .start-chip:hover,.ots-start .start-chip:focus-visible{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.ots-start .start-chip.all{color:var(--accent);border-color:var(--accent);border-style:dashed}
+
+/* Asset split -- one segment per class, width by account count, colored on
+   the same green->red severity ramp as .badge-pill.<code> elsewhere. */
+.ots-start .start-assetbar{display:flex;height:11px;border-radius:6px;overflow:hidden;border:1px solid var(--line);margin-bottom:9px}
+.ots-start .start-assetbar .seg{display:block;min-width:2px}
+.ots-start .seg.SUB_STD,.ots-start .start-leg i.SUB_STD{background:var(--green)}
+.ots-start .seg.DA1,.ots-start .start-leg i.DA1{background:var(--amber)}
+.ots-start .seg.DA2,.ots-start .start-leg i.DA2{background:#C2691C}
+.ots-start .seg.DA3,.ots-start .start-leg i.DA3{background:var(--red)}
+.ots-start .seg.LOSS,.ots-start .start-leg i.LOSS{background:#7A2B26}
+.ots-start .start-legend{display:flex;flex-wrap:wrap;gap:5px 6px}
+.ots-start .start-leg{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:8px;
+  border:1px solid var(--line);background:var(--card);color:var(--sub);
+  font-family:inherit;font-size:10px;font-weight:700;cursor:pointer;
+  transition:background .15s var(--ease),border-color .15s var(--ease)}
+.ots-start .start-leg:hover,.ots-start .start-leg:focus-visible{background:var(--accent-soft);border-color:var(--accent)}
+.ots-start .start-leg i{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.ots-start .start-leg b{font-family:var(--font-mono);font-weight:800;color:var(--ink)}
+
+.ots-start .start-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ots-start .start-stat{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 13px;min-width:0}
+.ots-start .start-stat .k{display:block;font-size:9px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--sub)}
+.ots-start .start-stat .v{display:block;font-size:17px;font-weight:800;color:var(--ink);font-family:var(--font-mono);letter-spacing:-.3px;margin-top:3px}
+
+/* No footer row here on purpose -- the report date already prints in the
+   page header, and the signature in .app-foot/.mobile-sig, so anything
+   added down here would just repeat what's already on screen. */
+
 .results-hint{font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.9px;margin:4px 2px 14px;display:flex;align-items:center;gap:10px}
 .results-hint::after{content:"";flex:1;height:3px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 
@@ -488,7 +554,14 @@ main{padding:20px 16px 40px}
 .dash{color:var(--ink-mute);font-weight:600}
 
 /* ---------- Footer ---------- */
-footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-inset-bottom))}
+/* "Crafted by Alok Mittal" was showing twice on every screen: this in-flow
+   footer plus the sidebar's own .nav-foot .sig on desktop, and this footer
+   plus the fixed .mobile-sig strip on a phone. Each viewport already
+   carries its own signature (and the print sheet has its own .pv-footer),
+   so this middle one is off everywhere. Markup left in place rather than
+   deleted so the layout/padding rules below stay valid if it's ever
+   brought back. */
+footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env(safe-area-inset-bottom))}
 .foot-note{font-size:11px;color:var(--sub);letter-spacing:.2px}
 .credit-signature{font-family:'Caveat',cursive;font-size:32px;font-weight:700;color:var(--gold-l);margin-top:6px;letter-spacing:.5px}
 @keyframes dissolveIn{0%{opacity:0;transform:translateY(6px);filter:blur(2px)}100%{opacity:1;transform:translateY(0);filter:blur(0)}}

@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 ---
 
@@ -122,6 +122,59 @@ Vercel first**, see notes below).
 **Current milestone**: none — ready to start M7 (fast search) or M9 (UI/UX
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
+
+### Feature: OTS Calculator start screen rebuilt as an "Action Hub" (2026-08-15)
+
+The Search tab's opening screen was a house icon, a heading and one line of
+text on an otherwise empty page -- roughly 70% of a phone screen doing
+nothing, while 13,925 accounts of loaded data went unmentioned. Alok asked
+for mockups first; three directions were built (Quick Start / Portfolio
+Snapshot / Action Hub) and he picked **Action Hub**, then added "aur asset
+bhi daal dena".
+
+Shipped layout, in order -- action first, context second:
+
+1. **Waapas wahin se** -- the last 5 borrowers opened, newest first, each a
+   tap back into that borrower. New feature: `localStorage` only (key
+   `upgb-recent-borrowers`), never published and never sent anywhere, so it
+   stays per-person even though the app needs no login. Keyed by cust ID so
+   re-opening moves a borrower back to the top instead of duplicating.
+   O/S is **summed across the borrower's linked loans** (same slots
+   `openDetail()` builds) -- storing only `custRow`'s own balance
+   under-reported a 2-loan household as ₹38,155 when the real figure is
+   ₹1.19 L. Multi-loan borrowers also show "· N loans".
+2. **Branch se kholo** -- top 4 branches by O/S as chips, each opening that
+   branch's full account list in the shared list modal, plus a "Saari 55 ›"
+   chip through to the Dashboard.
+3. **Asset classification** -- a segmented bar in regulatory severity order
+   (SUB_STD → DA1 → DA2 → DA3 → LOSS, not by count) so it reads
+   left-to-right as a severity ramp, colored on the same green→red language
+   `.badge-pill.<code>` already uses. Each legend entry opens that class's
+   accounts.
+4. **Two stat cards** -- NPA Accounts, Total O/S.
+
+Branch/asset totals come from a memoised pass over the raw NPA rows rather
+than `currentDashStats`, which only exists once the Dashboard has rendered
+and this is often the first screen opened; the memo is invalidated on data
+apply. Before the first borrower is ever opened, the Recent slot carries a
+search hint instead, so the screen still opens with a clear next step.
+
+**Also fixed, found while building this:** "Crafted by Alok Mittal" was
+rendering **twice on every screen** -- the in-flow `footer.app-foot` plus
+the sidebar's `.nav-foot .sig` on desktop, and that same footer plus the
+fixed `.mobile-sig` strip on a phone. Each viewport already carries its own
+signature (and the print sheet its own `.pv-footer`), so `app-foot` is now
+hidden everywhere. A "Data as on" line drafted for the start screen's own
+footer was dropped for the same reason -- the page header already prints
+the report date.
+
+**Verified**: live Playwright pass on a real mobile viewport (390x844) and
+desktop (1400x900), light and dark -- first-run hint state, recents
+populating in correct order after opening two borrowers, recent tap opening
+the right borrower, branch chip → "JARERA — Accounts | 958 account(s)",
+asset chip → "Substandard asset — Accounts | 1,818 account(s)" (matching
+the legend count), and exactly one signature visible per viewport in both.
+Zero console errors; full OTS/print/Excel regression still passing.
 
 ### Feature: Net Settlement Impact now shows both a Dues% and an O/S% (2026-08-14, same day)
 
