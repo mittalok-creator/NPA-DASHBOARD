@@ -474,6 +474,10 @@ function openDetail(custId, jumpAcct){
             </div>
             <div class="agg-hero-ring" id="aggHeroRing" style="--pct:0"><span id="aggHeroRingPct">—</span></div>
           </div>
+          <div class="agg-hero-pcts">
+            <div class="agg-hero-pct-chip"><span class="k">of Total Dues</span><span class="v" id="aggPctDues">—</span></div>
+            <div class="agg-hero-pct-chip"><span class="k">of O/S Balance</span><span class="v" id="aggPctOs">—</span></div>
+          </div>
         </div>
         <div class="agg-mini-grid">
           <div class="agg-mini"><div class="k">Total OTS Amount</div><div class="v" id="aggTotOts">—</div></div>
@@ -792,7 +796,11 @@ function recalcLoan(i){
   }
   if(settleCellEl){
     const settlePct = (totalDues && totalDues>0) ? Math.max(0,Math.min(100,(ots/totalDues)*100)) : 0;
-    settleCellEl.innerHTML = `<div class="settle-cell"><div class="settle-bar"><span style="width:${settlePct.toFixed(1)}%"></span></div><span class="settle-pct">${settlePct.toFixed(1)}% of dues</span></div>`;
+    // Alok's request -- shows the O/S-based share alongside the Dues-based
+    // bar/percentage that was already here, not just one or the other.
+    const settlePctOs = (s.os && s.os>0) ? Math.max(0,(ots/s.os)*100) : null;
+    const osLine = settlePctOs!==null ? ` · ${settlePctOs.toFixed(1)}% of O/S` : '';
+    settleCellEl.innerHTML = `<div class="settle-cell"><div class="settle-bar"><span style="width:${settlePct.toFixed(1)}%"></span></div><span class="settle-pct">${settlePct.toFixed(1)}% of dues${osLine}</span></div>`;
   }
   // Total Sacrifice = Total Dues - OTS Amount (Interest Reversal is already
   // folded into Total Dues above); Ledger Sacrifice (BDWO Amount) = O/S -
@@ -863,6 +871,18 @@ function recalcAggregate(){
   if(heroRingPctEl) heroRingPctEl.textContent = (any && liveTotalDues>0) ? pct.toFixed(0)+'%' : '—';
   const heroSubEl = document.getElementById('aggHeroSub');
   if(heroSubEl) heroSubEl.textContent = `across ${slots.length} account${slots.length>1?'s':''} · O/S ${fmtCr(window.__totalOS)}`;
+  // Alok's request -- the ring only ever showed OTS as a share of Total
+  // Dues; this pair makes both readings visible together (Dues share can
+  // run well above/below the O/S share depending on how much UCI/Interest
+  // Reversal is in play), not just whichever one the ring happens to draw.
+  const pctDuesEl = document.getElementById('aggPctDues');
+  if(pctDuesEl) pctDuesEl.textContent = (any && liveTotalDues>0) ? pct.toFixed(1)+'%' : '—';
+  const pctOsEl = document.getElementById('aggPctOs');
+  if(pctOsEl){
+    const totalOsForPct = window.__totalOS;
+    const pctOs = (any && totalOsForPct>0) ? Math.max(0,(totalOts/totalOsForPct)*100) : null;
+    pctOsEl.textContent = pctOs!==null ? pctOs.toFixed(1)+'%' : '—';
+  }
 
   const aggOtsEl = document.getElementById('aggTotOts');
   if(aggOtsEl){

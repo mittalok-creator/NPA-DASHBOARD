@@ -707,6 +707,13 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
   mask:radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px));
   transition:background 1s var(--ease)}
 #aggBar .agg-hero-ring span{position:relative;font-size:11.5px;font-weight:800;color:#fff}
+/* The ring only ever draws the Dues-based share -- these two chips put
+   both readings (Dues and O/S) side by side underneath it, always visible
+   (unlike .agg-hero-sub, which is hidden on the mobile dock). */
+#aggBar .agg-hero-pcts{display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.10)}
+#aggBar .agg-hero-pct-chip{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+#aggBar .agg-hero-pct-chip .k{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--head-sub)}
+#aggBar .agg-hero-pct-chip .v{font-size:14px;font-weight:800;color:#fff;font-family:var(--font-mono)}
 /* ---- Secondary stats: smaller, quieter, subordinate to the hero ---- */
 #aggBar .agg-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.10);border-radius:12px;overflow:hidden}
 /* min-width:0 is load-bearing here -- without it a grid item won't shrink
@@ -751,6 +758,8 @@ footer.app-foot{text-align:center;padding:26px 18px calc(28px + env(safe-area-in
   #aggBar .agg-hero-sub{display:none}
   #aggBar .agg-hero-ring{width:38px;height:38px}
   #aggBar .agg-hero-ring span{font-size:10px}
+  #aggBar .agg-hero-pcts{margin-top:8px;padding-top:8px}
+  #aggBar .agg-hero-pct-chip .v{font-size:12px}
   #aggBar .agg-mini{padding:7px 9px;text-align:center}
   #aggBar .agg-mini .k{font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #aggBar .agg-mini .v{font-size:11.5px}
@@ -1498,6 +1507,8 @@ header.app-head::before,.detail-head::before{
 :root[data-theme="light"] #aggBar .agg-mini{background:rgba(33,33,46,.015)}
 :root[data-theme="light"] #aggBar .agg-mini .v{color:var(--head-ink)}
 :root[data-theme="light"] #aggBar .agg-hero-ring span{color:var(--head-ink)}
+:root[data-theme="light"] #aggBar .agg-hero-pcts{border-top-color:rgba(33,33,46,.09)}
+:root[data-theme="light"] #aggBar .agg-hero-pct-chip .v{color:var(--head-ink)}
 :root[data-theme="light"] .side-rail .rail-value.pos{color:var(--pos)}
 :root[data-theme="light"] .side-rail .rail-value.neg{color:var(--neg)}
 

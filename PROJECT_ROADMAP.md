@@ -123,6 +123,31 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Feature: Net Settlement Impact now shows both a Dues% and an O/S% (2026-08-14, same day)
+
+Alok pointed out that the aggregate "Net Settlement Impact" ring only ever
+showed OTS Amount as a percentage of Total Dues -- correct, but he wanted
+the O/S-Balance-based percentage shown alongside it too, and asked for
+this "wherever it's shown" consistently, not just the one spot.
+
+**Aggregate hero card**: kept the ring as-is (still the Dues-based %, per
+"jo theek bhi hai"), and added a two-chip row underneath it -- "OF TOTAL
+DUES" / "OF O/S BALANCE" -- always visible on both desktop and the mobile
+dock (unlike `.agg-hero-sub`, which is hidden on mobile).
+
+**Per-account Settlement Progress row**: was already showing "X% of
+dues"; now reads "X% of dues · Y% of O/S" so the same pairing applies at
+the individual-account level too, not just the aggregate. (The small
+`pctNetOs` tag next to the OTS input itself was left as the O/S-based
+quick-glance figure it already was -- the fuller Settlement Progress row
+right below it now carries both readings.)
+
+**Verified**: live Playwright pass -- Dues% (86.6%) and O/S% (93.1%)
+both compute and render correctly on desktop and a real mobile viewport
+(390x844), with a screenshot check that the mobile dock's fixed-height
+layout still has clearance and doesn't overlap the content behind it.
+Zero console errors; full OTS/print/Excel regression still passing.
+
 ### Feature: WhatsApp link alongside every Manager/Recovery Officer phone number (2026-08-14, same day)
 
 Alok tapped a phone number in the new branch contact card and noticed the
