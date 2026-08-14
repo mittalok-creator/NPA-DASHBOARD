@@ -294,6 +294,10 @@ function runSearch(){
       matches.push(r);
     }
   }
+  // Alok's request -- results list reads more naturally sorted A-Z by
+  // borrower name than in raw data order, regardless of which field
+  // (account/cust ID/mobile/etc.) was actually searched on.
+  matches.sort((a,b)=>String(a[C.NAME]||'').localeCompare(String(b[C.NAME]||''), 'en', {sensitivity:'base'}));
   renderResults(matches, mode);
 }
 

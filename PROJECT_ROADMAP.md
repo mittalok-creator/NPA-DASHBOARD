@@ -123,6 +123,19 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: OTS Calculator search results now sort A-Z by borrower name (2026-08-14, same day)
+
+Alok asked that the results list under the OTS Calculator's Search tab
+(type 6+ characters -- account no./cust ID/mobile/Aadhar/PAN/SB no. --
+the matching-borrowers table that appears) come back sorted by name
+instead of raw data order. Added one `matches.sort()` by `NAME` (case-
+insensitive) in `runSearch()`, right before the results render -- applies
+regardless of which of the 6 search modes was used.
+
+**Verified**: live Playwright search on a 6-digit substring that matched
+23 real accounts across different names -- results render already
+sorted A-Z. Zero console errors.
+
 ### Feature: Branch Manager contacts added to the Branch/Sol ID panel (2026-08-14, same day)
 
 Alok asked for an Excel template to collect Branch Manager Name/Mobile/
