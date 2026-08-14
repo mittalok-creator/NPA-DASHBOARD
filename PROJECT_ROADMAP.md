@@ -123,6 +123,35 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Perf: boot-time data fetches now run in parallel, not one after another (2026-08-14, same day)
+
+Alok, after the Service Worker cache-bloat fix: *"Now working fine but
+load hone main abhi bhi 1 min. se jyada ka time le raha hai."* Checked
+`data/latest.json` -- it's ~4.2MB uncompressed but served gzip'd (~1MB
+over the wire, confirmed via a live curl against the production domain,
+~1.2s from a well-connected location), and the row-indexing that runs
+once the data lands is a single linear pass, not the kind of thing that
+would itself take anywhere near a minute.
+
+One real, if modest, inefficiency found: `loadNpaData()` was fetching
+`data/latest.json` (the ~4MB main dataset) and `data/locked-ots.json`
+(a few KB) **one after another** instead of at the same time -- the tiny
+lock file's fetch didn't even start until the multi-MB main dataset had
+fully landed, adding a full extra round trip before the app could
+render. Fixed via `Promise.all` so both fire together now.
+
+This alone won't fully explain a 1-minute+ load on its own -- flagged
+honestly rather than claimed as a complete fix. If it's still slow after
+this ships, the next things to check are the actual network conditions
+(WiFi vs. mobile data, signal strength) at the point of use, since nothing
+else found in the boot path looks like it should cost anywhere near a
+minute on a normal connection.
+
+**Verified** via Playwright: both `data/latest.json` and
+`data/locked-ots.json` requests now fire within the same tick of each
+other on reload (previously fully sequential), data still loads and
+renders correctly, no console errors.
+
 ### Search: live-typing now waits for 6 characters, and the list is never capped (2026-08-14, same day)
 
 Alok: *"OK search main pahle 2 digit k jagah pahle 6 digit k baad account
