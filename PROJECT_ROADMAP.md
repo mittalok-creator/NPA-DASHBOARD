@@ -123,6 +123,45 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Bug fix: Service Worker was silently filling up Cache Storage from the 3s/45s live-sync polls, slowing the whole app down (2026-08-14, same day)
+
+Once the missing `LOCK_OTS_GITHUB_TOKEN` Vercel env var (see previous entry)
+was fixed and OTS lock-sync actually started working live, Alok: *"Live to
+ho gaya ye work bhi kar raha hai par pura app slow ho gaya hai abhi tak
+bahut smooth chal raha tha ise implement karte hi bahut slow ho gaya."*
+
+**Root cause**: two features poll the server on a timer to pick up changes
+made from other devices -- Daily NPA Projection's live-sync every **3
+seconds**, OTS lock-sync every 45 seconds (`js/app.js`, `dpPollLive`/
+`refreshLocksFromServer`). Each poll's URL carries a unique cache-busting
+timestamp (`?t=...`) so it's never requested with that exact URL again --
+but `sw.js`'s fetch handler was unconditionally running `cache.put()` on
+*every* GET response regardless. That means every single poll -- up to
+1,200 an hour just from the 3-second one -- added a new, permanently dead
+entry to Cache Storage that would never be read back, only cleared out on
+the next app version deploy. Across a long-running tab (exactly today's
+situation, with the extended Vercel token troubleshooting keeping the app
+open for a while on the same version), this silently piled up thousands of
+useless entries and visibly slowed the browser tab down.
+
+**Fix**: `sw.js`'s fetch handler now sends `data/locked-ots.json` and
+`data/daily-npa-projection.json` straight to the network with no caching
+step at all -- nothing to write, nothing to grow. Every other request
+(shell assets, `data/latest.json`, KCC Overdue, PNPA, Bank Dashboard, etc.)
+still gets cached exactly as before, so offline fallback for the real app
+data is unaffected -- only the two endpoints that are *provably* never
+re-requested with the same URL were touched.
+
+**Verified** via Playwright: fired 5 rounds of both polled endpoints with
+unique cache-busting timestamps (mirroring real polling) -- 0 entries
+landed in Cache Storage for either, while a normal one-time data fetch
+(`data/bank-npa.json`) and the app shell still cached correctly (1 entry
+and present respectively). No console errors. Because this ships as a new
+Service Worker version, every user's already-bloated cache from today gets
+wiped automatically the next time the app updates (the existing
+version-mismatch cleanup in `sw.js`'s `activate` handler already does
+this — no extra step needed).
+
 ### Search: switched from big result cards to a compact account list, matching the other tabs (2026-08-14, same day)
 
 Alok's follow-up after the live-search change: *"Ye keval 8 match hi kyun
