@@ -224,23 +224,23 @@ SEARCH_MODES.forEach(m=>{
 
 const searchInput = document.getElementById('searchInput');
 const clearBtn = document.getElementById('clearBtn');
-// Live search: results now appear as the account no./name/etc is typed,
-// no need to press Enter or tap Search first -- same list, same cap (60),
-// whether triggered by typing or by Enter/Search.
+// Live search: results appear as the account no./name/etc is typed, no
+// need to press Enter or tap Search first -- but only once 6+ characters
+// are in, so it doesn't try to match against a handful of stray digits.
+// No cap on match count either -- the full match set renders every time.
 let __liveSearchTimer = null;
 searchInput.addEventListener('input', ()=>{
   clearBtn.style.display = searchInput.value ? 'flex' : 'none';
   clearTimeout(__liveSearchTimer);
   const q = searchInput.value.trim();
   if(!q){ renderEmpty(); return; }
-  if(q.length<2) return; // wait for a couple characters before suggesting
+  if(q.length<6) return; // wait for at least 6 characters before suggesting
   __liveSearchTimer = setTimeout(()=>runSearch(), 160);
 });
 searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ clearTimeout(__liveSearchTimer); runSearch(); } });
 function clearSearch(){ searchInput.value=''; clearBtn.style.display='none'; clearTimeout(__liveSearchTimer); renderEmpty(); }
 
-function runSearch(limit){
-  limit = limit || 60;
+function runSearch(){
   const q = searchInput.value.trim().toLowerCase();
   if(!q){ renderEmpty(); return; }
   const mode = SEARCH_MODES.find(m=>m.id===searchMode);
@@ -255,7 +255,6 @@ function runSearch(limit){
       if(seen.has(key)) continue;
       seen.add(key);
       matches.push(r);
-      if(matches.length>=limit) break;
     }
   }
   renderResults(matches, mode);
@@ -304,7 +303,7 @@ function renderResults(matches, mode){
       <td>${fmtINR2(os)}</td>
     </tr>`;
   }).join('');
-  el.innerHTML = `<div class="results-hint">${matches.length} match${matches.length>1?'es':''} found${matches.length>=60?' · showing first 60, refine your search for more':''}</div>` +
+  el.innerHTML = `<div class="results-hint">${matches.length} match${matches.length>1?'es':''} found</div>` +
     `<div class="dash-table-wrap acct-list-scroll">
       <table class="dash-table">
         <thead><tr>
