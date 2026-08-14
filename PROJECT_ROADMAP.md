@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-08-12
+Last updated: 2026-08-14
 
 ---
 
@@ -122,6 +122,41 @@ Vercel first**, see notes below).
 **Current milestone**: none — ready to start M7 (fast search) or M9 (UI/UX
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
+
+### Daily PNPA + Daily NPA Projection modules hidden from live nav (2026-08-14)
+
+Alok: *"Ab 1 yp daily pnpa and projection module hata do chahe memory main
+rakhna for future use but abhi live app se hata do."* Removed both tabs
+from the live app while keeping every line of their code intact for a
+future reactivation, rather than deleting anything.
+
+Commented out (not deleted) the 4 nav buttons that pointed to these two
+tabs -- `data-view="pnpa"` and `data-view="dailyproj"` -- in both nav
+copies in `index.html` (`#sideNav` for desktop, `#bottomTabs` for
+mobile), each with an inline comment explaining why and how to restore
+it. Left everything else completely untouched: the `<section
+id="viewPnpa">` / `<section id="viewDailyProj">` markup, every
+PNPA/Daily-Projection function in `js/app.js` (`renderPnpaDashboard()`,
+`renderDailyProj()`, the live-poll `dpStartLivePolling()`/`dpPollLive()`
+pair, the Settings-modal upload handlers), all the CSS, and the
+`relay/api/daily-proj-live.js` backend endpoint.
+
+This works cleanly because `switchView()` only ever activates a view in
+response to a nav-button click, and `.view{display:none}` is the default
+in CSS -- with no button left pointing at `pnpa`/`dailyproj`, those two
+`<section>`s simply never receive the `.active` class and stay hidden,
+and their live-polling code never starts (it's gated behind
+`switchView('dailyproj')` too). No deep link, command-palette entry, or
+persisted "last view" pointed at either tab, so hiding the buttons was
+the complete fix -- no orphaned references left dangling anywhere else
+in the app.
+
+**Verified** via Playwright: `#sideNav` and `#bottomTabs` both list
+exactly 4 reachable views now (`dashboard`, `bank`, `kccov`, `search`),
+Dashboard still renders correctly with no gap where the removed buttons
+were, zero console/page errors. To bring either module back later:
+un-comment its button block in both nav copies in `index.html` (the
+inline comments point to each other) -- nothing else needs to change.
 
 ### OTS Calculator: loan detail screen redesigned around a hero stat + one honest progress bar (2026-08-12, same day)
 
