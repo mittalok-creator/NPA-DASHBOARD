@@ -123,6 +123,25 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Copy: start screen labels switched to formal English (2026-08-15, same day)
+
+The Action Hub shipped with Hinglish section labels ("Waapas wahin se",
+"Branch se kholo", "Saari 55 ›", and a Hinglish first-run hint), matching
+how Alok and I talk in chat. He asked for **formal English only,
+everywhere** in the product itself. Changed to "Recently Opened", "Open by
+Branch", "All 55 ›", and "Search by <mode> above. Borrowers you open will
+be listed here for quick access." The multi-loan suffix also moved from
+"· 2 loans" to "· 2 accounts", matching the app's own terminology
+elsewhere ("NPA Accounts", "loan accounts linked").
+
+Swept the rest of the app for residual Hinglish in user-facing strings --
+none found; `index.html` and every other UI string were already English.
+One Hinglish phrase remains in a **code comment** in `js/app.js`, where it
+quotes Alok's original instruction verbatim ("koi fancy dashboard nahi")
+as the recorded reason for a design decision -- left as-is deliberately,
+since rewriting a quotation would misrepresent what was actually said. It
+never renders anywhere.
+
 ### Feature: OTS Calculator start screen rebuilt as an "Action Hub" (2026-08-15)
 
 The Search tab's opening screen was a house icon, a heading and one line of
