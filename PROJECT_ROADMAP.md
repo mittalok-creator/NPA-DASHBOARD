@@ -123,6 +123,57 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Feature: typed OTS Amounts now saved on the device, start screen trimmed to Recently Opened only (2026-08-15, same day)
+
+Four changes Alok asked for together, a day after the Action Hub shipped:
+
+**1. Start screen is Recently Opened only.** The branch chips, asset bar
+and the two portfolio stat cards are gone -- "recently opened hi do keval".
+`startBranchStats()`, `showStartBranchList()`, `showStartAssetList()`,
+`START_ASSET_ORDER` and their CSS were deleted rather than left dead.
+
+**2. Last 50 instead of last 5** (`RECENT_MAX`). The list just extends the
+page and scrolls naturally; 50 rows is nothing to render.
+
+**3. Typed OTS Amounts are saved on the device.** Previously `otsAmounts`
+was in-memory only, so every reload wiped a settlement being worked out.
+Now persisted to `localStorage` (`upgb-ots-amounts`) on each keystroke and
+restored at load. Device-only, exactly as asked -- never published, never
+sent anywhere, so each person's working figures stay their own.
+
+   **Interest Reversal overrides are persisted alongside**
+   (`upgb-uri-overrides`), which Alok did not explicitly ask for but is
+   required for correctness: Interest Reversal feeds Total Dues, which
+   feeds Total Sacrifice, so restoring the OTS Amount without it would
+   show a *different* sacrifice figure than the one on screen when the
+   account was last left. Verified: Total Sacrifice is byte-identical
+   across a full reload.
+
+   A daily NPA upload used to do `otsAmounts = {}`. That would now throw
+   away real work every morning, so it prunes to accounts still present in
+   the new file (regularized/closed ones drop) and carries the rest
+   forward.
+
+**4. The saved OTS Amount shows in the Recently Opened row**, under the
+O/S figure and in the accent color, summed across the borrower's linked
+loan accounts via `savedOtsFor()` -- so it matches the "Total OTS Amount"
+the detail screen shows for a multi-loan household. Rows with nothing
+entered yet stay a single clean line.
+
+**Also added (not asked for -- flagged for removal if unwanted):** a small
+"Clear" control on the Recently Opened header. With a 50-entry list that
+only ever grows, there was otherwise no way to prune it. It clears *only*
+the visited list -- saved OTS Amounts are keyed by account, not by this
+list, and are real work, so they survive; verified explicitly.
+
+**Verified**: live Playwright pass on mobile (390x844), light and dark --
+OTS and Interest Reversal both restored after a full reload with Total
+Sacrifice unchanged (₹25,974.32 before and after); multi-loan borrower's
+row showing OTS ₹1.00 L for 30,000 + 70,000 across two accounts; a seeded
+60-entry list correctly capped at 50 rows; Clear emptying the list, falling
+back to the search hint, and leaving `upgb-ots-amounts` intact. Zero
+console errors; full OTS/print/Excel regression still passing.
+
 ### Copy: start screen labels switched to formal English (2026-08-15, same day)
 
 The Action Hub shipped with Hinglish section labels ("Waapas wahin se",

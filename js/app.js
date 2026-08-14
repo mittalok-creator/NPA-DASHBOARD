@@ -373,7 +373,7 @@ function runSearch(){
    login. Keyed by custId so re-opening the same borrower moves it back to
    the top instead of adding a duplicate row. */
 const RECENT_KEY = 'upgb-recent-borrowers';
-const RECENT_MAX = 5;
+const RECENT_MAX = 50;
 function getRecentBorrowers(){
   try{
     const raw = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
@@ -411,139 +411,71 @@ function initialsOf(name){
   return ((parts[0][0]||'') + (parts.length>1 ? (parts[1][0]||'') : '')).toUpperCase();
 }
 
-/* Branch totals for the start screen's chips, computed once off the raw
-   NPA rows rather than off currentDashStats -- that only exists after the
-   Dashboard tab has rendered, and this screen is often the very first
-   thing opened. Invalidated whenever the dataset itself changes. */
-let __startBranchStats = null;
-/* Asset classes in regulatory severity order (least to most impaired), not
-   by count -- so the bar reads left-to-right as a severity ramp, matching
-   the green->red color language the .badge-pill.<code> classes already use
-   everywhere else in the app. */
-const START_ASSET_ORDER = ['SUB_STD','DA1','DA2','DA3','LOSS'];
-function startBranchStats(){
-  if(__startBranchStats) return __startBranchStats;
-  const by = new Map();
-  const byAsset = new Map();
-  DATA.npa.rows.forEach(r=>{
-    const os = typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : 0;
-    const br = r[C.SOL_DESC]||'';
-    if(br){
-      const cur = by.get(br) || {branch:br, os:0, count:0};
-      cur.os += os; cur.count++;
-      by.set(br, cur);
-    }
-    const code = r[C.ASSET]||'';
-    if(code){
-      const cur = byAsset.get(code) || {code, os:0, count:0};
-      cur.os += os; cur.count++;
-      byAsset.set(code, cur);
-    }
-  });
-  const list = [...by.values()].sort((a,b)=>b.os-a.os);
-  const assets = START_ASSET_ORDER.map(c=>byAsset.get(c)).filter(Boolean);
-  __startBranchStats = {
-    list,
-    assets,
-    assetTotal: assets.reduce((a,b)=>a+b.count,0),
-    totalOs: list.reduce((a,b)=>a+b.os,0),
-    totalAccounts: DATA.npa.rows.length,
-  };
-  return __startBranchStats;
-}
-/* Same shared account-list modal as the branch chips, filtered by asset
-   classification instead. */
-function showStartAssetList(code){
-  const list = DATA.npa.rows
-    .filter(r=>(r[C.ASSET]||'')===code)
-    .map(r=>({
-      acctNo:String(r[C.ACCT_NO]||''), custId:String(r[C.CUST_ID]||''),
-      name:r[C.NAME]||'', branch:r[C.SOL_DESC]||'',
-      os: typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : 0, asset:r[C.ASSET]||'',
-    }))
-    .sort((a,b)=>b.os-a.os);
-  showAcctListModal(assetLabel(code)+' — Accounts', list.length.toLocaleString('en-IN')+' account(s)', list);
-}
-window.showStartAssetList = showStartAssetList;
-/* Opens every account of one branch in the shared account-list modal --
-   same list/sort/lazy-batch machinery the Dashboard's own drill-downs use,
-   built straight off the raw rows so it works before the Dashboard has
-   ever been opened. */
-function showStartBranchList(branch){
-  const list = DATA.npa.rows
-    .filter(r=>(r[C.SOL_DESC]||'')===branch)
-    .map(r=>({
-      acctNo:String(r[C.ACCT_NO]||''), custId:String(r[C.CUST_ID]||''),
-      name:r[C.NAME]||'', branch:r[C.SOL_DESC]||'',
-      os: typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : 0, asset:r[C.ASSET]||'',
-    }))
-    .sort((a,b)=>b.os-a.os);
-  showAcctListModal(branch+' — Accounts', list.length.toLocaleString('en-IN')+' account(s)', list);
-}
-window.showStartBranchList = showStartBranchList;
 function openRecentBorrower(custId, acctNo){
   openDetail(String(custId), acctNo ? String(acctNo) : undefined);
 }
 window.openRecentBorrower = openRecentBorrower;
 
+/* Total of the OTS Amounts saved on this device for one borrower, summed
+   across their linked loan accounts -- the same slots openDetail() builds,
+   so this matches the "Total OTS Amount" the detail screen shows. Returns
+   null when nothing has been entered for any of them yet. */
+function savedOtsFor(custId){
+  const slots = [1,2,3,4].map(n=>lookupLoanSlot(String(custId),n)).filter(Boolean);
+  let total = 0, any = false;
+  slots.forEach(s=>{
+    const v = parseOtsAmount(otsAmounts[s.acctNo]);
+    if(v!==null){ total += v; any = true; }
+  });
+  return any ? total : null;
+}
+function clearRecentBorrowers(){
+  // Only the visited-list is dropped. Saved OTS Amounts are keyed by
+  // account, not by this list, and are real work -- they stay.
+  try{ localStorage.removeItem(RECENT_KEY); }catch(e){}
+  renderEmpty();
+}
+window.clearRecentBorrowers = clearRecentBorrowers;
+
 function renderEmpty(){
   const mode = SEARCH_MODES.find(m=>m.id===searchMode);
   const recents = getRecentBorrowers();
-  const st = startBranchStats();
 
-  // Before anything has been opened there's nothing to put in the Recent
-  // block, so that slot carries the search hint instead -- the screen
-  // still opens with a clear next step rather than a gap.
-  const recentBlock = recents.length ? `
-    <div class="start-block">
-      <div class="start-lbl">Recently Opened</div>
-      ${recents.map(r=>`
+  // Before anything has been opened there is no list to show, so the screen
+  // carries the search hint instead of an empty heading.
+  if(!recents.length){
+    document.getElementById('mainArea').innerHTML = `
+      <div class="ots-start">
+        <div class="start-hint">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>Search by <b>${esc(mode.label)}</b> above. Borrowers you open will be listed here for quick access.</span>
+        </div>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('mainArea').innerHTML = `
+    <div class="ots-start">
+      <div class="start-block">
+        <div class="start-head">
+          <span class="start-lbl">Recently Opened</span>
+          <button type="button" class="start-clear" onclick="clearRecentBorrowers()">Clear</button>
+        </div>
+        ${recents.map(r=>{
+          const ots = savedOtsFor(r.custId);
+          return `
         <button type="button" class="start-rec" onclick="openRecentBorrower('${esc(r.custId)}','${esc(r.acctNo||'')}')">
           <span class="start-rec-av">${esc(initialsOf(r.name))}</span>
           <span class="start-rec-txt">
             <span class="start-rec-nm">${esc(r.name)||'—'}</span>
             <span class="start-rec-sub">${esc(r.branch)||'—'}${r.asset?' · '+esc(r.asset):''}${r.n>1?' · '+r.n+' accounts':''}</span>
           </span>
-          <span class="start-rec-amt">${r.os===''?'—':fmtCr(r.os)}</span>
-        </button>`).join('')}
-    </div>` : `
-    <div class="start-block">
-      <div class="start-hint">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <span>Search by <b>${esc(mode.label)}</b> above. Borrowers you open will be listed here for quick access.</span>
-      </div>
-    </div>`;
-
-  const topBranches = st.list.slice(0,4);
-  document.getElementById('mainArea').innerHTML = `
-    <div class="ots-start">
-      ${recentBlock}
-      <div class="start-block">
-        <div class="start-lbl">Open by Branch</div>
-        <div class="start-chips">
-          ${topBranches.map(b=>`
-            <button type="button" class="start-chip" onclick="showStartBranchList('${jsq(b.branch)}')">
-              ${esc(b.branch)}<b>${fmtCr(b.os)}</b>
-            </button>`).join('')}
-          <button type="button" class="start-chip all" onclick="switchView('dashboard')">All ${st.list.length} &rsaquo;</button>
-        </div>
-      </div>
-      ${st.assets.length ? `
-      <div class="start-block">
-        <div class="start-lbl">Asset classification</div>
-        <div class="start-assetbar">
-          ${st.assets.map(a=>`<span class="seg ${esc(a.code)}" style="width:${(a.count/st.assetTotal*100).toFixed(2)}%" title="${esc(assetLabel(a.code))} — ${a.count.toLocaleString('en-IN')} account(s)"></span>`).join('')}
-        </div>
-        <div class="start-legend">
-          ${st.assets.map(a=>`
-            <button type="button" class="start-leg" onclick="showStartAssetList('${esc(a.code)}')" title="${esc(assetLabel(a.code))}">
-              <i class="${esc(a.code)}"></i>${esc(a.code)}<b>${a.count.toLocaleString('en-IN')}</b>
-            </button>`).join('')}
-        </div>
-      </div>` : ''}
-      <div class="start-stats">
-        <div class="start-stat"><span class="k">NPA Accounts</span><span class="v">${st.totalAccounts.toLocaleString('en-IN')}</span></div>
-        <div class="start-stat"><span class="k">Total O/S</span><span class="v">${fmtCr(st.totalOs)}</span></div>
+          <span class="start-rec-figs">
+            <span class="start-rec-amt">${r.os===''?'—':fmtCr(r.os)}</span>
+            ${ots!==null ? `<span class="start-rec-ots">OTS ${fmtCr(ots)}</span>` : ''}
+          </span>
+        </button>`;
+        }).join('')}
       </div>
     </div>`;
 }
@@ -587,9 +519,33 @@ function renderResults(matches, mode){
     </div>`;
 }
 
-/* ---------- Detail view ---------- */
-let otsAmounts = {}; // key: acctNo -> value, per-session only (no cross-device sync/lock)
-let interestReversalOverrides = {}; // key: acctNo -> user-edited Interest Reversal value
+/* ---------- Detail view ----------
+   Typed OTS Amounts and Interest Reversal overrides are kept in this
+   device's own localStorage, so a settlement being worked out survives a
+   reload, a phone restart, or coming back the next day. Nothing here is
+   ever published or sent anywhere -- it stays on the one device it was
+   typed on, and each person's working figures stay their own.
+
+   Interest Reversal is persisted alongside the OTS Amount deliberately:
+   it feeds Total Dues, which feeds Total Sacrifice, so restoring one
+   without the other would show a different sacrifice figure than the one
+   on screen when the account was last left. */
+const OTS_AMOUNTS_KEY = 'upgb-ots-amounts';
+const URI_OVERRIDES_KEY = 'upgb-uri-overrides';
+function loadStoredMap(key){
+  try{
+    const raw = JSON.parse(localStorage.getItem(key) || '{}');
+    return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+  }catch(e){ return {}; }
+}
+function persistStoredMap(key, map){
+  try{ localStorage.setItem(key, JSON.stringify(map)); }
+  catch(e){ /* private mode / quota -- on-screen values still work */ }
+}
+let otsAmounts = loadStoredMap(OTS_AMOUNTS_KEY);          // key: acctNo -> typed OTS Amount
+let interestReversalOverrides = loadStoredMap(URI_OVERRIDES_KEY); // key: acctNo -> typed Interest Reversal
+function saveOtsAmounts(){ persistStoredMap(OTS_AMOUNTS_KEY, otsAmounts); }
+function saveUriOverrides(){ persistStoredMap(URI_OVERRIDES_KEY, interestReversalOverrides); }
 // Resolves the live Interest Reversal for a slot: the user's typed override
 // if present, else the value loaded from the daily NPA data.
 function uriFor(s){
@@ -916,14 +872,16 @@ function parseOtsAmount(raw){
 
 function onOtsInput(i, acctNo){
   const v = document.getElementById('otsInput-'+i).value;
-  otsAmounts[acctNo] = v;
+  if(v==='') delete otsAmounts[acctNo]; else otsAmounts[acctNo] = v;
+  saveOtsAmounts();
   recalcLoan(i);
   recalcAggregate();
 }
 
 function onUriInput(i, acctNo){
   const v = document.getElementById('uriInput-'+i).value;
-  interestReversalOverrides[acctNo] = v;
+  if(v==='') delete interestReversalOverrides[acctNo]; else interestReversalOverrides[acctNo] = v;
+  saveUriOverrides();
   recalcLoan(i);
   recalcAggregate();
 }
@@ -2149,7 +2107,6 @@ function applyNewDataNow(){
   DATA.npa = { headers: __pendingData.npa.headers, rows: newRows };
   if(__pendingData.oldots) DATA.oldots = __pendingData.oldots;
   if(__pendingAsOnDate) DATA.asOnDate = __pendingAsOnDate;
-  __startBranchStats = null; // start screen's branch totals are now stale
 
   npaByAcct.clear(); npaByHelper.clear(); byCustId.clear(); oldOtsByAcct.clear();
   DATA.npa.rows.forEach(r=>{
@@ -2162,7 +2119,14 @@ function applyNewDataNow(){
     if(r[0]!=='' && !oldOtsByAcct.has(String(r[0]))) oldOtsByAcct.set(String(r[0]), {date:r[1], amount:r[2]});
   });
 
-  otsAmounts = {};
+  /* A daily upload used to wipe every typed OTS Amount. Now that these are
+     saved on the device, wiping would throw away real work each morning --
+     so entries are pruned to accounts still present in the new file
+     (regularized/closed ones go) and everything else carries forward. */
+  [[otsAmounts, saveOtsAmounts], [interestReversalOverrides, saveUriOverrides]].forEach(([map, save])=>{
+    Object.keys(map).forEach(acct=>{ if(!newAcctSet.has(String(acct))) delete map[acct]; });
+    save();
+  });
   updateReportDateDisplay();
   const staleMsg = staleRemovedCount>0 ? ` (${staleRemovedCount.toLocaleString('en-IN')} account(s) from the previous data no longer appear — regularized/closed accounts removed.)` : '';
   const addedMsg = newAddedCount>0 ? ` (${newAddedCount.toLocaleString('en-IN')} new account(s) added.)` : '';
