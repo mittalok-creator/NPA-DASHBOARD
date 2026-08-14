@@ -29,6 +29,11 @@ DATA.oldots.rows.forEach(r=>{
    not reset/carried-forward on a daily NPA update since it changes on its
    own, much slower schedule. */
 DATA.branchAdvances = DATA.branchAdvances || {};
+/* Branch Manager / Recovery Officer contacts -- keyed by Sol ID (string),
+   uploaded via Update Data -> Branch Contacts. Same "own slow-moving
+   schedule, not reset on a daily NPA update" treatment as branchAdvances
+   above. */
+DATA.branchContacts = DATA.branchContacts || {};
 
 /* ---------- Date helpers (NPA dates are raw Excel serials) ---------- */
 const XL_EPOCH = new Date(1899,11,30);
@@ -118,12 +123,12 @@ function titleCase(s){ return String(s||'').toLowerCase().replace(/\b\w/g,c=>c.t
    the NPA dataset -- one row per branch, "R O Hathras" (the Regional
    Office) listed first same as in the source file, rest in Sol ID order. */
 const BRANCH_LIST = [[15990,9269,"R O Hathras"],[15010,9270,"Agsauli"],[15020,9271,"Bamnai"],[15030,9272,"Bandhnoo"],[15040,9273,"Baraus"],[15050,9274,"Bastoi"],[15060,9275,"Bisawar"],[15070,9276,"Chandpa"],[15080,9277,"Chhonda Gadua"],[15090,9278,"Devinagar"],[15100,9279,"Eihan"],[15110,9280,"Agra Road"],[15120,9281,"Aligarh Road"],[15130,9282,"Mursan Gate"],[15140,9283,"Service Branch"],[15150,9284,"Hatisa"],[15160,9285,"Jarera"],[15170,9286,"Komari"],[15180,9287,"Kota"],[15190,9288,"Ladpur"],[15200,9289,"Mahow"],[15210,9290,"Meetai"],[15220,9291,"Mendu"],[15230,9292,"Mughal Garhi"],[15240,9293,"Mursan"],[15250,9294,"Parsara"],[15260,9295,"Pora"],[15270,9296,"Purdil Nagar"],[15280,9297,"Ratibhanpur"],[15290,9298,"Ruheri"],[15300,9299,"Sadabad"],[15310,9300,"Sahpau"],[15320,9301,"Salempur"],[15330,9302,"Sasni"],[15340,9303,"Sikandra Rao"],[15350,9304,"Tuksan"],[15360,9305,"Wazidpur"],[15370,9306,"Adarshnagar"],[15380,9307,"Hasayan"],[15390,9308,"Jaleser Road"],[15400,9309,"Naugaon"],[16010,9310,"Bajna"],[16020,9311,"Baldev"],[16030,9312,"Bati"],[16040,9313,"Damodarpura"],[16050,9314,"Farah"],[16060,9315,"Goverdhan"],[16070,9316,"Maant"],[16080,9317,"Mathura City"],[16090,9318,"Laxmi Nagar"],[16100,9319,"Pali Kheda"],[16110,9320,"Raya"],[16120,9321,"Ronchi Bangar"],[16130,9322,"Sonai"],[16140,9323,"Tarsi"],[16150,9324,"Vrindavan"],[16160,9325,"Jajan Patti"]];
-/* Branch manager contacts, collected by Alok via a filled-in Excel
-   template and shipped as a code update (same pattern as BRANCH_LIST
-   above -- small, occasionally-updated reference data, not part of the
-   published NPA data). Keyed by Sol ID (BRANCH_LIST's newId); every
-   field is optional since collection is still ongoing. */
-const MANAGER_CONTACTS = {"9270":{"mgr":"HARENDRA","mgrMobile":"9870838125","altName":"MUNISH","altMobile":"9368947674"},"9271":{"mgr":"HITENDRA CHAUDHARY","mgrMobile":"9758808188","altName":"PRADEEP","altMobile":"8755599276"},"9272":{"mgr":"ANKUR","mgrMobile":"9456626924"},"9273":{"mgr":"SUMAN","mgrMobile":"8224018807"},"9274":{"mgr":"ARVIND","mgrMobile":"9639010421"},"9275":{"mgr":"UMESH","mgrMobile":"8871257114"},"9276":{"mgr":"KAPIL","mgrMobile":"9897390040"},"9277":{"mgr":"ANIL RANA","mgrMobile":"9759487665"},"9278":{"mgr":"LALIT","mgrMobile":"8318450498"},"9279":{"mgr":"JASRAM"},"9280":{"mgr":"ANURADHA"},"9281":{"mgr":"JAGMOHAN"},"9282":{"mgr":"VIKAS"},"9284":{"mgr":"RANVEER"},"9285":{"mgr":"K.P."},"9286":{"mgr":"PUSHPENDRA"},"9287":{"mgr":"ANJUL"},"9288":{"mgr":"SEEMA"},"9289":{"mgr":"MANVENDRA"},"9290":{"mgr":"VIRENDRA"},"9291":{"mgr":"HANSRAJ"},"9292":{"mgr":"PRASHANT"},"9293":{"mgr":"RAJESH"},"9294":{"mgr":"ANKIT"},"9295":{"mgr":"RAJAN"},"9296":{"mgr":"LOKENDRA"},"9297":{"mgr":"JITENDRA"},"9298":{"mgr":"SHAMBHU DAYAL"},"9299":{"mgr":"BABITA"},"9300":{"mgr":"RAHUL"},"9301":{"mgr":"LALA RAM"},"9302":{"mgr":"VIVEK PRATAP"},"9303":{"mgr":"LAKHAN"},"9304":{"mgr":"RAMESH"},"9305":{"mgr":"MOHIT"},"9306":{"mgr":"KHUSHBOO"},"9307":{"mgr":"GAURAV"},"9308":{"mgr":"R.K.GUPTA"},"9309":{"mgr":"VIJAY"},"9310":{"mgr":"MUKESH"},"9311":{"mgr":"ANSHUL"},"9312":{"mgr":"PRASHANT"},"9313":{"mgr":"DEEKSHA"},"9314":{"mgr":"RAJAT"},"9315":{"mgr":"ABHISHEK"},"9316":{"mgr":"BANEE"},"9317":{"mgr":"AASHISH"},"9318":{"mgr":"MUDIT"},"9319":{"mgr":"RAMRAS"},"9320":{"mgr":"CHANDRASHEKAR"},"9321":{"mgr":"YATEENDRA"},"9322":{"mgr":"SHASHANK"},"9323":{"mgr":"YATEENDRA"},"9324":{"mgr":"SURAJ"},"9325":{"mgr":"TANMAY"}};
+/* Branch contacts (Manager + Recovery Officer) now live on DATA.branchContacts,
+   uploaded via Update Data -> Branch Contacts (see buildBranchContactsMap/
+   handleBranchContactsUpload below) and published alongside the rest of the
+   data, same pattern as DATA.branchAdvances -- replaces the earlier
+   hardcoded MANAGER_CONTACTS constant now that collection is an ongoing,
+   self-serve process rather than a one-off code ship. */
 
 // Bank logo, reused from the sidebar's own nav-logo (same base64 PNG) --
 // used in the OTS Calculator print sheet and Excel export headers, which
@@ -134,18 +139,24 @@ function renderBranchList(filter){
   const q = (filter||'').trim().toLowerCase();
   const body = document.getElementById('branchListBody');
   if(!body) return;
-  const rows = q ? BRANCH_LIST.filter(([oldId,newId,name])=>
-    String(newId).includes(q) || String(oldId).includes(q) || name.toLowerCase().includes(q) ||
-    (MANAGER_CONTACTS[newId]?.mgr||'').toLowerCase().includes(q)
-  ) : BRANCH_LIST;
+  const rows = q ? BRANCH_LIST.filter(([oldId,newId,name])=>{
+    const bc = DATA.branchContacts[String(newId)];
+    return String(newId).includes(q) || String(oldId).includes(q) || name.toLowerCase().includes(q) ||
+      (bc && ((bc.mgr||'').toLowerCase().includes(q) || (bc.roName||'').toLowerCase().includes(q)));
+  }) : BRANCH_LIST;
+  const contactLine = (role, name, mobile) => name || mobile ? `<div class="edge-row-contact-line">
+      <span class="role">${role}</span>
+      <span class="edge-row-mgr">${esc(name)||'—'}</span>
+      ${mobile?`<a href="tel:${esc(mobile)}" onclick="event.stopPropagation()">${esc(mobile)}</a>`:''}
+    </div>` : '';
   body.innerHTML = rows.length ? rows.map(([oldId,newId,name])=>{
-    const mc = MANAGER_CONTACTS[newId];
-    const contact = mc ? `<div class="edge-row-contact">
-        <span class="edge-row-mgr">${esc(mc.mgr)||'—'}</span>
-        ${mc.mgrMobile?`<a href="tel:${esc(mc.mgrMobile)}" onclick="event.stopPropagation()">${esc(mc.mgrMobile)}</a>`:''}
+    const bc = DATA.branchContacts[String(newId)];
+    const contact = bc ? `<div class="edge-row-contact">
+        ${contactLine('MGR', bc.mgr, bc.mgrMobile)}
+        ${contactLine('RO', bc.roName, bc.roMobile)}
       </div>` : '';
     return `
-    <div class="edge-row">
+    <div class="edge-row" onclick="showBranchCard(${newId})" role="button" tabindex="0" aria-label="View full contact card for ${esc(name)}">
       <div class="edge-row-top">
         <div class="edge-row-branch">${esc(name)}</div>
         <div class="edge-row-ids"><span class="edge-solid">Sol ID ${esc(newId)}</span><span class="edge-oldid">Old ${esc(oldId)}</span></div>
@@ -154,6 +165,36 @@ function renderBranchList(filter){
     </div>`;
   }).join('') : `<div class="edge-empty">No branch matches "${esc(filter)}"</div>`;
 }
+/* Full branch detail card, reusing the same generic title/sub/info-grid
+   modal already built for Quick Account Detail (quickAcctModalOverlay) --
+   shows everything collected for that branch (Old + New Sol ID, Manager,
+   Recovery Officer, and whatever else has been uploaded so far). */
+function showBranchCard(newId){
+  const entry = BRANCH_LIST.find(([,nid])=>nid===newId);
+  if(!entry) return;
+  const [oldId,,name] = entry;
+  const bc = DATA.branchContacts[String(newId)] || {};
+  const plain = (label,val) => [label, val ? esc(val) : null];
+  const tel = (label,num) => [label, num ? `<a href="tel:${esc(num)}">${esc(num)}</a>` : null];
+  const mail = (label,addr) => [label, addr ? `<a href="mailto:${esc(addr)}">${esc(addr)}</a>` : null];
+  const fields = [
+    plain('Branch Manager', bc.mgr),
+    tel('Manager Mobile', bc.mgrMobile),
+    mail('Manager Email', bc.mgrEmail),
+    plain('Recovery Officer', bc.roName),
+    tel('Recovery Officer Mobile', bc.roMobile),
+    plain('Branch Landline', bc.landline),
+    plain('Category', bc.category),
+    plain('Address', bc.address),
+    plain('IFSC Code', bc.ifsc),
+    plain('Remarks', bc.remarks),
+  ];
+  document.getElementById('quickAcctTitle').textContent = name;
+  document.getElementById('quickAcctSub').innerHTML = `Sol ID ${esc(newId)} &middot; Old Sol ID ${esc(oldId)}`;
+  document.getElementById('quickAcctGrid').innerHTML = fields.map(([k,v])=>`<div><div class="k">${esc(k)}</div><div class="v">${v!==null?v:'—'}</div></div>`).join('');
+  document.getElementById('quickAcctModalOverlay').classList.add('show');
+}
+window.showBranchCard = showBranchCard;
 function filterBranchList(){ renderBranchList(document.getElementById('branchListSearch').value); }
 window.filterBranchList = filterBranchList;
 function toggleBranchPanel(force){
@@ -1519,6 +1560,88 @@ function buildBranchAdvanceMap(allRows, hIdx){
   }
   return map;
 }
+/* Branch Contacts (Manager + Recovery Officer) template/upload -- matches
+   branches by Sol ID same as buildBranchAdvanceMap above, not by name.
+   Every contact field is optional (collection is ongoing); a row with a
+   Sol ID but nothing else is simply skipped rather than stored empty. */
+function buildBranchContactsMap(allRows, hIdx){
+  const header = (allRows[hIdx]||[]).map(normHeader);
+  const idx = (...names) => { for(const n of names){ const i = header.indexOf(normHeader(n)); if(i>=0) return i; } return -1; };
+  const iSol = idx('solid','sol');
+  if(iSol<0) throw new Error('Could not find a "Sol ID" column -- branches are matched by Sol ID, not name.');
+  const iMgr = idx('branchmanagername','managername','branchmanager');
+  const iMgrMobile = idx('managermobileno','managermobile');
+  const iMgrEmail = idx('manageremailid','manageremail');
+  const iRoName = idx('recoveryofficername','recoveryofficer');
+  const iRoMobile = idx('recoveryofficermobileno','recoveryofficermobile');
+  const iLandline = idx('branchlandlineno','landlineno','landline');
+  const iCategory = idx('branchcategory','category');
+  const iAddress = idx('branchaddress','address');
+  const iIfsc = idx('ifsccode','ifsc');
+  const iRemarks = idx('remarks');
+  const map = {};
+  let count = 0;
+  for(const row of allRows.slice(hIdx+1)){
+    const sol = cellStr(row, iSol);
+    if(!sol) continue;
+    const rec = {
+      mgr: iMgr>=0 ? cellStr(row, iMgr) : '',
+      mgrMobile: iMgrMobile>=0 ? cellStr(row, iMgrMobile) : '',
+      mgrEmail: iMgrEmail>=0 ? cellStr(row, iMgrEmail) : '',
+      roName: iRoName>=0 ? cellStr(row, iRoName) : '',
+      roMobile: iRoMobile>=0 ? cellStr(row, iRoMobile) : '',
+      landline: iLandline>=0 ? cellStr(row, iLandline) : '',
+      category: iCategory>=0 ? cellStr(row, iCategory) : '',
+      address: iAddress>=0 ? cellStr(row, iAddress) : '',
+      ifsc: iIfsc>=0 ? cellStr(row, iIfsc) : '',
+      remarks: iRemarks>=0 ? cellStr(row, iRemarks) : '',
+    };
+    Object.keys(rec).forEach(k=>{ if(!rec[k]) delete rec[k]; });
+    if(!Object.keys(rec).length) continue;
+    map[sol] = rec;
+    count++;
+  }
+  if(!count) throw new Error('No rows with a Sol ID and at least one contact field found.');
+  return map;
+}
+function handleBranchContactsUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const labelEl = document.getElementById('branchContactsUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('branchContactsUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Branch Contacts file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      const headerHints = ['solid','sol'];
+      let allRows, hIdx;
+      if(isCsv){
+        allRows = parseCSV(String(e.target.result));
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      }
+      const map = buildBranchContactsMap(allRows, hIdx);
+      const count = Object.keys(map).length;
+      DATA.branchContacts = map;
+      const label = document.getElementById('branchContactsStatusLabel');
+      if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es) loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch contact record(s) parsed. Tap a branch in the Branch/Sol ID panel to see the full card.</div>`;
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.getElementById('branchEdgePanel')?.classList.contains('open')) filterBranchList();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
 function carryForwardMapFromCurrentData(){
   const map = new Map();
   DATA.npa.rows.forEach(r=>{
@@ -1861,8 +1984,8 @@ function csvField(v){
   const s = String(v==null?'':v);
   return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
 }
-function downloadCsvTemplate(filename, headers, exampleRow){
-  const csv = [headers.map(csvField).join(','), exampleRow.map(csvField).join(',')].join('\r\n');
+function downloadCsvRows(filename, headers, dataRows){
+  const csv = [headers, ...dataRows].map(r=>r.map(csvField).join(',')).join('\r\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1871,6 +1994,9 @@ function downloadCsvTemplate(filename, headers, exampleRow){
   a.click();
   document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+function downloadCsvTemplate(filename, headers, exampleRow){
+  downloadCsvRows(filename, headers, [exampleRow]);
 }
 function downloadDailyTemplate(){
   const headers = ['Sol','Region','Branch','Account No','Customer ID','Intt Rev','Scheme Code','Account Name','Balance Amount','Turnover','Interest Charge Amount','Continuous Excess Date','Review Date','KCC Disbursement Date/Stock Date','Due date','Demand Amount','Adjustment Amount','Reasons','Exempted','Account NPA Date','Cust NPA Date','SBA Acc/Balance','Remarks','Category','Prov Amt','CADU','Sanction Date','Limit','Disb Date','ROI','Mobile No','SMA Status','Sec Val','Sec OS','Unsec OS'];
@@ -1886,6 +2012,20 @@ function downloadBranchAdvTemplate(){
   const headers = ['Sol ID','Branch Name','Advance (₹ Lakhs)','NPA MARCH 26 (₹ Lakhs)','NPA JUNE 26(₹ Lakhs)'];
   const example = ['9282','M.G.Hathras','1877.53','71.53','75.45'];
   downloadCsvTemplate('UPGB_Branch_Advance_Template.csv', headers, example);
+}
+/* Branch Contacts template -- unlike the other "blank + one example row"
+   templates above, this one pre-fills Sol ID/Old Sol ID/Branch Name for
+   every branch from BRANCH_LIST (the app's own reference list), and
+   carries forward whatever's already in DATA.branchContacts, so
+   re-downloading after a partial upload doesn't lose what's already
+   collected -- only the still-blank fields need filling in. */
+function downloadBranchContactsTemplate(){
+  const headers = ['Sol ID','Old Sol ID','Branch Name','Branch Manager Name','Manager Mobile No.','Manager Email ID','Recovery Officer Name','Recovery Officer Mobile No.','Branch Landline No.','Branch Category','Branch Address','IFSC Code','Remarks'];
+  const rows = BRANCH_LIST.map(([oldId,newId,name])=>{
+    const bc = DATA.branchContacts[String(newId)] || {};
+    return [newId, oldId, name, bc.mgr||'', bc.mgrMobile||'', bc.mgrEmail||'', bc.roName||'', bc.roMobile||'', bc.landline||'', bc.category||'', bc.address||'', bc.ifsc||'', bc.remarks||''];
+  });
+  downloadCsvRows('UPGB_Branch_Contacts_Template.csv', headers, rows);
 }
 
 function downloadUpdatedApp(){
@@ -1936,7 +2076,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -2424,6 +2564,15 @@ document.addEventListener('keydown', (e)=>{
   if(!th) return;
   e.preventDefault();
   th.click();
+});
+/* Same treatment for the Branch/Sol ID panel's clickable rows (opens the
+   branch contact card). */
+document.addEventListener('keydown', (e)=>{
+  if(e.key!=='Enter' && e.key!==' ') return;
+  const row = e.target.closest && e.target.closest('.edge-row[role="button"]');
+  if(!row) return;
+  e.preventDefault();
+  row.click();
 });
 
 /* On mobile, #aggBar is a fixed-position dock pinned to the bottom of the
@@ -4446,6 +4595,9 @@ function toggleTheme(){
   on('masterFileInput','change',(e)=>handleMasterFileUpload(e));
   on('branchAdvUploadDrop','click',()=>document.getElementById('branchAdvFileInput').click());
   on('branchAdvFileInput','change',(e)=>handleBranchAdvUpload(e));
+  on('branchContactsUploadDrop','click',()=>document.getElementById('branchContactsFileInput').click());
+  on('branchContactsFileInput','change',(e)=>handleBranchContactsUpload(e));
+  on('downloadBranchContactsTemplateBtn','click',()=>downloadBranchContactsTemplate());
   on('bankPdfUploadDrop','click',()=>document.getElementById('bankPdfFileInput').click());
   on('bankPdfFileInput','change',(e)=>handleBankPdfUpload(e));
   on('pnpaUploadDrop','click',()=>document.getElementById('pnpaFileInput').click());

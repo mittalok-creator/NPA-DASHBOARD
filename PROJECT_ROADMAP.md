@@ -123,6 +123,55 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Feature: Branch Contacts becomes a real upload (Manager + Recovery Officer), with a full-detail card (2026-08-14, same day)
+
+Alok asked for three things on top of yesterday's branch-contact panel: (1)
+rename "Alternate Contact" to "Recovery Officer" and show that name/number
+too, (2) turn Branch Contacts into a proper Update Data upload with a
+template, like every other data source in the app, instead of a hardcoded
+code-shipped list, and (3) make tapping a branch pop up a card with
+everything on file for it, including both Old and New Sol ID.
+
+**Data model change**: removed the hardcoded `MANAGER_CONTACTS` constant
+from yesterday's ship entirely. Contacts now live on `DATA.branchContacts`
+(keyed by Sol ID), uploaded via a new "Branch Contacts (Manager / Recovery
+Officer)" section in Update Data -- same "own slow-moving schedule, full
+replace, not part of the daily NPA file, goes live on next Publish"
+treatment as the existing Branch Advance upload, and now included in the
+Publish payload alongside it. `data/latest.json` was seeded with
+everything collected so far (55 branches' worth), with the old "Alternate
+Contact" fields renamed to `roName`/`roMobile` (Recovery Officer) so
+nothing already collected was lost in the rename.
+
+**Parser**: `buildBranchContactsMap()` (mirrors `buildBranchAdvanceMap` --
+header-driven column matching, Sol ID required, every contact field
+optional since collection is ongoing).
+
+**Template**: unlike the other "blank + one example row" download
+templates in this app, `downloadBranchContactsTemplate()` pre-fills every
+branch's Sol ID, Old Sol ID and Branch Name from `BRANCH_LIST` (the app's
+own reference list), *and* carries forward whatever's already in
+`DATA.branchContacts` -- re-downloading after a partial upload doesn't
+throw away what's already been collected, only the still-blank cells need
+filling in.
+
+**Full branch card**: tapping any row in the Branch/Sol ID panel now opens
+a card (reusing the existing Quick Account Detail modal) showing the
+branch name, Old + New Sol ID, and every contact field on file -- Manager
+name/mobile/email, Recovery Officer name/mobile, landline, category,
+address, IFSC, remarks -- with tap-to-call and mailto links. Each panel
+row itself now shows both the Manager's and the Recovery Officer's name +
+number (previously Manager only).
+
+**Verified**: live Playwright pass -- template download pre-fills all 56
+branches correctly (confirmed by intercepting the generated Blob, since
+this sandbox's headless Chromium doesn't fire real download events even
+for the pre-existing Branch Advance template button -- a environment
+limitation, not a regression); uploading a 2-row test CSV correctly
+replaces `DATA.branchContacts`, enables Publish, and the Branch/Sol ID
+panel + card immediately reflect the new data with zero console errors;
+full OTS/print/Excel regression still passing.
+
 ### Fix: OTS Calculator search results now sort A-Z by borrower name (2026-08-14, same day)
 
 Alok asked that the results list under the OTS Calculator's Search tab
