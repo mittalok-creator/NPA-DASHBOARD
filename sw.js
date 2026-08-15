@@ -1,4 +1,4 @@
-const CACHE_NAME = 'upgb-ots-shell-v109';
+const CACHE_NAME = 'upgb-ots-shell-v110';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
@@ -13,14 +13,14 @@ const CACHE_NAME = 'upgb-ots-shell-v109';
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './css/styles.css?v=20260815d',
-  './js/app.js?v=20260815d',
-  './js/auth.js?v=20260815d',
-  './js/publish.js?v=20260815d',
-  './js/splash.js?v=20260815d',
-  './js/vendor/xlsx.full.min.js?v=20260815d',
-  './js/vendor/exceljs.min.js?v=20260815d',
-  './js/vendor/pdf.min.js?v=20260815d',
+  './css/styles.css?v=20260815e',
+  './js/app.js?v=20260815e',
+  './js/auth.js?v=20260815e',
+  './js/publish.js?v=20260815e',
+  './js/splash.js?v=20260815e',
+  './js/vendor/xlsx.full.min.js?v=20260815e',
+  './js/vendor/exceljs.min.js?v=20260815e',
+  './js/vendor/pdf.min.js?v=20260815e',
   './manifest.webmanifest',
 ];
 

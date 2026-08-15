@@ -483,7 +483,16 @@ main{padding:20px 16px 40px}
    aligned stack instead of .empty-state's centered layout, because it now
    carries real scannable content (recent borrowers, branch chips, asset
    split) rather than a single message. */
-.ots-start{display:flex;flex-direction:column;gap:16px;padding:6px 2px 22px;animation:riseIn .4s var(--ease)}
+/* Runs on the brass tokens, like the hero card above it and the borrower
+   detail screen it leads into -- otherwise the OTS tab reads brass at the
+   top, sapphire in the middle and brass again on the detail screen. */
+.ots-start{
+  --accent:var(--seal-d); --accent-2:var(--seal); --accent-soft:rgba(212,165,68,.13);
+  display:flex;flex-direction:column;gap:16px;padding:6px 2px 22px;animation:riseIn .4s var(--ease);
+}
+:root:not([data-theme="light"]) .ots-start{
+  --accent:var(--seal-l); --accent-2:var(--seal); --accent-soft:rgba(212,165,68,.15);
+}
 .ots-start .start-block{display:flex;flex-direction:column}
 .ots-start .start-lbl{font-size:9.5px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--sub)}
 .ots-start .start-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px}
@@ -1144,6 +1153,16 @@ body{overscroll-behavior:none}
 .hero-kpi-card:hover{transform:translateY(-4px);box-shadow:var(--shadow);border-color:var(--glass-hi)}
 .hero-kpi-card.clickable{cursor:pointer}
 .hero-kpi-card::before{content:"";position:absolute;inset:0;background:radial-gradient(140px 100px at 12% -10%, var(--hero-tint,var(--accent-soft)) 0%, transparent 72%);pointer-events:none}
+/* A semantic rule across the top edge, in each card's own --hero-color.
+   Without it the four cards were visually identical apart from a small
+   icon badge, so nothing signalled that Total Outstanding is the headline
+   figure and High-Risk Exposure is a warning -- the row read as four
+   interchangeable boxes. */
+.hero-kpi-card::after{
+  content:"";position:absolute;top:0;left:0;right:0;height:3px;pointer-events:none;
+  background:linear-gradient(90deg,var(--hero-color,var(--accent)),transparent 85%);
+  opacity:.85;
+}
 .hero-kpi-main{min-width:0;flex:1}
 .hero-kpi-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--hero-tint,var(--accent-soft));color:var(--hero-color,var(--accent));margin-bottom:14px;position:relative}
 .hero-kpi-icon svg{width:20px;height:20px}
@@ -1609,31 +1628,38 @@ header.app-head::before,.detail-head::before{
 :root[data-theme="light"]{
   color-scheme: light;
   --navy-950:#EEF1F6; --navy-900:#E2E7F0; --navy-800:#10141F; --navy-700:#171C2C; --navy-600:#1E2740;
-  /* Page bg deepened a touch from #F4F3F8 -- near-white cards need a
-     slightly more present backdrop to actually read as "floating" instead
-     of everything blurring into one flat off-white field. */
-  --bg:#F6F8FC; --card:#FFFFFF; --ink:#21212E; --sub:#5E5F72; --ink-mute:#6A6B7E;
-  --line:rgba(33,33,46,.10);
-  --glass-fill:rgba(255,255,255,.82);
-  --glass-fill-strong:rgba(255,255,255,.95);
-  --glass-border:rgba(33,33,46,.09);
+  /* Warm ivory paper, not cool porcelain. The old #F6F8FC page + #FFFFFF
+     cards differed by ~2% luminance, so nothing read as "floating" -- the
+     whole screen was one flat off-white field. Now the page is a warm
+     ivory and cards stay a brighter warm white, so they lift off it, and
+     the app reads like paper rather than a clinical panel. The accent
+     stays sapphire: navy on cream is a long-standing pairing, and keeping
+     it means only the OTS Calculator carries brass, so that tab still
+     reads as its own instrument. Its hero body is a deeper cream than
+     this page, sitting under a navy band, so it stays distinct. */
+  --bg:#F5F2EA; --card:#FFFDF8; --ink:#221F19; --sub:#615C51; --ink-mute:#6E695D;
+  --line:rgba(62,50,30,.12);
+  --glass-fill:rgba(255,253,248,.84);
+  --glass-fill-strong:rgba(255,253,248,.96);
+  --glass-border:rgba(62,50,30,.10);
   --glass-hi:rgba(27,79,224,.34);
   /* Sapphire + emerald theme: deepened a shade further than the dark theme's
      accent/accent-2 so they read as rich rather than pastel against a pale
      page. */
   --accent:#1B4FE0; --accent-2:#0EA5C4; --accent-soft:rgba(27,79,224,.10);
   --gold:#1B4FE0; --gold-l:#3A7BFF; --gold-d:#123A9E; --gold-soft:rgba(27,79,224,.08);
-  --stripe:rgba(33,33,46,.022); --stripe-label:rgba(33,33,46,.032);
-  /* Table headers now match the rest of the light surface (a faint blue-
-     gray strip) instead of staying black -- see the chrome tokens below
-     for the matching side nav/top header flip. */
-  --table-head:#EDF1FA; --table-head-label:#E3E9F6;
-  --scrollbar-thumb:rgba(33,33,46,.16); --scrollbar-thumb-hover:rgba(33,33,46,.26);
-  --track-bg:rgba(33,33,46,.07); --track-ring:rgba(33,33,46,.05);
-  --scrim:rgba(28,27,38,.44);
-  --shadow-sm:0 2px 8px rgba(34,30,60,.08);
-  --shadow:0 14px 34px rgba(34,30,60,.11), 0 3px 8px rgba(34,30,60,.06);
-  --shadow-lg:0 28px 60px rgba(34,30,60,.14), 0 10px 24px rgba(34,30,60,.07);
+  --stripe:rgba(62,50,30,.024); --stripe-label:rgba(62,50,30,.035);
+  /* Table headers sit on the same warm paper as everything else -- a faint
+     ivory strip rather than the old blue-gray one. */
+  --table-head:#F1ECE1; --table-head-label:#E9E2D3;
+  --scrollbar-thumb:rgba(62,50,30,.18); --scrollbar-thumb-hover:rgba(62,50,30,.28);
+  --track-bg:rgba(62,50,30,.08); --track-ring:rgba(62,50,30,.06);
+  --scrim:rgba(34,28,18,.44);
+  /* Warm-toned shadows -- a cool blue-grey shadow over ivory reads as dirt
+     rather than depth. */
+  --shadow-sm:0 2px 8px rgba(74,58,30,.09);
+  --shadow:0 14px 34px rgba(74,58,30,.13), 0 3px 8px rgba(74,58,30,.07);
+  --shadow-lg:0 28px 60px rgba(74,58,30,.16), 0 10px 24px rgba(74,58,30,.08);
   /* Deepened past the dark theme's brief-exact success/warning values --
      #22C55E/#FFB020 read at only ~2.3:1 / ~1.8:1 against white (verified via
      WCAG contrast calc), nowhere near AA for the actual P&L figures these
@@ -1648,11 +1674,11 @@ header.app-head::before,.detail-head::before{
      used to stay permanently dark in this theme by design -- now flips to
      the same bright porcelain surface as everything else, so nothing on
      the page reads as "still dark mode" once light theme is on. */
-  --chrome-ink:#21212E; --chrome-sub:#5E5F72; --chrome-mute:#6A6B7E; --chrome-line:rgba(33,33,46,.10);
-  --head-grad:linear-gradient(160deg,#FFFFFF 0%,#F9FBFF 55%,#EEF3FC 100%);
-  --head-weave:rgba(27,79,224,.035);
-  --head-line:rgba(27,79,224,.14);
-  --head-ink:#21212E; --head-sub:#5E5F72; --head-ph:#6A6B7E;
+  --chrome-ink:#221F19; --chrome-sub:#615C51; --chrome-mute:#6E695D; --chrome-line:rgba(62,50,30,.12);
+  --head-grad:linear-gradient(160deg,#FFFDF8 0%,#FBF7EF 55%,#F3EDE0 100%);
+  --head-weave:rgba(120,92,40,.035);
+  --head-line:rgba(120,92,40,.16);
+  --head-ink:#221F19; --head-sub:#615C51; --head-ph:#6E695D;
 }
 :root[data-theme="light"] .view-title{
   background:linear-gradient(135deg,#21212E,#123A9E 70%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
@@ -1671,7 +1697,17 @@ header.app-head::before,.detail-head::before{
 :root[data-theme="light"] .btn-ghost{background:rgba(33,33,46,.05);color:var(--ink)}
 :root[data-theme="light"] .btn-ghost:hover{background:rgba(33,33,46,.09)}
 :root[data-theme="light"] .btn-primary:disabled{background:rgba(33,33,46,.08);color:var(--ink-mute)}
-:root[data-theme="light"] #bgFx::before,:root[data-theme="light"] #bgFx::after{opacity:.05}
+/* The ambient wash was dialled to .05 in light theme, i.e. invisible, so
+   the page sat as one flat field with nothing for cards to lift off. Now
+   it's a real (still soft) colour field in warm tones that suit the ivory
+   paper: amber-gold top-left, muted sapphire bottom-right, tying the
+   page's two accent families together. */
+:root[data-theme="light"] #bgFx::before{
+  opacity:.16;background:radial-gradient(circle,#C79A3C 0%,transparent 70%);
+}
+:root[data-theme="light"] #bgFx::after{
+  opacity:.13;background:radial-gradient(circle,#3A6BC9 0%,transparent 70%);
+}
 :root[data-theme="light"] .donut-svg circle:not(:first-child){filter:drop-shadow(0 1px 3px rgba(34,30,60,.18))}
 :root[data-theme="light"] .donut-svg circle:not(:first-child):hover{filter:drop-shadow(0 1px 3px rgba(34,30,60,.22)) brightness(1.06)}
 :root[data-theme="light"] .bar-track{box-shadow:inset 0 1px 3px rgba(34,30,60,.12),inset 0 0 0 1px var(--track-ring)}

@@ -123,6 +123,51 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Design: light theme moved to warm ivory paper (2026-08-15, same day)
+
+Alok: light mode *"bahut simple lagta hai ... kuch woow factor nikal kar
+aaye"*, then after seeing the OTS hero, *"jo best hai wo kar do like
+ivory"*. Three directions were mocked (Tinted Cards / Gradient Hero /
+Ambient Canvas); the shipped result takes the ivory cue plus the parts of
+those that carried real weight.
+
+**Diagnosis first.** The page was `#F6F8FC` and cards `#FFFFFF` — about 2%
+luminance apart, so nothing read as floating; the ambient wash was pinned
+at `opacity:.05`, i.e. invisible; and the four hero KPI cards were
+identical but for a small icon badge, so nothing signalled that Total
+Outstanding is the headline and High-Risk Exposure is a warning.
+
+Three changes:
+1. **Warm ivory neutrals** — page `#F5F2EA`, cards `#FFFDF8`, warm ink/
+   line/stripe/table-head tokens, and warm-toned shadows (a cool blue-grey
+   shadow over ivory reads as dirt, not depth). The accent stays sapphire:
+   navy on cream is a long-standing pairing, and keeping it means only the
+   OTS Calculator carries brass.
+2. **A real ambient wash** — amber-gold top-left, muted sapphire
+   bottom-right, at usable opacity, so cards lift off a colour field
+   instead of a flat sheet.
+3. **A semantic top rule on each hero KPI card**, drawn from that card's
+   existing `--hero-color`, so the row reads as a story rather than four
+   interchangeable boxes. This one applies in both themes.
+
+**Kept the OTS tab distinct on purpose.** Warming the whole app risked
+erasing what had just been built for the hero, so: the app's ivory is
+paler than the OTS hero's cream, and the hero's navy band, brass and
+ruled lines appear nowhere else. In the same pass `.ots-start` (Recently
+Opened) was moved onto the brass tokens too — it was still sapphire, so
+the OTS tab read brass at the top, sapphire in the middle, brass again on
+the detail screen.
+
+**Verified**: Playwright on desktop (1400x940) and mobile (390x844), light
+and dark, across Dashboard and OTS. Dark theme tokens untouched, so only
+the semantic KPI rule changes there. Full OTS/print/Excel, hero-search
+functionality, focus-ring-in-both-themes and OTS/URI persistence
+regressions all still passing; zero console errors.
+
+**Not touched (pre-existing, unrelated):** on the Total Outstanding card
+the value wraps to two lines ("₹127.64" / "Cr") because the Mar/Jun corner
+stats take width beside it. Flagged rather than silently changed.
+
 ### Design: OTS Calculator search area rebuilt as a brass "hero card" (2026-08-15, same day)
 
 Alok: *"mera main focus rahta hai ots calculator par wo mera hero hai wo
