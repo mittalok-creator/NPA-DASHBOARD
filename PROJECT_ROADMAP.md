@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: Regional Office contact uses "Region Head" / "Senior Manager Recovery" instead of the branch-level "Branch Manager" / "Recovery Officer" labels (2026-08-15, same day)
+
+Alok published R O Hathras's (Sol ID 9269) own contacts through the Branch Contacts upload — R.S.Verma and Himanshu Sharma (8172900300) — but pointed out the generic branch labels don't fit the Regional Office: its own head carries the title **Region Head**, and its recovery contact is a **Senior Manager Recovery**, not a plain branch Recovery Officer.
+
+New `branchRoleLabels(newId)` helper checks `BRANCH_META[newId].type` (from the frozen Sol ID master) — `'Regional Office'` gets `Region Head` / `Senior Manager Recovery` (rail pills `RH`/`SMR`), every other branch keeps the existing `Branch Manager` / `Recovery Officer` (`MGR`/`RO`). Applied everywhere those labels appear: the Branch & Sol ID panel's row contact lines, the full branch detail card, and the Dashboard's branch info card. The underlying `DATA.branchContacts` fields (`mgr`/`roName`/`roMobile`) and the Branch Contacts upload template are unchanged — this is a display-only relabel driven by branch type, not a data model change.
+
+Verified: R O Hathras's full card now reads "Region Head — R.S.VERMA" / "Senior Manager Recovery — HIMANSHU SHARMA · 8172900300"; a normal branch (Agsauli, 9270) still reads "Branch Manager" / "Recovery Officer" unchanged; branch panel row pill shows `RH`/`SMR` only for R O Hathras; no console errors.
+
+Files: `js/app.js` (`branchRoleLabels`, `branchRowHtml`, `showBranchCard`, `dashboardBranchInfoCard`). Cache-bust `v=20260815q`, SW `upgb-ots-shell-v122`.
+
 ### Feature: Branch master data (email, district, address, ...) now shown on the Branch card and at the top of the Dashboard for a selected branch (2026-08-15, same day)
 
 Alok asked for the extra columns from `UPGB_NEW_SOL_ID.xlsx` (branch email, and "all" the other details) to actually show, not just sit frozen in the data — both when clicking a branch in the Branch & Sol ID panel, and at the top of the Dashboard when a specific branch is selected there.

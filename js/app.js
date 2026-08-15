@@ -153,14 +153,15 @@ function branchMatchesQuery(name, oldId, newId, q){
 }
 function branchRowHtml([oldId,newId,name]){
   const bc = DATA.branchContacts[String(newId)];
+  const roleLabels = branchRoleLabels(newId);
   const contactLine = (role, cname, mobile) => cname || mobile ? `<div class="edge-row-contact-line">
       <span class="role">${role}</span>
       <span class="edge-row-mgr">${esc(cname)||'—'}</span>
       ${mobile?`<a href="tel:${esc(mobile)}" onclick="event.stopPropagation()">${esc(mobile)}</a>${waIconLink(mobile)}`:''}
     </div>` : '';
   const contact = bc ? `<div class="edge-row-contact">
-      ${contactLine('MGR', bc.mgr, bc.mgrMobile)}
-      ${contactLine('RO', bc.roName, bc.roMobile)}
+      ${contactLine(roleLabels.mgrShort, bc.mgr, bc.mgrMobile)}
+      ${contactLine(roleLabels.roShort, bc.roName, bc.roMobile)}
     </div>` : '';
   return `
     <div class="edge-row" onclick="showBranchCard(${newId})" role="button" tabindex="0" aria-label="View full contact card for ${esc(name)}">
@@ -251,6 +252,17 @@ function masterAddressOf(meta){
   if(meta.pin && !meta.address.includes(meta.pin)) return meta.address + ' - ' + meta.pin;
   return meta.address;
 }
+/* R O Hathras (the Regional Office, Sol ID 9269 -- BRANCH_META type
+   "Regional Office") carries different job titles than every branch: its
+   "Manager" contact is the Region Head, and its "Recovery Officer" is a
+   Senior Manager Recovery, not a branch-level Recovery Officer. Every other
+   branch keeps the plain Branch Manager / Recovery Officer labels. */
+function branchRoleLabels(newId){
+  const isRO = (BRANCH_META[newId]||{}).type === 'Regional Office';
+  return isRO
+    ? {mgrLabel:'Region Head', mgrShort:'RH', roLabel:'Senior Manager Recovery', roShort:'SMR'}
+    : {mgrLabel:'Branch Manager', mgrShort:'MGR', roLabel:'Recovery Officer', roShort:'RO'};
+}
 /* Full branch detail card, reusing the same generic title/sub/info-grid
    modal already built for Quick Account Detail (quickAcctModalOverlay) --
    shows everything collected for that branch (Old + New Sol ID, Manager,
@@ -269,6 +281,7 @@ function showBranchCard(newId){
      bc.address is a human keeping it current, meta.address is a one-time
      snapshot. */
   const masterAddress = masterAddressOf(meta);
+  const roleLabels = branchRoleLabels(newId);
   const fields = [
     plain('Branch Type', meta.type),
     plain('District', meta.district),
@@ -277,11 +290,11 @@ function showBranchCard(newId){
     mail('Branch Email', meta.email),
     plain('Date Opened', meta.dateOpen),
     plain('Address', bc.address || masterAddress),
-    plain('Branch Manager', bc.mgr),
-    tel('Manager Mobile', bc.mgrMobile),
-    mail('Manager Email', bc.mgrEmail),
-    plain('Recovery Officer', bc.roName),
-    tel('Recovery Officer Mobile', bc.roMobile),
+    plain(roleLabels.mgrLabel, bc.mgr),
+    tel(roleLabels.mgrLabel+' Mobile', bc.mgrMobile),
+    mail(roleLabels.mgrLabel+' Email', bc.mgrEmail),
+    plain(roleLabels.roLabel, bc.roName),
+    tel(roleLabels.roLabel+' Mobile', bc.roMobile),
     plain('Branch Landline', bc.landline),
     plain('Category', bc.category),
     plain('IFSC Code', bc.ifsc),
@@ -3470,10 +3483,11 @@ function dashboardBranchInfoCard(branchFilter, s){
   const item = (label,val) => val ? `<div><div class="k">${esc(label)}</div><div class="v">${val}</div></div>` : '';
   const masterAddress = masterAddressOf(meta);
   const address = esc(bc.address) || (masterAddress ? esc(masterAddress) : '');
+  const roleLabels = branchRoleLabels(Number(solId));
   const items = [
     item('District', meta.district ? esc(meta.district) : ''),
-    item('Branch Manager', bc.mgr ? `${esc(bc.mgr)}${bc.mgrMobile?'<span class="v-with-wa"> · '+telLink(bc.mgrMobile)+'</span>':''}` : ''),
-    item('Recovery Officer', bc.roName ? `${esc(bc.roName)}${bc.roMobile?'<span class="v-with-wa"> · '+telLink(bc.roMobile)+'</span>':''}` : ''),
+    item(roleLabels.mgrLabel, bc.mgr ? `${esc(bc.mgr)}${bc.mgrMobile?'<span class="v-with-wa"> · '+telLink(bc.mgrMobile)+'</span>':''}` : ''),
+    item(roleLabels.roLabel, bc.roName ? `${esc(bc.roName)}${bc.roMobile?'<span class="v-with-wa"> · '+telLink(bc.roMobile)+'</span>':''}` : ''),
     item('Branch Email', meta.email ? `<a href="mailto:${esc(meta.email)}" onclick="event.stopPropagation()">${esc(meta.email)}</a>` : ''),
     item('Address', address),
   ].filter(Boolean).join('');
