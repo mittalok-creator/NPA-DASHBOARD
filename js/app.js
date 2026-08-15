@@ -256,14 +256,19 @@ function computeUCI(os, npaDateRaw, scheme, rate){
   }
   return os*rate/100*(daysBetween(today,anchor)/365);
 }
-function lookupLoanSlot(custId, slotNo){
-  const row = npaByHelper.get(custId+':'+slotNo);
+/* Row -> loan-slot shape. Split out of lookupLoanSlot so the OTS
+   Worksheet can build the same slot straight from an account number,
+   without needing the borrower's cust ID and slot position first. */
+function slotFromRow(row){
   if(!row) return null;
   return {
     acctNo: row[C.ACCT_NO], scheme: row[C.SCHEME]||'', sanctionDate: row[C.SANCT_DT]||'',
     sanctionLimit: row[C.SANCT_LIM]===''?'':row[C.SANCT_LIM], assetCode: row[C.ASSET]||'',
     npaDate: row[C.NPA_DT]||'', osBalance: row[C.OUTBAL]===''?'':row[C.OUTBAL], uri: row[C.URI]===''?0:row[C.URI],
   };
+}
+function lookupLoanSlot(custId, slotNo){
+  return slotFromRow(npaByHelper.get(custId+':'+slotNo));
 }
 function computeSlot(slot){
   if(!slot) return null;
@@ -429,6 +434,261 @@ function savedOtsFor(custId){
   });
   return any ? total : null;
 }
+/* ---------- OTS Worksheet ----------
+   Every account this device has an OTS Amount saved for, in one table with
+   running totals. The amounts were already being kept (and restored) per
+   account, but they were only visible one borrower at a time -- this is
+   the view that makes a whole settlement batch reviewable and exportable.
+   Figures are recomputed from live data through the same computeSlot /
+   totalDuesFor path the detail screen uses, so nothing here can drift from
+   what that screen shows. */
+function otsWorksheetRows(){
+  const rows = [];
+  Object.keys(otsAmounts).forEach(acctNo => {
+    const ots = parseOtsAmount(otsAmounts[acctNo]);
+    if(ots===null) return;
+    const raw = npaByAcct.get(String(acctNo));
+    if(!raw) return; // account no longer in the book (regularized/closed)
+    const s = computeSlot(slotFromRow(raw));
+    const totalDues = totalDuesFor(s);
+    rows.push({
+      acctNo: String(acctNo),
+      custId: String(raw[C.CUST_ID]||''),
+      name: raw[C.NAME]||'',
+      branch: raw[C.SOL_DESC]||'',
+      asset: s.assetCode||'',
+      os: s.os===''?0:s.os,
+      ots,
+      sacrifice: totalDues==='' ? '' : totalDues-ots,
+      impact: s.totalPL==='' ? '' : ots-s.totalPL,
+    });
+  });
+  return rows.sort((a,b)=>b.os-a.os);
+}
+function otsWorksheetTotals(rows){
+  const sum = k => rows.reduce((a,r)=>a+(typeof r[k]==='number'?r[k]:0),0);
+  return { os:sum('os'), ots:sum('ots'), sacrifice:sum('sacrifice'), impact:sum('impact') };
+}
+function renderOtsWorksheet(){
+  const rows = otsWorksheetRows();
+  const t = otsWorksheetTotals(rows);
+  document.getElementById('wsSub').textContent = rows.length
+    ? `${rows.length} account(s) with an OTS Amount saved on this device`
+    : 'No OTS Amount has been entered yet';
+  const body = document.getElementById('wsBody');
+  const foot = document.getElementById('wsFoot');
+  const sum = document.getElementById('wsSum');
+  if(!rows.length){
+    body.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--sub);padding:26px 10px">
+      Open a borrower and type an OTS Amount — every account you work out will be listed here.</td></tr>`;
+    foot.innerHTML = '';
+    sum.innerHTML = '';
+    return;
+  }
+  sum.innerHTML = [
+    ['O/S Balance', fmtINR2(t.os), ''],
+    ['OTS Amount', fmtINR2(t.ots), 'ws-ots'],
+    ['Total Sacrifice', fmtINR2(t.sacrifice), ''],
+    ['Impact on P&amp;L', (t.impact>0?'+':(t.impact<0?'−':''))+fmtINR2(Math.abs(t.impact)),
+      t.impact>0?'ws-pos':(t.impact<0?'ws-neg':'')],
+  ].map(([lbl,val,cls])=>`<div class="ws-sum-tile">
+      <span class="ws-sum-lbl">${lbl}</span>
+      <span class="ws-sum-val ${cls}">${val}</span>
+    </div>`).join('');
+  body.innerHTML = rows.map(r=>`<tr class="clickable" onclick="closeOtsWorksheet();openDetail('${esc(r.custId)}','${esc(r.acctNo)}')">
+    <td>${esc(r.acctNo)}</td>
+    <td class="tal">${esc(r.name)||'—'}</td>
+    <td class="tal">${esc(r.branch)||'—'}</td>
+    <td>${r.asset?`<span class="badge-pill ${esc(r.asset)}">${esc(r.asset)}</span>`:'—'}</td>
+    <td>${fmtINR2(r.os)}</td>
+    <td class="ws-ots">${fmtINR2(r.ots)}</td>
+    <td>${r.sacrifice===''?'—':fmtINR2(r.sacrifice)}</td>
+    <td class="${r.impact===''?'':(r.impact>0?'ws-pos':(r.impact<0?'ws-neg':''))}">${r.impact===''?'—':(r.impact>0?'+':(r.impact<0?'−':''))+fmtINR2(Math.abs(r.impact))}</td>
+    <td><button type="button" class="ws-del" title="Remove this account's saved OTS Amount"
+      aria-label="Remove saved OTS Amount for account ${esc(r.acctNo)}"
+      onclick="event.stopPropagation();removeSavedOts('${esc(r.acctNo)}')">✕</button></td>
+  </tr>`).join('');
+  foot.innerHTML = `<tr class="ws-total">
+    <td colspan="4" class="tal">Total — ${rows.length} account(s)</td>
+    <td>${fmtINR2(t.os)}</td>
+    <td class="ws-ots">${fmtINR2(t.ots)}</td>
+    <td>${fmtINR2(t.sacrifice)}</td>
+    <td class="${t.impact>0?'ws-pos':(t.impact<0?'ws-neg':'')}">${(t.impact>0?'+':(t.impact<0?'−':''))+fmtINR2(Math.abs(t.impact))}</td>
+    <td></td>
+  </tr>`;
+}
+function openOtsWorksheet(){
+  renderOtsWorksheet();
+  document.getElementById('wsModalOverlay').classList.add('show');
+}
+function closeOtsWorksheet(){ document.getElementById('wsModalOverlay').classList.remove('show'); }
+window.openOtsWorksheet = openOtsWorksheet;
+window.closeOtsWorksheet = closeOtsWorksheet;
+function removeSavedOts(acctNo){
+  delete otsAmounts[acctNo];
+  delete interestReversalOverrides[acctNo];
+  saveOtsAmounts(); saveUriOverrides();
+  renderOtsWorksheet();
+  renderEmpty();
+}
+window.removeSavedOts = removeSavedOts;
+/* Built with ExcelJS, not SheetJS, for the same reason the single-borrower
+   export is (see the note above exportOtsExcel): the free SheetJS build
+   writes number formats but silently drops fonts and borders, and this
+   sheet is meant to be handed to a branch or filed, not just read on
+   screen. Same plain treatment as that export -- bold, real borders, no
+   fill colour -- and the same XL_* constants, so the two sheets look like
+   they came from one system. */
+async function exportOtsWorksheet(){
+  const rows = otsWorksheetRows();
+  if(!rows.length){ alert('There is no saved OTS Amount to export yet.'); return; }
+  const t = otsWorksheetTotals(rows);
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('OTS Worksheet', { views: [{showGridLines:false, state:'frozen', ySplit:5}] });
+  const set = (addr, value, opts={}) => {
+    const cell = ws.getCell(addr);
+    cell.value = value;
+    if(opts.numFmt) cell.numFmt = opts.numFmt;
+    if(opts.font) cell.font = opts.font;
+    if(opts.align) cell.alignment = opts.align;
+    if(opts.border!==false) cell.border = opts.border || XL_BORDER_ALL;
+    return cell;
+  };
+
+  ws.columns = [
+    {width:20},{width:34},{width:18},{width:10},{width:17},{width:17},{width:17},{width:17},
+  ];
+  ws.mergeCells('A1:H1');
+  set('A1', 'UPGB HATHRAS — OTS WORKSHEET',
+    {font:{bold:true, size:16}, align:{horizontal:'center'}, border:false});
+  ws.mergeCells('A2:H2');
+  set('A2', `Uttar Pradesh Gramin Bank (Regional Office Hathras) · Data as on ${fmtAsOnDisplay()} · Prepared ${fmtDateTime(new Date())}`,
+    {font:{size:10, color:{argb:'FF333333'}}, align:{horizontal:'center'},
+     border:{bottom:{style:'medium', color:{argb:'FF555555'}}}});
+  ws.getRow(1).height = 26;
+
+  const headerRow = 5;
+  ['Account No.','Customer','Branch','Asset','O/S Balance','OTS Amount','Total Sacrifice','Impact on P&L']
+    .forEach((h,i)=>{
+      set(XLSX.utils.encode_col(i)+headerRow, h,
+        {font:{bold:true}, align:{horizontal:i<4?'left':'right', vertical:'middle', wrapText:true}});
+    });
+  ws.getRow(headerRow).height = 26;
+
+  rows.forEach((r,i)=>{
+    const n = headerRow + 1 + i;
+    set(`A${n}`, String(r.acctNo), {align:{horizontal:'left'}});
+    set(`B${n}`, r.name, {align:{horizontal:'left'}});
+    set(`C${n}`, r.branch, {align:{horizontal:'left'}});
+    set(`D${n}`, r.asset, {align:{horizontal:'left'}});
+    set(`E${n}`, r.os===''?null:r.os, {numFmt:XL_INR_FMT});
+    set(`F${n}`, r.ots, {numFmt:XL_INR_FMT});
+    /* Sacrifice and Impact are written as live formulas off the same row's
+       O/S and OTS cells, so a settlement amount edited in Excel updates the
+       two derived columns and the totals -- the way the single-borrower
+       export already behaves. The constants they need (Total Dues and Total
+       P&L, which no column on this sheet carries) are folded into the
+       formula as the row's own difference, so nothing silently goes stale. */
+    const r2 = v => Math.round(v*100)/100; // to the paisa, matching fmtINR2 on screen
+    const dues = r.sacrifice==='' ? null : r2(r.ots + r.sacrifice);
+    const pl   = r.impact===''    ? null : r2(r.ots - r.impact);
+    set(`G${n}`, dues===null ? null : {formula:`(${dues})-F${n}`}, {numFmt:XL_INR_FMT});
+    set(`H${n}`, pl===null   ? null : {formula:`F${n}-(${pl})`},   {numFmt:XL_INR_FMT_PL});
+  });
+
+  const totalRow = headerRow + rows.length + 1;
+  const first = headerRow + 1, last = headerRow + rows.length;
+  ws.mergeCells(`A${totalRow}:D${totalRow}`);
+  set(`A${totalRow}`, `TOTAL — ${rows.length} ACCOUNT(S)`,
+    {font:{bold:true}, align:{horizontal:'left'}});
+  ['E','F','G'].forEach(col=>{
+    set(`${col}${totalRow}`, {formula:`SUM(${col}${first}:${col}${last})`},
+      {numFmt:XL_INR_FMT, font:{bold:true}});
+  });
+  set(`H${totalRow}`, {formula:`SUM(H${first}:H${last})`},
+    {numFmt:XL_INR_FMT_PL, font:{bold:true}});
+
+  const noteRow = totalRow + 2;
+  ws.mergeCells(`A${noteRow}:H${noteRow}`);
+  set(`A${noteRow}`, 'Total Sacrifice and Impact on P&L recalculate from the OTS Amount in column F. Figures are as on the data date above.',
+    {font:{italic:true, size:9, color:{argb:'FF666666'}}, border:false});
+
+  ws.pageSetup = {
+    paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+    horizontalCentered: true, printTitlesRow: `${headerRow}:${headerRow}`,
+    margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
+    printArea: `A1:H${noteRow}`,
+  };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `UPGB_OTS_Worksheet_${dateToInputValue(new Date())}.xlsx`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+/* The button's onclick can't await, so a rejection here would surface only
+   as an unhandled promise in the console -- the user would just see nothing
+   download. This turns that into a message they can act on. */
+window.exportOtsWorksheet = () => exportOtsWorksheet().catch(err=>{
+  console.error(err);
+  alert('The worksheet could not be exported. Please try again.');
+});
+
+/* ---------- Backup / restore of this device's own OTS work ----------
+   Everything the app saves per-person lives in this browser's
+   localStorage, so clearing browser data or moving to another phone loses
+   it. These two put that work in a file the user holds. Nothing is sent
+   anywhere -- the file is written and read locally. */
+const OTS_BACKUP_VERSION = 1;
+function backupOtsWork(){
+  const payload = {
+    app: 'upgb-ots', version: OTS_BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    otsAmounts, uriOverrides: interestReversalOverrides,
+    recents: getRecentBorrowers(),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `UPGB_OTS_Backup_${dateToInputValue(new Date())}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+window.backupOtsWork = backupOtsWork;
+function restoreOtsWork(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  evt.target.value = ''; // let the same file be picked again after a failed try
+  const reader = new FileReader();
+  reader.onerror = () => alert('Could not read that file.');
+  reader.onload = e => {
+    let data;
+    try{ data = JSON.parse(String(e.target.result)); }
+    catch(err){ alert('That file is not a valid backup — it could not be read as JSON.'); return; }
+    const isMap = v => v && typeof v==='object' && !Array.isArray(v);
+    if(!isMap(data) || data.app!=='upgb-ots' || !isMap(data.otsAmounts)){
+      alert('That file is not a UPGB OTS backup.');
+      return;
+    }
+    const n = Object.keys(data.otsAmounts).length;
+    if(!confirm(`Restore ${n} saved OTS Amount(s) from this backup?\n\nThis replaces what is currently saved on this device.`)) return;
+    otsAmounts = data.otsAmounts;
+    interestReversalOverrides = isMap(data.uriOverrides) ? data.uriOverrides : {};
+    saveOtsAmounts(); saveUriOverrides();
+    if(Array.isArray(data.recents)){
+      try{ localStorage.setItem(RECENT_KEY, JSON.stringify(data.recents.slice(0,RECENT_MAX))); }catch(err){}
+    }
+    renderOtsWorksheet();
+    renderEmpty();
+    alert(`Restored ${n} saved OTS Amount(s).`);
+  };
+  reader.readAsText(file);
+}
+window.restoreOtsWork = restoreOtsWork;
+
 function clearRecentBorrowers(){
   // Only the visited-list is dropped. Saved OTS Amounts are keyed by
   // account, not by this list, and are real work -- they stay.
@@ -436,6 +696,40 @@ function clearRecentBorrowers(){
   renderEmpty();
 }
 window.clearRecentBorrowers = clearRecentBorrowers;
+
+/* Drops a single borrower from the visited-list. Same rule as the Clear
+   button above: the list is a convenience, so removing a row never touches
+   that borrower's saved OTS Amount -- that stays in the worksheet. */
+function removeRecentBorrower(custId){
+  try{
+    const list = getRecentBorrowers().filter(r=>String(r.custId)!==String(custId));
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  }catch(e){}
+  renderEmpty();
+}
+window.removeRecentBorrower = removeRecentBorrower;
+
+/* The way into the worksheet, and -- when nothing is saved yet -- the way
+   to a backup file, which is exactly the state a fresh device is in. That
+   is why the bar renders in both cases instead of only when work exists. */
+function otsWorksheetBarHtml(){
+  const rows = otsWorksheetRows();
+  const t = otsWorksheetTotals(rows);
+  const sub = rows.length
+    ? `${rows.length} account(s) · O/S ${fmtCr(t.os)} · OTS ${fmtCr(t.ots)}`
+    : 'Nothing saved on this device yet — open to restore a backup';
+  return `
+      <button type="button" class="start-ws${rows.length?'':' is-empty'}" onclick="openOtsWorksheet()">
+        <span class="start-ws-ic" aria-hidden="true">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="3" width="17" height="18" rx="2.5"/><line x1="3.5" y1="9" x2="20.5" y2="9"/><line x1="9.5" y1="9" x2="9.5" y2="21"/></svg>
+        </span>
+        <span class="start-ws-txt">
+          <span class="start-ws-nm">OTS Worksheet</span>
+          <span class="start-ws-sub">${esc(sub)}</span>
+        </span>
+        <span class="start-ws-go">Open</span>
+      </button>`;
+}
 
 function renderEmpty(){
   const mode = SEARCH_MODES.find(m=>m.id===searchMode);
@@ -450,12 +744,14 @@ function renderEmpty(){
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <span>Search by <b>${esc(mode.label)}</b> above. Borrowers you open will be listed here for quick access.</span>
         </div>
+        ${otsWorksheetBarHtml()}
       </div>`;
     return;
   }
 
   document.getElementById('mainArea').innerHTML = `
     <div class="ots-start">
+      ${otsWorksheetBarHtml()}
       <div class="start-block">
         <div class="start-head">
           <span class="start-lbl">Recently Opened</span>
@@ -463,18 +759,24 @@ function renderEmpty(){
         </div>
         ${recents.map(r=>{
           const ots = savedOtsFor(r.custId);
+          const nm = esc(r.name)||'—';
           return `
-        <button type="button" class="start-rec" onclick="openRecentBorrower('${esc(r.custId)}','${esc(r.acctNo||'')}')">
-          <span class="start-rec-av">${esc(initialsOf(r.name))}</span>
-          <span class="start-rec-txt">
-            <span class="start-rec-nm">${esc(r.name)||'—'}</span>
-            <span class="start-rec-sub">${esc(r.branch)||'—'}${r.asset?' · '+esc(r.asset):''}${r.n>1?' · '+r.n+' accounts':''}</span>
-          </span>
-          <span class="start-rec-figs">
-            <span class="start-rec-amt">${r.os===''?'—':fmtCr(r.os)}</span>
-            ${ots!==null ? `<span class="start-rec-ots">OTS ${fmtCr(ots)}</span>` : ''}
-          </span>
-        </button>`;
+        <div class="start-rec-row">
+          <button type="button" class="start-rec" onclick="openRecentBorrower('${esc(r.custId)}','${esc(r.acctNo||'')}')">
+            <span class="start-rec-av">${esc(initialsOf(r.name))}</span>
+            <span class="start-rec-txt">
+              <span class="start-rec-nm">${nm}</span>
+              <span class="start-rec-sub">${esc(r.branch)||'—'}${r.asset?' · '+esc(r.asset):''}${r.n>1?' · '+r.n+' accounts':''}</span>
+            </span>
+            <span class="start-rec-figs">
+              <span class="start-rec-amt">${r.os===''?'—':fmtCr(r.os)}</span>
+              ${ots!==null ? `<span class="start-rec-ots">OTS ${fmtCr(ots)}</span>` : ''}
+            </span>
+          </button>
+          <button type="button" class="start-rec-del" title="Remove from Recently Opened"
+            aria-label="Remove ${nm} from Recently Opened"
+            onclick="removeRecentBorrower('${esc(r.custId)}')">✕</button>
+        </div>`;
         }).join('')}
       </div>
     </div>`;
@@ -489,10 +791,10 @@ function renderResults(matches, mode){
   __lastSearchMatches = matches; __lastSearchMode = mode;
   const el = document.getElementById('mainArea');
   if(!matches.length){
-    el.innerHTML = `<div class="results-hint">0 matches found</div>` +
+    el.innerHTML = `<div class="ots-results"><div class="results-hint">0 matches found</div>` +
       `<div class="no-results">` +
       `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>` +
-      `<div>No borrower matches that ${esc(mode.label)}.<br>Try a different value or search mode.</div></div>`;
+      `<div>No borrower matches that ${esc(mode.label)}.<br>Try a different value or search mode.</div></div></div>`;
     return;
   }
   const rows = matches.map(r=>{
@@ -508,7 +810,12 @@ function renderResults(matches, mode){
       <td>${fmtINR2(os)}</td>
     </tr>`;
   }).join('');
-  el.innerHTML = `<div class="results-hint">${matches.length} match${matches.length>1?'es':''} found</div>` +
+  /* .ots-results carries the brass tokens, the same way .ots-start and the
+     hero card above it do -- without it the tab reads brass at the top,
+     sapphire through the result list, then brass again on the detail
+     screen the list leads into. */
+  el.innerHTML = `<div class="ots-results">` +
+    `<div class="results-hint">${matches.length} match${matches.length>1?'es':''} found</div>` +
     `<div class="dash-table-wrap acct-list-scroll">
       <table class="dash-table">
         <thead><tr>
@@ -516,7 +823,7 @@ function renderResults(matches, mode){
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-    </div>`;
+    </div></div>`;
 }
 
 /* ---------- Detail view ----------
@@ -675,6 +982,11 @@ function closeDetail(){
   document.getElementById('railLeft').classList.remove('show');
   document.getElementById('railRight').classList.remove('show');
   document.getElementById('eligibleBanner').classList.remove('show');
+  /* Coming back from a borrower, the start screen behind it is stale -- the
+     visit just entered Recently Opened, and any OTS Amount typed changes
+     both that row and the worksheet bar's totals. Only redrawn when the
+     start screen is what's showing; a result list is left as it was. */
+  if(document.querySelector('#mainArea .ots-start')) renderEmpty();
 }
 
 function drawDetailBody(custRow, slots, prevOts){
@@ -2525,6 +2837,7 @@ document.addEventListener('keydown',(e)=>{
   if((e.metaKey||e.ctrlKey) && (e.key==='k'||e.key==='K')){ e.preventDefault(); (cmdkOverlay&&cmdkOverlay.classList.contains('show'))?closeCmdk():openCmdk(); }
   else if(e.key==='Escape'){
     if(cmdkOverlay && cmdkOverlay.classList.contains('show')) closeCmdk();
+    else if(document.getElementById('wsModalOverlay')?.classList.contains('show')) closeOtsWorksheet();
     else if(document.getElementById('detailPane').classList.contains('open')) closeDetail();
   }
 });
@@ -4765,6 +5078,8 @@ function toggleTheme(){
   const closeQuickAcctModal = () => document.getElementById('quickAcctModalOverlay')?.classList.remove('show');
   on('quickAcctCloseX','click',closeQuickAcctModal);
   document.getElementById('quickAcctModalOverlay')?.addEventListener('click',(e)=>{ if(e.target.id==='quickAcctModalOverlay') closeQuickAcctModal(); });
+  on('wsCloseX','click',closeOtsWorksheet);
+  document.getElementById('wsModalOverlay')?.addEventListener('click',(e)=>{ if(e.target.id==='wsModalOverlay') closeOtsWorksheet(); });
   on('clearBtn','click',()=>clearSearch());
   on('searchGoBtn','click',()=>runSearch());
   on('uploadDrop','click',()=>document.getElementById('fileInput').click());
