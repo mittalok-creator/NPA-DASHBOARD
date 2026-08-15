@@ -1144,7 +1144,14 @@ body{overscroll-behavior:none}
      card. Laid out as a real flex row instead: .hero-kpi-main takes the
      remaining space and .hero-kpi-side reserves its own column, so they
      can never overlap regardless of value length or card width. */
-  display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
+  /* ...and then laid out as a column, with the badge + Mar/Jun stats as a
+     strip ABOVE the main block rather than a column beside it. Side-by-side,
+     .hero-kpi-side reserved the width its nowrap "MAR ₹128.95 Cr" rows
+     needed, leaving the 4-across Total Outstanding card too narrow for its
+     own value -- "₹127.64 Cr" broke onto a second line. Stacking gives the
+     value the card's full width at every breakpoint, and the strip still
+     can't overlap it because it's a real flex item, not an overlay. */
+  display:flex;flex-direction:column;align-items:stretch;gap:14px;
 }
 .hero-kpi-row .hero-kpi-card:nth-child(1){animation-delay:.02s}
 .hero-kpi-row .hero-kpi-card:nth-child(2){animation-delay:.08s}
@@ -1170,13 +1177,18 @@ body{overscroll-behavior:none}
 .hero-kpi-value{font-size:38px;font-weight:800;color:var(--ink);margin-top:6px;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1.1;position:relative}
 .hero-kpi-sub{font-size:12.5px;color:var(--ink-mute);margin-top:8px;font-weight:600;position:relative}
 .hero-kpi-sub2{display:block;font-size:11px;color:var(--sub);margin-top:4px;font-weight:600;font-variant-numeric:tabular-nums}
-.hero-kpi-side{flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;text-align:right;position:relative}
-.hero-kpi-side>*{margin-top:10px}
-.hero-kpi-side>*:first-child{margin-top:0}
+/* Badge + Mar/Jun groups as a strip BELOW the main block, wrapping onto
+   their own line when the card is too narrow to hold both. Below rather
+   than above so every card in the row still opens with icon → label →
+   value at the same height: putting the strip on top pushed the one card
+   that has it (Total Outstanding) ~90px down, leaving the four headline
+   figures visibly out of line with each other. */
+.hero-kpi-side{display:flex;flex-direction:row;align-items:flex-start;flex-wrap:wrap;
+  gap:10px 16px;text-align:left;position:relative;margin-top:auto;padding-top:2px}
+.hero-kpi-side>*{margin-top:0}
 .hero-kpi-badge{padding:6px 12px;border-radius:10px;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.3px;white-space:nowrap}
-.hero-kpi-corner-stats{text-align:right}
-.hero-kpi-corner-group{margin-top:9px}
-.hero-kpi-corner-group:first-child{margin-top:0}
+.hero-kpi-corner-stats{text-align:left;display:flex;flex-wrap:wrap;gap:8px 18px}
+.hero-kpi-corner-group{margin-top:0}
 .hero-kpi-corner-row{font-size:11px;color:var(--ink-mute);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .hero-kpi-corner-row span{text-transform:uppercase;letter-spacing:.4px;margin-right:5px}
 .hero-kpi-corner-row b{color:var(--ink);font-weight:800}
@@ -1186,11 +1198,7 @@ body{overscroll-behavior:none}
 @media (max-width:599px){
   .hero-kpi-row{grid-template-columns:1fr}
   .hero-kpi-value{font-size:32px}
-  .hero-kpi-card{flex-direction:column}
-  .hero-kpi-side{order:-1;align-items:flex-start;text-align:left}
   .hero-kpi-badge{display:inline-block}
-  .hero-kpi-corner-stats{text-align:left;display:flex;gap:20px}
-  .hero-kpi-corner-group{margin-top:0}
 }
 
 /* ---------- Bank-wide NPA Dashboard ---------- */
