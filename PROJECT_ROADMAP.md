@@ -123,6 +123,69 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Removed the Daily NPA Projection module entirely (2026-08-15, same day)
+
+Asked at the end of the worksheet build whether *"Daily npa projection kaam
+ka nahi hai ab"* meant "skip its relay-auth problem" or "remove the tab".
+Alok chose removal. The tab had already been hidden from the live nav on
+2026-08-14; this deletes it outright rather than leaving dead code behind.
+
+**Removed:**
+- `js/app.js` — the whole module (~625 lines): the `DP`/`DP_DISPLAY` schema,
+  the editable grid, Excel-style per-column AutoFilter, undo stack, summary
+  strip, live-sync client (`dpQueueLiveSync`/`dpFlushLiveSync`/`dpPollLive`,
+  3s poll), Print/PDF and Excel export, plus the `switchView` and
+  refresh-button hooks.
+- `index.html` — the `<section data-view="dailyproj">` view and both
+  commented-out nav buttons.
+- `css/styles.css` — the editable-grid, frozen-column, summary-tile,
+  AutoFilter-popover and sync-status rules, and the grid's landscape
+  `@media print` block (~137 lines).
+- `relay/api/daily-proj-live.js` — deleted. **This also closes the
+  unauthenticated relay endpoint** flagged in the earlier forensic audit:
+  it accepted row writes with no auth beyond CORS. It is gone with the
+  feature rather than fixed, so there is nothing left to secure.
+- `data/daily-npa-projection.json` — deleted.
+- `sw.js` — `POLLED_ENDPOINTS` is now empty. The list and its fetch branch
+  stay deliberately: they are the guard rail that stopped polled endpoints
+  from filling Cache Storage, and the next one added must not reintroduce
+  that bug.
+
+**Deliberately kept:** the Branch Advance upload still accepts the Head
+Office *Daily NPA Projection workbook* as a source file — it reads Sol ID /
+Advance / NPA MARCH 26 / NPA JUNE 26 out of it for the Dashboard's Mar/Jun
+comparison. That is a separate feature that merely shares the file. Its two
+labels were reworded to say "Head Office Daily NPA Projection workbook", so
+they read as a filename rather than a pointer to a tab that no longer
+exists. Daily PNPA is also untouched — still hidden from nav, not removed.
+
+**Two real defects found and fixed while doing this:**
+
+- *Print sheet lost its white background.* The removed grid's print block
+  carried `body{background:#fff!important}`, and the `!important` was
+  load-bearing — the base `html,body{background:var(--bg)}` sits later in
+  the stylesheet at equal specificity, so without it the theme's navy (dark)
+  or ivory (light) painted behind the whole OTS print sheet. Caught by
+  diffing computed styles under print emulation against a served copy of
+  the pre-change build. The declaration now lives in the OTS print block
+  itself, where the app's one remaining printable view cannot lose it again.
+- *Refresh button threw on every use (pre-existing, unrelated to removal).*
+  `refreshCurrentView` read `e.currentTarget` inside a 700ms `setTimeout`.
+  The DOM nulls `currentTarget` as soon as the handler returns, so every
+  refresh on the Bank / PNPA / KCC Overdue tabs threw "Cannot read
+  properties of null" and the spinner never stopped. The element is now
+  captured into a local before the timeout.
+
+Verified in Chromium at 430px and 1280px, dark and light: all four live tabs
+render, `switchView('dailyproj')` is inert rather than throwing, no
+`dailyproj` DOM or globals remain, the refresh button completes cleanly, and
+print emulation matches the pre-change build byte for byte on body
+background. The OTS Worksheet shipped earlier today was re-tested
+end-to-end afterwards and is unaffected. No console errors.
+
+Files: `js/app.js`, `index.html`, `css/styles.css`, `sw.js`, and the two
+deletions. Cache-bust `v=20260815h`, SW `upgb-ots-shell-v113`.
+
 ### Feature: OTS Worksheet + device Backup/Restore, brass result list, per-row remove (2026-08-15, same day)
 
 Alok, picking from a list of suggestions: *"Ots worksheet / Backup / Dono
