@@ -123,6 +123,33 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Excel export made row-for-row identical to the PDF (2026-08-15, same day)
+
+Alok: *"Pdf itna simple clean well align hai bahut hi bhadiya and excel utna hi bikhra hua data bhi kuch jyada hai pdf jitna aur jaisa hi chahiye"* — the PDF is clean and well aligned; the Excel is scattered and carries more data than the PDF. Make it the same.
+
+**Tooling note.** LibreOffice is installed in this container but cannot read `.xlsx` at all (confirmed: even a two-cell workbook written by openpyxl fails with "source file could not be loaded"), and there are no PDF rasterisers either. So a small renderer (`xlsx2html.py`, kept in the scratchpad) was written to turn a real `.xlsx` into HTML reproducing its actual column widths, merges, alignment, borders and number formats. Every judgement below was made against that render rather than by reading code.
+
+**Two false alarms it caught first.** The initial render showed columns C/D width-less and the aggregate values missing, both of which looked like export bugs and were not: openpyxl keys `column_dimensions` by letter, so a grouped `<col min="2" max="4">` only surfaces under `B`; and the preview table was stretching because `table-layout:fixed` with no explicit table width fills its container. Both were fixed in the renderer before touching the export — otherwise correct code would have been "fixed".
+
+**What actually differed, and is now aligned:**
+
+| | Before | After |
+|---|---|---|
+| Trailing column | header merged to column E, table stopped at D — a blank column on every export | one `SPAN` for every merged row; no column past the table |
+| `Net O/S` row | present | removed (it always equals O/S Balance — the reason the PDF dropped it). Provision now reads O/S Balance directly instead of going through it |
+| `Scheme` row | on the helper sheet only | a proper row, in the PDF's position |
+| Aggregates | 4, in a different order, **`Total Ledger Sacrifice` missing** | the PDF's 5, in the PDF's order |
+| `scheme · branch` strip | one per account under the totals | removed — the branch already prints in the header |
+| "Editable" note row | its own row | a cell note on Report Date, plus one on OTS Amount |
+| Helper sheet | a visible second tab | hidden; still drives the live formulas |
+| Row label | `OTS Amount (edit me)` | `OTS Amount` |
+
+Live formulas are unchanged in behaviour — editing OTS Amount still recalculates Total Sacrifice, Ledger Sacrifice, Impact on P&L and every aggregate, and editing Report Date still redrives UCI and Days in NPA. The UCI anchor formula now reads Scheme off the main sheet rather than a duplicate copy, so the value is stored once.
+
+Verified against borrowers with **1, 2 and 3 linked accounts** (the account count drives the merge span, so each behaves differently). For each: the 16 table row labels equal the PDF's exactly and in order; the 5 aggregate labels equal the PDF's exactly and in order; title and subtitle match; no column exists past the merge span; every column has an explicit width; all full-width merges end on the same column; the helper sheet is hidden; Scheme is not duplicated on it; `Net O/S` and the `scheme · branch` strip are gone. 33 assertions, all passing. Formulas spot-checked cell by cell against the corrected row numbers, and both cell notes confirmed present in `xl/comments1.xml`.
+
+Files: `js/app.js`. Cache-bust `v=20260815k`, SW `upgb-ots-shell-v116`.
+
 ### Login screen rebuilt as a ledger page with a handwritten masthead (2026-08-15, same day)
 
 Alok asked for login mockups — *"kuch new modern approach latest tranding kuch real skills"*. Four concepts were built as working prototypes (Vault Dial, Ledger Page, Split Console, One-Thumb Keypad); he chose **Ledger Page**, then asked for the masthead to read "NPA Dashboard / OTS Calculator" in handwriting rather than "ALOK MITTAL", shown in several colour treatments first. He picked **Study 4 — Ink & Red Seal**, and specified the footer as two lines: `UPGB RO HATHRAS`, then `Designed & Developed by ALOK MITTAL`.

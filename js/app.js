@@ -1528,12 +1528,17 @@ function renderPrintView(){
    lookup table are helper/intermediate values the PDF never showed, so
    they live on a second "Calculation Details" sheet instead of cluttering
    this one; formulas here just reference across to that sheet. */
+/* Exactly the print sheet's 16 rows, in the print sheet's order -- Scheme
+   included (it used to sit on the helper sheet), Net O/S excluded (it is
+   always identical to O/S Balance, which is why the print sheet dropped it),
+   and "OTS Amount" plainly named. The two sheets are now row-for-row the
+   same document. */
 const OTS_XL_ROW_LABELS = [
-  'Sanction Date','Sanction Limit','Asset Code','NPA Date','Days in NPA',
-  'O/S Balance','UCI @ 8.5%','Total Dues','Interest Reversal','Net O/S','Provision','Total P&L',
-  'OTS Amount (edit me)','Total Sacrifice','Ledger Sacrifice (BDWO Amount)','Impact on P&L',
+  'Sanction Date','Sanction Limit','Asset Code','NPA Date','Days in NPA','Scheme',
+  'O/S Balance','UCI @ 8.5%','Total Dues','Interest Reversal','Provision','Total P&L',
+  'OTS Amount','Total Sacrifice','Ledger Sacrifice (BDWO Amount)','Impact on P&L',
 ];
-const OTS_XL_CALC_ROW_LABELS = ['Scheme','UCI Anchor Date'];
+const OTS_XL_CALC_ROW_LABELS = ['UCI Anchor Date'];
 /* SheetJS (the "xlsx" global used elsewhere in this file, e.g. Daily NPA
    Projection's export) is the free Community Edition, which can only
    READ cell styles, not write them -- .z (number format) writes fine, but
@@ -1559,11 +1564,23 @@ async function exportOtsExcel(){
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('OTS Calculator', { views: [{showGridLines:false}] });
-  const wsCalc = wb.addWorksheet(XL_CALC_SHEET, { views: [{showGridLines:false}] });
+  /* Hidden: it only carries the UCI anchor dates and the provision-rate
+     lookup the formulas point at. The printed sheet never showed either, so
+     the workbook now opens on one sheet that matches the PDF. Right-click
+     the tab strip and Unhide to inspect it. */
+  const wsCalc = wb.addWorksheet(XL_CALC_SHEET, { views: [{showGridLines:false}], state:'hidden' });
   const colLetter = i => XLSX.utils.encode_col(i+1); // account 0 -> B, 1 -> C, ...
   const cols = slots.map((s,i)=>colLetter(i));
   const lastCol = cols[cols.length-1];
   const lastColIdx = cols.length + 1; // 1-indexed: A=1, B=2...
+  /* One span for every merged row -- title, subtitle, meta, name, address,
+     aggregates and footer all end on the same column as the table below
+     them. Previously the header block merged out to column E while the table
+     stopped at D, leaving a permanently empty column hanging off the right
+     of every export. The floor of 4 keeps a single-account sheet wide enough
+     for the footer line without stretching a 3-account one. */
+  const SPAN = Math.max(lastColIdx, 4);
+  const SPAN_COL = XLSX.utils.encode_col(SPAN - 1);
 
   const setOn = (sheet, addr, value, opts={}) => {
     const cell = sheet.getCell(addr);
@@ -1589,32 +1606,34 @@ async function exportOtsExcel(){
   // numbers, so the header can grow or shrink without hand-recalculating
   // every row below it. ----
   const solId = String(custRow[C.SOL_ID]||'');
-  const headerSpan = Math.max(lastColIdx,5);
+  /* Guidance the paper sheet has no need for (paper cannot be edited) is
+     attached as a cell note rather than its own row, so the sheet keeps the
+     PDF's exact shape. Wrapped because note support varies by ExcelJS build
+     and a missing note must never cost the whole export. */
+  const addNote = (addr, text) => { try{ ws.getCell(addr).note = text; }catch(e){} };
   let r = 1;
-  ws.mergeCells(r,1,r,headerSpan);
+  ws.mergeCells(r,1,r,SPAN);
   set(`A${r}`, 'UPGB OTS CALCULATOR', {font:{bold:true, size:16, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
   ws.getRow(r).height = 26;
   r++;
-  ws.mergeCells(r,1,r,headerSpan);
+  ws.mergeCells(r,1,r,SPAN);
   set(`A${r}`, 'Uttar Pradesh Gramin Bank (Regional Office Hathras)', {font:{size:11, color:{argb:'FF333333'}}, align:{horizontal:'center'}, border:{bottom:{style:'medium', color:{argb:'FF555555'}}}});
   r += 2;
 
   const reportDateRow = r;
-  set(`A${reportDateRow}`, 'Report Date', {font:{bold:true}, border:false});
+  set(`A${reportDateRow}`, 'Report Date', {font:{bold:true, color:{argb:'FF333333'}}, border:false});
   set(`B${reportDateRow}`, dateVal(new Date()), {numFmt:XL_DATE_FMT, font:{bold:true, color:{argb:'FF000000'}}, border:XL_BORDER_ALL});
+  addNote(`B${reportDateRow}`, 'Editable. Every UCI, Days in NPA and dues figure below recalculates off this date.');
   set(`C${reportDateRow}`, 'Branch', {font:{bold:true, color:{argb:'FF333333'}}, border:false});
-  ws.mergeCells(reportDateRow,4,reportDateRow,headerSpan);
+  ws.mergeCells(reportDateRow,4,reportDateRow,SPAN);
   set(`D${reportDateRow}`, `${custRow[C.SOL_DESC]||''}${solId?` (${solId})`:''}`, {font:{color:{argb:'FF000000'}}, border:false});
   const reportDateRef = `$B$${reportDateRow}`;
-  r++;
-  ws.mergeCells(r,1,r,headerSpan);
-  set(`A${r}`, 'Editable — every UCI/dues figure below recalculates off the Report Date above', {font:{italic:true, size:10, color:{argb:'FF666666'}}, border:false});
   r += 2;
 
-  ws.mergeCells(r,1,r,headerSpan);
+  ws.mergeCells(r,1,r,SPAN);
   set(`A${r}`, custRow[C.NAME]||'', {font:{bold:true, size:12, color:{argb:'FF000000'}}, border:false});
   r++;
-  ws.mergeCells(r,1,r,headerSpan);
+  ws.mergeCells(r,1,r,SPAN);
   set(`A${r}`, custRow[C.ADDR]||'', {font:{size:10, color:{argb:'FF333333'}}, border:false});
   r += 2;
 
@@ -1630,13 +1649,16 @@ async function exportOtsExcel(){
     set(`B${rr}`, row[1], {font:{color:{argb:'FF000000'}}, border:false});
     if(row[2]){
       set(`C${rr}`, row[2], {font:{bold:true, color:{argb:'FF333333'}}, border:false});
+      ws.mergeCells(rr,4,rr,SPAN);
       set(`D${rr}`, row[3], {font:{color:{argb:'FF000000'}}, numFmt: row[2]==='SB Balance'?XL_INR_FMT:undefined, border:false});
     }
   });
   r += infoPairs.length + 1;
 
-  // ---- Calculation Details sheet: Scheme + UCI Anchor Date (helper values
-  // the print sheet never showed) + the Provision Rate lookup table. ----
+  // ---- Calculation Details sheet (hidden): the UCI anchor date per account
+  // plus the Provision Rate lookup table. Scheme no longer lives here -- it
+  // is a proper row on the main sheet now, and the anchor formula reads it
+  // from there, so the same value is not stored in two places. ----
   wsCalc.mergeCells(1,1,1,Math.max(lastColIdx,4));
   setCalc('A1', 'Calculation Details', {font:{bold:true, size:14, color:{argb:'FF000000'}}, border:false});
   wsCalc.mergeCells(2,1,2,Math.max(lastColIdx,4));
@@ -1644,7 +1666,7 @@ async function exportOtsExcel(){
   const calcHeaderRow = 4;
   setCalc(`A${calcHeaderRow}`, 'Particulars', {font:{bold:true, color:{argb:'FF000000'}}});
   slots.forEach((s,i)=>setCalc(`${cols[i]}${calcHeaderRow}`, s.acctNo, {font:{bold:true, color:{argb:'FF000000'}}, align:{horizontal:'center'}}));
-  const RC = { scheme: calcHeaderRow+1, anchor: calcHeaderRow+2 };
+  const RC = { anchor: calcHeaderRow+1 };
   OTS_XL_CALC_ROW_LABELS.forEach((label,i)=>setCalc(`A${calcHeaderRow+1+i}`, label, {font:{bold:true, color:{argb:'FF000000'}}}));
 
   const RATE_ROWS = [['SUB_STD',0.10],['DA1',0.20],['DA2',0.30],['DA3',1],['LOSS',1]];
@@ -1661,16 +1683,18 @@ async function exportOtsExcel(){
   set(`A${headerRow}`, 'Particulars', {font:{bold:true, color:{argb:'FF000000'}}});
   slots.forEach((s,i)=>set(`${cols[i]}${headerRow}`, s.acctNo, {font:{bold:true, color:{argb:'FF000000'}}, align:{horizontal:'center'}}));
 
-  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amount (edit me)','Total Sacrifice','Impact on P&L']);
+  // Same rows the print sheet bolds, so the two read identically on paper.
+  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amount','Total Sacrifice','Impact on P&L']);
   const rowOf = label => headerRow + 1 + OTS_XL_ROW_LABELS.indexOf(label);
   const R = {
     sanctionDate: rowOf('Sanction Date'), sanctionLimit: rowOf('Sanction Limit'), assetCode: rowOf('Asset Code'),
-    npaDate: rowOf('NPA Date'), daysNpa: rowOf('Days in NPA'),
+    npaDate: rowOf('NPA Date'), daysNpa: rowOf('Days in NPA'), scheme: rowOf('Scheme'),
     os: rowOf('O/S Balance'), uci85: rowOf('UCI @ 8.5%'), totalDues: rowOf('Total Dues'),
-    uri: rowOf('Interest Reversal'), netOs: rowOf('Net O/S'), provision: rowOf('Provision'), totalPL: rowOf('Total P&L'),
-    ots: rowOf('OTS Amount (edit me)'), totalSac: rowOf('Total Sacrifice'),
+    uri: rowOf('Interest Reversal'), provision: rowOf('Provision'), totalPL: rowOf('Total P&L'),
+    ots: rowOf('OTS Amount'), totalSac: rowOf('Total Sacrifice'),
     ledgerSac: rowOf('Ledger Sacrifice (BDWO Amount)'), impact: rowOf('Impact on P&L'),
   };
+  addNote(`A${R.ots}`, 'Type a settlement amount here. Total Sacrifice, Ledger Sacrifice, Impact on P&L and the aggregate totals all recalculate from it.');
 
   OTS_XL_ROW_LABELS.forEach((label,i)=>{
     const r = headerRow + 1 + i;
@@ -1681,11 +1705,11 @@ async function exportOtsExcel(){
     const c = cols[i];
     const rowStyle = r => ({border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}, bold:STRONG_ROWS.has(OTS_XL_ROW_LABELS[r-headerRow-1])}});
 
-    // Calculation Details sheet: Scheme (plain value) + UCI Anchor Date
-    // (formula) for this account -- referenced by this sheet's UCI@8.5% below.
-    setCalc(`${c}${RC.scheme}`, s.scheme, {border:XL_BORDER_ALL, align:{horizontal:'center'}, font:{color:{argb:'FF000000'}}});
+    // UCI Anchor Date (formula) for this account on the hidden sheet, read by
+    // this sheet's UCI @ 8.5% below. Both its inputs -- NPA Date and Scheme --
+    // are read back off the main sheet, so editing either there flows through.
     const npaRefMain = `'OTS Calculator'!${c}${R.npaDate}`;
-    const schemeRefCalc = `${c}${RC.scheme}`;
+    const schemeRefCalc = `'OTS Calculator'!${c}${R.scheme}`;
     // Anchor date replicates computeUCI()'s scheme-dependent rule exactly:
     // CC004 (KCC) uses fixed 24-Mar/24-Sep half-year edges; every other
     // scheme anchors to end of NPA month (or the previous month's end, if
@@ -1702,15 +1726,16 @@ async function exportOtsExcel(){
     set(`${c}${R.assetCode}`, s.assetCode, rowStyle(R.assetCode));
     set(`${c}${R.npaDate}`, dateVal(toDate(s.npaDate)), {...rowStyle(R.npaDate), numFmt:XL_DATE_FMT});
     set(`${c}${R.daysNpa}`, formula(`${reportDateRef}-${c}${R.npaDate}`), {...rowStyle(R.daysNpa), numFmt:'0'});
+    set(`${c}${R.scheme}`, s.scheme||'', rowStyle(R.scheme));
     set(`${c}${R.os}`, s.os===''?0:s.os, {...rowStyle(R.os), numFmt:XL_INR_FMT});
     set(`${c}${R.uci85}`, formula(`${c}${R.os}*8.5/100*((${reportDateRef}-${anchorRefCalc})/365)`), {...rowStyle(R.uci85), numFmt:XL_INR_FMT});
     set(`${c}${R.uri}`, uriFor(s), {...rowStyle(R.uri), numFmt:XL_INR_FMT});
     // Total Dues = O/S + UCI@8.5% + Interest Reversal.
     set(`${c}${R.totalDues}`, formula(`${c}${R.os}+${c}${R.uci85}+${c}${R.uri}`), {...rowStyle(R.totalDues), numFmt:XL_INR_FMT});
-    // Net O/S always mirrors O/S Balance -- Interest Reversal is editable and
-    // must flow into Total Dues, but never changes what Net O/S itself shows.
-    set(`${c}${R.netOs}`, formula(`${c}${R.os}`), {...rowStyle(R.netOs), numFmt:XL_INR_FMT});
-    set(`${c}${R.provision}`, formula(`${c}${R.netOs}*VLOOKUP(${c}${R.assetCode},${rateTable},2,FALSE)`), {...rowStyle(R.provision), numFmt:XL_INR_FMT});
+    // Provision reads O/S Balance directly. It used to go through a Net O/S
+    // row, but that row only ever mirrored O/S Balance -- which is exactly
+    // why the print sheet dropped it -- so the indirection is gone with it.
+    set(`${c}${R.provision}`, formula(`${c}${R.os}*VLOOKUP(${c}${R.assetCode},${rateTable},2,FALSE)`), {...rowStyle(R.provision), numFmt:XL_INR_FMT});
     // Total P&L = O/S - Provision (Interest Reversal already flows into
     // Total Dues above, not into Total P&L).
     set(`${c}${R.totalPL}`, formula(`${c}${R.os}-${c}${R.provision}`), {...rowStyle(R.totalPL), numFmt:XL_INR_FMT});
@@ -1727,31 +1752,39 @@ async function exportOtsExcel(){
     set(`${c}${R.impact}`, formula(`${c}${R.ots}-${c}${R.totalPL}`), {...rowStyle(R.impact), numFmt:XL_INR_FMT_PL});
   });
 
-  // ---- Aggregate totals ----
+  // ---- Aggregate totals: the print sheet's five, in its order (O/S, Dues,
+  // OTS, Ledger Sacrifice, Sacrifice). Ledger Sacrifice was missing here
+  // entirely, and the order did not match the paper. ----
   const aggTitleRow = headerRow + OTS_XL_ROW_LABELS.length + 2;
-  ws.mergeCells(aggTitleRow,1,aggTitleRow,Math.max(lastColIdx,4));
+  ws.mergeCells(aggTitleRow,1,aggTitleRow,SPAN);
   set(`A${aggTitleRow}`, 'A G G R E G A T E   T O T A L S', {font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
   const sumRange = row => `SUM(B${row}:${lastCol}${row})`;
-  const AGG_LABELS = ['Total O/S Balance','Total Dues','Total OTS Amount','Total Sacrifice'];
-  const AGG_ROWS = [R.os, R.totalDues, R.ots, R.totalSac];
-  AGG_LABELS.forEach((label,i)=>{
-    const r = aggTitleRow+1+i;
-    set(`A${r}`, label, {font:{bold:true, color:{argb:'FF000000'}}, border:false});
-    ws.mergeCells(r,2,r,Math.max(lastColIdx,4));
-    set(`B${r}`, formula(sumRange(AGG_ROWS[i])), {numFmt:XL_INR_FMT, font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'right'}, border:false});
+  const AGG = [
+    ['Total O/S Balance', R.os],
+    ['Total Dues', R.totalDues],
+    ['Total OTS Amount', R.ots],
+    ['Total Ledger Sacrifice', R.ledgerSac],
+    ['Total Sacrifice', R.totalSac],
+  ];
+  AGG.forEach(([label,srcRow],i)=>{
+    const rr = aggTitleRow+1+i;
+    set(`A${rr}`, label, {font:{bold:true, color:{argb:'FF000000'}}, border:false});
+    ws.mergeCells(rr,2,rr,SPAN);
+    set(`B${rr}`, formula(sumRange(srcRow)), {numFmt:XL_INR_FMT, font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'right'}, border:false});
   });
 
-  const schemeLineRow = aggTitleRow + AGG_LABELS.length + 1;
-  slots.forEach((s,i)=>{
-    set(`${cols[i]}${schemeLineRow}`, `${s.scheme||''} · ${custRow[C.SOL_DESC]||''}`, {font:{italic:true, size:9, color:{argb:'FF666666'}}, align:{horizontal:'center'}, border:false});
-  });
-  const footerRow = schemeLineRow + 2;
-  ws.mergeCells(footerRow,1,footerRow,Math.max(lastColIdx,4));
+  // The per-account "scheme · branch" strip that used to sit here is gone:
+  // Scheme is a table row now, and the branch already prints in the header,
+  // so it was the same two facts repeated once per account.
+  const footerRow = aggTitleRow + AGG.length + 2;
+  ws.mergeCells(footerRow,1,footerRow,SPAN);
   set(`A${footerRow}`, 'Designed & Developed by ALOK MITTAL · Uttar Pradesh Gramin Bank', {font:{italic:true, size:9.5, color:{argb:'FF666666'}}, align:{horizontal:'center'}, border:false});
 
   // ---- Column widths + freeze header row/label column ----
+  // Every column out to SPAN gets a width, including any beyond the last
+  // account -- an unsized column at the right edge reads as a stray blank.
   ws.getColumn(1).width = 30;
-  cols.forEach((c,i)=>{ ws.getColumn(2+i).width = 17; });
+  for(let ci = 2; ci <= SPAN; ci++) ws.getColumn(ci).width = 17;
   ws.views = [{state:'frozen', xSplit:1, ySplit:headerRow, topLeftCell:`B${headerRow+1}`, showGridLines:false}];
   wsCalc.getColumn(1).width = 30;
   cols.forEach((c,i)=>{ wsCalc.getColumn(2+i).width = 17; });
@@ -1765,11 +1798,7 @@ async function exportOtsExcel(){
     horizontalCentered: true, printTitlesRow: `${headerRow}:${headerRow}`,
     margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
   };
-  // The aggregate/header/footer rows merge out to column D even when
-  // fewer than 3 accounts are linked (see Math.max(lastColIdx,4) above),
-  // so the print area must cover that width too, not just the account columns.
-  const printLastCol = XLSX.utils.encode_col(Math.max(lastColIdx,4)-1);
-  ws.pageSetup.printArea = `A1:${printLastCol}${footerRow}`;
+  ws.pageSetup.printArea = `A1:${SPAN_COL}${footerRow}`;
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
