@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: Regional Office info card now also shows on the Dashboard's default "Regional Office" (whole-book) view (2026-08-15, same day)
+
+Alok pointed at a screenshot of the Dashboard's default state -- `#dashBranchFilter` left on "Regional Office" (blank, the whole book) -- and asked for R O Hathras's own info card to show there too, not just when a specific lending branch is picked.
+
+`dashboardBranchInfoCard()` previously returned nothing whenever `branchFilter` was blank, on the assumption that "Regional Office" meant no single branch was in view. But R O Hathras (Sol ID 9269) never carries NPA accounts -- it's the administrative office, not a lending branch -- so it never has its own `s.branchMap` entry either way; the blank-filter case is now hardcoded to Sol ID 9269 instead of returning early, since "Regional Office" on this dropdown always means that one office. Everything downstream (District, Region Head, Senior Manager Recovery, Branch Email, Address, click-through to the full card) reuses the exact same rendering path as a normal branch, including the Region Head/Senior Manager Recovery relabeling shipped just above.
+
+Verified: default Dashboard load (no branch selected) now shows the R O Hathras card with R.S.Verma/Himanshu Sharma; switching to a real branch (Agsauli) and back to "Regional Office" both render correctly; click-through to the full branch card still works; no console errors.
+
+Files: `js/app.js` (`dashboardBranchInfoCard`). Cache-bust `v=20260815r`, SW `upgb-ots-shell-v123`.
+
 ### Fix: Regional Office contact uses "Region Head" / "Senior Manager Recovery" instead of the branch-level "Branch Manager" / "Recovery Officer" labels (2026-08-15, same day)
 
 Alok published R O Hathras's (Sol ID 9269) own contacts through the Branch Contacts upload — R.S.Verma and Himanshu Sharma (8172900300) — but pointed out the generic branch labels don't fit the Regional Office: its own head carries the title **Region Head**, and its recovery contact is a **Senior Manager Recovery**, not a plain branch Recovery Officer.

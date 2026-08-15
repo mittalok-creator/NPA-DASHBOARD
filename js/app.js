@@ -3463,18 +3463,18 @@ function dashboardCornerStats(s){
   return html;
 }
 
-/* Branch profile card shown at the top of the Dashboard whenever a single
-   branch is picked from #dashBranchFilter (blank = whole Regional Office,
-   where a single branch profile wouldn't make sense). branchFilter is the
-   raw branch-name string the filter uses to slice NPA rows; s.branchMap
-   already carries that same branch's Sol ID (captured off the real NPA
-   rows during computeDashboardStats), so this reads off that rather than
-   re-matching the name against BRANCH_LIST/BRANCH_META, which use a
-   slightly different canonical spelling. */
+/* Branch profile card shown at the top of the Dashboard. A single branch
+   picked from #dashBranchFilter reads its Sol ID off s.branchMap (captured
+   straight from the real NPA rows during computeDashboardStats, so it
+   matches even though the raw branch-name spelling differs slightly from
+   BRANCH_LIST/BRANCH_META's canonical form). "Regional Office" (blank
+   filter, the whole book) has no branchMap entry of its own -- R O Hathras
+   (Sol ID 9269) never carries NPA accounts, it's the administrative office,
+   not a lending branch -- so that case is hardcoded to 9269 instead, since
+   "Regional Office" on this dropdown always means that one office. */
 function dashboardBranchInfoCard(branchFilter, s){
-  if(!branchFilter) return '';
-  const bmEntry = s.branchMap.get(branchFilter);
-  const solId = bmEntry ? bmEntry.solId : '';
+  const solId = branchFilter ? (s.branchMap.get(branchFilter)||{}).solId||'' : '9269';
+  const branchName = branchFilter || 'R O Hathras';
   const meta = BRANCH_META[Number(solId)] || {};
   const bc = DATA.branchContacts[solId] || {};
   const listEntry = BRANCH_LIST.find(([,nid])=>String(nid)===String(solId));
@@ -3494,7 +3494,7 @@ function dashboardBranchInfoCard(branchFilter, s){
   if(!items) return '';
   return `<div class="card branch-info-card"${solId?` onclick="showBranchCard(${solId})" role="button" tabindex="0"`:''}>
     <div class="branch-info-head">
-      <div><div class="bname">${esc(branchFilter)}</div><div class="baddr">${solId?`Sol ID ${esc(solId)} &middot; Old ${esc(oldId)}`:''}</div></div>
+      <div><div class="bname">${esc(branchName)}</div><div class="baddr">${solId?`Sol ID ${esc(solId)} &middot; Old ${esc(oldId)}`:''}</div></div>
       ${solId?'<div class="branch-info-cta">Full details →</div>':''}
     </div>
     <div class="info-grid">${items}</div>
