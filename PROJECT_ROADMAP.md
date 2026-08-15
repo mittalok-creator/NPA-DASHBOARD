@@ -123,6 +123,20 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Data: BRANCH_LIST frozen against the official UPGB_NEW_SOL_ID.xlsx master (2026-08-15, same day)
+
+Alok supplied `UPGB_NEW_SOL_ID.xlsx` — the official Old Sol ID / New Sol ID / Branch Name master — and said this is data that won't change, so it should be set/frozen in the app; the still-outstanding Manager/Recovery Officer contact data he'll upload separately (Monday) through the existing Branch Contacts template in Settings.
+
+Diffed all 57 rows of the sheet against the hardcoded `BRANCH_LIST` in `js/app.js` (a small Node script matching by new Sol ID). All 57 Old/New Sol ID pairs matched exactly — no additions, removals, or ID mismatches — but 4 branch names in the sheet were more complete than what shipped: `Agra Road` → **Hathras Agra Road**, `Aligarh Road` → **Hathras Aligarh Road**, `Service Branch` → **Hathras Service Branch**, `Hatisa` → **Hatisa Bhagwantpur**. Updated `BRANCH_LIST` to match the sheet exactly and added a comment marking it as the frozen source of truth going forward.
+
+Bonus find: the sheet carries its own `District Name` column, and it confirms the Hathras/Mathura district split used by `branchGroups()` (shipped just below, 9270–9309 vs 9310–9325) is exactly right — every row in the sheet tagged `Hathras` falls in 9270–9309 and every row tagged `Mathura` falls in 9310–9325, with no exceptions.
+
+No template work was needed for the Manager/RO contact data Alok will upload Monday — `downloadBranchContactsTemplate()` (Settings → Update Data → Branch Contacts) already pre-fills Sol ID/Old Sol ID/Branch Name from `BRANCH_LIST` for all 57 branches and carries forward anything already in `DATA.branchContacts`, so it automatically picks up the 4 corrected names with no changes of its own.
+
+Verified: all 57 rows render in the Branch & Sol ID panel with the corrected names, no console errors, `js/app.js` parses clean.
+
+Files: `js/app.js` (`BRANCH_LIST`). Cache-bust `v=20260815o`, SW `upgb-ots-shell-v120`.
+
 ### Fix: Branch panel groups switched from Sol ID decade ranges to the real Hathras/Mathura district split (2026-08-15, same day)
 
 One more correction to the Branch panel grouping shipped just below: the Sol ID decade-range groups (`9270–9279`, `9280–9289`, ...) were an arbitrary numeric bucketing, not a grouping that means anything to a branch officer. Alok pointed out the real structure: Sol ID 9269 is the Regional Office itself, 9270–9309 are the **Hathras district** branches, and 9310–9325 are the **Mathura district** branches — UPGB Hathras Regional Office covers both districts. (The old Sol ID prefix flips from 15xxx to 16xxx at exactly the same 9309/9310 boundary, confirming this is a real administrative line, not a coincidence of the numeric range.)
