@@ -130,27 +130,23 @@ const BRANCH_LIST = [[15990,9269,"R O Hathras"],[15010,9270,"Agsauli"],[15020,92
    hardcoded MANAGER_CONTACTS constant now that collection is an ongoing,
    self-serve process rather than a one-off code ship. */
 
-function renderBranchList(filter){
-  const q = (filter||'').trim().toLowerCase();
-  const body = document.getElementById('branchListBody');
-  if(!body) return;
-  const rows = q ? BRANCH_LIST.filter(([oldId,newId,name])=>{
-    const bc = DATA.branchContacts[String(newId)];
-    return String(newId).includes(q) || String(oldId).includes(q) || name.toLowerCase().includes(q) ||
-      (bc && ((bc.mgr||'').toLowerCase().includes(q) || (bc.roName||'').toLowerCase().includes(q)));
-  }) : BRANCH_LIST;
-  const contactLine = (role, name, mobile) => name || mobile ? `<div class="edge-row-contact-line">
+function branchMatchesQuery(name, oldId, newId, q){
+  const bc = DATA.branchContacts[String(newId)];
+  return String(newId).includes(q) || String(oldId).includes(q) || name.toLowerCase().includes(q) ||
+    (bc && ((bc.mgr||'').toLowerCase().includes(q) || (bc.roName||'').toLowerCase().includes(q)));
+}
+function branchRowHtml([oldId,newId,name]){
+  const bc = DATA.branchContacts[String(newId)];
+  const contactLine = (role, cname, mobile) => cname || mobile ? `<div class="edge-row-contact-line">
       <span class="role">${role}</span>
-      <span class="edge-row-mgr">${esc(name)||'—'}</span>
+      <span class="edge-row-mgr">${esc(cname)||'—'}</span>
       ${mobile?`<a href="tel:${esc(mobile)}" onclick="event.stopPropagation()">${esc(mobile)}</a>${waIconLink(mobile)}`:''}
     </div>` : '';
-  body.innerHTML = rows.length ? rows.map(([oldId,newId,name])=>{
-    const bc = DATA.branchContacts[String(newId)];
-    const contact = bc ? `<div class="edge-row-contact">
-        ${contactLine('MGR', bc.mgr, bc.mgrMobile)}
-        ${contactLine('RO', bc.roName, bc.roMobile)}
-      </div>` : '';
-    return `
+  const contact = bc ? `<div class="edge-row-contact">
+      ${contactLine('MGR', bc.mgr, bc.mgrMobile)}
+      ${contactLine('RO', bc.roName, bc.roMobile)}
+    </div>` : '';
+  return `
     <div class="edge-row" onclick="showBranchCard(${newId})" role="button" tabindex="0" aria-label="View full contact card for ${esc(name)}">
       <div class="edge-row-top">
         <div class="edge-row-branch">${esc(name)}</div>
@@ -158,8 +154,54 @@ function renderBranchList(filter){
       </div>
       ${contact}
     </div>`;
-  }).join('') : `<div class="edge-empty">No branch matches "${esc(filter)}"</div>`;
 }
+/* Grouped, alphabetical view of BRANCH_LIST, with the Regional Office
+   pinned first. BRANCH_LIST's own order is Sol ID order (new branches get
+   appended out of alphabetical sequence as they're added), which reads
+   fine as a flat reference list but makes an A-Z jump rail meaningless --
+   so the panel keeps its own sorted copy rather than reordering the
+   source list other code (Excel template, showBranchCard lookup) relies on. */
+function branchGroups(){
+  const ro = BRANCH_LIST.find(([,,name])=>name==='R O Hathras');
+  const rest = BRANCH_LIST.filter(([,,name])=>name!=='R O Hathras')
+    .slice().sort((a,b)=>a[2].localeCompare(b[2],'en',{sensitivity:'base'}));
+  const groups = [];
+  if(ro) groups.push({id:'ro', letter:'★', rows:[ro]});
+  rest.forEach(entry=>{
+    const L = entry[2][0].toUpperCase();
+    const last = groups[groups.length-1];
+    if(!last || last.id!==L) groups.push({id:L, letter:L, rows:[entry]});
+    else last.rows.push(entry);
+  });
+  return groups;
+}
+function renderBranchList(filter){
+  const q = (filter||'').trim().toLowerCase();
+  const body = document.getElementById('branchListBody');
+  const rail = document.getElementById('branchEdgeRail');
+  const countEl = document.getElementById('branchListCount');
+  if(!body) return;
+
+  if(q){
+    const rows = BRANCH_LIST.filter(([oldId,newId,name])=>branchMatchesQuery(name,oldId,newId,q));
+    if(countEl) countEl.textContent = `${rows.length} match${rows.length===1?'':'es'}`;
+    if(rail) rail.innerHTML = '';
+    body.innerHTML = rows.length ? rows.map(branchRowHtml).join('') : `<div class="edge-empty">No branch matches "${esc(filter)}"</div>`;
+    return;
+  }
+
+  if(countEl) countEl.textContent = `${BRANCH_LIST.length} branches`;
+  const groups = branchGroups();
+  body.innerHTML = groups.map(g=>`
+    <div class="edge-grp" id="edgeGrp-${esc(g.id)}"><b>${g.id==='ro'?'Regional Office':esc(g.letter)}</b><i></i><em>${g.rows.length}</em></div>
+    ${g.rows.map(branchRowHtml).join('')}
+  `).join('');
+  if(rail) rail.innerHTML = groups.map(g=>`<button type="button" onclick="jumpBranchGroup('${esc(g.id)}')" aria-label="Jump to ${g.id==='ro'?'Regional Office':esc(g.letter)}">${g.letter}</button>`).join('');
+}
+function jumpBranchGroup(id){
+  document.getElementById('edgeGrp-'+id)?.scrollIntoView({block:'start', behavior:'smooth'});
+}
+window.jumpBranchGroup = jumpBranchGroup;
 /* WhatsApp deep link for a mobile number -- wa.me needs the full
    international number with no "+"/spaces, so a bare 10-digit Indian
    mobile gets "91" prefixed; a number that already carries a country

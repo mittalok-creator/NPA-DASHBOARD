@@ -123,6 +123,22 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Sidebar redesigned as a collapsible sapphire rail; Branch panel grouped A-Z with old + new Sol ID (2026-08-15, same day)
+
+Alok asked for a modern, unique, simple-but-elegant look for the sidebar. Four mockups were shown as a standalone HTML file (Ledger Register / Quiet Rail / Grouped & Sapphire / — see the earlier login-mockups session for the pattern); he picked **Direction C's look** (grouped labels, the app's own sapphire) combined with **Direction B's hover-to-open collapse**, and asked that the Branches panel carry the same treatment while keeping both old and new Sol ID per branch (already shown there — just had to survive the redesign).
+
+**Sidebar.** `#sideNav` is now a 76px flex placeholder that never changes size — it only reserves that much space in `#app`'s layout, so nothing about `#mainCol` ever reflows. The actual chrome (background, padding, nav items) moved to a `.nav-shell` child, absolutely positioned to fill that 76px box at rest and widen to 252px on `:hover`/`:focus-within`, escaping its parent's bounds to *overlay* the dashboard rather than push it — the same technique VS Code/GitHub Desktop use for a collapsible activity bar. `:focus-within` (not just `:hover`) keeps it open, so a keyboard user tabbing through nav items doesn't lose the rail mid-navigation.
+
+Collapsed, it reads as a plain icon rail. Expanded, it's grouped: **Analysis** (Dashboard, Bank Dashboard, KCC Overdue), **Settlement** (Search & Settlement), a **Data as on** card filling the gap the nav used to leave empty below four tabs, then **Tools** (Refresh, Quick Search, Settings, Theme). The date card reuses the existing `.report-date-val` convention — `updateReportDateDisplay()` already writes `DATA.asOnDate` into every element carrying that class, so the card needed no wiring of its own and can't drift out of sync with the date shown everywhere else.
+
+**Branch panel.** Was a flat 57-row list in Sol ID order (new branches get appended out of alphabetical sequence as they're added, so the source order isn't usable for an A-Z index). The panel now keeps its own sorted copy — Regional Office pinned first, everything else grouped alphabetically under sticky letter headers with a count badge — plus a jump rail along the right edge. Both **old and new Sol ID** continue to show on every row exactly as before (`Sol ID 9269` / `Old 15990`); a search still returns a flat list with the rail cleared, since letter grouping doesn't help a handful of scattered matches.
+
+One real defect caught before shipping: `.nav-card-lbl` was styled with `--accent-2` (a light teal, chosen because it read well on the dark rail) — on the light theme's pale `--accent-soft` card background it measured 2.47:1, well under WCAG AA. Switched to `--accent` (deep sapphire in both themes), which held past 5:1 in both. Every other new element — nav labels, the branch panel's group letters, count badges, and the A-Z rail — was contrast-checked the same way (composited against its real, possibly-translucent background, not assumed opaque) and came back clean; worst case 4.17:1.
+
+Verified: hover expands 76→252px and mouse-leave collapses it back (confirmed independent of `:focus-within` by testing pure mouse movement with no click involved); a focused nav item keeps the rail open through blur; `#mainCol`'s left edge never moves in either state; the borrower detail pane still opens above the collapsed rail (z-index 95 vs. the rail's 5, confirmed by hit-testing the top-left pixel); mobile (`<900px`) is untouched — `#sideNav` still hides in favour of the bottom tabs, no horizontal scroll. Branch panel: 20 groups render (Regional Office + A–Z), rail jump scrolls to the right group, search returns 1 match for "mendu" with the rail cleared, and the full contact card opened from a row still reads "Sol ID 9269 · Old Sol ID 15990". No console errors in either theme.
+
+Files: `index.html`, `css/styles.css`, `js/app.js` (`renderBranchList` split into `branchMatchesQuery`/`branchRowHtml`/`branchGroups`, plus a new `jumpBranchGroup`). Cache-bust `v=20260815l`, SW `upgb-ots-shell-v117`.
+
 ### OTS Excel export made row-for-row identical to the PDF (2026-08-15, same day)
 
 Alok: *"Pdf itna simple clean well align hai bahut hi bhadiya and excel utna hi bikhra hua data bhi kuch jyada hai pdf jitna aur jaisa hi chahiye"* — the PDF is clean and well aligned; the Excel is scattered and carries more data than the PDF. Make it the same.
