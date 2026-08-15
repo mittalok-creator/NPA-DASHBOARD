@@ -123,6 +123,38 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: hero KPI value wrapping onto two lines (2026-08-15, same day)
+
+Flagged as pre-existing in the ivory pass, then Alok asked for it too. On
+the Total Outstanding card the value broke across two lines — "₹127.64" /
+"Cr" — because `.hero-kpi-side` sat as a column *beside* `.hero-kpi-main`
+and reserved whatever width its `white-space:nowrap` "MAR ₹128.95 Cr" rows
+needed. At the 4-across grid that left the main column too narrow for a
+38px figure.
+
+The card is now a column: icon → label → value → sub, with the badge and
+Mar/Jun groups as a strip below, wrapping onto their own line when narrow.
+The value gets the card's full width at every breakpoint, and the strip
+still cannot overlap it, since it stays a real flex item rather than the
+absolute overlay that caused the original overlap bug (see the 2026-08-14
+"hero KPI card value overlapping badge" entry — that lesson is preserved).
+
+Putting the strip *above* the main block was tried first and rejected: it
+pushed the one card that has it ~90px down, leaving the four headline
+figures visibly out of line with each other across the row. Below keeps
+every card opening at the same height.
+
+The now-redundant `@media (max-width:599px)` overrides that used to force
+this same stacking on phones were removed rather than left duplicating the
+base rules.
+
+**Verified**: measured (not eyeballed) at four widths — 1400px 4-across,
+1000px and 760px 2-across, 390px 1-across — asserting every
+`.hero-kpi-value` renders on exactly one line with no horizontal overflow;
+0 wrapped at all four. Bank Dashboard, which reuses the same card, checked
+too: all 7 hero values single-line. Full OTS/print/Excel, hero-search and
+persistence regressions still passing; zero console errors.
+
 ### Design: light theme moved to warm ivory paper (2026-08-15, same day)
 
 Alok: light mode *"bahut simple lagta hai ... kuch woow factor nikal kar
