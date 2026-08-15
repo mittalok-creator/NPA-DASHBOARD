@@ -123,6 +123,95 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Feature: OTS Worksheet + device Backup/Restore, brass result list, per-row remove (2026-08-15, same day)
+
+Alok, picking from a list of suggestions: *"Ots worksheet / Backup / Dono
+choti cheezen / Contact list monday ko update ho jayegi / Daily npa
+projection kaam ka nahi hai ab"* — i.e. build the worksheet, build the
+backup, and do both small items.
+
+**1. OTS Worksheet.** Typed OTS Amounts have been saved per account since
+this morning's change, but they were only ever visible one borrower at a
+time. This is the view that makes a whole settlement batch reviewable in
+one place: every account with an OTS Amount saved on this device, with
+O/S Balance, OTS Amount, Total Sacrifice and Impact on P&L, plus a totals
+row.
+
+Reached from a ledger-cover bar on the OTS start screen ("OTS Worksheet —
+N account(s) · O/S ₹X · OTS ₹Y"). The bar renders even when nothing is
+saved, because that is exactly the state a fresh phone is in and Restore
+has to be reachable from it.
+
+Every figure is recomputed live through `computeSlot(slotFromRow(raw))`
+and `totalDuesFor(s)` — the same path the borrower detail screen uses — so
+the worksheet cannot drift from what that screen shows. Accounts that have
+since dropped out of the NPA book (regularized/closed) are skipped rather
+than shown against stale figures. `slotFromRow(row)` was extracted out of
+`lookupLoanSlot()` for this, so a slot can be built from an account number
+alone.
+
+**Excel export** is built with ExcelJS, not SheetJS, for the same reason
+the single-borrower export is: the free SheetJS build writes number formats
+but silently drops fonts and borders. Total Sacrifice and Impact on P&L are
+written as **live formulas** off column F, so editing a settlement amount
+in Excel updates the derived columns and the totals. A4 landscape, fit to
+width, header row frozen and repeated on every printed page.
+
+**2. Backup / Restore.** Everything the app saves per-person — OTS Amounts,
+Interest Reversal overrides, Recently Opened — lives in this browser's
+localStorage. Clearing browser data or changing phone loses all of it.
+Backup writes it to a JSON file the user holds; Restore reads it back.
+Nothing is uploaded anywhere. Restore validates `app === 'upgb-ots'` and
+confirms the count before replacing, so a wrong file cannot silently wipe
+real work (verified: a non-backup JSON is rejected and the 3 saved amounts
+survived).
+
+**3. Small item — brass result list.** The OTS search results table still
+ran on the app's sapphire tokens, so the tab read brass at the top (hero
+card), sapphire through the result list, then brass again on the detail
+screen. Now scoped to the brass tokens via a `.ots-results` wrapper.
+
+**4. Small item — per-row remove in Recently Opened.** Each row gets a ✕.
+The row's `<button>` and the ✕ are siblings inside `.start-rec-row`, never
+nested — a button inside a button is invalid markup and breaks keyboard
+activation. Removing a row drops it from the visited list only; that
+borrower's saved OTS Amount is real work and stays in the worksheet.
+
+**Two real defects found and fixed while building this:**
+
+- *Light-theme header row was dark-on-dark.* The existing rule
+  `:root[data-theme="light"] .dash-table th{color:var(--head-ink)}` has
+  specificity (0,3,1) and outranked a plain `.ots-results .dash-table th`
+  at (0,2,1), putting the light theme's dark ink on the new navy header.
+  Fixed by re-pointing the `--head-ink` token inside the scope rather than
+  fighting the cascade with a more specific colour rule.
+- *Start screen went stale on returning from a borrower.* `closeDetail()`
+  never redrew what was behind it, so a just-typed OTS Amount did not
+  appear in Recently Opened or in the worksheet bar's totals until the tab
+  was re-entered. It now redraws, but only when the start screen is what's
+  showing — a result list is left as it was.
+
+Also: totals are repeated as four tiles above the table, because on a phone
+the foot row's figures sit past the right edge of a nine-column scroller;
+the worksheet modal widens to 1160px on desktop, where nine columns in the
+shared 720px sheet forced a needless sideways scroll; and the ✕ buttons
+stay at 85% opacity under `@media (hover:none)`, since a phone never shows
+the hover state that reveals them.
+
+Verified end-to-end in Chromium at 430px and 1280px, dark and light: seed
+three accounts → worksheet rows and totals correct → Excel export (formulas,
+freeze pane, A4 landscape, print titles all confirmed in the file's XML) →
+Backup → wipe localStorage → Restore → all three amounts and recents back →
+bad file rejected without loss. No console errors.
+
+Not acted on: *"Daily npa projection kaam ka nahi hai ab"* — ambiguous
+between "don't bother fixing its relay authentication" and "remove the
+tab". Removing a whole module is destructive, so it is being asked about
+rather than assumed.
+
+Files: `js/app.js`, `index.html`, `css/styles.css`. Cache-bust
+`v=20260815g`, SW `upgb-ots-shell-v112`.
+
 ### Fix: hero KPI value wrapping onto two lines (2026-08-15, same day)
 
 Flagged as pre-existing in the ivory pass, then Alok asked for it too. On

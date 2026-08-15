@@ -488,6 +488,9 @@ main{padding:20px 16px 40px}
    top, sapphire in the middle and brass again on the detail screen. */
 .ots-start{
   --accent:var(--seal-d); --accent-2:var(--seal); --accent-soft:rgba(212,165,68,.13);
+  /* Same navy plate the hero band above uses, so the worksheet bar reads as
+     part of the same instrument rather than a stray dark box. */
+  --ots-navy-a:#1C2030; --ots-navy-b:#141826;
   display:flex;flex-direction:column;gap:16px;padding:6px 2px 22px;animation:riseIn .4s var(--ease);
 }
 :root:not([data-theme="light"]) .ots-start{
@@ -500,13 +503,44 @@ main{padding:20px 16px 40px}
   font-size:10.5px;font-weight:700;color:var(--sub);letter-spacing:.3px;border-radius:6px}
 .ots-start .start-clear:hover,.ots-start .start-clear:focus-visible{color:var(--accent);background:var(--accent-soft)}
 
+/* Worksheet bar -- the way into every OTS Amount saved on this device, and
+   (when none is) the way to Restore, which is exactly the state a fresh
+   phone is in. Reads as a ledger cover: navy plate, brass rule. */
+.ots-start .start-ws{display:flex;align-items:center;gap:11px;width:100%;text-align:left;
+  padding:12px 13px;border-radius:13px;cursor:pointer;font-family:inherit;
+  background:linear-gradient(150deg,var(--ots-navy-a,#151A2E) 0%,var(--ots-navy-b,#0D1120) 100%);
+  border:1px solid var(--seal-d);box-shadow:0 6px 18px rgba(74,58,30,.16);
+  transition:box-shadow .18s var(--ease),transform .12s var(--ease)}
+.ots-start .start-ws:hover,.ots-start .start-ws:focus-visible{box-shadow:0 9px 24px rgba(74,58,30,.26);transform:translateY(-1px)}
+.ots-start .start-ws:active{transform:translateY(0)}
+.ots-start .start-ws.is-empty{opacity:.8}
+.ots-start .start-ws-ic{width:32px;height:32px;border-radius:10px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(212,165,68,.16);border:1px solid rgba(212,165,68,.42);color:var(--seal-l)}
+.ots-start .start-ws-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ots-start .start-ws-nm{font-size:12.5px;font-weight:800;color:#F6F1E4;letter-spacing:.2px}
+.ots-start .start-ws-sub{font-size:10px;color:#B9AE93;font-family:var(--font-mono);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ots-start .start-ws-go{flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.7px;
+  text-transform:uppercase;color:var(--seal-l);border:1px solid rgba(212,165,68,.42);
+  border-radius:20px;padding:4px 11px}
+
 /* Recent borrowers -- <button> not <div> so it's keyboard-reachable and
-   announces as an action, same as the branch/asset chips below. */
+   announces as an action, same as the branch/asset chips below. The row's
+   remove (✕) is a sibling of that button, never nested inside it: a button
+   within a button is invalid markup and breaks keyboard activation. */
+.ots-start .start-rec-row{position:relative;margin-bottom:6px}
 .ots-start .start-rec{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
-  padding:9px 11px;margin-bottom:6px;border-radius:11px;background:var(--card);
+  padding:9px 34px 9px 11px;border-radius:11px;background:var(--card);
   border:1px solid var(--line);cursor:pointer;font-family:inherit;
   transition:background .15s var(--ease),border-color .15s var(--ease)}
 .ots-start .start-rec:hover,.ots-start .start-rec:focus-visible{background:var(--accent-soft);border-color:var(--accent)}
+.ots-start .start-rec-del{position:absolute;top:50%;right:7px;transform:translateY(-50%);
+  width:22px;height:22px;border-radius:7px;border:none;background:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;
+  color:var(--sub);opacity:.5;transition:opacity .15s var(--ease),background .15s var(--ease),color .15s var(--ease)}
+.ots-start .start-rec-row:hover .start-rec-del{opacity:1}
+.ots-start .start-rec-del:hover,.ots-start .start-rec-del:focus-visible{opacity:1;color:var(--neg);background:var(--neg-soft)}
 .ots-start .start-rec-av{width:30px;height:30px;border-radius:9px;flex-shrink:0;
   background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;
   font-size:11px;font-weight:800;letter-spacing:.3px}
@@ -529,6 +563,85 @@ main{padding:20px 16px 40px}
 /* No footer row here on purpose -- the report date already prints in the
    page header, and the signature in .app-foot/.mobile-sig, so anything
    added down here would just repeat what's already on screen. */
+
+/* ---------- OTS search results ----------
+   The list that sits between the brass hero card and the brass borrower
+   detail screen. Without these tokens it inherited the app's sapphire and
+   the tab changed colour halfway through a single flow. Only the accent
+   and the table head are re-pointed -- rows, stripes and borders keep the
+   shared table treatment so the list still behaves like every other
+   account list in the app. */
+.ots-results{
+  --accent:var(--seal-d); --accent-2:var(--seal); --accent-soft:rgba(212,165,68,.13);
+  /* --head-ink is re-pointed, not the th colour directly: the light theme
+     sets `:root[data-theme="light"] .dash-table th{color:var(--head-ink)}`,
+     which outranks a plain `.ots-results .dash-table th` and would put the
+     light theme's dark ink on this navy header row. Overriding the token
+     the existing rule already reads keeps one source of truth. */
+  --table-head:#1C2030; --head-ink:#F1E8D3;
+}
+:root:not([data-theme="light"]) .ots-results{
+  --accent:var(--seal-l); --accent-2:var(--seal); --accent-soft:rgba(212,165,68,.15);
+}
+.ots-results .dash-table-wrap{border-color:rgba(179,129,42,.24)}
+.ots-results .dash-table th{border-bottom:2px solid var(--seal-d)}
+.ots-results .results-hint::after{border-color:rgba(179,129,42,.30)}
+
+/* ---------- OTS Worksheet modal ----------
+   Every account an OTS Amount has been typed for, on one sheet. Same brass
+   treatment as the rest of the calculator. */
+.ws-modal .modal-sheet{--accent:var(--seal-d); --accent-2:var(--seal); --accent-soft:rgba(212,165,68,.13);
+  --table-head:#1C2030; --head-ink:#F1E8D3}
+:root:not([data-theme="light"]) .ws-modal .modal-sheet{--accent:var(--seal-l); --accent-soft:rgba(212,165,68,.15)}
+.ws-modal .dash-table th{border-bottom:2px solid var(--seal-d)}
+.ws-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 13px}
+.ws-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:9px;
+  background:var(--card);border:1px solid var(--line);color:var(--ink);
+  font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;
+  transition:background .15s var(--ease),border-color .15s var(--ease),color .15s var(--ease)}
+.ws-btn:hover,.ws-btn:focus-visible{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.ws-btn.primary{background:linear-gradient(135deg,var(--seal),var(--seal-d));border-color:var(--seal-d);color:#241D08}
+.ws-btn.primary:hover,.ws-btn.primary:focus-visible{filter:brightness(1.06);color:#241D08}
+.ws-btn svg{flex-shrink:0}
+/* Batch totals, repeated above the table because on a phone the foot row's
+   figures sit past the right edge of a nine-column scroller. */
+.ws-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px;margin:0 0 13px}
+.ws-sum-tile{display:flex;flex-direction:column;gap:3px;padding:9px 11px;border-radius:10px;
+  background:var(--accent-soft);border:1px solid rgba(179,129,42,.26)}
+.ws-sum-lbl{font-size:9px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--sub)}
+.ws-sum-val{font-size:13px;font-weight:800;color:var(--ink);font-family:var(--font-mono);
+  font-variant-numeric:tabular-nums}
+.ws-sum-val:empty{display:none}
+.ws-sum-val.ws-ots{color:var(--accent)}
+.ws-sum-val.ws-pos{color:var(--pos)}
+.ws-sum-val.ws-neg{color:var(--neg)}
+
+/* The OTS Amount is the one figure the user typed themselves -- it is
+   given the brass so it reads apart from the derived columns beside it. */
+.ws-table td.ws-ots{color:var(--accent);font-weight:800}
+.ws-table td.ws-pos{color:var(--pos)}
+.ws-table td.ws-neg{color:var(--neg)}
+.ws-table tr.ws-total td{font-weight:800;background:var(--accent-soft);border-top:2px solid var(--seal-d)}
+.ws-del{width:22px;height:22px;border-radius:7px;border:none;background:none;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;font-size:11px;line-height:1;
+  color:var(--sub);opacity:.55;transition:opacity .15s var(--ease),background .15s var(--ease),color .15s var(--ease)}
+.ws-table tr:hover .ws-del{opacity:1}
+.ws-del:hover,.ws-del:focus-visible{opacity:1;color:var(--neg);background:var(--neg-soft)}
+/* No hover on a touch screen, so the dimmed resting state would be the only
+   state a phone ever shows -- these two are the app's primary device. */
+@media (hover:none){
+  .ws-del,.ots-start .start-rec-del{opacity:.85}
+}
+.ws-note{margin:2px 2px 0;font-size:10.5px;line-height:1.5;color:var(--sub)}
+/* Centred and wider than the 720px .modal-sheet.wide default: nine columns
+   in 720px forced a sideways scroll on a desktop screen with room to spare.
+   Phones are untouched -- there the sheet stays bottom-anchored and the
+   table scrolls, with the totals repeated in .ws-sum above it. */
+#wsModalOverlay{align-items:center}
+#wsModalOverlay .modal-sheet{border-radius:22px}
+@media (min-width:900px){
+  #wsModalOverlay .modal-sheet.wide{max-width:1160px}
+}
 
 .results-hint{font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.9px;margin:4px 2px 14px;display:flex;align-items:center;gap:10px}
 .results-hint::after{content:"";flex:1;height:3px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
