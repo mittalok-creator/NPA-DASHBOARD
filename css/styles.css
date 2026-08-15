@@ -1160,36 +1160,80 @@ body{overscroll-behavior:none}
 
 #app{position:relative;z-index:1;display:flex;height:100vh;height:100dvh;width:100%}
 
-/* ---------- Side nav (desktop) ---------- */
+/* ---------- Side nav (desktop) ----------
+   #sideNav itself is just a 76px flex placeholder -- it reserves that much
+   space in #app's layout and never changes size, so nothing about #mainCol
+   ever has to reflow. All the real chrome (background, padding, items)
+   lives on .nav-shell, absolutely positioned to fill that 76px box at
+   rest and widen to a full rail on hover/focus-within, escaping its
+   parent's bounds to overlay #mainCol rather than push it. Same technique
+   as a VS Code/GitHub Desktop-style collapsible rail. */
 #sideNav{
-  width:248px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;padding:22px 14px;
-  background:rgba(12,12,20,.62);backdrop-filter:blur(28px) saturate(160%);-webkit-backdrop-filter:blur(28px) saturate(160%);
-  border-right:1px solid var(--glass-border);position:relative;z-index:5;
+  flex:0 0 76px;width:76px;position:relative;z-index:5;
+}
+.nav-shell{
+  position:absolute;inset:0;width:76px;
+  display:flex;flex-direction:column;gap:4px;padding:22px 14px;
+  background:rgba(12,12,20,.86);backdrop-filter:blur(28px) saturate(160%);-webkit-backdrop-filter:blur(28px) saturate(160%);
+  border-right:1px solid var(--glass-border);
+  overflow:hidden;
+  transition:width .22s var(--ease),box-shadow .22s var(--ease);
+}
+#sideNav:hover .nav-shell,#sideNav:focus-within .nav-shell{
+  width:252px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  box-shadow:26px 0 64px rgba(0,0,0,.34);z-index:20;
   /* #app is height:100vh with body{overflow:hidden}, so on a short
      viewport (e.g. a phone rotated to landscape, wide enough to trigger
-     this desktop layout but only ~400px tall) the nav items + nav-foot
-     content can be taller than the sidebar itself -- without its own
-     scroll, that overflow was just clipped and unreachable. */
-  overflow-y:auto;-webkit-overflow-scrolling:touch;
+     this desktop layout but only ~400px tall) the expanded rail's content
+     can be taller than the viewport -- without its own scroll, that
+     overflow would just be clipped and unreachable. */
 }
-.nav-brand{display:flex;align-items:center;gap:11px;padding:6px 10px 22px}
+.nav-brand{display:flex;align-items:center;gap:11px;padding:6px 0 22px;justify-content:center}
+#sideNav:hover .nav-brand,#sideNav:focus-within .nav-brand{padding:6px 10px 22px;justify-content:flex-start}
 .nav-logo{width:38px;height:38px;border-radius:12px;background:#fff;padding:4px;flex-shrink:0;box-shadow:0 4px 14px rgba(0,0,0,.35),0 0 0 2px rgba(58,123,255,.28)}
-.nav-brand-text{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.nav-brand-text{display:flex;flex-direction:column;line-height:1.25;min-width:0;width:0;opacity:0;overflow:hidden;white-space:nowrap;transition:opacity .14s var(--ease)}
+#sideNav:hover .nav-brand-text,#sideNav:focus-within .nav-brand-text{width:auto;opacity:1}
 .nav-brand-text b{font-size:14.5px;font-weight:800;color:var(--chrome-ink);letter-spacing:-.1px}
 .nav-brand-text span{font-size:10px;color:var(--accent-2);font-weight:800;letter-spacing:1.1px;text-transform:uppercase}
-.nav-item{display:flex;align-items:center;gap:12px;width:100%;padding:11px 14px;border:none;background:none;border-radius:var(--radius-md);color:var(--chrome-sub);font-size:13.5px;font-weight:600;text-align:left;transition:background .18s var(--ease),color .18s var(--ease);position:relative}
+/* Section labels ("Analysis" / "Settlement" / "Tools") group the nav into
+   scannable clusters instead of four tabs floating with dead space below
+   them. Collapse to zero height in the rail state (icons alone need no
+   label row between them) and only take space once the rail is expanded. */
+.nav-lbl{font-size:9px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--chrome-mute);
+  padding:0 14px;height:0;margin:0;opacity:0;overflow:hidden;white-space:nowrap;transition:opacity .12s var(--ease)}
+#sideNav:hover .nav-lbl,#sideNav:focus-within .nav-lbl{height:auto;margin:14px 0 6px;opacity:1}
+.nav-item{display:flex;align-items:center;gap:0;width:100%;padding:11px 14px;border:none;background:none;border-radius:var(--radius-md);color:var(--chrome-sub);font-size:13.5px;font-weight:600;text-align:left;justify-content:center;transition:background .18s var(--ease),color .18s var(--ease),gap .12s var(--ease);position:relative}
+#sideNav:hover .nav-item,#sideNav:focus-within .nav-item{gap:12px;justify-content:flex-start}
 .nav-item svg{flex-shrink:0;opacity:.82;transition:opacity .18s var(--ease)}
+.nav-item span{width:0;opacity:0;overflow:hidden;white-space:nowrap;transition:opacity .1s var(--ease)}
+#sideNav:hover .nav-item span,#sideNav:focus-within .nav-item span{width:auto;opacity:1}
 .nav-item:hover{background:rgba(255,255,255,.05);color:var(--chrome-ink)}
 .nav-item:hover svg{opacity:1}
 .nav-item.active{background:linear-gradient(135deg,rgba(58,123,255,.24),rgba(54,215,255,.08));color:#fff;font-weight:700;box-shadow:inset 0 0 0 1px rgba(127,176,255,.28)}
 .nav-item.active svg{opacity:1}
 .nav-item.active::before{content:"";position:absolute;left:-14px;top:50%;transform:translateY(-50%);width:3px;height:18px;border-radius:0 4px 4px 0;background:linear-gradient(180deg,var(--accent),var(--accent-2))}
-.nav-item kbd{margin-left:auto;font-family:inherit;font-size:9.5px;font-weight:700;color:var(--chrome-mute);border:1px solid var(--chrome-line);border-radius:5px;padding:2px 5px}
+.nav-item kbd{margin-left:auto;flex-shrink:0;font-family:inherit;font-size:9.5px;font-weight:700;color:var(--chrome-mute);border:1px solid var(--chrome-line);border-radius:5px;padding:2px 5px;
+  width:0;opacity:0;overflow:hidden;transition:opacity .1s var(--ease)}
+#sideNav:hover .nav-item kbd,#sideNav:focus-within .nav-item kbd{width:auto;opacity:1;padding:2px 5px}
+/* "Data as on" card -- fills the gap the nav used to leave empty below
+   four tabs with the one fact every tab already shows, so it can't drift
+   out of sync (fmtAsOnDisplay() via updateReportDateDisplay() writes
+   every .report-date-val on the page, this one included). */
+.nav-card{margin:8px 0 0;padding:0;border-radius:11px;background:var(--accent-soft);border:1px solid rgba(58,123,255,.22);
+  max-height:0;opacity:0;overflow:hidden;transition:opacity .12s var(--ease)}
+#sideNav:hover .nav-card,#sideNav:focus-within .nav-card{max-height:80px;opacity:1;padding:10px 12px}
+/* --accent-2 (a light teal/cyan) reads fine on the dark rail but drops to
+   ~2.5:1 on the pale accent-soft tint the light theme uses -- --accent
+   itself (deep sapphire in both themes) stays legible against both. */
+.nav-card-lbl{font-size:8.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--accent);margin-bottom:4px;white-space:nowrap}
+.nav-card-val{font-size:13px;font-weight:800;color:var(--chrome-ink);font-variant-numeric:tabular-nums;white-space:nowrap}
 .nav-spacer{flex:1}
 .nav-item-ghost{font-weight:600;color:var(--chrome-mute)}
 .nav-item-ghost:hover{color:var(--chrome-ink)}
-.nav-foot{padding:14px 16px 18px;font-size:10.5px;color:var(--chrome-mute);letter-spacing:.2px}
-.nav-foot .sig{font-family:var(--font-body);font-size:17px;font-weight:600;color:#D6D4E4;opacity:.88;letter-spacing:.1px;margin-top:2px;text-shadow:0 1px 1px rgba(0,0,0,.2)}
+.nav-foot{padding:0 14px;font-size:10.5px;color:var(--chrome-mute);letter-spacing:.2px;
+  max-height:0;opacity:0;overflow:hidden;pointer-events:none;transition:opacity .12s var(--ease)}
+#sideNav:hover .nav-foot,#sideNav:focus-within .nav-foot{max-height:220px;opacity:1;padding:14px 16px 18px 2px;pointer-events:auto}
+.nav-foot .sig{font-family:var(--font-body);font-size:17px;font-weight:600;color:#D6D4E4;opacity:.88;letter-spacing:.1px;margin-top:2px;text-shadow:0 1px 1px rgba(0,0,0,.2);white-space:nowrap}
 
 /* ---------- Auth widget (GitHub sign-in) ---------- */
 .auth-widget{margin-bottom:12px}
@@ -1709,7 +1753,7 @@ header.app-head::before,.detail-head::before{
 /* ---------- Chrome flip: side nav, top header/search bar, bottom tabs,
    aggregate rail and data-table headers all move to the same light glass
    surface as the rest of the page instead of staying dark. ---------- */
-:root[data-theme="light"] #sideNav{background:rgba(255,255,255,.82)}
+:root[data-theme="light"] .nav-shell{background:rgba(255,255,255,.92)}
 :root[data-theme="light"] .nav-item:hover{background:rgba(33,33,46,.05)}
 :root[data-theme="light"] .nav-item.active{color:var(--gold-d)}
 :root[data-theme="light"] .nav-brand-text span{color:var(--accent)}
@@ -1930,16 +1974,40 @@ header.app-head::before,.detail-head::before{
   display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s var(--ease);
 }
 .edge-panel.open{transform:translateX(0)}
-.edge-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 16px 14px;border-bottom:1px solid var(--line);flex-shrink:0}
+.edge-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:18px 16px 14px;border-bottom:1px solid var(--line);flex-shrink:0}
+.edge-panel-headtext{display:flex;flex-direction:column;gap:2px;min-width:0}
 .edge-panel-head h3{margin:0;font-size:15px;font-weight:800;color:var(--ink);letter-spacing:-.2px}
+.edge-panel-count{font-size:9.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--sub)}
 .edge-panel-search{display:flex;align-items:center;gap:8px;margin:14px 16px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink-mute);flex-shrink:0}
 .edge-panel-search input{flex:1;border:none;background:none;outline:none;color:var(--ink);font-size:13px;font-family:inherit}
-.edge-panel-body{flex:1;overflow-y:auto;padding:0 16px 16px;display:flex;flex-direction:column;gap:6px}
+/* Right padding reserves room for the A-Z rail (.edge-rail) -- kept
+   constant whether or not the rail currently has content, so the row
+   width doesn't shift between the grouped view and a search result. */
+.edge-panel-body{position:relative;flex:1;overflow-y:auto;padding:0 26px 16px 16px;display:flex;flex-direction:column;gap:6px}
+/* Sticky letter-group header, Direction C ("Grouped & Sapphire"): a rule
+   line and a count badge turn 57 branches into scannable clusters instead
+   of one long list, and the header itself remains visible while its rows
+   scroll past underneath it. Background matches .edge-panel exactly so it
+   reads as a seam, not a floating card. */
+.edge-grp{display:flex;align-items:center;gap:8px;padding:10px 2px 6px;position:sticky;top:0;background:var(--card);z-index:1}
+.edge-grp b{font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--accent);white-space:nowrap}
+.edge-grp i{flex:1;height:1px;background:var(--line)}
+.edge-grp em{font-style:normal;font-size:9px;font-weight:800;color:var(--sub);background:var(--stripe);border-radius:20px;padding:1px 7px;flex-shrink:0}
 /* Whole row is clickable now (opens the full branch contact card via
-   showBranchCard) -- cursor + hover state signal that. */
-.edge-row{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;background:var(--stripe);cursor:pointer;transition:background .15s var(--ease)}
-.edge-row:hover,.edge-row:focus-visible{background:var(--accent-soft)}
+   showBranchCard) -- cursor + hover state signal that. Bordered like a
+   card, per Direction C, rather than a flat stripe. */
+.edge-row{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;background:var(--stripe);border:1px solid var(--line);cursor:pointer;transition:background .15s var(--ease),border-color .15s var(--ease)}
+.edge-row:hover,.edge-row:focus-visible{background:var(--accent-soft);border-color:var(--accent)}
 .edge-row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* A-Z jump rail -- only populated while showing the full grouped list
+   (renderBranchList clears it during a search); space-evenly rather than
+   center, so ~14 letters spread the full height of the panel instead of
+   bunching in the middle. */
+.edge-rail{position:absolute;right:4px;top:96px;bottom:16px;width:16px;
+  display:flex;flex-direction:column;justify-content:space-evenly;z-index:2}
+.edge-rail button{background:none;border:none;padding:0;font-family:inherit;font-size:8px;font-weight:800;
+  color:var(--sub);cursor:pointer;line-height:1.4}
+.edge-rail button:hover{color:var(--accent)}
 .edge-row-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .edge-row-branch{font-size:13px;font-weight:700;color:var(--ink)}
 .edge-row-ids{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}
