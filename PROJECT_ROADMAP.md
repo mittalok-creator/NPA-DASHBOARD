@@ -123,6 +123,52 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Design: OTS Calculator search area rebuilt as a brass "hero card" (2026-08-15, same day)
+
+Alok: *"mera main focus rahta hai ots calculator par wo mera hero hai wo
+mujhe bilkul unique chahiye ... search area should be hero card"*. Three
+directions were mocked (Brass Plate / Ledger Paper / Vault Console); he
+picked **C + B mixed** — Vault Console's structure with Ledger Paper's
+ivory body: *"wo old ivory sheets concept achha hai"*.
+
+**The finding that shaped it:** the OTS *borrower detail* screen already
+runs on the brass tokens (`--seal #D4A544`) while every other tab is
+sapphire — but the OTS *search header* was still sapphire. So the
+calculator's identity was only half-built: a blue header bolted onto a
+brass screen. The hero now closes that gap.
+
+Shipped as `#searchHeader .ots-hero`, two halves:
+- **`.ots-hero-band`** — deep navy plate with a brass hairline along the
+  top edge and a soft brass glow, carrying the brand seal and the report
+  date as a brass chip.
+- **`.ots-hero-body`** — ivory ledger paper (ruled lines via a repeating
+  gradient) carrying an oversized mono search slot and the six search
+  modes restyled from loose chips into one segmented switch.
+
+Everything is ID-scoped (`#searchHeader ...`) so it outranks the shared
+`header.app-head, .detail-head` chrome rules without touching the borrower
+detail header those also style. Dark theme keeps the metaphor but as aged
+stock (`#241F17`) rather than a white slab; the navy band and brass are
+identical in both, so the identity doesn't shift with the theme. Subtitle
+trimmed "One-time settlement calculator" → "One-time settlement", since
+"Calculator" is already in the title directly above it.
+
+**Two bugs caught while building, both from specificity/nesting:**
+1. The report-date chip landed as a *sibling* of the band rather than a
+   child, so it rendered on the ivory paper in brass-on-cream — verified
+   via `band.contains(date) === false`, then fixed.
+2. The dark-theme field shadow rule
+   (`:root:not([data-theme="light"]) #searchHeader .search-box`, 1‑3‑0)
+   outranked `#searchHeader .search-box:focus-within` (1‑2‑0) and silently
+   ate the focus ring in dark mode. Resting and focus shadows are now
+   per-theme tokens, so one rule per state and focus always wins.
+
+**Verified**: live Playwright on mobile (390x844) and desktop (1400x900),
+light and dark — live-typing results, Clear button, mode switching
+(placeholder follows the mode), Search button, and a focus ring confirmed
+present in *both* themes. Full OTS/print/Excel and recents/persistence
+regressions still passing; zero console errors.
+
 ### Feature: typed OTS Amounts now saved on the device, start screen trimmed to Recently Opened only (2026-08-15, same day)
 
 Four changes Alok asked for together, a day after the Action Hub shipped:
