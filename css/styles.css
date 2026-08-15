@@ -732,6 +732,17 @@ main{padding:20px 16px 40px}
 .info-grid .k{font-size:9.5px;text-transform:uppercase;color:var(--sub);font-weight:700;letter-spacing:.7px}
 .info-grid .v{font-size:13.5px;font-weight:700;color:var(--ink);margin-top:3px;word-break:break-word}
 .linked-note{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--sub);font-weight:600}
+
+/* Branch profile card at the top of the Dashboard when a single branch is
+   selected -- reuses .card/.info-grid/.bname/.baddr from the borrower card
+   above so it reads as the same "detail summary" pattern, not a new one. */
+.branch-info-card{margin-bottom:20px}
+.branch-info-card[role="button"]{cursor:pointer;transition:border-color .16s var(--ease)}
+.branch-info-card[role="button"]:hover{border-color:var(--accent)}
+.branch-info-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.branch-info-head .bname{font-size:17px;font-weight:800;color:var(--ink);letter-spacing:-.3px}
+.branch-info-head .baddr{font-size:12.5px;color:var(--sub);margin-top:3px;font-variant-numeric:tabular-nums}
+.branch-info-cta{font-size:11.5px;font-weight:800;color:var(--accent);white-space:nowrap;flex-shrink:0}
 .eligibility-warn{margin-top:14px;background:var(--red-soft);color:var(--red);padding:10px 12px;border-radius:10px;font-size:12px;font-weight:700;border:1px solid rgba(242,131,123,.25)}
 
 .section-label{font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.9px;margin:22px 2px 4px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}

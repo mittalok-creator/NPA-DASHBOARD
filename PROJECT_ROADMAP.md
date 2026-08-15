@@ -123,6 +123,22 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Feature: Branch master data (email, district, address, ...) now shown on the Branch card and at the top of the Dashboard for a selected branch (2026-08-15, same day)
+
+Alok asked for the extra columns from `UPGB_NEW_SOL_ID.xlsx` (branch email, and "all" the other details) to actually show, not just sit frozen in the data — both when clicking a branch in the Branch & Sol ID panel, and at the top of the Dashboard when a specific branch is selected there.
+
+**New `BRANCH_META` constant** (`js/app.js`), keyed by new Sol ID: branch code, official branch email, Branch/Regional Office/Service Branch type, Urban/Rural/Semi Urban area, district, registered address, PIN, and date opened (already `DD-MM-YYYY` per the date-format rule in CLAUDE.md — the sheet's raw Excel date was converted once at data-authoring time, not left as a serial). `branchGroups()`'s Hathras/Mathura split (shipped a few entries below) was also switched from a hardcoded Sol ID range to reading `BRANCH_META[id].district` directly, since that's now the actual ground truth.
+
+**Branch card** (`showBranchCard`, opened from the Branch & Sol ID panel): gained Branch Type, District, Area, Branch Code, Branch Email, Date Opened, and Address (preferring the manually-curated `DATA.branchContacts` address over the frozen sheet's one, falling back to the sheet's when nothing's been entered yet) — sitting above the existing Manager/Recovery Officer/IFSC/Remarks fields.
+
+**Dashboard branch info card** (new `dashboardBranchInfoCard()`): renders at the top of the Dashboard, only when `#dashBranchFilter` has a specific branch picked (blank/"Regional Office" shows the whole book, where a single branch profile wouldn't make sense) — District, Branch Manager + mobile, Recovery Officer + mobile, Branch Email, Address, clickable through to the same full branch card. The dashboard's branch filter runs off the raw branch-name string in the uploaded NPA data, not `BRANCH_LIST`/`BRANCH_META` directly, so the card reads the Sol ID off `computeDashboardStats()`'s own `branchMap` (which already captures each branch's Sol ID straight from the NPA rows) rather than re-matching names, which use a slightly different spelling convention than the master sheet.
+
+One data quality wrinkle handled: 4 of the newer branches (opened 2016) already have their PIN typed into the address text itself in the source sheet, unlike every other branch — a naive "address + PIN" concatenation would have shown the PIN twice for just those four. `masterAddressOf()` only appends the PIN when it isn't already present in the address string.
+
+Verified: card renders correctly in both themes with real data (Adarshnagar/Agsauli), no double-PIN on the four affected branches, branch panel's district grouping still correct (1/40/16 = 57) after switching to read `BRANCH_META` instead of the hardcoded range, no console errors.
+
+Files: `js/app.js` (`BRANCH_META`, `masterAddressOf`, `showBranchCard`, `dashboardBranchInfoCard`, `branchGroups`, `renderDashboard`), `css/styles.css` (`.branch-info-card` and friends, reusing `.card`/`.info-grid`). Cache-bust `v=20260815p`, SW `upgb-ots-shell-v121`.
+
 ### Data: BRANCH_LIST frozen against the official UPGB_NEW_SOL_ID.xlsx master (2026-08-15, same day)
 
 Alok supplied `UPGB_NEW_SOL_ID.xlsx` — the official Old Sol ID / New Sol ID / Branch Name master — and said this is data that won't change, so it should be set/frozen in the app; the still-outstanding Manager/Recovery Officer contact data he'll upload separately (Monday) through the existing Branch Contacts template in Settings.
