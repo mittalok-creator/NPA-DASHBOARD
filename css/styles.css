@@ -1799,33 +1799,83 @@ header.app-head::before,.detail-head::before{
 .dash-table-wrap.acct-list-scroll thead th{position:sticky;top:0;background:var(--table-head);z-index:1}
 
 
-/* ---------- Splash / welcome screen ---------- */
-.splash-screen{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;background:radial-gradient(ellipse at 50% 42%,#1c1c22 0%,#0a0a0d 62%,#050506 100%);transition:opacity .6s ease,visibility .6s ease}
+/* ---------- Login: ledger page ----------
+   Ivory ruled paper with a red margin rule and punch holes, a masthead
+   written in by hand (strokes drawn by js/splash.js), and a brass seal that
+   stamps on the correct PIN. This screen deliberately commits to one look --
+   it stays ivory whichever theme the app itself is in, so every colour below
+   is painted explicitly rather than inherited from the theme tokens. */
+.splash-screen{
+  position:fixed;inset:0;z-index:9999;overflow:hidden;
+  background:linear-gradient(168deg,#FFFDF8 0%,#FBF7EF 52%,#F3EDE0 100%);
+  color:#221F19;transition:opacity .6s ease,visibility .6s ease;
+}
 .splash-screen.unlocked{opacity:0;visibility:hidden;pointer-events:none}
 .splash-screen.skip{transition:none;opacity:0;visibility:hidden;pointer-events:none}
-.splash-glow{position:absolute;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(212,165,68,.16) 0%,rgba(212,165,68,0) 70%);animation:splashGlowPulse 4s ease-in-out infinite}
-.splash-logo{position:relative;width:180px;height:180px;display:flex;align-items:center;justify-content:center}
-.splash-ring{position:absolute;inset:0;transform:rotate(-90deg)}
-.splash-ring circle{stroke-dasharray:540.35;stroke-dashoffset:540.35;animation:splashRingDraw 1.4s cubic-bezier(.65,0,.35,1) .2s forwards}
-.splash-monogram{position:relative;font-family:var(--font-display);font-size:44px;font-weight:600;letter-spacing:2px;color:#D4A544;opacity:0;transform:scale(.7);animation:splashMonoIn .8s cubic-bezier(.34,1.56,.64,1) 1s forwards}
-.splash-name{font-family:var(--font-display);font-size:22px;font-weight:500;letter-spacing:9px;color:#F2EDE4;opacity:0;transform:translateY(14px);animation:splashFadeUp .8s ease 1.6s forwards}
-.splash-pin-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;opacity:0;transform:translateY(10px);animation:splashFadeUp .7s ease 2.3s forwards}
-.splash-pin-label{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:rgba(242,237,228,.55);font-weight:700}
-.splash-pin-boxes{display:flex;gap:12px}
-.pin-box{width:44px;height:52px;text-align:center;font-size:22px;font-weight:700;background:rgba(255,255,255,.04);border:1.5px solid rgba(212,165,68,.35);border-radius:10px;color:#F2EDE4;font-family:var(--font-mono);transition:border-color .18s ease,background .18s ease}
-.pin-box:focus{outline:none;border-color:#D4A544;background:rgba(212,165,68,.08)}
+
+.splash-lines{position:absolute;inset:0;pointer-events:none;
+  background-image:repeating-linear-gradient(180deg,transparent 0 25px,rgba(58,107,201,.14) 25px 26px)}
+.splash-margin{position:absolute;left:44px;top:0;bottom:0;width:1px;background:rgba(190,60,60,.40)}
+.splash-holes{position:absolute;left:16px;top:0;bottom:0;width:14px;display:flex;flex-direction:column;
+  justify-content:space-around;padding:16vh 0;pointer-events:none}
+.splash-holes span{width:12px;height:12px;border-radius:50%;background:rgba(120,95,50,.15);
+  box-shadow:inset 0 1px 2px rgba(74,58,30,.35)}
+
+.splash-sheet{position:relative;height:100%;max-width:420px;margin:0 auto;
+  display:flex;flex-direction:column;padding:8vh 22px 20px 62px}
+
+/* Masthead -- the two handwritten lines are injected here as <svg>. */
+.splash-mast{flex-shrink:0}
+.splash-mast svg{display:block;width:100%;height:auto;overflow:visible}
+.splash-mast-sub{margin-top:2px}
+.splash-mast-sub svg{max-width:82%}
+.splash-mast-rule{height:1.5px;background:rgba(34,31,25,.18);margin-top:10px}
+
+.splash-pin-wrap{position:relative;display:flex;flex-direction:column;gap:12px;margin:auto 0}
+.splash-pin-label{font-size:9px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#615C51}
+.splash-pin-cells{display:flex;gap:10px}
+.splash-cell{flex:1;aspect-ratio:1/1.18;border:1px solid rgba(179,129,42,.30);border-bottom:2.5px solid #B3812A;
+  background:#FFF;border-radius:4px;font-family:var(--font-mono);font-size:24px;font-weight:800;color:#221F19;
+  display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(74,58,30,.10);
+  transition:background .18s ease,border-color .18s ease}
+.splash-cell.filled{background:rgba(176,42,42,.10);border-color:#B02A2A}
+.splash-pin-error{font-size:11px;font-weight:700;color:#B02A2A;min-height:15px;text-align:center}
+.splash-pin-error.ok{color:#1E8449}
+
+/* On-screen keypad, so tapping never raises the phone's own keyboard over
+   the sheet. A physical keyboard still works -- js/splash.js listens for
+   digit and Backspace keys too. */
+.splash-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.splash-key{padding:12px 0;border:1px solid rgba(179,129,42,.28);border-radius:9px;background:rgba(255,255,255,.7);
+  color:#221F19;font-family:var(--font-mono);font-size:17px;font-weight:700;cursor:pointer;
+  transition:background .12s ease,transform .12s ease;-webkit-tap-highlight-color:transparent}
+.splash-key:hover{background:rgba(176,42,42,.09)}
+.splash-key:active{background:#B02A2A;color:#fff;transform:scale(.94)}
+.splash-key.ghost{border-style:dashed;color:#615C51;font-size:12px;font-weight:800;font-family:var(--font-body)}
+.splash-key:focus-visible{outline:2px solid #B02A2A;outline-offset:2px}
+
+/* The stamp lands on the row it certifies -- the PIN, not the keypad. */
+.splash-seal{position:absolute;right:-6px;top:-18px;width:62px;height:62px;border-radius:50%;
+  border:2px solid #B02A2A;color:#B02A2A;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1px;font-size:7px;font-weight:800;letter-spacing:.8px;text-align:center;line-height:1.25;
+  background:rgba(176,42,42,.08);transform:rotate(-13deg) scale(.55);opacity:0;
+  transition:transform .42s cubic-bezier(.34,1.5,.5,1),opacity .3s ease}
+.splash-seal.stamped{transform:rotate(-13deg) scale(1);opacity:1}
+
+.splash-foot{flex-shrink:0;text-align:center;font-size:9px;letter-spacing:1px;color:#615C51;line-height:1.9;padding-top:14px}
+.splash-foot div:first-child{font-weight:800;letter-spacing:1.6px;color:#4A443A}
+
 .splash-pin-wrap.shake{animation:splashShake .4s ease}
-.splash-pin-error{font-size:11.5px;color:#e5484d;font-weight:700;min-height:14px}
-@keyframes splashGlowPulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
-@keyframes splashRingDraw{to{stroke-dashoffset:0}}
-@keyframes splashMonoIn{to{opacity:1;transform:scale(1)}}
-@keyframes splashFadeUp{to{opacity:1;transform:translateY(0)}}
 @keyframes splashShake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}100%{transform:translateX(0)}}
+
+@media (max-height:680px){
+  .splash-sheet{padding-top:4vh}
+  .splash-key{padding:9px 0;font-size:15px}
+  .splash-mast-rule{margin-top:6px}
+}
 @media (prefers-reduced-motion: reduce){
-  .splash-glow{animation:none}
-  .splash-ring circle{animation:none;stroke-dashoffset:0}
-  .splash-monogram,.splash-name,.splash-pin-wrap{animation:none;opacity:1;transform:none}
   .splash-pin-wrap.shake{animation:none}
+  /* Strokes are handed straight to their drawn state by js/splash.js. */
 }
 
 /* ---------- Data-loading overlay (data/latest.json fetch on boot) ---------- */

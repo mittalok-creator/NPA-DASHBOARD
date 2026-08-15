@@ -123,6 +123,27 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Login screen rebuilt as a ledger page with a handwritten masthead (2026-08-15, same day)
+
+Alok asked for login mockups — *"kuch new modern approach latest tranding kuch real skills"*. Four concepts were built as working prototypes (Vault Dial, Ledger Page, Split Console, One-Thumb Keypad); he chose **Ledger Page**, then asked for the masthead to read "NPA Dashboard / OTS Calculator" in handwriting rather than "ALOK MITTAL", shown in several colour treatments first. He picked **Study 4 — Ink & Red Seal**, and specified the footer as two lines: `UPGB RO HATHRAS`, then `Designed & Developed by ALOK MITTAL`.
+
+**The handwriting is drawn, not set in a font.** No script/handwriting font exists on the build machine (checked: only Liberation, DejaVu, FreeSans and CJK families), and the app is an offline PWA that cannot pull one from a CDN. So `js/splash.js` carries a small stroke-based handwriting engine: each of the 20 glyphs needed is defined as the actual pen strokes a hand would make, on a shared baseline grid (cap height 30, x-height 20, ascender 34). Words are laid out along the baseline with a **seeded** per-letter vertical nudge and rotation — seeded rather than `Math.random`, so the masthead is byte-identical on every load instead of wobbling differently each time. Rendered as SVG paths with round caps at marker weight, then animated with `stroke-dashoffset` so the two lines write themselves in.
+
+**The old screen is gone**: the dark radial gradient, the drawn gold ring, the "AM" monogram, "ALOK MITTAL", and the four `<input class="pin-box">` fields. In their place: ruled ivory paper, a red margin rule, punch holes, the handwritten masthead, four ledger cells, an on-screen keypad, and a brass seal that stamps on the correct PIN.
+
+Decisions worth recording:
+
+- **Single-look on purpose.** The sheet stays ivory whichever theme the app is in, so every colour in the block is painted explicitly rather than read from the theme tokens — a `var(--bg)` here would have put the dark theme's navy behind ivory paper.
+- **On-screen keypad *and* physical keyboard.** The keypad exists so a phone does not raise its own keyboard over the sheet; `keydown` is still handled for digits and Backspace so a desktop keyboard works. The old `<input>` fields would have forced the OS keyboard up every time.
+- **The stamp lands on what it certifies** — the PIN row, not the keypad. In the first pass it was anchored to the sheet and sat squarely over the number keys.
+- **Reduced motion** skips the write-on entirely and hands every stroke straight to its drawn state, rather than animating faster.
+
+**One real defect found while building this:** the write-on was far too slow — a 21-stroke line took roughly 15 seconds, so the title was still half-written when the PIN was reachable. It was missed at first because the check read `path.style.strokeDashoffset`, which is set to `0` the instant the transition is *declared*, regardless of how far it has actually run; switching the check to `getComputedStyle` exposed it. Stroke speed went from 62 to 300 units/sec and the per-stroke overlap from 0.72 to 0.42, bringing both lines in at ~2.5s, now verified by sampling computed style at 0.5s / 1.5s / 2.5s.
+
+Verified in Chromium at 430×900, 1280×900 and 390×660 (short screen): all 40 strokes finish drawing, both footer lines render, the title never overflows the sheet, keypad and footer stay inside the viewport, the seal never overlaps the keypad, wrong PIN shakes and clears, Backspace works, a physical keyboard unlocks it, unlocking sets `upgb-splash-unlocked` and hides the screen, a reload skips straight past it, and reduced motion shows the finished writing immediately. No console errors.
+
+Files: `index.html`, `css/styles.css`, `js/splash.js`. Cache-bust `v=20260815j`, SW `upgb-ots-shell-v115`.
+
 ### OTS Excel export: dropped the bank logo, header rebuilt to match the print/PDF sheet exactly (2026-08-15, same day)
 
 Alok: *"Ots ki excel export main se bank logo hata k use same pdf jaisa bana do"* — remove the bank logo from the OTS Excel export, make it the same as the PDF.
