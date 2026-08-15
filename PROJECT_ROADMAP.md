@@ -123,6 +123,27 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS Excel export: dropped the bank logo, header rebuilt to match the print/PDF sheet exactly (2026-08-15, same day)
+
+Alok: *"Ots ki excel export main se bank logo hata k use same pdf jaisa bana do"* — remove the bank logo from the OTS Excel export, make it the same as the PDF.
+
+The logo image (`OTS_LOGO_DATA_URI`, a ~98KB base64 PNG) was `wb.addImage`'d into cell A1 of the export, which had also forced the title/subtitle merges to start at column B instead of A to keep the text from overlapping it (a fix from an earlier session, confirmed against a screenshot from Alok's phone). Both are gone now — the merges start at column A like everything else on the sheet.
+
+The header section is rebuilt to mirror `renderPrintView()`'s structure line for line, using a running row counter (`r`) instead of hardcoded row numbers so nothing downstream needs re-deriving by hand:
+
+1. Title — "UPGB OTS CALCULATOR" (previously had the borrower's name appended, which the print sheet never does)
+2. Subtitle — "Uttar Pradesh Gramin Bank (Regional Office Hathras)"
+3. Report Date (still a live, editable cell — formulas reference it) + Branch, with Sol ID folded into the Branch text as "LADPUR (9288)" instead of its own row, matching how the print sheet folded Sol ID into the branch line earlier this session
+4. The "Editable — recalculates off the Report Date" hint
+5. Borrower Name and Address — previously shown nowhere in the Excel export except buried in the title
+6. The info grid, regrouped to match the print sheet's own two columns exactly: Cust ID / Mobile / PAN / Aadhar beside SB A/c / SB Balance (previously paired differently and still carried a standalone Sol ID field)
+
+`OTS_LOGO_DATA_URI` itself is deleted from `js/app.js` along with its declaration comment — it had no other callers left (the print sheet dropped its own logo in an earlier session), so keeping a 98KB dead constant around served no purpose.
+
+Verified: exported workbook has no `xl/media/` or `xl/drawings/` parts (no embedded image at all), and every text row — title, subtitle, "Branch: LADPUR (9288)", borrower name, address, and the info-grid field order — was diffed field-by-field against `renderPrintView()`'s live DOM for the same borrower and matches exactly. Formulas (Days in NPA, UCI, Total Dues, etc.) still resolve correctly with the shifted row numbers. No console errors.
+
+Files: `js/app.js`. Cache-bust `v=20260815i`, SW `upgb-ots-shell-v114`.
+
 ### Removed the Daily NPA Projection module entirely (2026-08-15, same day)
 
 Asked at the end of the worksheet build whether *"Daily npa projection kaam
