@@ -1,4 +1,4 @@
-const CACHE_NAME = 'upgb-ots-shell-v112';
+const CACHE_NAME = 'upgb-ots-shell-v113';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
@@ -13,14 +13,14 @@ const CACHE_NAME = 'upgb-ots-shell-v112';
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './css/styles.css?v=20260815g',
-  './js/app.js?v=20260815g',
-  './js/auth.js?v=20260815g',
-  './js/publish.js?v=20260815g',
-  './js/splash.js?v=20260815g',
-  './js/vendor/xlsx.full.min.js?v=20260815g',
-  './js/vendor/exceljs.min.js?v=20260815g',
-  './js/vendor/pdf.min.js?v=20260815g',
+  './css/styles.css?v=20260815h',
+  './js/app.js?v=20260815h',
+  './js/auth.js?v=20260815h',
+  './js/publish.js?v=20260815h',
+  './js/splash.js?v=20260815h',
+  './js/vendor/xlsx.full.min.js?v=20260815h',
+  './js/vendor/exceljs.min.js?v=20260815h',
+  './js/vendor/pdf.min.js?v=20260815h',
   './manifest.webmanifest',
 ];
 
@@ -44,15 +44,19 @@ self.addEventListener('activate', (event) => {
    always try the network first for the freshest data/app version, falling
    back to the cached copy only when genuinely offline. Never silently serve
    stale banking data while a real connection is available. */
-// These two files are polled on a timer purely to pick up changes made from
-// other devices -- OTS lock sync every 45s, Daily NPA Projection live-sync
-// every 3s (js/app.js) -- and each poll's URL carries a unique cache-busting
-// timestamp, so it is never requested again with that exact URL. Caching the
-// response therefore only ever adds a write and never serves a read: over a
-// long-running tab this silently filled up Cache Storage with thousands of
-// dead entries and visibly slowed the whole app down. These two always go
-// straight to the network, nothing cached, nothing to grow unbounded.
-const POLLED_ENDPOINTS = ['/data/locked-ots.json', '/data/daily-npa-projection.json'];
+// Files polled on a timer to pick up changes made from other devices. Each
+// poll's URL carries a unique cache-busting timestamp, so it is never
+// requested again with that exact URL: caching the response only ever adds
+// a write and never serves a read, and over a long-running tab that
+// silently filled Cache Storage with thousands of dead entries and visibly
+// slowed the whole app down. Anything listed here goes straight to the
+// network, nothing cached, nothing to grow unbounded.
+//
+// Both original entries are gone with the features that polled them (OTS
+// lock sync, removed 2026-08-14; Daily NPA Projection, removed 2026-08-15).
+// The list and its fetch branch stay because they are the guard rail that
+// stops the next polled endpoint from reintroducing that bug.
+const POLLED_ENDPOINTS = [];
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
