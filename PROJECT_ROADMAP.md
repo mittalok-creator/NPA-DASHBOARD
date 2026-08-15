@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: Branch panel groups switched from Sol ID decade ranges to the real Hathras/Mathura district split (2026-08-15, same day)
+
+One more correction to the Branch panel grouping shipped just below: the Sol ID decade-range groups (`9270–9279`, `9280–9289`, ...) were an arbitrary numeric bucketing, not a grouping that means anything to a branch officer. Alok pointed out the real structure: Sol ID 9269 is the Regional Office itself, 9270–9309 are the **Hathras district** branches, and 9310–9325 are the **Mathura district** branches — UPGB Hathras Regional Office covers both districts. (The old Sol ID prefix flips from 15xxx to 16xxx at exactly the same 9309/9310 boundary, confirming this is a real administrative line, not a coincidence of the numeric range.)
+
+`branchGroups()` now uses a small `BRANCH_DISTRICTS` table (`{from,to,label,letter}` per district) instead of computing a decade bucket from each Sol ID, so the three groups are Regional Office (1) → Hathras District (40) → Mathura District (16), still sorted ascending by Sol ID within each. Jump-rail labels changed from the decade digits (`27`, `28`, ...) to `HTH`/`MTH`.
+
+Verified: group order, labels, and per-group counts (1/40/16 = 57) all correct in both themes; Sol IDs still strictly ascending within and across groups; no console errors.
+
+Files: `js/app.js` (`branchGroups`, new `BRANCH_DISTRICTS` constant). Cache-bust `v=20260815n`, SW `upgb-ots-shell-v119`.
+
 ### Fix: hovered sidebar rail was losing to page content instead of overlaying it; Branch panel re-sorted from A-Z to ascending Sol ID (2026-08-15, same day)
 
 Two follow-up corrections to the sidebar/branch-panel redesign above, both reported by Alok from a live screenshot.

@@ -161,22 +161,26 @@ function branchRowHtml([oldId,newId,name]){
    order already happens to be ascending by Sol ID, but this sorts
    defensively rather than relying on that, since other code (Excel
    template, showBranchCard lookup) depends on the source array's own
-   order and shouldn't be reordered. Sol IDs run 9269-9325 in clean
-   contiguous decades (9270-9279, 9280-9289, ...), so those decades make
-   natural jump-rail groups once alphabetical A-Z groups no longer apply. */
+   order and shouldn't be reordered.
+   Groups follow the real administrative split within UPGB Hathras Regional
+   Office, not an arbitrary numeric bucket: Sol ID 9269 is the RO itself,
+   9270-9309 are the Hathras district branches, and 9310-9325 are the
+   Mathura district branches (the old Sol ID prefix flips 15xxx -> 16xxx at
+   the same boundary, confirming it's a real district line, not a
+   coincidence of the ID range). */
+const BRANCH_DISTRICTS = [
+  {id:'hathras', from:9270, to:9309, label:'Hathras District', letter:'HTH'},
+  {id:'mathura', from:9310, to:9325, label:'Mathura District', letter:'MTH'},
+];
 function branchGroups(){
   const ro = BRANCH_LIST.find(([,,name])=>name==='R O Hathras');
   const rest = BRANCH_LIST.filter(([,,name])=>name!=='R O Hathras')
     .slice().sort((a,b)=>a[1]-b[1]);
   const groups = [];
   if(ro) groups.push({id:'ro', letter:'★', label:'Regional Office', rows:[ro]});
-  rest.forEach(entry=>{
-    const decade = Math.floor(entry[1]/10)*10;
-    const id = String(decade);
-    const last = groups[groups.length-1];
-    if(!last || last.id!==id){
-      groups.push({id, letter:String(decade).slice(1,3), label:`Sol ID ${decade}–${decade+9}`, rows:[entry]});
-    } else last.rows.push(entry);
+  BRANCH_DISTRICTS.forEach(d=>{
+    const rows = rest.filter(([,newId])=>newId>=d.from && newId<=d.to);
+    if(rows.length) groups.push({id:d.id, letter:d.letter, label:d.label, rows});
   });
   return groups;
 }
