@@ -131,6 +131,14 @@ function titleCase(s){ return String(s||'').toLowerCase().replace(/\b\w/g,c=>c.t
    Hathras Service Branch, Hatisa -> Hatisa Bhagwantpur). All 57 Old/New Sol
    ID pairs matched the sheet exactly, no other differences. */
 const BRANCH_LIST = [[15990,9269,"R O Hathras"],[15010,9270,"Agsauli"],[15020,9271,"Bamnai"],[15030,9272,"Bandhnoo"],[15040,9273,"Baraus"],[15050,9274,"Bastoi"],[15060,9275,"Bisawar"],[15070,9276,"Chandpa"],[15080,9277,"Chhonda Gadua"],[15090,9278,"Devinagar"],[15100,9279,"Eihan"],[15110,9280,"Hathras Agra Road"],[15120,9281,"Hathras Aligarh Road"],[15130,9282,"Mursan Gate"],[15140,9283,"Hathras Service Branch"],[15150,9284,"Hatisa Bhagwantpur"],[15160,9285,"Jarera"],[15170,9286,"Komari"],[15180,9287,"Kota"],[15190,9288,"Ladpur"],[15200,9289,"Mahow"],[15210,9290,"Meetai"],[15220,9291,"Mendu"],[15230,9292,"Mughal Garhi"],[15240,9293,"Mursan"],[15250,9294,"Parsara"],[15260,9295,"Pora"],[15270,9296,"Purdil Nagar"],[15280,9297,"Ratibhanpur"],[15290,9298,"Ruheri"],[15300,9299,"Sadabad"],[15310,9300,"Sahpau"],[15320,9301,"Salempur"],[15330,9302,"Sasni"],[15340,9303,"Sikandra Rao"],[15350,9304,"Tuksan"],[15360,9305,"Wazidpur"],[15370,9306,"Adarshnagar"],[15380,9307,"Hasayan"],[15390,9308,"Jaleser Road"],[15400,9309,"Naugaon"],[16010,9310,"Bajna"],[16020,9311,"Baldev"],[16030,9312,"Bati"],[16040,9313,"Damodarpura"],[16050,9314,"Farah"],[16060,9315,"Goverdhan"],[16070,9316,"Maant"],[16080,9317,"Mathura City"],[16090,9318,"Laxmi Nagar"],[16100,9319,"Pali Kheda"],[16110,9320,"Raya"],[16120,9321,"Ronchi Bangar"],[16130,9322,"Sonai"],[16140,9323,"Tarsi"],[16150,9324,"Vrindavan"],[16160,9325,"Jajan Patti"]];
+/* Branch master data from the same frozen UPGB_NEW_SOL_ID.xlsx source as
+   BRANCH_LIST above -- branch code, official branch email, RO/Branch type,
+   Urban/Rural/Semi Urban area, district, registered address, PIN, and date
+   opened. Keyed by new Sol ID (number). This is the authoritative source
+   for branch district (used by branchGroups() below) rather than a
+   hardcoded Sol ID range, since the sheet's own District Name column is
+   ground truth, not an inference from the numbering. */
+const BRANCH_META = {9269:{code:"ROHATH",email:"recovery.rohath@upgb.bank.in",type:"Regional Office",area:"Urban",district:"Hathras",address:"MUNSHI GAJADHAR MARG ALIGARH ROAD",pin:"204101",dateOpen:"01-04-2013"},9270:{code:"AGSAUA",email:"AGSAUA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.AGSAULI HATHRAS",pin:"204210",dateOpen:"08-08-1983"},9271:{code:"BAMNHA",email:"BAMNHA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.LUHETA HATHRAS",pin:"204101",dateOpen:"11-08-1982"},9272:{code:"BANDHA",email:"BANDHA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.KGW SASNI HATHRAS",pin:"202139",dateOpen:"10-12-1983"},9273:{code:"BARAHA",email:"BARAHA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"VILL. BARAUS PO- BANS AMRU",pin:"281306",dateOpen:"31-12-2012"},9274:{code:"BASTOA",email:"BASTOA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O. BASTOI HATHRAS",pin:"204215",dateOpen:"20-12-1983"},9275:{code:"BISAWA",email:"BISAWA@upgb.bank.in",type:"Branch",area:"Semi Urban",district:"Hathras",address:"MOHALLA PENTH BAZAR, BISAWAR BLOCK- SADABAD",pin:"281302",dateOpen:"14-03-2012"},9276:{code:"CHANHA",email:"CHANHA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.CHANDPA HATHRAS",pin:"204101",dateOpen:"17-09-1981"},9277:{code:"CHHONA",email:"CHHONA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"VILLAGE- CHHONDA GADUA P.O. GADUA",pin:"204216",dateOpen:"14-03-2012"},9278:{code:"DEVINA",email:"DEVINA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.HATHRAS JUNCTION HATHRAS",pin:"204102",dateOpen:"09-08-1994"},9279:{code:"EIHANA",email:"EIHANA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.EIHAN HATHRAS",pin:"204102",dateOpen:"19-08-1982"},9280:{code:"HATRDA",email:"HATRDA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"AGRA ROAD HATHRAS",pin:"204101",dateOpen:"08-11-1994"},9281:{code:"HATHHA",email:"HATHHA@upgb.bank.in",type:"Branch",area:"Urban",district:"Hathras",address:"MUNSHI GAJADHAR MARG ALIGARH ROAD",pin:"204101",dateOpen:"22-03-2012"},9282:{code:"MURSNA",email:"MURSNA@upgb.bank.in",type:"Branch",area:"Urban",district:"Hathras",address:"MURSAN GATE HATHRAS HATHRAS",pin:"204101",dateOpen:"08-02-1994"},9283:{code:"HATHRA",email:null,type:"Service Branch",area:"Urban",district:"Hathras",address:"MUNSHI GAJADHAR MARG ALIGARH ROAD",pin:"204101",dateOpen:"16-07-2012"},9284:{code:"HATISA",email:"HATISA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.HATISA BHAGWANTPUR HATHRAS",pin:"204101",dateOpen:"28-09-1984"},9285:{code:"JARERA",email:"JARERA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O. NAGLA VEER SAHAI HATHRAS",pin:"204214",dateOpen:"10-08-1983"},9286:{code:"KOMARA",email:"KOMARA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.KOMRI HATHRAS",pin:"202139",dateOpen:"11-12-1981"},9287:{code:"KOTAHA",email:"KOTAHA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"VILLAGE and P.O. KOTA BLOCK - MURSAN",pin:"204213",dateOpen:"14-03-2012"},9288:{code:"LADPUA",email:"LADPUA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.LADPUR HATHRAS",pin:"204101",dateOpen:"27-05-1981"},9289:{code:"MAHOWA",email:"MAHOWA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.,MAHOW HATHRAS",pin:"204121",dateOpen:"02-09-1981"},9290:{code:"MEETAA",email:"MEETAA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.MEETAI HATHRAS",pin:"204101",dateOpen:"26-04-1982"},9291:{code:"MENDUA",email:"MENDUA@upgb.bank.in",type:"Branch",area:"Semi Urban",district:"Hathras",address:"P.O.MENDU HATHRAS",pin:"204105",dateOpen:"18-09-1985"},9292:{code:"MUGHAA",email:"MUGHAA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"VILL. and PO- MUGHALGARHI TEHSIL- S. RAO",pin:"204215",dateOpen:"29-03-2013"},9293:{code:"MURSAA",email:"MURSAA@upgb.bank.in",type:"Branch",area:"Semi Urban",district:"Hathras",address:"P.O. MURSAN HATHRAS",pin:"204213",dateOpen:"31-10-1984"},9294:{code:"PARSRA",email:"PARSRA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"VILLAGE and P.O. PARSARA BLOCK- HATHRAS",pin:"204101",dateOpen:"14-03-2012"},9295:{code:"PORAHA",email:"PORAHA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.PORA HATHRAS",pin:"204215",dateOpen:"14-10-1982"},9296:{code:"PURDIA",email:"PURDIA@upgb.bank.in",type:"Branch",area:"Semi Urban",district:"Hathras",address:"P.O.PURDILNAGAR HATHRAS",pin:"204214",dateOpen:"10-01-1995"},9297:{code:"RATIHA",email:"RATIHA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O. PIPAL GAVAN HATHRAS",pin:"204215",dateOpen:"09-08-1983"},9298:{code:"RUHERA",email:"RUHERA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.RUHERI HATHRAS",pin:"204101",dateOpen:"19-10-1982"},9299:{code:"SADABA",email:"SADABA@upgb.bank.in",type:"Branch",area:"Semi Urban",district:"Hathras",address:"HIGHWAY PLAZA, AGRA- ALIGARH ROAD SADABAD",pin:"281306",dateOpen:"29-02-2008"},9300:{code:"SAHPAA",email:"SAHPAA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"MAIN ROAD, MOHALLA- BAJARIA VILLAGE and P.O. SAHPAU",pin:"281307",dateOpen:"14-03-2012"},9301:{code:"SALEMA",email:"SALEMA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.SALEMPUR HATHRAS",pin:"202124",dateOpen:"15-10-1981"},9302:{code:"SASNIA",email:"SASNIA@upgb.bank.in",type:"Branch",area:"Semi Urban",district:"Hathras",address:"P.O.SASNI HATHRAS",pin:"204216",dateOpen:"05-02-1994"},9303:{code:"SIKADA",email:"SIKADA@upgb.bank.in",type:"Branch",area:"Semi Urban",district:"Hathras",address:"P.O. S.RAO HATHRAS",pin:"204215",dateOpen:"09-02-1994"},9304:{code:"TUKSAA",email:"TUKSAA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.TUKSAN HATHRAS",pin:"204101",dateOpen:"16-09-1983"},9305:{code:"WAZIDA",email:"WAZIDA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"P.O.WAZIDPUR HATHRAS",pin:"204215",dateOpen:"25-01-1982"},9306:{code:"ADARSA",email:"ADARSA@upgb.bank.in",type:"Branch",area:"Urban",district:"Hathras",address:"-Adarshnagar Maindu Road -Hathras-204101 std-05722",pin:"204101",dateOpen:"03-05-2016"},9307:{code:"HASAYA",email:"HASAYA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"Hasayan -Sikandra rao-Hathras- pin-204212 Std code-05721",pin:"204212",dateOpen:"03-05-2016"},9308:{code:"JALESA",email:"JALESA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"Jaleser Road  P- JaleserRS Tahsil -Sadabad -pin 281104 STD-05745",pin:"281104",dateOpen:"15-05-2016"},9309:{code:"NAUGGA",email:"NAUGGA@upgb.bank.in",type:"Branch",area:"Rural",district:"Hathras",address:"V+P Nagaonn-tahsil -Sahabad-Hathras.  pin-281502 std 0565",pin:"281502",dateOpen:"18-05-2016"},9310:{code:"BAJNAA",email:"BAJNAA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"MOHALLA SHIVAJI NAGAR BAJNA",pin:"281201",dateOpen:"20-01-2010"},9311:{code:"BALDEA",email:"BALDEA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"JAWAHAR ROAD, NEW POST OFFICE BUILDING BALDEV",pin:"281301",dateOpen:"19-03-2012"},9312:{code:"BATIHA",email:"BATIHA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"VILL. and PO- BATI, MAIN ROAD",pin:"281004",dateOpen:"29-03-2013"},9313:{code:"DAMODA",email:"DAMODA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"VILL. DAMODARPURA PO- AURANGABAD",pin:"281006",dateOpen:"31-12-2012"},9314:{code:"FARAHA",email:"FARAHA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"NEAR BUS STAND POST FARAH",pin:"281122",dateOpen:"30-06-2008"},9315:{code:"GOVERA",email:"GOVERA@upgb.bank.in",type:"Branch",area:"Semi Urban",district:"Mathura",address:"SARAI BARA BAZAR GOVERDHAN",pin:"281502",dateOpen:"10-03-2008"},9316:{code:"MAANTA",email:"MAANTA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"RAYA NAUJHIL ROAD MAANT",pin:"281202",dateOpen:"26-03-2010"},9317:{code:"MATHUA",email:"MATHUA@upgb.bank.in",type:"Branch",area:"Urban",district:"Mathura",address:"17-A RADHA NAGAR, OPPOSITE MADHUVAN HOTEL KRISHNA NAGAR",pin:"281004",dateOpen:"05-03-2008"},9318:{code:"LAXMIA",email:"LAXMIA@upgb.bank.in",type:"Branch",area:"Urban",district:"Mathura",address:"BEHIND - MAA CHANDRAWALI PETROL PUMP LAXMI NAGAR",pin:"281001",dateOpen:"14-03-2012"},9319:{code:"PALIKA",email:"PALIKA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"OM NAGAR COLONY, PALIKHERA SONKH ROAD",pin:"281004",dateOpen:"24-03-2012"},9320:{code:"RAYAHA",email:"RAYAHA@upgb.bank.in",type:"Branch",area:"Semi Urban",district:"Mathura",address:"SUBEDAR ATAR SINGH MARKET, HATHRAS- MATHURA ROAD RAYA",pin:"281204",dateOpen:"11-03-2008"},9321:{code:"RONCHA",email:"RONCHA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"KADAMB VIHAR ROAD RONCHI BANGAR",pin:"281006",dateOpen:"31-12-2012"},9322:{code:"SONAIA",email:"SONAIA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"VILL. and PO- SONAI MATHURA",pin:"281206",dateOpen:"31-12-2012"},9323:{code:"TARSIA",email:"TARSIA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"VILL. TARSI, PO- DHANGAO MATHURA",pin:"281005",dateOpen:"29-03-2013"},9324:{code:"VRINDA",email:"VRINDA@upgb.bank.in",type:"Branch",area:"Semi Urban",district:"Mathura",address:"MUDGAL RISHI BHAWAN, MOTI JHEEL MARG VRINDAVAN",pin:"281121",dateOpen:"17-03-2009"},9325:{code:"JAJANA",email:"JAJANA@upgb.bank.in",type:"Branch",area:"Rural",district:"Mathura",address:"v -Jajanpatti Block Goverdhan- Mathura.pin code-281123",pin:"281123",dateOpen:"17-08-2016"}};
 /* Branch contacts (Manager + Recovery Officer) now live on DATA.branchContacts,
    uploaded via Update Data -> Branch Contacts (see buildBranchContactsMap/
    handleBranchContactsUpload below) and published alongside the rest of the
@@ -171,24 +179,21 @@ function branchRowHtml([oldId,newId,name]){
    template, showBranchCard lookup) depends on the source array's own
    order and shouldn't be reordered.
    Groups follow the real administrative split within UPGB Hathras Regional
-   Office, not an arbitrary numeric bucket: Sol ID 9269 is the RO itself,
-   9270-9309 are the Hathras district branches, and 9310-9325 are the
-   Mathura district branches (the old Sol ID prefix flips 15xxx -> 16xxx at
-   the same boundary, confirming it's a real district line, not a
-   coincidence of the ID range). */
-const BRANCH_DISTRICTS = [
-  {id:'hathras', from:9270, to:9309, label:'Hathras District', letter:'HTH'},
-  {id:'mathura', from:9310, to:9325, label:'Mathura District', letter:'MTH'},
-];
+   Office -- each branch's actual district, straight from BRANCH_META
+   (the frozen official sheet), not an inferred Sol ID range. */
+const BRANCH_DISTRICT_LETTER = {Hathras:'HTH', Mathura:'MTH'};
 function branchGroups(){
   const ro = BRANCH_LIST.find(([,,name])=>name==='R O Hathras');
   const rest = BRANCH_LIST.filter(([,,name])=>name!=='R O Hathras')
     .slice().sort((a,b)=>a[1]-b[1]);
   const groups = [];
   if(ro) groups.push({id:'ro', letter:'★', label:'Regional Office', rows:[ro]});
-  BRANCH_DISTRICTS.forEach(d=>{
-    const rows = rest.filter(([,newId])=>newId>=d.from && newId<=d.to);
-    if(rows.length) groups.push({id:d.id, letter:d.letter, label:d.label, rows});
+  rest.forEach(entry=>{
+    const dist = (BRANCH_META[entry[1]]||{}).district || 'Other';
+    const last = groups[groups.length-1];
+    if(!last || last.id!==dist){
+      groups.push({id:dist, letter:BRANCH_DISTRICT_LETTER[dist]||dist.slice(0,3).toUpperCase(), label:`${dist} District`, rows:[entry]});
+    } else last.rows.push(entry);
   });
   return groups;
 }
@@ -236,6 +241,16 @@ function waIconLink(num){
   if(!wa) return '';
   return `<a class="wa-link" href="https://wa.me/${wa}" target="_blank" rel="noopener" title="Chat on WhatsApp" aria-label="Chat on WhatsApp" onclick="event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 448 512" fill="currentColor" aria-hidden="true"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg></a>`;
 }
+/* A handful of BRANCH_META addresses (the branches opened 2016 -- Adarshnagar,
+   Hasayan, Jaleser Road, Naugaon) already have the PIN typed into the
+   address text itself ("...std-05722"), unlike the rest which don't --
+   append meta.pin only when it isn't already there, so those four don't
+   show the same PIN twice. */
+function masterAddressOf(meta){
+  if(!meta.address) return null;
+  if(meta.pin && !meta.address.includes(meta.pin)) return meta.address + ' - ' + meta.pin;
+  return meta.address;
+}
 /* Full branch detail card, reusing the same generic title/sub/info-grid
    modal already built for Quick Account Detail (quickAcctModalOverlay) --
    shows everything collected for that branch (Old + New Sol ID, Manager,
@@ -244,11 +259,24 @@ function showBranchCard(newId){
   const entry = BRANCH_LIST.find(([,nid])=>nid===newId);
   if(!entry) return;
   const [oldId,,name] = entry;
+  const meta = BRANCH_META[newId] || {};
   const bc = DATA.branchContacts[String(newId)] || {};
   const plain = (label,val) => [label, val ? esc(val) : null];
   const tel = (label,num) => [label, num ? `<span class="v-with-wa"><a href="tel:${esc(num)}">${esc(num)}</a>${waIconLink(num)}</span>` : null];
   const mail = (label,addr) => [label, addr ? `<a href="mailto:${esc(addr)}">${esc(addr)}</a>` : null];
+  /* Manually-collected fields (bc.*, via the Branch Contacts upload) win
+     over the frozen master sheet's own address when both are present --
+     bc.address is a human keeping it current, meta.address is a one-time
+     snapshot. */
+  const masterAddress = masterAddressOf(meta);
   const fields = [
+    plain('Branch Type', meta.type),
+    plain('District', meta.district),
+    plain('Area', meta.area),
+    plain('Branch Code', meta.code),
+    mail('Branch Email', meta.email),
+    plain('Date Opened', meta.dateOpen),
+    plain('Address', bc.address || masterAddress),
     plain('Branch Manager', bc.mgr),
     tel('Manager Mobile', bc.mgrMobile),
     mail('Manager Email', bc.mgrEmail),
@@ -256,7 +284,6 @@ function showBranchCard(newId){
     tel('Recovery Officer Mobile', bc.roMobile),
     plain('Branch Landline', bc.landline),
     plain('Category', bc.category),
-    plain('Address', bc.address),
     plain('IFSC Code', bc.ifsc),
     plain('Remarks', bc.remarks),
   ];
@@ -3423,6 +3450,42 @@ function dashboardCornerStats(s){
   return html;
 }
 
+/* Branch profile card shown at the top of the Dashboard whenever a single
+   branch is picked from #dashBranchFilter (blank = whole Regional Office,
+   where a single branch profile wouldn't make sense). branchFilter is the
+   raw branch-name string the filter uses to slice NPA rows; s.branchMap
+   already carries that same branch's Sol ID (captured off the real NPA
+   rows during computeDashboardStats), so this reads off that rather than
+   re-matching the name against BRANCH_LIST/BRANCH_META, which use a
+   slightly different canonical spelling. */
+function dashboardBranchInfoCard(branchFilter, s){
+  if(!branchFilter) return '';
+  const bmEntry = s.branchMap.get(branchFilter);
+  const solId = bmEntry ? bmEntry.solId : '';
+  const meta = BRANCH_META[Number(solId)] || {};
+  const bc = DATA.branchContacts[solId] || {};
+  const listEntry = BRANCH_LIST.find(([,nid])=>String(nid)===String(solId));
+  const oldId = listEntry ? listEntry[0] : '';
+  const telLink = (num) => num ? `<a href="tel:${esc(num)}" onclick="event.stopPropagation()">${esc(num)}</a>${waIconLink(num)}` : '';
+  const item = (label,val) => val ? `<div><div class="k">${esc(label)}</div><div class="v">${val}</div></div>` : '';
+  const masterAddress = masterAddressOf(meta);
+  const address = esc(bc.address) || (masterAddress ? esc(masterAddress) : '');
+  const items = [
+    item('District', meta.district ? esc(meta.district) : ''),
+    item('Branch Manager', bc.mgr ? `${esc(bc.mgr)}${bc.mgrMobile?'<span class="v-with-wa"> · '+telLink(bc.mgrMobile)+'</span>':''}` : ''),
+    item('Recovery Officer', bc.roName ? `${esc(bc.roName)}${bc.roMobile?'<span class="v-with-wa"> · '+telLink(bc.roMobile)+'</span>':''}` : ''),
+    item('Branch Email', meta.email ? `<a href="mailto:${esc(meta.email)}" onclick="event.stopPropagation()">${esc(meta.email)}</a>` : ''),
+    item('Address', address),
+  ].filter(Boolean).join('');
+  if(!items) return '';
+  return `<div class="card branch-info-card"${solId?` onclick="showBranchCard(${solId})" role="button" tabindex="0"`:''}>
+    <div class="branch-info-head">
+      <div><div class="bname">${esc(branchFilter)}</div><div class="baddr">${solId?`Sol ID ${esc(solId)} &middot; Old ${esc(oldId)}`:''}</div></div>
+      ${solId?'<div class="branch-info-cta">Full details →</div>':''}
+    </div>
+    <div class="info-grid">${items}</div>
+  </div>`;
+}
 function renderDashboard(){
   const el = document.getElementById('dashboardArea');
   if(!el) return;
@@ -3505,6 +3568,7 @@ function renderDashboard(){
   const topBucket = actionableBuckets.length ? actionableBuckets.reduce((max,b)=>b.os>max.os?b:max) : null;
 
   el.innerHTML = `
+    ${dashboardBranchInfoCard(branchFilter, s)}
     <div class="hero-kpi-row">
       ${heroKpiCard({id:'heroTotalOs', label:'Total Outstanding', fallback:fmtCr(s.totalOS), sub:s.totalAccounts.toLocaleString('en-IN')+' accounts', icon:ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', badge:heroNpaBadge, corner:heroCorner})}
       ${heroKpiCard({id:'heroTotalAccts', label:'Total Accounts', fallback:s.totalAccounts.toLocaleString('en-IN'), sub:s.custCount.toLocaleString('en-IN')+' unique customers', icon:ICON_USERS, tint:'var(--gauge-track)', color:'var(--accent-2)'})}
