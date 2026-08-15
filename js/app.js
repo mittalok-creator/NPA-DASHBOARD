@@ -155,23 +155,28 @@ function branchRowHtml([oldId,newId,name]){
       ${contact}
     </div>`;
 }
-/* Grouped, alphabetical view of BRANCH_LIST, with the Regional Office
-   pinned first. BRANCH_LIST's own order is Sol ID order (new branches get
-   appended out of alphabetical sequence as they're added), which reads
-   fine as a flat reference list but makes an A-Z jump rail meaningless --
-   so the panel keeps its own sorted copy rather than reordering the
-   source list other code (Excel template, showBranchCard lookup) relies on. */
+/* Grouped view of BRANCH_LIST, sorted by new Sol ID ascending (low to
+   high) -- branch staff look branches up by Sol ID, not alphabetically, so
+   that's the order that's actually useful here. BRANCH_LIST's own declared
+   order already happens to be ascending by Sol ID, but this sorts
+   defensively rather than relying on that, since other code (Excel
+   template, showBranchCard lookup) depends on the source array's own
+   order and shouldn't be reordered. Sol IDs run 9269-9325 in clean
+   contiguous decades (9270-9279, 9280-9289, ...), so those decades make
+   natural jump-rail groups once alphabetical A-Z groups no longer apply. */
 function branchGroups(){
   const ro = BRANCH_LIST.find(([,,name])=>name==='R O Hathras');
   const rest = BRANCH_LIST.filter(([,,name])=>name!=='R O Hathras')
-    .slice().sort((a,b)=>a[2].localeCompare(b[2],'en',{sensitivity:'base'}));
+    .slice().sort((a,b)=>a[1]-b[1]);
   const groups = [];
-  if(ro) groups.push({id:'ro', letter:'★', rows:[ro]});
+  if(ro) groups.push({id:'ro', letter:'★', label:'Regional Office', rows:[ro]});
   rest.forEach(entry=>{
-    const L = entry[2][0].toUpperCase();
+    const decade = Math.floor(entry[1]/10)*10;
+    const id = String(decade);
     const last = groups[groups.length-1];
-    if(!last || last.id!==L) groups.push({id:L, letter:L, rows:[entry]});
-    else last.rows.push(entry);
+    if(!last || last.id!==id){
+      groups.push({id, letter:String(decade).slice(1,3), label:`Sol ID ${decade}–${decade+9}`, rows:[entry]});
+    } else last.rows.push(entry);
   });
   return groups;
 }
@@ -193,10 +198,10 @@ function renderBranchList(filter){
   if(countEl) countEl.textContent = `${BRANCH_LIST.length} branches`;
   const groups = branchGroups();
   body.innerHTML = groups.map(g=>`
-    <div class="edge-grp" id="edgeGrp-${esc(g.id)}"><b>${g.id==='ro'?'Regional Office':esc(g.letter)}</b><i></i><em>${g.rows.length}</em></div>
+    <div class="edge-grp" id="edgeGrp-${esc(g.id)}"><b>${esc(g.label)}</b><i></i><em>${g.rows.length}</em></div>
     ${g.rows.map(branchRowHtml).join('')}
   `).join('');
-  if(rail) rail.innerHTML = groups.map(g=>`<button type="button" onclick="jumpBranchGroup('${esc(g.id)}')" aria-label="Jump to ${g.id==='ro'?'Regional Office':esc(g.letter)}">${g.letter}</button>`).join('');
+  if(rail) rail.innerHTML = groups.map(g=>`<button type="button" onclick="jumpBranchGroup('${esc(g.id)}')" aria-label="Jump to ${esc(g.label)}">${esc(g.letter)}</button>`).join('');
 }
 function jumpBranchGroup(id){
   document.getElementById('edgeGrp-'+id)?.scrollIntoView({block:'start', behavior:'smooth'});

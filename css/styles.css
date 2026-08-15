@@ -1171,6 +1171,15 @@ body{overscroll-behavior:none}
 #sideNav{
   flex:0 0 76px;width:76px;position:relative;z-index:5;
 }
+/* z-index only has meaning within its own containing stacking context --
+   .nav-shell's z-index:50 (below) only reorders content *inside* #sideNav,
+   it can never let the rail outrank siblings outside #sideNav (like
+   #searchHeader's sticky, isolated z-index:40) unless #sideNav's OWN
+   z-index rises too. Without this, hovering the rail open produced a
+   jagged double-image: the header card kept winning the paint order and
+   cut the rail's labels off mid-word instead of the rail cleanly
+   overlaying the page like a drawer. */
+#sideNav:hover,#sideNav:focus-within{z-index:50}
 .nav-shell{
   position:absolute;inset:0;width:76px;
   display:flex;flex-direction:column;gap:4px;padding:22px 14px;
@@ -1181,7 +1190,15 @@ body{overscroll-behavior:none}
 }
 #sideNav:hover .nav-shell,#sideNav:focus-within .nav-shell{
   width:252px;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  box-shadow:26px 0 64px rgba(0,0,0,.34);z-index:20;
+  box-shadow:26px 0 64px rgba(0,0,0,.34);
+  /* Must outrank the page's own sticky headers (header.app-head /
+     #searchHeader sit at z-index:40 with isolation:isolate) or the "overlay,
+     don't reflow" rail becomes a jagged double-image: the header card wins
+     the paint order and the rail's labels get cut off mid-word behind it
+     instead of the rail cleanly overlaying the page like a drawer. Stays
+     below true full-screen layers (detail pane 95, modals 100+, cmdk 120)
+     so opening any of those still correctly wins over a hovered rail. */
+  z-index:50;
   /* #app is height:100vh with body{overflow:hidden}, so on a short
      viewport (e.g. a phone rotated to landscape, wide enough to trigger
      this desktop layout but only ~400px tall) the expanded rail's content
