@@ -1898,7 +1898,7 @@ header.app-head::before,.detail-head::before{
 /* ---- hero panel ---- */
 .splash-hero{
   flex:0 0 340px;position:relative;overflow:hidden;
-  padding:36px 32px;display:flex;flex-direction:column;align-items:center;text-align:center;
+  padding:36px 32px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
   background:radial-gradient(circle at 82% 4%,var(--accent-soft) 0%,transparent 55%),var(--head-grad);
   color:var(--head-ink);
 }
@@ -1914,7 +1914,7 @@ header.app-head::before,.detail-head::before{
 .splash-title{font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--head-ink);margin-top:22px}
 .splash-subtitle{font-size:15.5px;font-weight:700;color:var(--red);margin-top:2px}
 .splash-rule{width:40px;height:3px;border-radius:2px;background:var(--head-ink);opacity:.35;margin-top:14px}
-.splash-hero-spacer{flex:1;min-height:20px}
+.splash-hero-spacer{height:32px}
 .splash-trust{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
   border-radius:var(--radius-md);padding:12px 15px;box-shadow:var(--shadow-sm);text-align:left}
 .splash-trust-ic{width:32px;height:32px;border-radius:9px;background:var(--accent-soft);color:var(--accent);
@@ -1965,7 +1965,7 @@ header.app-head::before,.detail-head::before{
 @media (max-width:819px){
   .splash-frame{flex-direction:column;max-width:420px}
   .splash-hero{flex:0 0 auto;padding:28px 24px 24px}
-  .splash-hero-spacer{min-height:14px}
+  .splash-hero-spacer{height:18px}
   .splash-formside{padding:28px 24px 26px}
 }
 @media (max-height:760px){

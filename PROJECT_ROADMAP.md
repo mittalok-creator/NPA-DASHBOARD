@@ -123,6 +123,18 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: Login screen's left panel was a wall of dead space, not "not aligned" (2026-08-15, same day)
+
+Alok's blunt read on the split-panel login just shipped: "bilkul bhi achha nahi lag raha na hi proper align hai" (doesn't look good at all, also not properly aligned), and asked me to audit it myself rather than describe the fix first.
+
+Screenshotted both themes at desktop width and looked at it critically: the hero panel's content (logo, org name, app name, "OTS Calculator", rule) sat pinned to the top, then a `flex:1` spacer shoved the "Secure Access" chip all the way to the bottom — leaving roughly 300px of pure empty gradient in the middle of the panel with nothing in it, because the form panel next to it is naturally taller (it has to fit a full numeric keypad + Login button) and `.splash-frame`'s default flex `align-items:stretch` forces the hero panel to match that height. The two panels' content was never actually designed as one composition — one was top+bottom-pinned with a hole in the middle, the other filled edge to edge — which is exactly what reads as "not aligned."
+
+Fix: `.splash-hero` switched from top-aligned-with-a-growing-spacer to `justify-content:center`, and `.splash-hero-spacer` from `flex:1` (grab all remaining space) to a fixed small gap (32px desktop, 18px mobile) between the rule and the trust chip. The whole hero content block — logo through trust chip — now sits centered as one group within whatever height the taller form panel gives it, with the extra space distributed evenly above and below instead of dumped in the middle as a hole.
+
+Verified: both themes at desktop width now show a balanced, centered hero panel with no dead gap; mobile stacked layout (already `flex:0 0 auto`, unaffected by this fix) unchanged; PIN flow retested end-to-end (wrong/correct PIN, keyboard, Login button) — all still pass; no console errors.
+
+Files: `css/styles.css` (`.splash-hero`, `.splash-hero-spacer`). Cache-bust `v=20260815t`, SW `upgb-ots-shell-v125`.
+
 ### Design: Login screen rebuilt again as a professional split access panel, replacing the handwritten ledger page (2026-08-15, same day)
 
 Alok said the ledger-page login (handwritten masthead, ruled ivory paper, red margin rule, punch holes — shipped earlier this session) "professional nahi lag raha" for a banking tool. Iterated through several mockups before landing on the final direction: a split panel with a branded hero (real UPGB logo, "UPGB Regional Office Hathras", app name, a "Secure Access" trust chip) on one side and PIN entry ("Welcome Back!", PIN cells, numeric keypad, Login button) on the other — closely modelled on a reference image he shared, with the generic stock illustration replaced by the real bank logo per his follow-up ("pasand nahi aaya... bank ka logo use kar lo"), left panel content centered per his request, and a duplicated "Enter your PIN" / "Authorised Signatory — PIN" line removed per his last note before approving.
