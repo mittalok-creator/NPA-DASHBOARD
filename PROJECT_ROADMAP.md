@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Config: Login passcode changed (2026-08-15, same day)
+
+Alok asked for the login screen's 4-digit passcode to be changed from the placeholder default to a new value. Same client-side gate as before (`CORRECT_PIN` in `js/splash.js`) -- this was never meant as real security, just a shared-device screen lock, so a plain string swap is the right level of effort. Verified via Playwright: the old code now gets rejected, the new one unlocks.
+
+Files: `js/splash.js`. Cache-bust `v=20260815u`, SW `upgb-ots-shell-v126`.
+
 ### Fix: Login screen's left panel was a wall of dead space, not "not aligned" (2026-08-15, same day)
 
 Alok's blunt read on the split-panel login just shipped: "bilkul bhi achha nahi lag raha na hi proper align hai" (doesn't look good at all, also not properly aligned), and asked me to audit it myself rather than describe the fix first.

@@ -1,6 +1,6 @@
 /* Login screen — split access panel (branded hero + PIN entry). */
 (function () {
-  const CORRECT_PIN = '0000';
+  const CORRECT_PIN = '9269';
   const screen = document.getElementById('splashScreen');
   if (!screen || screen.classList.contains('skip')) return;
 
