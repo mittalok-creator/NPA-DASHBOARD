@@ -1871,83 +1871,114 @@ header.app-head::before,.detail-head::before{
 .dash-table-wrap.acct-list-scroll thead th{position:sticky;top:0;background:var(--table-head);z-index:1}
 
 
-/* ---------- Login: ledger page ----------
-   Ivory ruled paper with a red margin rule and punch holes, a masthead
-   written in by hand (strokes drawn by js/splash.js), and a brass seal that
-   stamps on the correct PIN. This screen deliberately commits to one look --
-   it stays ivory whichever theme the app itself is in, so every colour below
-   is painted explicitly rather than inherited from the theme tokens. */
+/* ---------- Login: split access panel ----------
+   Branded hero (bank logo, org name, app name, "Secure Access" trust chip)
+   on one side, PIN entry on the other -- stacks vertically (hero on top) on
+   a phone. Built from the app's own tokens (--card/--ink/--accent/
+   --head-grad, the same gradient the app header itself uses) rather than a
+   fixed look of its own, so it already matches whichever theme is active
+   the instant you're through to the dashboard -- see the inline <head>
+   script that stamps data-theme from localStorage before first paint, so
+   there's no flash of the wrong theme here either. */
 .splash-screen{
   position:fixed;inset:0;z-index:9999;overflow:hidden;
-  background:linear-gradient(168deg,#FFFDF8 0%,#FBF7EF 52%,#F3EDE0 100%);
-  color:#221F19;transition:opacity .6s ease,visibility .6s ease;
+  background:var(--bg);color:var(--ink);
+  display:flex;align-items:center;justify-content:center;padding:24px;
+  transition:opacity .5s ease,visibility .5s ease;
 }
 .splash-screen.unlocked{opacity:0;visibility:hidden;pointer-events:none}
 .splash-screen.skip{transition:none;opacity:0;visibility:hidden;pointer-events:none}
 
-.splash-lines{position:absolute;inset:0;pointer-events:none;
-  background-image:repeating-linear-gradient(180deg,transparent 0 25px,rgba(58,107,201,.14) 25px 26px)}
-.splash-margin{position:absolute;left:44px;top:0;bottom:0;width:1px;background:rgba(190,60,60,.40)}
-.splash-holes{position:absolute;left:16px;top:0;bottom:0;width:14px;display:flex;flex-direction:column;
-  justify-content:space-around;padding:16vh 0;pointer-events:none}
-.splash-holes span{width:12px;height:12px;border-radius:50%;background:rgba(120,95,50,.15);
-  box-shadow:inset 0 1px 2px rgba(74,58,30,.35)}
+.splash-frame{
+  width:100%;max-width:900px;max-height:100%;overflow-y:auto;
+  display:flex;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius-xl);box-shadow:var(--shadow-lg);
+}
 
-.splash-sheet{position:relative;height:100%;max-width:420px;margin:0 auto;
-  display:flex;flex-direction:column;padding:8vh 22px 20px 62px}
+/* ---- hero panel ---- */
+.splash-hero{
+  flex:0 0 340px;position:relative;overflow:hidden;
+  padding:36px 32px;display:flex;flex-direction:column;align-items:center;text-align:center;
+  background:radial-gradient(circle at 82% 4%,var(--accent-soft) 0%,transparent 55%),var(--head-grad);
+  color:var(--head-ink);
+}
+.splash-dots{position:absolute;top:24px;right:26px;width:5px;height:5px;opacity:.4}
+.splash-dots::before{content:"";display:block;width:5px;height:5px;border-radius:50%;background:var(--head-ink);box-shadow:
+  12px 0 0 var(--head-ink),24px 0 0 var(--head-ink),36px 0 0 var(--head-ink),
+  0 12px 0 var(--head-ink),12px 12px 0 var(--head-ink),24px 12px 0 var(--head-ink),36px 12px 0 var(--head-ink),
+  0 24px 0 var(--head-ink),12px 24px 0 var(--head-ink),24px 24px 0 var(--head-ink),36px 24px 0 var(--head-ink)}
+.splash-badge{width:78px;height:78px;border-radius:20px;background:#fff;display:flex;align-items:center;justify-content:center;
+  padding:9px;box-shadow:0 10px 24px rgba(0,0,0,.22)}
+.splash-badge img{width:100%;height:100%;object-fit:contain;border-radius:13px}
+.splash-org{font-size:14px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--head-ink);margin-top:18px;line-height:1.4}
+.splash-title{font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--head-ink);margin-top:22px}
+.splash-subtitle{font-size:15.5px;font-weight:700;color:var(--red);margin-top:2px}
+.splash-rule{width:40px;height:3px;border-radius:2px;background:var(--head-ink);opacity:.35;margin-top:14px}
+.splash-hero-spacer{flex:1;min-height:20px}
+.splash-trust{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius-md);padding:12px 15px;box-shadow:var(--shadow-sm);text-align:left}
+.splash-trust-ic{width:32px;height:32px;border-radius:9px;background:var(--accent-soft);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.splash-trust-t1{font-size:12.5px;font-weight:800;color:var(--ink)}
+.splash-trust-t2{font-size:10.5px;color:var(--sub);margin-top:1px}
 
-/* Masthead -- the two handwritten lines are injected here as <svg>. */
-.splash-mast{flex-shrink:0}
-.splash-mast svg{display:block;width:100%;height:auto;overflow:visible}
-.splash-mast-sub{margin-top:2px}
-.splash-mast-sub svg{max-width:82%}
-.splash-mast-rule{height:1.5px;background:rgba(34,31,25,.18);margin-top:10px}
+/* ---- form panel ---- */
+.splash-formside{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:40px 40px 32px}
+.splash-lockwrap{width:60px;height:60px;border-radius:50%;background:var(--accent-soft);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.splash-welcome{font-size:20px;font-weight:800;color:var(--ink);letter-spacing:-.3px;margin-bottom:26px}
 
-.splash-pin-wrap{position:relative;display:flex;flex-direction:column;gap:12px;margin:auto 0}
-.splash-pin-label{font-size:9px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#615C51}
+.splash-pin-wrap{width:100%;max-width:280px;display:flex;flex-direction:column;gap:10px}
+.splash-pin-label{font-size:10px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--sub);align-self:flex-start}
 .splash-pin-cells{display:flex;gap:10px}
-.splash-cell{flex:1;aspect-ratio:1/1.18;border:1px solid rgba(179,129,42,.30);border-bottom:2.5px solid #B3812A;
-  background:#FFF;border-radius:4px;font-family:var(--font-mono);font-size:24px;font-weight:800;color:#221F19;
-  display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(74,58,30,.10);
-  transition:background .18s ease,border-color .18s ease}
-.splash-cell.filled{background:rgba(176,42,42,.10);border-color:#B02A2A}
-.splash-pin-error{font-size:11px;font-weight:700;color:#B02A2A;min-height:15px;text-align:center}
-.splash-pin-error.ok{color:#1E8449}
+.splash-cell{flex:1;aspect-ratio:1/1.1;border:1.5px solid var(--line);background:var(--bg);border-radius:14px;
+  font-family:var(--font-mono);font-size:22px;font-weight:800;color:var(--ink);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}
+.splash-cell.filled{border-color:var(--accent);background:var(--accent-soft)}
+.splash-pin-error{font-size:11px;font-weight:700;color:var(--red);min-height:15px;text-align:center}
+.splash-pin-error.ok{color:var(--green)}
 
-/* On-screen keypad, so tapping never raises the phone's own keyboard over
-   the sheet. A physical keyboard still works -- js/splash.js listens for
-   digit and Backspace keys too. */
-.splash-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.splash-key{padding:12px 0;border:1px solid rgba(179,129,42,.28);border-radius:9px;background:rgba(255,255,255,.7);
-  color:#221F19;font-family:var(--font-mono);font-size:17px;font-weight:700;cursor:pointer;
-  transition:background .12s ease,transform .12s ease;-webkit-tap-highlight-color:transparent}
-.splash-key:hover{background:rgba(176,42,42,.09)}
-.splash-key:active{background:#B02A2A;color:#fff;transform:scale(.94)}
-.splash-key.ghost{border-style:dashed;color:#615C51;font-size:12px;font-weight:800;font-family:var(--font-body)}
-.splash-key:focus-visible{outline:2px solid #B02A2A;outline-offset:2px}
+.splash-pad{width:100%;max-width:280px;display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:18px}
+.splash-key{padding:13px 0;border:1px solid var(--line);border-radius:13px;background:var(--bg);
+  color:var(--ink);font-family:var(--font-mono);font-size:17px;font-weight:700;cursor:pointer;
+  transition:background .12s ease,border-color .12s ease,transform .12s ease;-webkit-tap-highlight-color:transparent}
+.splash-key:hover{background:var(--accent-soft);border-color:var(--accent)}
+.splash-key:active{background:var(--accent);border-color:var(--accent);color:#fff;transform:scale(.94)}
+.splash-key.ghost{border-style:dashed;color:var(--sub)}
+.splash-key:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-/* The stamp lands on the row it certifies -- the PIN, not the keypad. */
-.splash-seal{position:absolute;right:-6px;top:-18px;width:62px;height:62px;border-radius:50%;
-  border:2px solid #B02A2A;color:#B02A2A;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:1px;font-size:7px;font-weight:800;letter-spacing:.8px;text-align:center;line-height:1.25;
-  background:rgba(176,42,42,.08);transform:rotate(-13deg) scale(.55);opacity:0;
-  transition:transform .42s cubic-bezier(.34,1.5,.5,1),opacity .3s ease}
-.splash-seal.stamped{transform:rotate(-13deg) scale(1);opacity:1}
+.splash-login-btn{width:100%;max-width:280px;margin-top:22px;padding:15px 0;border:none;border-radius:14px;
+  background:linear-gradient(135deg,var(--accent),var(--gold-d));color:#fff;font-size:14px;font-weight:800;
+  letter-spacing:.6px;cursor:pointer;box-shadow:0 14px 28px rgba(36,91,255,.28);
+  transition:transform .12s ease,box-shadow .12s ease}
+.splash-login-btn:active{transform:scale(.98)}
 
-.splash-foot{flex-shrink:0;text-align:center;font-size:9px;letter-spacing:1px;color:#615C51;line-height:1.9;padding-top:14px}
-.splash-foot div:first-child{font-weight:800;letter-spacing:1.6px;color:#4A443A}
+.splash-foot{margin-top:22px;font-size:10.5px;color:var(--sub);font-weight:700;letter-spacing:.4px}
 
 .splash-pin-wrap.shake{animation:splashShake .4s ease}
 @keyframes splashShake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}100%{transform:translateX(0)}}
 
-@media (max-height:680px){
-  .splash-sheet{padding-top:4vh}
-  .splash-key{padding:9px 0;font-size:15px}
-  .splash-mast-rule{margin-top:6px}
+/* Below ~820px the two panels no longer fit side by side -- stack the hero
+   above the form instead, and stop stretching the hero to a fixed 340px
+   (that was a column width, not a useful height). */
+@media (max-width:819px){
+  .splash-frame{flex-direction:column;max-width:420px}
+  .splash-hero{flex:0 0 auto;padding:28px 24px 24px}
+  .splash-hero-spacer{min-height:14px}
+  .splash-formside{padding:28px 24px 26px}
+}
+@media (max-height:760px){
+  .splash-screen{padding:14px}
+  .splash-hero{padding-top:22px;padding-bottom:18px}
+  .splash-badge{width:64px;height:64px}
+  .splash-org{margin-top:12px}
+  .splash-title{margin-top:14px}
+  .splash-formside{padding-top:26px}
+  .splash-key{padding:10px 0}
 }
 @media (prefers-reduced-motion: reduce){
   .splash-pin-wrap.shake{animation:none}
-  /* Strokes are handed straight to their drawn state by js/splash.js. */
 }
 
 /* ---------- Data-loading overlay (data/latest.json fetch on boot) ---------- */
