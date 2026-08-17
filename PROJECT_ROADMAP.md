@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: Removed "Designed & Developed by Alok Mittal · Uttar Pradesh Gramin Bank" credit line from the OTS Calculator's PDF/print sheet (2026-08-15, same day)
+
+Alok asked for this footer line off the PDF. It only lived in one place -- `.pv-footer`, the last element of `renderPrintView()`'s `#printArea` markup, printed via `printOtsSheet()` (Search & Settlement → print/Save as PDF). Removed the `<div class="pv-footer">...</div>` line and its now-unused CSS rule; the credit still appears everywhere else it always has (sidebar signature, mobile signature strip, Excel export footer, splash screen) -- this was a PDF-only removal, not a global one.
+
+Verified via Playwright: `#printArea`'s rendered HTML no longer contains the footer text or the `.pv-footer` class after `renderPrintView()` runs on a real account; no console errors.
+
+Files: `js/app.js` (`renderPrintView`), `css/styles.css` (removed `.pv-footer`). Cache-bust `v=20260815v`, SW `upgb-ots-shell-v127`.
+
 ### Config: Login passcode changed (2026-08-15, same day)
 
 Alok asked for the login screen's 4-digit passcode to be changed from the placeholder default to a new value. Same client-side gate as before (`CORRECT_PIN` in `js/splash.js`) -- this was never meant as real security, just a shared-device screen lock, so a plain string swap is the right level of effort. Verified via Playwright: the old code now gets rejected, the new one unlocks.
