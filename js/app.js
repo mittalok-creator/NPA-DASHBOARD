@@ -1610,7 +1610,6 @@ function renderPrintView(){
       <div class="pv-agg-row"><span>Total Ledger Sacrifice</span><span>${anyOts?fmtINR2(totalLedgerSac):'—'}</span></div>
       <div class="pv-agg-row"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(totalDues-totalOtsSum):'—'}</span></div>
     </div>
-    <div class="pv-footer">Designed &amp; Developed by ALOK MITTAL · Uttar Pradesh Gramin Bank</div>
   `;
 }
 

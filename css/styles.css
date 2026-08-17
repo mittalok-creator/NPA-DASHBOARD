@@ -826,10 +826,9 @@ main{padding:20px 16px 40px}
 /* "Crafted by Alok Mittal" was showing twice on every screen: this in-flow
    footer plus the sidebar's own .nav-foot .sig on desktop, and this footer
    plus the fixed .mobile-sig strip on a phone. Each viewport already
-   carries its own signature (and the print sheet has its own .pv-footer),
-   so this middle one is off everywhere. Markup left in place rather than
-   deleted so the layout/padding rules below stay valid if it's ever
-   brought back. */
+   carries its own signature, so this middle one is off everywhere. Markup
+   left in place rather than deleted so the layout/padding rules below stay
+   valid if it's ever brought back. */
 footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env(safe-area-inset-bottom))}
 .foot-note{font-size:11px;color:var(--sub);letter-spacing:.2px}
 .credit-signature{font-family:'Caveat',cursive;font-size:32px;font-weight:700;color:var(--gold-l);margin-top:6px;letter-spacing:.5px}
@@ -989,7 +988,6 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .pv-agg-title{font-family:'Archivo',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;text-align:center;margin-bottom:5px;color:#000}
 .pv-agg-row{display:flex;justify-content:space-between;font-size:12.5px;font-weight:800;padding:4px 6px;border-bottom:1px solid #999;color:#000}
 .pv-agg-row span:last-child{font-family:'IBM Plex Mono',ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace}
-.pv-footer{text-align:center;font-size:9.5px;color:#333;letter-spacing:.6px;margin-top:8px}
 
 /* ---------- Cmd+K command palette ---------- */
 .cmdk-overlay{position:fixed;inset:0;z-index:120;background:var(--scrim);backdrop-filter:blur(6px);
