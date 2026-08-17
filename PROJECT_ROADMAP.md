@@ -123,6 +123,21 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: Bank Dashboard PDF upload broke because Head Office changed the report's layout (2026-08-16)
+
+Alok uploaded `NPA_DASHBOARD_16.08.2026.pdf` and got "Could not recognize this PDF's layout" on the Bank Dashboard's PDF upload, asking whether the PDF itself had changed. It had: extracted and inspected the actual PDF (via pdfplumber, then cross-checked against `parseBankPdf()`'s real pdf.js parsing in a headless browser to see exactly what it saw). Two things changed from HO's side:
+
+1. The report used to group all 65 regions under their circle, closing each group with its own `"Sub Total CO <name>"` row — that grouping is gone. This PDF is one flat, alphabetical list of all 65 regions with no circle subtotals anywhere.
+2. The bank-wide grand total row used to be labelled `"Total UPGB"` — it's now labelled `"G. TOTAL"`.
+
+`parseBankPdf()` only recognized the old grouped format: region rows were staged in a temp array and only flushed into the final `regions` list when a `"Sub Total"` row triggered it, and the grand total was matched by exact `"Total UPGB"` text. With neither present, `regions` stayed empty and `grandTotal` stayed null — hence the generic "could not recognize this PDF's layout" error, correctly describing what happened but not why.
+
+Fix, in `js/app.js`: the grand-total regex now matches `Total UPGB` **or** `G. TOTAL` (HO has used both). For circles: added `BANK_REGION_CIRCLE`, a hardcoded 65-region → circle map extracted from the last PDF that still had the grouping (circle membership is an administrative fact, not something that changes with HO's report formatting) — when the parse loop finishes with zero circles found but ≥50 region rows collected (the flat-layout signature), a new fallback assigns each region's circle from that map and computes circle-level totals itself via `bankPdfSumRegions()`, summing every field except the one percentage the app actually displays (`pctRemainingNpaWithAdv`, recomputed as `remainingNpaAsOnDate/totalAdv*100` — verified against HO's own `G. TOTAL` row, which prints the identical figure to the same decimal). The two other percentage fields in the source data are left `null` at circle level rather than guessed, since nothing in the app reads them and their exact denominator isn't confirmable from the printed report alone. The original grouped-format code path is completely untouched — the fallback only runs when no `Sub Total` rows were found at all, so a future PDF that reverts to the old grouped layout keeps using HO's own subtotal figures directly.
+
+Verified against the real 16-08-2026 file end-to-end: 65 regions parsed across the expected 3 circles; Bank total (₹8,939.62 Cr, 4,330 branches, 9.86% NPA), CO Moradabad (₹3,648.24 Cr, 1,295 branches — hand-summed from the 19 member regions' branch counts as a cross-check, matches exactly), and Hathras (₹127.72 Cr, 56 branches, rank #39 of 65) all match the source PDF; circle filter dropdown correctly shows "19 of 65 regions" for CO Moradabad; NPA-share-by-circle donut sums to 100% (40.8 + 32.5 + 26.7); no console errors.
+
+Files: `js/app.js` (`parseBankPdf`, new `BANK_REGION_CIRCLE` + `bankPdfSumRegions`). Cache-bust `v=20260816a`, SW `upgb-ots-shell-v128`.
+
 ### Fix: Removed "Designed & Developed by Alok Mittal · Uttar Pradesh Gramin Bank" credit line from the OTS Calculator's PDF/print sheet (2026-08-15, same day)
 
 Alok asked for this footer line off the PDF. It only lived in one place -- `.pv-footer`, the last element of `renderPrintView()`'s `#printArea` markup, printed via `printOtsSheet()` (Search & Settlement → print/Save as PDF). Removed the `<div class="pv-footer">...</div>` line and its now-unused CSS rule; the credit still appears everywhere else it always has (sidebar signature, mobile signature strip, Excel export footer, splash screen) -- this was a PDF-only removal, not a global one.
