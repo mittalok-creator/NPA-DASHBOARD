@@ -3733,16 +3733,71 @@ let __pendingBankData = null;
    (tolerance tuned against the real report; regular data rows land
    consistently within ~1-2pt of each other, comfortably under the ~9pt gap
    between separate rows) then reading left-to-right by x. Region rows are
-   "S.No, Region, 18 numbers" (20 items); "Sub Total CO <name>" rows close
-   out a circle; "Total UPGB" is the bank grand total. This exact approach
-   was validated against a real file before shipping: extracted figures
-   matched the source PDF exactly, including cross-checking sums. */
+   "S.No, Region, 18 numbers" (20 items); the bank grand total is either
+   "Total UPGB" or "G. TOTAL" (HO has used both labels).
+   HO's report comes in two layouts, both handled here: grouped-by-circle
+   (each circle's regions followed by its own "Sub Total CO <name>" row --
+   the original format) and a flat, ungrouped list of all 65 regions with
+   no circle subtotals at all (seen from 16-08-2026 on). The flat layout
+   carries no circle assignment or circle total in the PDF at all, so
+   BANK_REGION_CIRCLE below (captured from the last grouped PDF) supplies
+   both as a fallback -- circle membership is an administrative grouping
+   that doesn't change from week to week, unlike HO's own report layout.
+   This exact approach was validated against a real file before shipping:
+   extracted figures matched the source PDF exactly, including
+   cross-checking sums; the flat-layout fallback was validated the same
+   way against the 16-08-2026 file once that format appeared. */
 const BANK_PDF_FIELD_NAMES = ['branches','totalAdv','npaMar26','pctWithAdvMar26','npaJun26','slippage',
   'addition','acSlippedUpgradedClosed','inttReversal','npaReductionOn','reductionDuringMonth',
   'netReductionDuringMonth','pctNetReductionOverPrevMonth','pctRemainingNpaWithAdv','remainingNpaAsOnDate',
   'netReductionOverMar26','targetCurrentMonth','gapFromTarget'];
+const BANK_REGION_CIRCLE = {
+  'AYODHYA':'CO Gorakhpur','AZAMGARH':'CO Gorakhpur','BALLIA-I':'CO Gorakhpur','BALLIA-II':'CO Gorakhpur',
+  'BALRAMPUR':'CO Gorakhpur','BASTI':'CO Gorakhpur','BHADOHI':'CO Gorakhpur','CHANDAULI':'CO Gorakhpur',
+  'DEORIA':'CO Gorakhpur','GHAZIPUR':'CO Gorakhpur','GONDA':'CO Gorakhpur','GORAKHPUR-I':'CO Gorakhpur',
+  'GORAKHPUR-II':'CO Gorakhpur','JAUNPUR':'CO Gorakhpur','KHALILABAD':'CO Gorakhpur','MAHARAJGANJ':'CO Gorakhpur',
+  'MAU':'CO Gorakhpur','MIRZAPUR':'CO Gorakhpur','NAUGARH':'CO Gorakhpur','PADRAUNA':'CO Gorakhpur',
+  'SULTANPUR':'CO Gorakhpur','VARANASI':'CO Gorakhpur',
+  'AMETHI':'CO Lucknow','BAHRAICH':'CO Lucknow','BANDA':'CO Lucknow','BARABANKI':'CO Lucknow',
+  'BHINGA':'CO Lucknow','BISWAN':'CO Lucknow','CHITRAKOOT':'CO Lucknow','ETAWAH':'CO Lucknow',
+  'FATEHPUR':'CO Lucknow','HARDOI':'CO Lucknow','JHANSI':'CO Lucknow','KANNAUJ':'CO Lucknow',
+  'KANPUR':'CO Lucknow','KANPUR DEHAT':'CO Lucknow','KAUSHAMBI':'CO Lucknow','LAKHIMPUR':'CO Lucknow',
+  'LUCKNOW':'CO Lucknow','MAHOBA':'CO Lucknow','ORAI':'CO Lucknow','PRATAPGARH':'CO Lucknow',
+  'PRAYAGRAJ':'CO Lucknow','RAEBARELI':'CO Lucknow','SITAPUR':'CO Lucknow','UNNAO':'CO Lucknow',
+  'AGRA':'CO Moradabad','ALIGARH':'CO Moradabad','ALIPUR CHOPLA':'CO Moradabad','AMROHA':'CO Moradabad',
+  'BADAUN':'CO Moradabad','BAREILLY':'CO Moradabad','BIJNOR':'CO Moradabad','ETAH':'CO Moradabad',
+  'FARRUKHABAD':'CO Moradabad','FIROZABAD':'CO Moradabad','GHAZIABAD':'CO Moradabad','HATHRAS':'CO Moradabad',
+  'MAINPURI':'CO Moradabad','MORADABAD':'CO Moradabad','MUZAFFARNAGAR':'CO Moradabad','RAMPUR':'CO Moradabad',
+  'SAMBHAL':'CO Moradabad','SHAHJAHANPUR':'CO Moradabad','THAKURDWARA':'CO Moradabad',
+};
 function bankPdfToNum(s){ const c = String(s).replace(/%/g,'').replace(/,/g,'').trim(); const n = parseFloat(c); return isNaN(n)?null:n; }
 function bankPdfFields(nums){ const o={}; BANK_PDF_FIELD_NAMES.forEach((name,i)=>{ o[name]=bankPdfToNum(nums[i]); }); return o; }
+/* Sums a circle's member regions field-by-field for the flat-layout
+   fallback (no PDF-provided circle subtotal to read instead). Every field
+   except pctRemainingNpaWithAdv is a plain money/count amount or a linear
+   difference of two such amounts (netReductionOverMar26, gapFromTarget --
+   both verified against the source PDF as remainingNpaAsOnDate minus
+   another summed field), so summing member rows is exact, the same as
+   what HO's own "Sub Total" row would contain. pctWithAdvMar26 and
+   pctNetReductionOverPrevMonth are true percentages with an unconfirmed
+   denominator (unused anywhere in the app) -- left null rather than
+   guessed. pctRemainingNpaWithAdv (the one percentage this app actually
+   displays) is recomputed from the summed totals, verified against HO's
+   own "G. TOTAL" row: remainingNpaAsOnDate / totalAdv * 100 matches to
+   the printed decimal. */
+function bankPdfSumRegions(members){
+  const o = {};
+  BANK_PDF_FIELD_NAMES.forEach(name=>{ o[name] = 0; });
+  members.forEach(r=>{
+    BANK_PDF_FIELD_NAMES.forEach(name=>{
+      if(typeof r[name]==='number') o[name] += r[name];
+    });
+  });
+  o.pctWithAdvMar26 = null;
+  o.pctNetReductionOverPrevMonth = null;
+  o.pctRemainingNpaWithAdv = o.totalAdv ? (o.remainingNpaAsOnDate/o.totalAdv*100) : null;
+  return o;
+}
 function bankPdfClusterRows(items, tol){
   const sorted = [...items].sort((a,b)=>b.y-a.y || a.x-b.x);
   const rows = []; let current=null, refY=null;
@@ -3775,13 +3830,26 @@ async function parseBankPdf(arrayBuffer){
         circles.push({ name: coName, ...bankPdfFields(strs.slice(1)) });
         regions.push(...currentCoRegions.map(r=>({ ...r, co: coName })));
         currentCoRegions = [];
-      } else if(/^Total UPGB/.test(strs[0]) && strs.length===19){
+      } else if(/^(Total UPGB|G\.\s*TOTAL)/i.test(strs[0]) && strs.length===19){
         grandTotal = bankPdfFields(strs.slice(1));
       }
     }
   }
+  /* Flat layout: every region row landed in currentCoRegions and never
+     got flushed (no "Sub Total" row ever appeared to trigger it). Assign
+     circles from the fallback map and compute each circle's totals by
+     summing its member regions instead of reading a PDF-provided row. */
+  if(circles.length===0 && currentCoRegions.length>=50){
+    regions = currentCoRegions.map(r=>({ ...r, co: BANK_REGION_CIRCLE[r.region] || 'Unknown' }));
+    const byCircle = new Map();
+    regions.forEach(r=>{
+      if(!byCircle.has(r.co)) byCircle.set(r.co, []);
+      byCircle.get(r.co).push(r);
+    });
+    byCircle.forEach((members, name)=>{ circles.push({ name, ...bankPdfSumRegions(members) }); });
+  }
   if(!grandTotal || regions.length<50){
-    throw new Error('Could not recognize this PDF\'s layout — expected the "Dashboard of NPA" bank-wide report with region rows and a "Total UPGB" grand total.');
+    throw new Error('Could not recognize this PDF\'s layout — expected the "Dashboard of NPA" bank-wide report with region rows and a "Total UPGB"/"G. TOTAL" grand total.');
   }
   let asOnDate = null;
   if(asOnDateRaw){
