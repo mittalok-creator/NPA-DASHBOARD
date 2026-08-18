@@ -887,6 +887,24 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .publish-review-summary b{color:var(--accent)}
 .publish-review-summary .pr-warn{color:var(--red);font-weight:700}
 .publish-review-summary .pr-good{color:var(--green);font-weight:700}
+
+/* Publish review: per-dataset checklist -- each dataset that will go live
+   in this commit gets its own row (icon, name, detail), instead of a
+   single generic "Publish NPA data" line no matter what actually changed.
+   `.is-maybe` marks the NPA book row, whose inclusion in the version
+   history log depends on whether it genuinely changed (checked
+   server-side at publish time via a blob-sha compare, not knowable here
+   in advance) -- shown with a distinct "checked automatically" badge
+   rather than a plain checkmark, so this doesn't overclaim. */
+.publish-item-list{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.publish-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:12px;background:var(--stripe);border:1px solid var(--line)}
+.publish-item-icon{width:32px;height:32px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--accent-soft);color:var(--accent);font-size:15px}
+.publish-item-body{flex:1;min-width:0}
+.publish-item-title{font-size:12.5px;font-weight:800;color:var(--ink)}
+.publish-item-sub{font-size:11px;color:var(--ink-mute);margin-top:1px;font-weight:600}
+.publish-item-badge{flex-shrink:0;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:4px 9px;border-radius:20px;white-space:nowrap}
+.publish-item-badge.on{background:var(--green-soft);color:var(--green)}
+.publish-item.is-maybe .publish-item-badge{background:var(--amber-soft);color:var(--amber)}
 #publishStatus .upload-status{margin-top:10px}
 #versionHistoryList{font-size:12px}
 .version-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}

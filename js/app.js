@@ -2733,6 +2733,26 @@ window.addEventListener('beforeunload', (e) => {
 function computeCurrentDataSummary(){
   return { rowCount: DATA.npa.rows.length, asOnDate: DATA.asOnDate||null };
 }
+/* One row per dataset that could go into this publish's commit -- each
+   dataset gets its own icon/name/detail instead of every publish being
+   labelled generically "Publish NPA data" regardless of what actually
+   changed (Alok's report: the log said "NPA data" even for a KCC-only
+   upload). The NPA Book row is marked "checked automatically" rather than
+   a plain "included" badge, since whether it truly changed since the last
+   publish can only be known server-side (publishData() compares blob
+   shas) -- it always ships as part of data/latest.json, but only earns a
+   new version-history entry and a mention in the commit message when its
+   content actually differs from what's already live. */
+function publishReviewItemRow({icon, title, sub, maybe}){
+  return `<div class="publish-item${maybe?' is-maybe':''}">
+    <div class="publish-item-icon">${svgIcon(icon)}</div>
+    <div class="publish-item-body">
+      <div class="publish-item-title">${esc(title)}</div>
+      <div class="publish-item-sub">${esc(sub)}</div>
+    </div>
+    <span class="publish-item-badge${maybe?'':' on'}">${maybe?'Checked automatically':'Included'}</span>
+  </div>`;
+}
 function openPublishReview(){
   const summary = computeCurrentDataSummary();
   const meta = __lastApplyMeta || {};
@@ -2743,24 +2763,32 @@ function openPublishReview(){
   const addedLine = meta.newAddedCount>0
     ? `<div class="pr-good">${meta.newAddedCount.toLocaleString('en-IN')} new account(s) added.</div>`
     : '';
-  const bankLine = __pendingBankData
-    ? `<div class="pr-good">Bank-wide dashboard data will also update — ${__pendingBankData.regions.length} regions, as on ${esc((__pendingBankData.asOnDate||'').split('-').reverse().join('-'))}.</div>`
-    : '';
-  const pnpaLine = __pendingPnpaData
-    ? `<div class="pr-good">Daily PNPA data will also update — ${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts, as on ${esc(__pendingPnpaData.asOnDate||'')}.</div>`
-    : '';
-  const kccovLine = __pendingKccOverdueData
-    ? `<div class="pr-good">KCC Overdue data will also update — ${__pendingKccOverdueData.rows.length.toLocaleString('en-IN')} accounts, as on ${esc(__pendingKccOverdueData.asOnDate||'')}.</div>`
-    : '';
+
+  const npaLabel = `NPA data (${summary.rowCount.toLocaleString('en-IN')} accounts, as on ${fmtAsOnDisplay()})`;
+  const items = [publishReviewItemRow({
+    icon: ICON_BANKNOTE, title: 'NPA Book', maybe: true,
+    sub: `${summary.rowCount.toLocaleString('en-IN')} accounts · as on ${fmtAsOnDisplay()}`,
+  })];
+  let bankLabel = null, pnpaLabel = null, kccovLabel = null;
+  if(__pendingBankData){
+    const bankDate = esc((__pendingBankData.asOnDate||'').split('-').reverse().join('-'));
+    bankLabel = `Bank Dashboard (${__pendingBankData.regions.length} regions, as on ${bankDate})`;
+    items.push(publishReviewItemRow({ icon: ICON_LANDMARK, title: 'Bank Dashboard', sub: `${__pendingBankData.regions.length} regions · as on ${bankDate}` }));
+  }
+  if(__pendingPnpaData){
+    pnpaLabel = `Daily PNPA (${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingPnpaData.asOnDate||''})`;
+    items.push(publishReviewItemRow({ icon: ICON_ALERT_CIRCLE, title: 'Daily PNPA', sub: `${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingPnpaData.asOnDate||'')}` }));
+  }
+  if(__pendingKccOverdueData){
+    kccovLabel = `KCC Overdue (${__pendingKccOverdueData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingKccOverdueData.asOnDate||''})`;
+    items.push(publishReviewItemRow({ icon: ICON_TARGET, title: 'KCC Overdue', sub: `${__pendingKccOverdueData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingKccOverdueData.asOnDate||'')}` }));
+  }
+
   document.getElementById('publishReviewSummary').innerHTML = `
-    <div>Data as on: <b>${esc(fmtAsOnDisplay())}</b></div>
-    <div>Total accounts live after publish: <b>${summary.rowCount.toLocaleString('en-IN')}</b></div>
     ${addedLine}
     ${staleLine}
-    ${bankLine}
-    ${pnpaLine}
-    ${kccovLine}
-    <div style="margin-top:8px;color:var(--sub)">Publishing as <b>${esc(user.login||'unknown')}</b>. Goes live on npadashboard.alokmittal.net within about a minute.</div>
+    <div class="publish-item-list">${items.join('')}</div>
+    <div style="color:var(--sub)">Publishing as <b>${esc(user.login||'unknown')}</b>. Goes live on npadashboard.alokmittal.net within about a minute.</div>
   `;
   __pendingPublish = {
     type: 'publish',
@@ -2768,10 +2796,11 @@ function openPublishReview(){
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
-      commitMessage: `Publish NPA data: ${summary.rowCount.toLocaleString('en-IN')} accounts, as on ${summary.asOnDate||'unknown'}`,
+      npaLabel,
       publishedBy: user.login || null,
       isRollback: false,
     },
+    labels: { bankLabel, pnpaLabel, kccovLabel },
   };
   document.getElementById('publishConfirmBtn').textContent = 'Confirm & Publish';
   document.getElementById('publishReviewPanel').style.display = 'block';
@@ -2815,24 +2844,25 @@ async function confirmPublish(){
   confirmBtn.classList.add('is-loading');
   const onProgress = (msg) => { statusEl.innerHTML = `<div class="upload-status ok">⏳ ${esc(msg)}</div>`; };
   try{
+    const labels = __pendingPublish.labels || {};
     let extraFiles;
     if(__pendingPublish.type!=='rollback' && __pendingBankData){
-      extraFiles = [{ path:'data/bank-npa.json', content: __pendingBankData }];
+      extraFiles = [{ path:'data/bank-npa.json', content: __pendingBankData, label: labels.bankLabel }];
       try{
         const user = (window.UPGBAuth && window.UPGBAuth.getCurrentUser()) || {};
         extraFiles = extraFiles.concat(await buildBankHistoryFiles(__pendingBankData, user));
       } catch(e){ /* history snapshot is best-effort -- the main bank-npa.json publish still proceeds */ }
     }
     if(__pendingPublish.type!=='rollback' && __pendingPnpaData){
-      extraFiles = (extraFiles||[]).concat([{ path:'data/pnpa.json', content: __pendingPnpaData }]);
+      extraFiles = (extraFiles||[]).concat([{ path:'data/pnpa.json', content: __pendingPnpaData, label: labels.pnpaLabel }]);
     }
     if(__pendingPublish.type!=='rollback' && __pendingKccOverdueData){
-      extraFiles = (extraFiles||[]).concat([{ path:'data/kcc-overdue.json', content: __pendingKccOverdueData }]);
+      extraFiles = (extraFiles||[]).concat([{ path:'data/kcc-overdue.json', content: __pendingKccOverdueData, label: labels.kccovLabel }]);
     }
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
       : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress, extraFiles);
-    statusEl.innerHTML = `<div class="upload-status ok">✔ Published — live at npadashboard.alokmittal.net within ~30-60s (commit ${esc(result.commitSha.slice(0,7))}).</div>`;
+    statusEl.innerHTML = `<div class="upload-status ok">✔ ${esc(result.commitMessage||'Published')} — live at npadashboard.alokmittal.net within ~30-60s (commit ${esc(result.commitSha.slice(0,7))}).</div>`;
     document.getElementById('publishBtn').disabled = true;
     __pendingBankData = null;
     __pendingPnpaData = null;
