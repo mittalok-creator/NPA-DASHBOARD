@@ -123,6 +123,18 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: Refresh button on Bank Dashboard/Daily PNPA/KCC Overdue silently never picked up new app code (2026-08-18, same day)
+
+Right after the Datewise Calendar shipped above, Alok reported it "showing in mobile view but unable to find in browser." Confirmed the deployed GitHub Pages site itself was already serving the new code (fetched `js/app.js?v=20260818a` directly off the live site and found `renderKccOverdueCalendar` present) — so this wasn't a deploy problem, it was a client stuck on an old cached copy. Walked through the app's own Refresh button as the fix, but a follow-up screenshot showed the toggle still missing on desktop even after pressing it.
+
+Root cause, in the consolidated Refresh button's handler (`refreshCurrentView`, wired in `wireChrome()`): it branched by active view — Dashboard/Search fell back to `location.reload()` (a real page reload, which re-fetches `index.html`/`app.js` through the service worker's network-first handler and therefore always picks up newly shipped code), but Bank Dashboard, Daily PNPA, and **KCC Overdue** instead called a per-tab helper (`refreshBankDashboard`/`refreshPnpaDashboard`/`refreshKccOverdue`) that only nulled out that tab's in-memory data object and re-rendered with whatever `app.js` was *already loaded in the browser*. A user sitting on the KCC Overdue tab with a stale cached `app.js` — exactly Alok's situation — could hit Refresh as many times as they liked and it would faithfully re-fetch `kcc-overdue.json` every time while never once re-evaluating the actual page, so a brand new feature in that same file could never appear. This was silent: the button spun, nothing errored, it looked like it worked.
+
+Fix: `refreshCurrentView` now always calls `location.reload()`, for every view, full stop — Refresh means "get everything fresh," not "refresh data, except when it doesn't." The three now-dead per-tab helpers (`refreshBankDashboard`, `refreshPnpaDashboard`, `refreshKccOverdue`) were deleted rather than left unused, since nothing else referenced them.
+
+Verified via Playwright: clicking Refresh from the KCC Overdue tab now triggers a real `load` navigation event (previously it did not), and the Datewise Calendar toggle is present immediately after — confirming a stale-`app.js` browser would now self-heal on the very next Refresh press instead of needing a manual hard-reload/cache-clear. `node -c` clean.
+
+Files: `js/app.js` (`refreshCurrentView`, removed `refreshBankDashboard`/`refreshPnpaDashboard`/`refreshKccOverdue`). Cache-bust `v=20260818b`, SW `upgb-ots-shell-v130`.
+
 ### Feature: "Datewise Calendar" view added to the KCC Overdue tab — a Branch x Cust-NPA-Date slippage heatmap, built from data already on hand (2026-08-18)
 
 Alok uploaded a Head Office MIS export, `PNPA_Calendar_.pdf` ("DATEWISE CALENDAR OF KCC PNPA IN THE MONTH OF AUG 2026") and asked for something similar built from the app's own KCC Overdue data, with an explicit instruction to show a mockup before building anything.
