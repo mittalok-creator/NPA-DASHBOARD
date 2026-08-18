@@ -1426,20 +1426,24 @@ function recalcAggregate(){
 
   const aggOtsEl = document.getElementById('aggTotOts');
   if(aggOtsEl){
-    aggOtsEl.textContent = otsTxt;
+    // .innerHTML + fmtINR2Wrap (not the plain otsTxt used by the rail
+    // above) -- the tight aggBar sidebar column needs the single <wbr>
+    // after ₹ so a figure that doesn't fit wraps cleanly onto its own
+    // line instead of splitting mid-digit.
+    aggOtsEl.innerHTML = any ? fmtINR2Wrap(totalOts) : '—';
     const aggNetOsEl = document.getElementById('aggTotNetOs');
-    if(aggNetOsEl) aggNetOsEl.textContent = fmtINR2(window.__totalNetOS);
+    if(aggNetOsEl) aggNetOsEl.innerHTML = fmtINR2Wrap(window.__totalNetOS);
     const aggPLEl = document.getElementById('aggTotPL');
-    if(aggPLEl) aggPLEl.textContent = fmtINR2(window.__totalPL);
+    if(aggPLEl) aggPLEl.innerHTML = fmtINR2Wrap(window.__totalPL);
     const aggSacEl = document.getElementById('aggTotSac');
-    if(aggSacEl) aggSacEl.textContent = any?fmtINR2(aggTotalSac):'—';
+    if(aggSacEl) aggSacEl.innerHTML = any?fmtINR2Wrap(aggTotalSac):'—';
     const aggImpEl = document.getElementById('aggTotImpact');
     if(aggImpEl){
       const impact = any ? (totalOts - window.__totalPL) : '';
       aggImpEl.classList.remove('pos','neg');
-      if(impact===''){ aggImpEl.textContent='—'; }
+      if(impact===''){ aggImpEl.innerHTML='—'; }
       else {
-        aggImpEl.textContent = (impact>0?'+':(impact<0?'−':'')) + fmtINR2(Math.abs(impact));
+        aggImpEl.innerHTML = (impact>0?'+':(impact<0?'−':'')) + fmtINR2Wrap(Math.abs(impact));
         const sign = impact>0?'pos':(impact<0?'neg':'');
         if(sign) aggImpEl.classList.add(sign);
       }
@@ -3181,6 +3185,21 @@ function computeDashboardStats(branchFilter){
 }
 
 function fmtINR2(n){ if(n===''||n===null||n===undefined||isNaN(n)) return '—'; return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+/* Same figure, but as HTML with a <wbr> after the ₹ symbol and after every
+   comma -- used only in the tight aggregate sidebar (#aggBar), where a
+   large multi-account total ("₹1,04,50,000.00") genuinely doesn't fit on
+   one line at that column width. A single <wbr> after ₹ alone wasn't
+   enough -- the remaining "1,04,50,000.00" chunk could still be too wide
+   by itself, and with no further break point the browser fell back to
+   `word-break:break-word`, splitting mid-digit or mid-decimal
+   ("₹1,81,205" / ".58") -- unreadable at a glance, the whole point of a
+   summary figure. Indian-format grouping commas are natural digit-group
+   boundaries, so a <wbr> after each one means any forced wrap lands
+   between whole groups ("1,04," / "50,000.00") rather than through one --
+   nothing after the last comma is ever a candidate, so the decimal pair
+   always stays attached to its own group. On any line that fits, none of
+   these are used. Caller must assign via .innerHTML, not .textContent. */
+function fmtINR2Wrap(n){ const s = fmtINR2(n); return s==='—' ? s : s.replace(/([₹,])/g, '$1<wbr>'); }
 
 function populateBranchFilter(branches){
   const sel = document.getElementById('dashBranchFilter');
