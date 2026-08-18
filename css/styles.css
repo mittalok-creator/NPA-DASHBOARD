@@ -1079,9 +1079,9 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    figure ("₹1,04,50,000.00") forces its 1fr track wider than the sidebar,
    and the overflow silently clips against .agg-mini-grid's own
    overflow:hidden (needed for the border-radius) instead of wrapping. */
-#aggBar .agg-mini{background:rgba(255,255,255,.03);padding:10px 12px;min-width:0}
+#aggBar .agg-mini{background:rgba(255,255,255,.03);padding:10px 10px;min-width:0}
 #aggBar .agg-mini .k{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--head-sub)}
-#aggBar .agg-mini .v{font-size:13.5px;font-weight:800;margin-top:3px;letter-spacing:-.2px;color:#fff;font-family:var(--font-mono);word-break:break-word}
+#aggBar .agg-mini .v{font-size:12.5px;font-weight:800;margin-top:3px;letter-spacing:-.3px;color:#fff;font-family:var(--font-mono);word-break:break-word}
 /* mobile: dock at the bottom of the screen -- hero shrinks to a compact
    row (sub-line dropped, ring shrunk); the mini-grid stays 2 columns
    (not 4 -- real rupee figures run 10-14 characters and need the room)
