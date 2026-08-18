@@ -83,6 +83,21 @@
      a string). Used for datasets that live in their own file separate from
      the main NPA book (e.g. data/bank-npa.json), so they can go live
      alongside a regular daily Publish without a second commit/step. */
+  /* Every publish used to unconditionally stamp a brand-new "version" --
+     a new data/history/<date>-<ts>.json snapshot plus a fresh
+     data/history/index.json entry, and always the generic commit message
+     "Publish NPA data: X accounts, as on Y" -- even when the actual NPA
+     book hadn't changed at all and the publish was really just a KCC
+     Overdue/Daily PNPA/Bank Dashboard upload going live via extraFiles.
+     Alok's own complaint, verified against the real repo history: every
+     single publish that day logged as "NPA data" regardless of what was
+     actually new. Fixed by comparing the freshly-uploaded data/latest.json
+     blob's sha against what's already live (via the Contents API, which
+     returns a file's current blob sha directly) -- when they match, the
+     NPA snapshot step is skipped entirely (no orphan history entry, no
+     misleading "NPA data" commit line), and only the caller-labelled
+     pieces that genuinely changed (meta.npaLabel + each extraFile's own
+     .label) go into the commit message. */
   async function publishData(dataObj, meta, onProgress, extraFiles) {
     meta = meta || {};
     const progress = (msg) => { if (onProgress) onProgress(msg); };
@@ -94,45 +109,52 @@
     const baseCommit = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/commits/${baseCommitSha}`);
     const baseTreeSha = baseCommit.tree.sha;
 
-    progress('Reading version history…');
-    let historyIndex = await getHistoryIndex();
-
-    progress('Uploading new data…');
+    progress('Uploading data…');
     const dataBlob = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
       method: 'POST',
       body: { content: utf8ToBase64(dataJsonString), encoding: 'base64' },
     });
 
-    const safeDate = (meta.asOnDate || 'unknown').replace(/[^0-9-]/g, '');
-    const historyFileName = `history/${safeDate}-${Date.now()}.json`;
-    historyIndex.unshift({
-      date: meta.asOnDate || null,
-      file: historyFileName,
-      rowCount: meta.rowCount || null,
-      publishedAt: new Date().toISOString(),
-      publishedBy: meta.publishedBy || null,
-      isRollback: !!meta.isRollback,
-    });
-    // Evicted entries must also be removed from the tree itself (sha:null
-    // deletes a path in the Git Trees API), not just dropped from the index
-    // list -- otherwise data/history/ grows unbounded forever across months
-    // of daily publishes.
-    let evicted = [];
-    if (historyIndex.length > MAX_HISTORY_ENTRIES) {
-      evicted = historyIndex.slice(MAX_HISTORY_ENTRIES);
-      historyIndex = historyIndex.slice(0, MAX_HISTORY_ENTRIES);
-    }
-    const historyIndexBlob = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
-      method: 'POST',
-      body: { content: utf8ToBase64(JSON.stringify(historyIndex, null, 2)), encoding: 'base64' },
-    });
+    let npaChanged = true;
+    try {
+      const currentFile = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/contents/data/latest.json?ref=${REPO_BRANCH}`);
+      npaChanged = currentFile.sha !== dataBlob.sha;
+    } catch (e) { npaChanged = true; } // couldn't tell -- default to treating it as a real change, never silently drop a version
 
-    progress('Building commit…');
     const treeEntries = [
       { path: 'data/latest.json', mode: '100644', type: 'blob', sha: dataBlob.sha },
-      { path: `data/${historyFileName}`, mode: '100644', type: 'blob', sha: dataBlob.sha },
-      { path: 'data/history/index.json', mode: '100644', type: 'blob', sha: historyIndexBlob.sha },
     ];
+    let historyFileName = null;
+    let evicted = [];
+    if (npaChanged) {
+      progress('Reading version history…');
+      let historyIndex = await getHistoryIndex();
+      const safeDate = (meta.asOnDate || 'unknown').replace(/[^0-9-]/g, '');
+      historyFileName = `history/${safeDate}-${Date.now()}.json`;
+      historyIndex.unshift({
+        date: meta.asOnDate || null,
+        file: historyFileName,
+        rowCount: meta.rowCount || null,
+        publishedAt: new Date().toISOString(),
+        publishedBy: meta.publishedBy || null,
+        isRollback: !!meta.isRollback,
+      });
+      // Evicted entries must also be removed from the tree itself (sha:null
+      // deletes a path in the Git Trees API), not just dropped from the
+      // index list -- otherwise data/history/ grows unbounded forever.
+      if (historyIndex.length > MAX_HISTORY_ENTRIES) {
+        evicted = historyIndex.slice(MAX_HISTORY_ENTRIES);
+        historyIndex = historyIndex.slice(0, MAX_HISTORY_ENTRIES);
+      }
+      const historyIndexBlob = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
+        method: 'POST',
+        body: { content: utf8ToBase64(JSON.stringify(historyIndex, null, 2)), encoding: 'base64' },
+      });
+      treeEntries.push({ path: `data/${historyFileName}`, mode: '100644', type: 'blob', sha: dataBlob.sha });
+      treeEntries.push({ path: 'data/history/index.json', mode: '100644', type: 'blob', sha: historyIndexBlob.sha });
+    }
+
+    progress('Building commit…');
     if (extraFiles && extraFiles.length) {
       progress('Uploading additional data…');
       for (const f of extraFiles) {
@@ -150,10 +172,17 @@
       body: { base_tree: baseTreeSha, tree: treeEntries },
     });
 
+    const parts = [];
+    if (npaChanged) parts.push(meta.npaLabel || `NPA data (${(meta.rowCount || 0).toLocaleString('en-IN')} accounts)`);
+    (extraFiles || []).forEach(f => { if (f.label) parts.push(f.label); });
+    const commitMessage = meta.isRollback
+      ? (meta.commitMessage || 'Rollback NPA data')
+      : (parts.length ? `Publish: ${parts.join(' + ')}` : (meta.commitMessage || 'Publish data update'));
+
     const newCommit = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/commits`, {
       method: 'POST',
       body: {
-        message: meta.commitMessage || 'Publish NPA data update',
+        message: commitMessage,
         tree: tree.sha,
         parents: [baseCommitSha],
       },
@@ -166,7 +195,7 @@
     });
 
     progress('Published.');
-    return { commitSha: newCommit.sha, historyFile: historyFileName, versionId: historyFileName };
+    return { commitSha: newCommit.sha, historyFile: historyFileName, versionId: historyFileName, npaChanged, commitMessage };
   }
 
   async function rollbackToVersion(fileName, onProgress) {
