@@ -2256,6 +2256,7 @@ function handleBranchContactsUpload(evt){
       const label = document.getElementById('branchContactsStatusLabel');
       if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es) loaded (${file.name})`;
       statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch contact record(s) parsed. Tap a branch in the Branch/Sol ID panel to see the full card.</div>`;
+      clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
       if(document.getElementById('branchEdgePanel')?.classList.contains('open')) filterBranchList();
@@ -2529,6 +2530,7 @@ function handleBranchAdvUpload(evt){
       const label = document.getElementById('branchAdvStatusLabel');
       if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es) loaded (${file.name})`;
       statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch advance figure(s) parsed. NPA % is now shown on the Dashboard.</div>`;
+      clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
       if(document.querySelector('.view.active')?.dataset.view==='dashboard') renderDashboard();
@@ -2584,6 +2586,7 @@ function applyNewDataNow(){
   const addedMsg = newAddedCount>0 ? ` (${newAddedCount.toLocaleString('en-IN')} new account(s) added.)` : '';
   document.getElementById('uploadStatus').innerHTML = `<div class="upload-status ok">✔ Data updated — ${DATA.npa.rows.length.toLocaleString('en-IN')} NPA rows now active.${staleMsg}${addedMsg}</div>`;
   document.getElementById('downloadAppBtn').disabled = false;
+  clearStalePublishStatus();
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;
   __lastApplyMeta = {
@@ -2680,6 +2683,24 @@ function downloadUpdatedApp(){
 let __pendingPublish = null; // { type: 'publish'|'rollback', dataObj, meta, versionId } staged for confirmPublish()
 let __lastHistoryList = []; // last-loaded version history, so rollback review can show metadata without a separate fetch
 
+/* #publishStatus (the "Published — live at ..." banner) sits as a sibling
+   AFTER #publishReviewPanel in the DOM, not inside it -- closePublishReview()
+   only hides the review panel, so a successful publish's confirmation text
+   stays on screen indefinitely afterward. If new data (KCC Overdue, Daily
+   PNPA, Bank PDF, Branch Advance/Contacts, or a fresh daily NPA Apply
+   Update) gets staged after that, the old "Published" banner is still
+   sitting right there looking current -- a real report from Alok: he
+   uploaded a KCC Overdue rollover file, saw the still-visible banner from
+   an earlier publish, and reasonably read that as confirmation his new
+   upload had gone live, when the actual commit never touched
+   data/kcc-overdue.json at all. Every place that stages new pending data
+   for publish calls this first, so a stale success (or failure) message
+   can never be mistaken for feedback on what's about to be published. */
+function clearStalePublishStatus(){
+  const el = document.getElementById('publishStatus');
+  if(el) el.innerHTML = '';
+}
+
 function computeCurrentDataSummary(){
   return { rowCount: DATA.npa.rows.length, asOnDate: DATA.asOnDate||null };
 }
@@ -2696,12 +2717,20 @@ function openPublishReview(){
   const bankLine = __pendingBankData
     ? `<div class="pr-good">Bank-wide dashboard data will also update — ${__pendingBankData.regions.length} regions, as on ${esc((__pendingBankData.asOnDate||'').split('-').reverse().join('-'))}.</div>`
     : '';
+  const pnpaLine = __pendingPnpaData
+    ? `<div class="pr-good">Daily PNPA data will also update — ${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts, as on ${esc(__pendingPnpaData.asOnDate||'')}.</div>`
+    : '';
+  const kccovLine = __pendingKccOverdueData
+    ? `<div class="pr-good">KCC Overdue data will also update — ${__pendingKccOverdueData.rows.length.toLocaleString('en-IN')} accounts, as on ${esc(__pendingKccOverdueData.asOnDate||'')}.</div>`
+    : '';
   document.getElementById('publishReviewSummary').innerHTML = `
     <div>Data as on: <b>${esc(fmtAsOnDisplay())}</b></div>
     <div>Total accounts live after publish: <b>${summary.rowCount.toLocaleString('en-IN')}</b></div>
     ${addedLine}
     ${staleLine}
     ${bankLine}
+    ${pnpaLine}
+    ${kccovLine}
     <div style="margin-top:8px;color:var(--sub)">Publishing as <b>${esc(user.login||'unknown')}</b>. Goes live on npadashboard.alokmittal.net within about a minute.</div>
   `;
   __pendingPublish = {
@@ -3871,6 +3900,7 @@ function handleBankPdfUpload(evt){
       const label = document.getElementById('bankPdfStatusLabel');
       if(label) label.textContent = `${parsed.regions.length} regions loaded (${file.name})`;
       statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${parsed.regions.length} regions across ${parsed.circles.length} circles, as on ${esc(parsed.asOnDate||'unknown date')}. Goes live the next time you hit Publish.</div>`;
+      clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
       if(document.querySelector('.view.active')?.dataset.view==='bank') renderBankDashboardBody();
@@ -4202,6 +4232,7 @@ function handlePnpaUpload(evt){
       const label = document.getElementById('pnpaStatusLabel');
       if(label) label.textContent = `${rows.length.toLocaleString('en-IN')} accounts loaded (${file.name})`;
       statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${rows.length.toLocaleString('en-IN')} accounts, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.</div>`;
+      clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
       if(document.querySelector('.view.active')?.dataset.view==='pnpa') renderPnpaDashboardBody();
@@ -4486,6 +4517,7 @@ function handleKccOverdueUpload(evt){
       const label = document.getElementById('kccovStatusLabel');
       if(label) label.textContent = `${rows.length.toLocaleString('en-IN')} accounts loaded (${file.name})`;
       statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${rows.length.toLocaleString('en-IN')} accounts, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.</div>`;
+      clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
       if(document.querySelector('.view.active')?.dataset.view==='kccov') renderKccOverdueBody();
