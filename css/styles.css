@@ -1156,7 +1156,17 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 /* ---------- Full-screen detail pane on wide screens ---------- */
 @media (min-width:1200px){
   #detailPane .detail-head{padding:24px 5vw 28px}
-  #detailPane .detail-inner{padding:0 5vw 48px;max-width:1500px;margin:0 auto}
+  /* 1500px left real desktop monitors (1920px+) with a wide empty gutter
+     on both sides -- this is the one screen in the app where more width
+     is actually useful, not just tolerable: a multi-account borrower's
+     loan table lays every account out side-by-side, so extra width
+     directly means fewer columns forced into horizontal scroll. Raised
+     to 1800px; .detail-headrow gets the same override (it shares a
+     lower 1500px cap with unrelated header rows on other views via a
+     generic selector list, so it's overridden here rather than there) to
+     keep the title row's edges aligned with the sidebar/table below it. */
+  #detailPane .detail-inner{padding:0 5vw 48px;max-width:1800px;margin:0 auto}
+  #detailPane .detail-headrow{max-width:1800px}
   .detail-active .side-rail{display:none!important}
 }
 @media print{

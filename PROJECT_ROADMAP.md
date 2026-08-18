@@ -123,6 +123,18 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: detail pane on wide desktop monitors left a large empty gutter on both sides instead of using the available width (2026-08-18, same day)
+
+Once the aggregate-sidebar wrap fix above shipped, Alok could finally see the full "This Account" detail pane clearly on his screen for the first time -- and immediately spotted the next problem: "ismain left and right main area empty hai ise bhi to use karo thoda stretch lar lo" (there's empty space on the left and right here too, use that too, stretch it out a bit). On a real desktop monitor (1920px), the whole content column -- header row, sidebar, loan table -- was capped at `max-width:1500px` and centered, leaving a wide grey band on both edges.
+
+This is the one screen in the app where extra width is genuinely useful rather than just tolerable: a multi-account borrower's loan table lays every linked account out side-by-side as columns, so more width directly means fewer columns forced into horizontal scroll.
+
+Fix: raised `#detailPane .detail-inner`'s `max-width` from 1500px to 1800px (`@media (min-width:1200px)`). `.detail-headrow` needed its own explicit `max-width:1800px` override in the same block -- it shares a lower 1500px cap with unrelated header rows on other (non-detail) views via a generic selector list, so overriding it there directly (rather than touching the shared rule) keeps the title row's edges aligned with the sidebar/table below it without affecting any other screen.
+
+Verified against the real 3-account borrower from the screenshot (PREMVATI W/O PREMSHYAM, Cust ID 710257339) at a 1920px viewport in both themes: `.detail-inner` now measures 1800px wide (up from 1500px) with symmetric ~60px side margins instead of the earlier wide gutter, and `.detail-headrow`'s edges line up exactly with the sidebar/table below it. All rupee figures still render whole on one line (confirming the earlier aggBar fix is unaffected).
+
+Files: `css/styles.css` (`#detailPane .detail-inner` max-width, new `#detailPane .detail-headrow` max-width override). Cache-bust `v=20260818h`, SW `upgb-ots-shell-v136`.
+
 ### Fix: aggregate sidebar figures still wrapped after the comma-<wbr> fix -- widened the sidebar and dropped the mini-grid to one column so every figure fits on a single line (2026-08-18, same day)
 
 Immediately after the comma-<wbr> fix below shipped, Alok sent the exact same "This Account" screenshot again -- and every figure was now wrapping after a comma ("+₹3," / "156.09", "₹1,30," / "000.00", "₹1,81," / "205.58"...) instead of not wrapping at all. He was explicit: every number should read whole on one line, "chahe to row k no. bhada lo width aur bhada lo" (even if it means more rows or more width). The comma fix had done its one job -- no more mid-digit/mid-decimal breaks -- but hadn't addressed the actual complaint, which was that the sidebar was simply too narrow for these figures at any font size reasonable for a summary panel.
