@@ -1,6 +1,14 @@
 [
   {
     "date": "2026-07-31",
+    "file": "history/2026-07-31-1787035367908.json",
+    "rowCount": 13925,
+    "publishedAt": "2026-08-18T06:42:47.908Z",
+    "publishedBy": "mittalok-creator",
+    "isRollback": false
+  },
+  {
+    "date": "2026-07-31",
     "file": "history/2026-07-31-1787035100506.json",
     "rowCount": 13925,
     "publishedAt": "2026-08-18T06:38:20.506Z",
