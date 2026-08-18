@@ -3892,7 +3892,6 @@ function renderBankDashboard(){
       el.innerHTML = `<div class="empty-state"><h2>Could not load bank-wide data</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
     });
 }
-function refreshBankDashboard(){ BANK_DATA = null; renderBankDashboard(); }
 
 function bankRegionRank(regions, region){
   const sorted = [...regions].sort((a,b)=>a.pctRemainingNpaWithAdv-b.pctRemainingNpaWithAdv);
@@ -4224,7 +4223,6 @@ function renderPnpaDashboard(){
       el.innerHTML = `<div class="empty-state"><h2>Could not load Daily PNPA data</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
     });
 }
-function refreshPnpaDashboard(){ PNPA_DATA = null; renderPnpaDashboard(); }
 
 function pnpaBranchAgg(rows, bucket){
   const map = new Map();
@@ -4509,7 +4507,6 @@ function renderKccOverdue(){
       el.innerHTML = `<div class="empty-state"><h2>Could not load KCC Overdue data</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
     });
 }
-function refreshKccOverdue(){ KCC_OVERDUE_DATA = null; renderKccOverdue(); }
 
 function kccovFilteredRows(d){
   let rows = d.rows;
@@ -4853,26 +4850,25 @@ function toggleTheme(){
   on('publishConfirmBtn','click',()=>confirmPublish());
   on('eligibleBanner','click',()=>document.getElementById('eligibleBanner').classList.remove('show'));
   on('dashBranchFilter','change',()=>renderDashboardSmooth());
-  // One consolidated Refresh button (top header/sidebar) replaces the old
-  // per-tab refresh icons -- it refreshes whichever view is currently
-  // active. Dashboard/Search fall back to a full reload (not just
-  // re-fetching data/latest.json), which also picks up any newly
-  // published app-shell code -- the service worker's network-first fetch
-  // (sw.js) means this always gets whatever is actually live, never a
-  // stale cached copy, as long as there's a connection.
-  /* The button is captured into `btn` rather than read off the event inside
-     the timeout: the DOM sets event.currentTarget back to null the moment
-     the handler returns, so by the time a 700ms setTimeout ran it threw
-     "Cannot read properties of null" and the spinner never stopped. */
+  // One consolidated Refresh button (top header/sidebar) always does a full
+  // page reload, for every view. It used to branch per-view -- Bank
+  // Dashboard/Daily PNPA/KCC Overdue only re-fetched that tab's own data
+  // JSON and re-rendered with whatever app.js was already loaded in memory,
+  // while only Dashboard/Search fell back to location.reload(). That meant
+  // Refresh on those three tabs could never pick up newly shipped app code
+  // (a bug fix, a new feature) -- a real case of this: the Datewise
+  // Calendar view shipped to KCC Overdue, and a user sitting on that exact
+  // tab hit Refresh repeatedly and never saw it, because their browser's
+  // service worker was still serving the old app.js it had already loaded
+  // and Refresh never asked the browser to re-evaluate the page at all.
+  // A full reload's request for index.html/app.js still goes through the
+  // service worker's network-first fetch handler (sw.js), which always
+  // gets whatever is actually live rather than a stale cached copy, as
+  // long as there's a connection -- so this is not slower in any way that
+  // matters, just reliably correct for every view instead of only two.
   const refreshCurrentView = (e) => {
-    const btn = e.currentTarget;
-    const activeView = document.querySelector('.view.active')?.dataset.view;
-    btn.classList.add('is-spinning');
-    const stopSpin = () => setTimeout(()=>btn.classList.remove('is-spinning'), 700);
-    if(activeView==='bank'){ refreshBankDashboard(); stopSpin(); }
-    else if(activeView==='pnpa'){ refreshPnpaDashboard(); stopSpin(); }
-    else if(activeView==='kccov'){ refreshKccOverdue(); stopSpin(); }
-    else { location.reload(); }
+    e.currentTarget.classList.add('is-spinning');
+    location.reload();
   };
   on('refreshCurrentBtnMobile','click',refreshCurrentView);
   on('refreshCurrentBtnNav','click',refreshCurrentView);
