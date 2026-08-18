@@ -2701,6 +2701,35 @@ function clearStalePublishStatus(){
   if(el) el.innerHTML = '';
 }
 
+/* Real bug this guards against: __pendingBankData/__pendingPnpaData/
+   __pendingKccOverdueData/__pendingData are plain JS variables -- a file
+   upload stages data ONLY in browser memory until Publish actually sends
+   it. A full page reload (the Refresh button, browser F5, closing the
+   tab) wipes all of it silently, with no error, no warning. Alok hit this
+   exactly: uploaded a KCC Overdue file, then (most likely) hit Refresh
+   before Publishing -- the reload wiped the staged upload, and the
+   Publish that followed went through "successfully" but with nothing
+   KCC-related to include, since Refresh giving no indication that the
+   upload it just discarded even existed. Confirmed via git history: that
+   publish's commit only touched data/history/*, never data/kcc-overdue.json,
+   matching this exact failure mode.
+   window.confirm() lets the Refresh button show wording that actually
+   names what's about to be lost; beforeunload is the safety net for every
+   OTHER way the page can go away (F5, closing the tab, navigating off)
+   where the browser only allows its own generic "leave site?" prompt, not
+   custom text -- both check the same one source of truth below. */
+function pendingUnpublishedLabel(){
+  const parts = [];
+  if(__pendingData) parts.push('the uploaded daily NPA file (not yet applied)');
+  if(typeof __pendingBankData!=='undefined' && __pendingBankData) parts.push('the Bank Dashboard PDF upload');
+  if(typeof __pendingPnpaData!=='undefined' && __pendingPnpaData) parts.push('the Daily PNPA upload');
+  if(typeof __pendingKccOverdueData!=='undefined' && __pendingKccOverdueData) parts.push('the KCC Overdue upload');
+  return parts;
+}
+window.addEventListener('beforeunload', (e) => {
+  if(pendingUnpublishedLabel().length){ e.preventDefault(); e.returnValue = ''; }
+});
+
 function computeCurrentDataSummary(){
   return { rowCount: DATA.npa.rows.length, asOnDate: DATA.asOnDate||null };
 }
@@ -4899,6 +4928,8 @@ function toggleTheme(){
   // long as there's a connection -- so this is not slower in any way that
   // matters, just reliably correct for every view instead of only two.
   const refreshCurrentView = (e) => {
+    const pending = pendingUnpublishedLabel();
+    if(pending.length && !confirm(`You have unpublished data staged: ${pending.join(', ')}. Refreshing will discard it -- Publish first if you want to keep it.\n\nRefresh anyway?`)) return;
     e.currentTarget.classList.add('is-spinning');
     location.reload();
   };
