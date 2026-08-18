@@ -1123,15 +1123,24 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
   #aggBar .agg-mini .v{font-size:11.5px}
 }
 /* tablet/desktop: left column inside the detail -- widened from the old
-   190-210px so the hero's headline number has room to breathe. */
+   190-210px so the hero's headline number has room to breathe. Widened
+   again (260px -> 300px) plus the mini-grid dropped from 2 columns to 1
+   -- even with the comma-<wbr> fix above, a real crore-level figure
+   ("₹1,81,205.58") was still wrapping inside a half-width mini box at
+   260px, and Alok was explicit: every figure should read whole on one
+   line, wrap or widen, not "wrap cleanly." A full-width single-column
+   mini box gives roughly double the room per figure, and 300px covers
+   the hero value too. detailBody keeps flex:1/min-width:0 so it simply
+   absorbs the difference rather than the sidebar competing with it. */
 @media (min-width:860px){
   .detail-inner.has-agg{display:flex;gap:20px;align-items:flex-start}
-  .detail-inner.has-agg #aggBar{position:sticky;top:96px;width:260px;flex-shrink:0;order:-1}
+  .detail-inner.has-agg #aggBar{position:sticky;top:96px;width:300px;flex-shrink:0;order:-1}
   .detail-inner.has-agg #detailBody{flex:1;min-width:0}
+  .detail-inner.has-agg #aggBar .agg-mini-grid{grid-template-columns:1fr}
 }
 @media (min-width:1200px){
   .detail-inner.has-agg{gap:16px}
-  .detail-inner.has-agg #aggBar{width:240px}
+  .detail-inner.has-agg #aggBar{width:300px}
 }
 
 @media (min-width:860px){

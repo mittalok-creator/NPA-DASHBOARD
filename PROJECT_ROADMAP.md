@@ -123,6 +123,18 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: aggregate sidebar figures still wrapped after the comma-<wbr> fix -- widened the sidebar and dropped the mini-grid to one column so every figure fits on a single line (2026-08-18, same day)
+
+Immediately after the comma-<wbr> fix below shipped, Alok sent the exact same "This Account" screenshot again -- and every figure was now wrapping after a comma ("+₹3," / "156.09", "₹1,30," / "000.00", "₹1,81," / "205.58"...) instead of not wrapping at all. He was explicit: every number should read whole on one line, "chahe to row k no. bhada lo width aur bhada lo" (even if it means more rows or more width). The comma fix had done its one job -- no more mid-digit/mid-decimal breaks -- but hadn't addressed the actual complaint, which was that the sidebar was simply too narrow for these figures at any font size reasonable for a summary panel.
+
+Found the exact account from the screenshot in the real data (O/S ₹1,81,205.58 matched `custId 103144990`, LATE LILAVATI W/O LAKHAMI) to reproduce and verify against precisely, rather than approximate numbers.
+
+Fix: `.detail-inner.has-agg #aggBar` widened from 260px (860px breakpoint) / 240px (1200px breakpoint, oddly *narrower* on bigger screens than the tablet breakpoint) to a flat 300px at both -- removing the paradox and giving real headroom. More importantly, `#aggBar .agg-mini-grid` dropped from a 2-column grid to a single column on desktop (`@media (min-width:860px)` only -- the mobile fixed-bottom-dock keeps its existing 2-column layout, where the compact footprint matters more and the figures there are already smaller/shorter in practice) -- each of the four mini stats (Total OTS/O/S/P&L/Sacrifice) now gets the sidebar's full width instead of half, roughly doubling the room per figure. `detailBody` (the loan table) keeps `flex:1;min-width:0`, so it simply absorbs the extra 40px rather than the sidebar and table competing for space.
+
+Verified against the exact reproduced account/figures from the screenshot, in both themes: Net Settlement Impact (+₹3,156.09), Total OTS Amount (₹1,30,000.00), Total O/S Balance (₹1,81,205.58), Total P&L (₹1,26,843.91), Total Sacrifice (₹1,03,658.39) -- every one now renders whole on a single line, no wrapping at all. Also confirmed the wider sidebar doesn't visibly cramp the loan detail table next to it (screenshotted full width).
+
+Files: `css/styles.css` (`.detail-inner.has-agg #aggBar` width, new `.detail-inner.has-agg #aggBar .agg-mini-grid` override). Cache-bust `v=20260818g`, SW `upgb-ots-shell-v135`.
+
 ### Fix: OTS Calculator's aggregate sidebar was breaking rupee figures mid-digit, not just at the decimal (2026-08-18, same day)
 
 Alok sent a screenshot of the multi-account "Net Settlement Impact" sidebar: figures like "₹3,156.09" and "₹1,81,205.58" were splitting across two lines mid-number -- "₹3,156.0" then "09" on the next line, "₹1,81,205" then ".58" -- unreadable at a glance, which defeats the point of a summary figure.
