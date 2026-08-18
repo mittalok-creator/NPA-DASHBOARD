@@ -1868,6 +1868,43 @@ header.app-head::before,.detail-head::before{
 .dash-table-wrap.acct-list-scroll{max-height:560px;overflow-y:auto}
 .dash-table-wrap.acct-list-scroll thead th{position:sticky;top:0;background:var(--table-head);z-index:1}
 
+/* ---------- KCC Overdue: Datewise NPA Slippage Calendar ----------
+   Branch x Cust-NPA-Date heatmap matrix (renderKccOverdueCalendar in
+   js/app.js). Sol ID and Branch are two independently sticky left columns
+   (left:0 / left:64px) so both stay visible while scrolling through the
+   date columns; the Total column mirrors that behavior via tbody/tfoot
+   rules since CSS has no native "sticky right, aware of sticky left"
+   shorthand for a scrolling table. */
+.kccov-cal-wrap{overflow:auto;border-radius:var(--radius-md);border:1px solid var(--line);max-height:640px;position:relative}
+table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px;width:100%}
+.kccov-cal-table th,.kccov-cal-table td{white-space:nowrap;text-align:right;padding:9px 12px;font-variant-numeric:tabular-nums}
+.kccov-cal-table thead th{background:var(--table-head);color:var(--head-ink);font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:800;position:sticky;top:0;z-index:3}
+.kccov-cal-table thead th.kccov-cal-sol,.kccov-cal-table thead th.kccov-cal-branch{text-align:left;z-index:4}
+.kccov-cal-table thead th.kccov-cal-sol{left:0}
+.kccov-cal-table thead th.kccov-cal-branch{left:64px}
+.kccov-cal-table tbody td.kccov-cal-sol,.kccov-cal-table tbody td.kccov-cal-branch{position:sticky;z-index:2;background:var(--card);text-align:left;font-weight:700;color:var(--ink)}
+.kccov-cal-table tbody td.kccov-cal-sol{left:0;color:var(--ink-mute);font-family:var(--font-mono);font-weight:700;font-size:11.5px;border-right:1px solid var(--line)}
+.kccov-cal-table tbody td.kccov-cal-branch{left:64px;border-right:1px solid var(--line)}
+.kccov-cal-table tbody tr:nth-child(even) td{background-image:linear-gradient(var(--stripe),var(--stripe))}
+.kccov-cal-table tbody td{border-top:1px solid var(--line);color:var(--ink-mute);font-weight:700}
+.kccov-cal-table tbody td.kccov-cal-total{color:var(--accent);font-weight:800;background:var(--accent-soft)}
+.kccov-cal-table tbody td .dash-rank{margin-right:7px}
+.kccov-cal-table tfoot td{position:sticky;bottom:0;background:var(--table-head);color:var(--head-ink);font-weight:800;border-top:2px solid var(--accent);font-size:12px;z-index:2}
+.kccov-cal-table tfoot td.kccov-cal-sol{left:0;z-index:4}
+.kccov-cal-table tfoot td.kccov-cal-branch{left:64px;z-index:4;text-align:left}
+.kccov-cal-cell{border-radius:7px;padding:5px 9px;display:inline-block;min-width:34px;cursor:pointer;transition:transform .1s var(--ease),filter .12s var(--ease)}
+.kccov-cal-cell:hover{transform:scale(1.08);filter:brightness(1.15)}
+.kccov-cal-blank{color:var(--line);font-weight:400}
+.kccov-cal-legend{display:flex;align-items:center;gap:14px;margin:0 2px 14px;flex-wrap:wrap;font-size:11px;font-weight:700;color:var(--ink-mute)}
+.kccov-cal-legend .sw{width:13px;height:13px;border-radius:4px;display:inline-block;margin-right:6px;vertical-align:-2px}
+.kccov-cal-low{background:var(--green-soft);color:var(--ink)}
+.kccov-cal-mod{background:var(--amber-soft);color:var(--ink)}
+.kccov-cal-high{background:var(--red-soft);color:var(--ink)}
+.kccov-cal-severe{background:var(--red);color:#fff}
+@media (max-width:819px){
+  .kccov-cal-table thead th.kccov-cal-branch,.kccov-cal-table tbody td.kccov-cal-branch,.kccov-cal-table tfoot td.kccov-cal-branch{max-width:110px;overflow:hidden;text-overflow:ellipsis}
+}
+
 
 /* ---------- Login: split access panel ----------
    Branded hero (bank logo, org name, app name, "Secure Access" trust chip)

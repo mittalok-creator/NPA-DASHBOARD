@@ -4360,6 +4360,10 @@ window.pnpaShowBranchAccounts = pnpaShowBranchAccounts;
    case a future export widens scope. Only rows matching one of the 3 known scheme
    codes are kept; there is no "Other" catch-all bucket here (unlike PNPA). */
 const KC = {BRANCH:0, SCHEME:1, ACCT:2, NAME:3, OS:4, CADU:5, LIMIT:6, REVIEW:7, CUSTNPADATE:8, FY:9, CATEGORY:10, SMA:11, REASON:12};
+/* KCC Overdue rows carry only the branch name string (uppercase, e.g.
+   "HATHRAS AGRA ROAD") -- match it back to the frozen BRANCH_LIST to show
+   Sol ID alongside it in the Datewise Calendar view. */
+const KCCOV_BRANCH_SOL = Object.fromEntries(BRANCH_LIST.map(([,newId,name])=>[name.toUpperCase(), newId]));
 const KCC_OVERDUE_SCHEMES = [
   {key:'kcc', code:'CC004', label:'KCC'},
   {key:'kccah', code:'CC043', label:'KCC — Animal Husbandry'},
@@ -4424,10 +4428,33 @@ let kccovDateMode = 'month';
 let kccovMonthFilter = '';
 let kccovDateFrom = '';
 let kccovDateTo = '';
+let kccovView = 'summary'; // 'summary' | 'calendar'
 function setKccovSchemeTab(tab){ kccovSchemeTab = tab; renderKccOverdueBody(); }
 window.setKccovSchemeTab = setKccovSchemeTab;
 function setKccovDateMode(mode){ kccovDateMode = mode; renderKccOverdueBody(); }
 window.setKccovDateMode = setKccovDateMode;
+function setKccovView(v){
+  kccovView = v;
+  /* Datewise Calendar renders one column per distinct Cust NPA Date --
+     with no month/range filter picked yet, kccovFilteredRows() lets every
+     date in the whole upload through (which spans years, since Cust NPA
+     Date is a forward-looking projected-classification date, not just
+     "this month"), producing an unusably wide table. Default the filter
+     to the upload's own as-on month the first time Calendar is opened, so
+     it always starts scoped to something sane; leave it alone once the
+     user has picked their own month/range. */
+  if(v==='calendar' && KCC_OVERDUE_DATA && KCC_OVERDUE_DATA.asOnDate){
+    const ym = KCC_OVERDUE_DATA.asOnDate.slice(0,7);
+    if(kccovDateMode==='month' && !kccovMonthFilter) kccovMonthFilter = ym;
+    if(kccovDateMode==='range' && !kccovDateFrom && !kccovDateTo){
+      const [y,m] = ym.split('-').map(Number);
+      kccovDateFrom = dateToInputValue(new Date(y, m-1, 1));
+      kccovDateTo = dateToInputValue(new Date(y, m, 0));
+    }
+  }
+  renderKccOverdueBody();
+}
+window.setKccovView = setKccovView;
 
 function handleKccOverdueUpload(evt){
   const file = evt.target.files[0];
@@ -4575,9 +4602,16 @@ function renderKccOverdueBody(){
     });
   }).join('')}</div>`;
 
-  el.innerHTML = toolbar + heroRow +
-    `<div class="chart-card" style="margin-top:20px">
+  const viewToggleRow = `<div class="bank-tab-row" style="margin-top:18px">
+    <button type="button" class="bank-tab-btn${kccovView==='summary'?' active':''}" onclick="setKccovView('summary')">Branch Summary</button>
+    <button type="button" class="bank-tab-btn${kccovView==='calendar'?' active':''}" onclick="setKccovView('calendar')">Datewise Calendar</button>
+  </div>`;
+
+  el.innerHTML = toolbar + heroRow + viewToggleRow +
+    (kccovView==='calendar' ? `<div id="kccovInsightWrap"></div>` : '') +
+    `<div class="chart-card" style="margin-top:16px">
       <div class="section-label" id="kccovTableLabel"></div>
+      ${kccovView==='calendar' ? `<div class="kccov-cal-legend" id="kccovCalLegend"></div>` : ''}
       <div id="kccovBranchTableCard"></div>
     </div>`;
 
@@ -4592,7 +4626,8 @@ function renderKccOverdueBody(){
   const toInput = document.getElementById('kccovDateToInput');
   if(toInput) toInput.onchange = () => { kccovDateTo = toInput.value; renderKccOverdueBody(); };
 
-  renderKccOverdueBranchTable(filteredRows);
+  if(kccovView==='calendar') renderKccOverdueCalendar(filteredRows);
+  else renderKccOverdueBranchTable(filteredRows);
 }
 
 function renderKccOverdueBranchTable(filteredRows){
@@ -4613,6 +4648,94 @@ function renderKccOverdueBranchTable(filteredRows){
     <table class="dash-table">
       <thead><tr><th class="tal">Rank</th><th class="tal">Branch</th><th>Accounts</th><th>Total O/S</th></tr></thead>
       <tbody>${rowsHtml || `<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">No branches match</td></tr>`}</tbody>
+    </table>
+  </div>`;
+}
+
+/* Datewise NPA Slippage Calendar: Branch x Cust-NPA-Date heatmap, inspired
+   by Head Office's own "Datewise Calendar of KCC PNPA" MIS sheet. Built
+   entirely from fields already collected by the KCC Overdue upload (no new
+   file) -- respects whatever Month/Date-Range window is already selected
+   via kccovFilteredRows, so "Grand Total" always matches that window. */
+function kccovCellSeverity(v, maxCell){
+  const p = v / maxCell;
+  if(p < 0.18) return 'kccov-cal-low';
+  if(p < 0.40) return 'kccov-cal-mod';
+  if(p < 0.68) return 'kccov-cal-high';
+  return 'kccov-cal-severe';
+}
+function renderKccOverdueCalendar(filteredRows){
+  const wrap = document.getElementById('kccovBranchTableCard');
+  const labelEl = document.getElementById('kccovTableLabel');
+  const legendEl = document.getElementById('kccovCalLegend');
+  const insightWrap = document.getElementById('kccovInsightWrap');
+  if(!wrap) return;
+  const activeScheme = KCC_OVERDUE_SCHEMES.find(s=>s.key===kccovSchemeTab);
+  const scopeLabel = kccovBranchFilter ? esc(kccovBranchFilter) : 'Regional Office (all branches)';
+
+  if(legendEl) legendEl.innerHTML = `
+    <span><span class="sw" style="background:transparent;border:1px dashed var(--line)"></span>No slippage</span>
+    <span><span class="sw" style="background:var(--green-soft)"></span>Low</span>
+    <span><span class="sw" style="background:var(--amber-soft)"></span>Moderate</span>
+    <span><span class="sw" style="background:var(--red-soft)"></span>High</span>
+    <span><span class="sw" style="background:var(--red)"></span>Severe</span>`;
+
+  const bucketRows = filteredRows.filter(r=>kccOverdueBucketOf(r[KC.SCHEME])===kccovSchemeTab && r[KC.CUSTNPADATE]);
+  const dateSet = new Set(bucketRows.map(r=>r[KC.CUSTNPADATE]));
+  const dates = [...dateSet].sort((a,b)=>toDate(a)-toDate(b));
+
+  const byBranch = new Map();
+  bucketRows.forEach(r=>{
+    const b = r[KC.BRANCH];
+    let e = byBranch.get(b);
+    if(!e){ e = { name:b, sol: KCCOV_BRANCH_SOL[b.toUpperCase()], cells:{} }; byBranch.set(b, e); }
+    e.cells[r[KC.CUSTNPADATE]] = (e.cells[r[KC.CUSTNPADATE]] || 0) + r[KC.OS];
+  });
+  const matrix = [...byBranch.values()].map(e=>{
+    const row = dates.map(d=>e.cells[d]||0);
+    return { name:e.name, sol:e.sol, row, total: row.reduce((a,c)=>a+c,0) };
+  }).filter(m=>m.total>0).sort((a,b)=>b.total-a.total);
+
+  if(labelEl) labelEl.innerHTML = `${esc(activeScheme.label)} — Datewise Slippage, worst branch first<span class="chart-sub">Scheme ${esc(activeScheme.code)} · ${scopeLabel} · ${matrix.length.toLocaleString('en-IN')} branch(es) shown · amounts in ₹ Lakh · tap a cell to see the account list</span>`;
+
+  if(!dates.length || !matrix.length){
+    if(insightWrap) insightWrap.innerHTML = '';
+    wrap.innerHTML = `<div class="dash-table-wrap"><div style="padding:30px;text-align:center;color:var(--ink-mute)">No Cust NPA Date data in this window</div></div>`;
+    return;
+  }
+
+  const colTotals = dates.map((_,ci)=>matrix.reduce((s,r)=>s+r.row[ci],0));
+  const grandTotal = colTotals.reduce((a,c)=>a+c,0);
+  const maxCell = Math.max(1, ...matrix.flatMap(m=>m.row));
+
+  if(insightWrap){
+    const worstIdx = colTotals.indexOf(Math.max(...colTotals));
+    const branchesThatDay = matrix.filter(m=>m.row[worstIdx]>0).length;
+    insightWrap.innerHTML = `<div class="insight-strip">
+      <div class="insight-icon">${svgIcon(ICON_ALERT_TRIANGLE)}</div>
+      <div class="insight-body">
+        <div class="insight-title">Worst single day in this window: ${esc(dates[worstIdx])}</div>
+        <div class="insight-text">${fmtCr(colTotals[worstIdx])} slipped to NPA across ${branchesThatDay.toLocaleString('en-IN')} branch(es) on this one date — ${grandTotal ? ((colTotals[worstIdx]/grandTotal)*100).toFixed(0) : 0}% of this window's ${esc(activeScheme.label)} slippage.</div>
+      </div>
+    </div>`;
+  }
+
+  const fmtLakh = v => (v/1e5).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const thead = `<tr><th class="kccov-cal-sol">Sol ID</th><th class="kccov-cal-branch">Branch</th>${dates.map(d=>`<th>${esc(d.slice(0,5))}</th>`).join('')}<th class="kccov-cal-total">Total</th></tr>`;
+  const rowsHtml = matrix.map((m,i)=>{
+    const cells = m.row.map((v,ci)=>{
+      if(v<=0) return `<td><span class="kccov-cal-cell kccov-cal-blank">–</span></td>`;
+      return `<td><span class="kccov-cal-cell ${kccovCellSeverity(v,maxCell)}" onclick="kccovShowBranchAccounts('${kccovSchemeTab}','${esc(m.name)}','${esc(dates[ci])}')">${fmtLakh(v)}</span></td>`;
+    }).join('');
+    return `<tr><td class="kccov-cal-sol">${m.sol ? esc(String(m.sol)) : '—'}</td><td class="kccov-cal-branch"><span class="dash-rank">${i+1}</span>${esc(m.name)}</td>${cells}<td class="kccov-cal-total">${fmtLakh(m.total)}</td></tr>`;
+  }).join('');
+  const footRow = `<tr><td class="kccov-cal-sol"></td><td class="kccov-cal-branch">Grand Total</td>${colTotals.map(v=>`<td>${fmtLakh(v)}</td>`).join('')}<td class="kccov-cal-total">${fmtLakh(grandTotal)}</td></tr>`;
+
+  wrap.innerHTML = `<div class="kccov-cal-wrap">
+    <table class="kccov-cal-table">
+      <thead>${thead}</thead>
+      <tbody>${rowsHtml}</tbody>
+      <tfoot>${footRow}</tfoot>
     </table>
   </div>`;
 }
@@ -4644,12 +4767,14 @@ function kccovAcctRows(list){
 }
 function showKccovListModal(title, sub, list){ showListModal(title, sub, KCCOV_ACCT_LIST_HEAD, 'kccov', list, {key:'os',dir:'desc'}); }
 window.showKccovListModal = showKccovListModal;
-function kccovShowBranchAccounts(bucket, branch){
+function kccovShowBranchAccounts(bucket, branch, custNpaDate){
   const filteredRows = kccovFilteredRows(KCC_OVERDUE_DATA);
-  const rows = filteredRows.filter(r=>kccOverdueBucketOf(r[KC.SCHEME])===bucket && r[KC.BRANCH]===branch);
+  let rows = filteredRows.filter(r=>kccOverdueBucketOf(r[KC.SCHEME])===bucket && r[KC.BRANCH]===branch);
+  if(custNpaDate) rows = rows.filter(r=>r[KC.CUSTNPADATE]===custNpaDate);
   const list = rows.map(r=>({ acctNo:r[KC.ACCT], name:r[KC.NAME], os:r[KC.OS], cadu:r[KC.CADU], limit:r[KC.LIMIT], custNpaDate:r[KC.CUSTNPADATE], fy:r[KC.FY], category:r[KC.CATEGORY], sma:r[KC.SMA] }));
   const sLabel = (KCC_OVERDUE_SCHEMES.find(s=>s.key===bucket)||{}).label || bucket;
-  showKccovListModal(`${branch} — ${sLabel}`, `Hathras · ${list.length.toLocaleString('en-IN')} account(s)`, list);
+  const subLabel = custNpaDate ? `Hathras · Cust NPA Date ${custNpaDate} · ${list.length.toLocaleString('en-IN')} account(s)` : `Hathras · ${list.length.toLocaleString('en-IN')} account(s)`;
+  showKccovListModal(`${branch} — ${sLabel}`, subLabel, list);
 }
 window.kccovShowBranchAccounts = kccovShowBranchAccounts;
 
