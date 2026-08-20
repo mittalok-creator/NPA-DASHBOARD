@@ -1448,41 +1448,6 @@ body{overscroll-behavior:none}
 .bank-tab-btn{background:var(--card);border:1.5px solid var(--line);color:var(--sub);padding:9px 16px;border-radius:20px;font-size:12.5px;font-weight:700;white-space:nowrap;transition:background .15s var(--ease),color .15s var(--ease),border-color .15s var(--ease)}
 .bank-tab-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
 .bank-npa-pill{display:inline-block;padding:3px 10px;border-radius:7px;font-size:11.5px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
-
-/* ---------- Region table (PNPA Reports / KCC Renewal & Rollover) --
-   one generic sortable/filterable table shared by all 6 reports, each
-   published independently so any of them may be stale relative to the
-   others -- see renderRegionTable() in app.js. ---------- */
-.rt-wrap{overflow-x:auto;overflow-y:auto;max-height:min(70vh,640px);border:1px solid var(--line);border-radius:var(--radius-md);background:var(--card)}
-.rt-table{border-collapse:collapse;width:100%;min-width:640px;font-size:11.5px;font-variant-numeric:tabular-nums}
-.rt-table thead th{background:var(--accent-soft);color:var(--gold-l);text-align:right;font-weight:800;text-transform:uppercase;letter-spacing:.25px;padding:8px 10px;font-size:9.5px;white-space:nowrap;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
-.rt-table thead tr.rt-grp-row th{border-bottom:1px solid rgba(127,176,255,.28)}
-.rt-table thead tr.rt-sub-row th{top:29px}
-.rt-table thead tr.rt-filter-row td{top:56px;position:sticky;background:var(--card);padding:4px 6px;border-bottom:1px solid var(--line);z-index:2}
-.rt-table th.rt-left,.rt-table td.rt-left{text-align:left}
-.rt-filter-input{width:100%;min-width:56px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:6px;padding:4px 7px;font-size:11px;font-family:var(--font-body)}
-.rt-filter-input:focus{outline:none;border-color:var(--accent)}
-.rt-sortable{cursor:pointer;user-select:none}
-.rt-sortable:hover{color:#fff}
-.rt-hicons{display:inline-flex;gap:4px;margin-left:5px;vertical-align:middle}
-.rt-hicons svg{width:9px;height:9px;opacity:.5;display:inline-block}
-.rt-sortable.sort-asc .rt-sort-ic,.rt-sortable.sort-desc .rt-sort-ic{opacity:1;color:var(--gold-l)}
-.rt-sortable.sort-asc .rt-sort-ic{transform:rotate(180deg)}
-.rt-filter-ic:hover{opacity:1!important;color:var(--gold-l)}
-.rt-table tbody td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);color:var(--ink);white-space:nowrap}
-.rt-table tbody tr:last-child td{border-bottom:none}
-.rt-table tbody tr:hover td{background:var(--accent-soft)}
-.rt-table tfoot td{background:var(--seal-soft);font-weight:800;color:var(--ink);border-top:2px solid var(--seal-d)}
-.rt-good{color:var(--green);font-weight:800}
-.rt-mid{color:var(--amber);font-weight:800}
-.rt-bad{color:var(--red);font-weight:800}
-.rt-rank{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:7px;background:var(--seal-soft);color:var(--seal-d);font-weight:800;font-size:10.5px}
-:root:not([data-theme="light"]) .rt-rank{color:var(--seal-l)}
-.rt-hathras-row td{background:var(--seal-soft)!important;box-shadow:inset 3px 0 0 var(--seal-d)}
-.rt-table tbody tr.rt-hathras-row:hover td{background:var(--seal-soft)!important}
-.rt-pin{display:inline-flex;align-items:center;gap:5px}
-.rt-pin svg{width:11px;height:11px;color:var(--seal-d);flex-shrink:0}
-:root:not([data-theme="light"]) .rt-pin svg{color:var(--seal-l)}
 .dash-table tr.is-ours td{background:var(--accent-soft)}
 .dash-table tr.is-our-circle td{background:rgba(58,123,255,.06)}
 :root[data-theme="light"] .dash-table tr.is-our-circle td{background:rgba(27,79,224,.045)}

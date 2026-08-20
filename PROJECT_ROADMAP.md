@@ -123,7 +123,17 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
-### Feature: two new tabs — "PNPA Reports" (Daily/Weekly/Monthly/RCT Efficiency) and "KCC Renewal & Rollover" — six independently-published Head Office region reports, mocked up and approved before implementation (2026-08-18, same day)
+### Removed: "PNPA Reports" and "KCC Renewal & Rollover" tabs, permanently (2026-08-19)
+
+Shipped the day before (see the "Feature" entry directly below), Alok tried the feature live — he even published a fresh Daily PNPA update through it (commit `0be6da3`, 19-08-2026) — then asked for both tabs gone for good: "ye dono reports hata hi do permanent executives ko ab app jyada bhari bhari lag rahe hai aur ye data bekar" (remove both permanently, the app feels too heavy for executives now and this data isn't useful). Unlike the earlier "Daily PNPA" tab (hidden via a commented-out nav button, code kept for future reactivation — see the Refresh-button fix entry below), "permanent" here meant a real deletion, not a hide: removed both nav entries (side nav + bottom nav), both view sections, all six upload sections from the Update Data modal, the entire six-report data/render/parse/upload code block from `js/app.js` (~700 lines: `renderRegionTable()`, the six PDF parsers, the six upload handlers, and their wiring into `switchView()`/`pendingUnpublishedLabel()`/`openPublishReview()`/`confirmPublish()`/`wireChrome()`), the `.rt-*` CSS block, and all six `data/*.json` files (including the one Alok had just re-published, since the whole report is gone, not just stale).
+
+Verified nothing else referenced any of it (`grep` for every symbol/id introduced by the previous entry came back empty in all three files) and ran a full regression across every remaining view (Dashboard/Bank/KCC Overdue/Search) plus the OTS Calculator detail pane — zero console errors, bottom nav back to exactly the original 4 tabs (Dashboard/Bank/Overdue/Search).
+
+One git wrinkle worth noting for future reference: Alok's own publish (`0be6da3`) landed on `main` one commit ahead of what this reversion was built on top of, touching the very file (`data/pnpa-daily.json`) this reversion deletes — `git stash` + fast-forward + `stash pop` hit the expected modify/delete conflict, resolved by keeping the deletion (the whole file is going away regardless of its latest content).
+
+Files: `js/app.js`, `index.html`, `css/styles.css` (all reverted to their pre-feature state); `data/pnpa-daily.json`, `data/pnpa-weekly.json`, `data/pnpa-monthly.json`, `data/rct-efficiency.json`, `data/kcc-renewal.json`, `data/kcc-rollover.json` (deleted). Cache-bust `v=20260818j`, SW `upgb-ots-shell-v138`.
+
+### Feature: two new tabs — "PNPA Reports" (Daily/Weekly/Monthly/RCT Efficiency) and "KCC Renewal & Rollover" — six independently-published Head Office region reports, mocked up and approved before implementation (2026-08-18, same day) — REMOVED THE NEXT DAY, see the reversal entry directly above
 
 Alok sent six PDFs he receives from Head Office that the app didn't yet have anywhere to put: Daily PNPA, Weekly PNPA, Monthly PNPA Reduction Progress, RCT Framework Efficiency, KCC Renewal Progress, and Region-wise KCC Rollover Progress — all region-wise (65 regions), none of them the same shape as the existing Daily PNPA (Hathras-only, account-level) or Bank Dashboard (single bank-wide snapshot) tabs already in the app.
 
