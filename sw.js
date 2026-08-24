@@ -1,26 +1,22 @@
-const CACHE_NAME = 'upgb-ots-shell-v139';
+const CACHE_NAME = 'upgb-ots-shell-v140';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
 // dead weight, never actually served, since the browser always requests
 // the current versioned URL instead. Keep these in sync with index.html
-// on every future version bump. pdf.worker.min.js (~1.1MB) is deliberately
-// NOT precached here -- it's only needed by the PDF-upload feature
-// (parseBankPdf in js/app.js), which most sessions never touch; the
-// runtime fetch handler below still caches it normally the first time it
-// actually gets requested, so nothing is lost, just no longer forced on
-// every single app load.
+// on every future version bump. pdf.min.js / pdf.worker.min.js were
+// dropped entirely (2026-08-24) along with the Bank Dashboard tab that
+// was their only consumer -- neither is loaded by index.html anymore.
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './css/styles.css?v=20260819a',
-  './js/app.js?v=20260819a',
-  './js/auth.js?v=20260819a',
-  './js/publish.js?v=20260819a',
-  './js/splash.js?v=20260819a',
-  './js/vendor/xlsx.full.min.js?v=20260819a',
-  './js/vendor/exceljs.min.js?v=20260819a',
-  './js/vendor/pdf.min.js?v=20260819a',
+  './css/styles.css?v=20260824a',
+  './js/app.js?v=20260824a',
+  './js/auth.js?v=20260824a',
+  './js/publish.js?v=20260824a',
+  './js/splash.js?v=20260824a',
+  './js/vendor/xlsx.full.min.js?v=20260824a',
+  './js/vendor/exceljs.min.js?v=20260824a',
   './manifest.webmanifest',
 ];
 

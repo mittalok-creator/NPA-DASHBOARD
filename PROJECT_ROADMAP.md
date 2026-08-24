@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-08-15
+Last updated: 2026-08-24
 
 ---
 
@@ -122,6 +122,22 @@ Vercel first**, see notes below).
 **Current milestone**: none — ready to start M7 (fast search) or M9 (UI/UX
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
+
+### Removed: "Bank Dashboard" tab, permanently (2026-08-24)
+
+Alok uploaded a fresh whole-bank "Dashboard of NPA" PDF (`NPA_DASHBOARD_23.08.2026.pdf`) and asked "ab ismain kya issue hai" (what's the issue in this). Investigated properly rather than guessing:
+
+1. **Upload/parsing path**: drove the real `#bankPdfFileInput` → `handleBankPdfUpload()` → `parseBankPdf()` flow end-to-end with the actual file — parsed cleanly, 65/65 regions, 3/3 circle subtotals, grand total, zero warnings, zero console errors.
+2. **Checksum validation**: summed every region's 18 numeric fields per circle and compared against that circle's own "Sub Total" row, and summed the three circle subtotals against the "Total UPGB" grand total — every additive column reconciled exactly (the only reported "mismatches" were the 3 percentage columns, which are never supposed to sum — expected, not a defect).
+3. **HATHRAS and the grand total**: already matched what was live in `data/bank-npa.json` figure-for-figure (Alok had evidently already published this exact file through the live production app before asking).
+4. **Genuine finding**: no code bug at all — the actual story in the data was BADAUN, the one region moving the wrong direction (NPA rising from ₹494.70 Cr at Mar-26 to ₹521.85 Cr now, the only large positive `netReductionOverMar26` in the whole bank at +₹27.15 Cr vs. the next-worst region's +₹2.51 Cr, and the single largest `gapFromTarget` of all 65 regions at ₹51.90 Cr — more than double the next-worst).
+5. Alok then asked whether something from "hamari main sheet" (his master Excel) hadn't made it into the upload. Checked: the PDF's own Excel-derived column-letter row (`A B D F G H I J K L M N O P Q R S T U`) skips letters C and E — meaning the master sheet has 2 columns that were never printed into this PDF export at all, so nothing was dropped by the app; those columns simply never reached it. `BANK_PDF_FIELD_NAMES` (18 fields) has been stable since this parser shipped, so this wasn't new to this file.
+
+Asked Alok directly what "hata do" (remove it) meant, since neither finding was a fixable bug — his answer: **"BANK DASHBOARD KO COMPLETLY HATA DO APP SE"** (remove the Bank Dashboard tab completely from the app), adding "mujhe jyada tension nahi chahiye roz roz ki" (don't want this daily tension). Treated as the same kind of genuine, permanent deletion as the earlier PNPA Reports/KCC Renewal removal (2026-08-19) — not a hide-behind-a-comment like the still-dormant "Daily PNPA" nav button.
+
+**Removed entirely**: the nav buttons (side nav + bottom nav), the `#viewBank` section and `#bankDashboardArea`, the Update Data modal's "Bank-wide NPA Dashboard (PDF)" upload block, and every JS symbol behind it — `BANK_DATA`, `fmtBankCr`/`fmtBankPct`, `bankRegionFilter`/`bankMarchFilter`/`bankTargetFilter`, `bankTabInfo`, `bankCornerGapLine`/`bankCornerStats`, `BANK_PDF_FIELD_NAMES`, `BANK_REGION_CIRCLE`, `bankPdfToNum`/`bankPdfFields`/`bankPdfSumRegions`/`bankPdfClusterRows`, `parseBankPdf`, `handleBankPdfUpload`, `renderBankDashboard`/`renderBankDashboardBody`/`bankRegionRank`, `buildBankHistoryFiles`, plus every wiring point in `pendingUnpublishedLabel()`, `openPublishReview()`, `confirmPublish()`, `switchView()`, and `wireChrome()`. CSS: dropped `.circle-card*`, `.bank-npa-pill`, `.dash-table tr.is-ours/.is-our-circle`, the dead `.target-chip*` rules, and `#viewBank` from the shared selector — kept `.bank-hero-row`/`.bank-filter-row`/`.bank-tab-row`/`.bank-tab-btn`, which PNPA and KCC Overdue still use. Data: deleted `data/bank-npa.json` and the entire `data/bank-history/` snapshot directory (10 files). Also dropped `js/vendor/pdf.min.js` + `pdf.worker.min.js` (~1.4 MB) and their `<script>`/precache entries, since `parseBankPdf` was PDF.js's only consumer in this app and nothing else touches `pdfjsLib`.
+
+Verified via Playwright: 0 `[data-view="bank"]` elements, `#viewBank`/`#bankPdfUploadDetails` both absent, all other views (Dashboard/PNPA/KCC Overdue/Search) still switch cleanly, OTS Calculator detail pane still opens, no failed network requests (no stray 404s on the deleted PDF.js/data files), zero console errors. Cache-bust bumped (`index.html` 8× `?v=20260819a`→`?v=20260824a`, `sw.js` `CACHE_NAME` v139→v140 + matching 8 `?v=` bumps). Files touched: `index.html`, `js/app.js`, `css/styles.css`, `sw.js`, `data/bank-npa.json` (deleted), `data/bank-history/*` (deleted), `js/vendor/pdf.min.js` + `pdf.worker.min.js` (deleted).
 
 ### Design: OTS Calculator's rupee/percentage figures switched to Inter (thinner weight), with an explicit no-slashed-zero guarantee (2026-08-19, same day)
 

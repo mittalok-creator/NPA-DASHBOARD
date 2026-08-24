@@ -877,7 +877,7 @@ function renderEmpty(){
 }
 
 // Compact, table-style result list -- matches the "All Accounts" list
-// already used on the Bank Dashboard / KCC Overdue / PNPA tabs (Account,
+// already used on the KCC Overdue / PNPA tabs (Account,
 // Customer, Branch, Asset, O/S Balance), so the search behaves the same
 // way as every other account list in the app: type -> a plain scrollable
 // list of matches -> tap a row -> the full OTS Calculator detail opens.
@@ -2691,7 +2691,7 @@ let __lastHistoryList = []; // last-loaded version history, so rollback review c
    AFTER #publishReviewPanel in the DOM, not inside it -- closePublishReview()
    only hides the review panel, so a successful publish's confirmation text
    stays on screen indefinitely afterward. If new data (KCC Overdue, Daily
-   PNPA, Bank PDF, Branch Advance/Contacts, or a fresh daily NPA Apply
+   PNPA, Branch Advance/Contacts, or a fresh daily NPA Apply
    Update) gets staged after that, the old "Published" banner is still
    sitting right there looking current -- a real report from Alok: he
    uploaded a KCC Overdue rollover file, saw the still-visible banner from
@@ -2705,7 +2705,7 @@ function clearStalePublishStatus(){
   if(el) el.innerHTML = '';
 }
 
-/* Real bug this guards against: __pendingBankData/__pendingPnpaData/
+/* Real bug this guards against: __pendingPnpaData/
    __pendingKccOverdueData/__pendingData are plain JS variables -- a file
    upload stages data ONLY in browser memory until Publish actually sends
    it. A full page reload (the Refresh button, browser F5, closing the
@@ -2725,7 +2725,6 @@ function clearStalePublishStatus(){
 function pendingUnpublishedLabel(){
   const parts = [];
   if(__pendingData) parts.push('the uploaded daily NPA file (not yet applied)');
-  if(typeof __pendingBankData!=='undefined' && __pendingBankData) parts.push('the Bank Dashboard PDF upload');
   if(typeof __pendingPnpaData!=='undefined' && __pendingPnpaData) parts.push('the Daily PNPA upload');
   if(typeof __pendingKccOverdueData!=='undefined' && __pendingKccOverdueData) parts.push('the KCC Overdue upload');
   return parts;
@@ -2773,12 +2772,7 @@ function openPublishReview(){
     icon: ICON_BANKNOTE, title: 'NPA Book', maybe: true,
     sub: `${summary.rowCount.toLocaleString('en-IN')} accounts · as on ${fmtAsOnDisplay()}`,
   })];
-  let bankLabel = null, pnpaLabel = null, kccovLabel = null;
-  if(__pendingBankData){
-    const bankDate = esc((__pendingBankData.asOnDate||'').split('-').reverse().join('-'));
-    bankLabel = `Bank Dashboard (${__pendingBankData.regions.length} regions, as on ${bankDate})`;
-    items.push(publishReviewItemRow({ icon: ICON_LANDMARK, title: 'Bank Dashboard', sub: `${__pendingBankData.regions.length} regions · as on ${bankDate}` }));
-  }
+  let pnpaLabel = null, kccovLabel = null;
   if(__pendingPnpaData){
     pnpaLabel = `Daily PNPA (${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingPnpaData.asOnDate||''})`;
     items.push(publishReviewItemRow({ icon: ICON_ALERT_CIRCLE, title: 'Daily PNPA', sub: `${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingPnpaData.asOnDate||'')}` }));
@@ -2803,7 +2797,7 @@ function openPublishReview(){
       publishedBy: user.login || null,
       isRollback: false,
     },
-    labels: { bankLabel, pnpaLabel, kccovLabel },
+    labels: { pnpaLabel, kccovLabel },
   };
   document.getElementById('publishConfirmBtn').textContent = 'Confirm & Publish';
   document.getElementById('publishReviewPanel').style.display = 'block';
@@ -2813,30 +2807,6 @@ function closePublishReview(){
   const panel = document.getElementById('publishReviewPanel');
   if(panel) panel.style.display = 'none';
   __pendingPublish = null;
-}
-/* Snapshots each published bank-wide dataset to its own small history file,
-   mirroring the main NPA data's history/index.json pattern -- lets a future
-   sparkline/trend feature look back over daily uploads once enough of them
-   have accumulated. Best-effort: a failure here must never block the main
-   NPA-data publish, so callers should swallow errors from this. */
-async function buildBankHistoryFiles(bankData, user){
-  let index = [];
-  try{ index = await fetchJson('data/bank-history/index.json?t=' + Date.now()); } catch(e){ index = []; }
-  if(!Array.isArray(index)) index = [];
-  const safeDate = (bankData.asOnDate||'unknown').replace(/[^0-9-]/g,'');
-  const historyFileName = `bank-history/${safeDate}-${Date.now()}.json`;
-  index.unshift({
-    date: bankData.asOnDate||null,
-    file: historyFileName,
-    regionsCount: bankData.regions.length,
-    publishedAt: new Date().toISOString(),
-    publishedBy: user.login||null,
-  });
-  if(index.length>120) index = index.slice(0,120);
-  return [
-    { path:`data/${historyFileName}`, content: bankData },
-    { path:'data/bank-history/index.json', content: index },
-  ];
 }
 async function confirmPublish(){
   if(!__pendingPublish || !window.UPGBPublish) return;
@@ -2849,13 +2819,6 @@ async function confirmPublish(){
   try{
     const labels = __pendingPublish.labels || {};
     let extraFiles;
-    if(__pendingPublish.type!=='rollback' && __pendingBankData){
-      extraFiles = [{ path:'data/bank-npa.json', content: __pendingBankData, label: labels.bankLabel }];
-      try{
-        const user = (window.UPGBAuth && window.UPGBAuth.getCurrentUser()) || {};
-        extraFiles = extraFiles.concat(await buildBankHistoryFiles(__pendingBankData, user));
-      } catch(e){ /* history snapshot is best-effort -- the main bank-npa.json publish still proceeds */ }
-    }
     if(__pendingPublish.type!=='rollback' && __pendingPnpaData){
       extraFiles = (extraFiles||[]).concat([{ path:'data/pnpa.json', content: __pendingPnpaData, label: labels.pnpaLabel }]);
     }
@@ -2867,7 +2830,6 @@ async function confirmPublish(){
       : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress, extraFiles);
     statusEl.innerHTML = `<div class="upload-status ok">✔ ${esc(result.commitMessage||'Published')} — live at npadashboard.alokmittal.net within ~30-60s (commit ${esc(result.commitSha.slice(0,7))}).</div>`;
     document.getElementById('publishBtn').disabled = true;
-    __pendingBankData = null;
     __pendingPnpaData = null;
     __pendingKccOverdueData = null;
     closePublishReview();
@@ -3545,9 +3507,9 @@ window.showSlabList = showSlabList;
 window.showHighValueCustList = showHighValueCustList;
 
 /* Shown in the top-right corner of the "Total Outstanding" hero card,
-   below the NPA% badge -- mirrors the same March/June + gap treatment
-   built for the Bank Dashboard's hero cards, using the per-branch NPA
-   March/June figures from the Branch Advance upload. Only aggregates
+   below the NPA% badge -- a March/June + gap treatment using the
+   per-branch NPA March/June figures from the Branch Advance upload.
+   Only aggregates
    over branches that actually have a Mar/Jun figure (and only compares
    against THOSE branches' current O/S), same safeguard as the advance
    aggregation just above -- so a partial upload never produces a
@@ -3785,417 +3747,6 @@ function renderDashboard(){
   if(heroRisk) animateNumber(heroRisk, 0, highRiskOS, fmtCr, 900);
   const heroTicket = document.getElementById('heroAvgTicket');
   if(heroTicket) animateNumber(heroTicket, 0, avgTicket, fmtINR2, 900);
-}
-
-/* ---------- Bank-wide NPA Dashboard (all 65 regions, from Alok's daily
-   whole-bank MIS PDF -- separate dataset from the Hathras-only account-
-   level book above). Figures here are already in ₹ Crore, as printed in
-   the source PDF -- fmtCr() above assumes plain rupees, so this view uses
-   its own formatter instead. ---------- */
-let BANK_DATA = null;
-function fmtBankCr(n){ if(n===null||n===undefined||isNaN(n)) return '—'; return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})+' Cr'; }
-function fmtBankPct(n){ return (n===null||n===undefined||isNaN(n)) ? '—' : n.toFixed(2)+'%'; }
-let bankRegionFilter = '';
-let bankMarchFilter = '';
-let bankTargetFilter = '';
-function bankTabInfo(o){
-  const ahead = o.gapFromTarget<=0;
-  return { color: ahead?'var(--green)':'var(--red)', text: `${ahead?'✓ Ahead of target by':'⚠ Behind target by'} ${fmtBankCr(Math.abs(o.gapFromTarget))}` };
-}
-/* Shown in the otherwise-empty top-right corner of each hero card, below
-   the NPA% badge -- March and June are fixed baseline columns the source
-   PDF itself reports (npaMar26/npaJun26), so showing both directly here
-   is more scannable than the tab-toggle this replaced (had to click to
-   see one comparison at a time). */
-/* Gap line under each of Mar/Jun: negative = NPA has since reduced (good,
-   green ▼); positive = increased (bad, red ▲) -- same sign convention as
-   netReductionOverMar26 everywhere else in this tab. March's gap reuses
-   the report's own netReductionOverMar26 field rather than re-deriving it
-   (avoids rounding drift); June has no equivalent field in the source
-   PDF, so it's computed directly (current − npaJun26). */
-function bankCornerGapLine(v){
-  const improved = v<=0;
-  return `<span style="color:${improved?'var(--green)':'var(--red)'}">${improved?'▼':'▲'} ${fmtBankCr(Math.abs(v))}</span>`;
-}
-function bankCornerStats(o){
-  const junGap = o.remainingNpaAsOnDate - o.npaJun26;
-  return `<div class="hero-kpi-corner-stats">
-    <div class="hero-kpi-corner-group">
-      <div class="hero-kpi-corner-row"><span>Mar</span><b>${fmtBankCr(o.npaMar26)}</b></div>
-      <div class="hero-kpi-corner-gap">${bankCornerGapLine(o.netReductionOverMar26)}</div>
-    </div>
-    <div class="hero-kpi-corner-group">
-      <div class="hero-kpi-corner-row"><span>Jun</span><b>${fmtBankCr(o.npaJun26)}</b></div>
-      <div class="hero-kpi-corner-gap">${bankCornerGapLine(junGap)}</div>
-    </div>
-  </div>`;
-}
-let __pendingBankData = null;
-
-/* Parses Alok's daily whole-bank "Dashboard of NPA" PDF client-side, via
-   pdf.js (js/vendor/pdf.min.js) -- no server involved. The PDF has no
-   underlying table structure, only positioned text, so rows are
-   reconstructed by clustering text items with close y-coordinates
-   (tolerance tuned against the real report; regular data rows land
-   consistently within ~1-2pt of each other, comfortably under the ~9pt gap
-   between separate rows) then reading left-to-right by x. Region rows are
-   "S.No, Region, 18 numbers" (20 items); the bank grand total is either
-   "Total UPGB" or "G. TOTAL" (HO has used both labels).
-   HO's report comes in two layouts, both handled here: grouped-by-circle
-   (each circle's regions followed by its own "Sub Total CO <name>" row --
-   the original format) and a flat, ungrouped list of all 65 regions with
-   no circle subtotals at all (seen from 16-08-2026 on). The flat layout
-   carries no circle assignment or circle total in the PDF at all, so
-   BANK_REGION_CIRCLE below (captured from the last grouped PDF) supplies
-   both as a fallback -- circle membership is an administrative grouping
-   that doesn't change from week to week, unlike HO's own report layout.
-   This exact approach was validated against a real file before shipping:
-   extracted figures matched the source PDF exactly, including
-   cross-checking sums; the flat-layout fallback was validated the same
-   way against the 16-08-2026 file once that format appeared. */
-const BANK_PDF_FIELD_NAMES = ['branches','totalAdv','npaMar26','pctWithAdvMar26','npaJun26','slippage',
-  'addition','acSlippedUpgradedClosed','inttReversal','npaReductionOn','reductionDuringMonth',
-  'netReductionDuringMonth','pctNetReductionOverPrevMonth','pctRemainingNpaWithAdv','remainingNpaAsOnDate',
-  'netReductionOverMar26','targetCurrentMonth','gapFromTarget'];
-const BANK_REGION_CIRCLE = {
-  'AYODHYA':'CO Gorakhpur','AZAMGARH':'CO Gorakhpur','BALLIA-I':'CO Gorakhpur','BALLIA-II':'CO Gorakhpur',
-  'BALRAMPUR':'CO Gorakhpur','BASTI':'CO Gorakhpur','BHADOHI':'CO Gorakhpur','CHANDAULI':'CO Gorakhpur',
-  'DEORIA':'CO Gorakhpur','GHAZIPUR':'CO Gorakhpur','GONDA':'CO Gorakhpur','GORAKHPUR-I':'CO Gorakhpur',
-  'GORAKHPUR-II':'CO Gorakhpur','JAUNPUR':'CO Gorakhpur','KHALILABAD':'CO Gorakhpur','MAHARAJGANJ':'CO Gorakhpur',
-  'MAU':'CO Gorakhpur','MIRZAPUR':'CO Gorakhpur','NAUGARH':'CO Gorakhpur','PADRAUNA':'CO Gorakhpur',
-  'SULTANPUR':'CO Gorakhpur','VARANASI':'CO Gorakhpur',
-  'AMETHI':'CO Lucknow','BAHRAICH':'CO Lucknow','BANDA':'CO Lucknow','BARABANKI':'CO Lucknow',
-  'BHINGA':'CO Lucknow','BISWAN':'CO Lucknow','CHITRAKOOT':'CO Lucknow','ETAWAH':'CO Lucknow',
-  'FATEHPUR':'CO Lucknow','HARDOI':'CO Lucknow','JHANSI':'CO Lucknow','KANNAUJ':'CO Lucknow',
-  'KANPUR':'CO Lucknow','KANPUR DEHAT':'CO Lucknow','KAUSHAMBI':'CO Lucknow','LAKHIMPUR':'CO Lucknow',
-  'LUCKNOW':'CO Lucknow','MAHOBA':'CO Lucknow','ORAI':'CO Lucknow','PRATAPGARH':'CO Lucknow',
-  'PRAYAGRAJ':'CO Lucknow','RAEBARELI':'CO Lucknow','SITAPUR':'CO Lucknow','UNNAO':'CO Lucknow',
-  'AGRA':'CO Moradabad','ALIGARH':'CO Moradabad','ALIPUR CHOPLA':'CO Moradabad','AMROHA':'CO Moradabad',
-  'BADAUN':'CO Moradabad','BAREILLY':'CO Moradabad','BIJNOR':'CO Moradabad','ETAH':'CO Moradabad',
-  'FARRUKHABAD':'CO Moradabad','FIROZABAD':'CO Moradabad','GHAZIABAD':'CO Moradabad','HATHRAS':'CO Moradabad',
-  'MAINPURI':'CO Moradabad','MORADABAD':'CO Moradabad','MUZAFFARNAGAR':'CO Moradabad','RAMPUR':'CO Moradabad',
-  'SAMBHAL':'CO Moradabad','SHAHJAHANPUR':'CO Moradabad','THAKURDWARA':'CO Moradabad',
-};
-function bankPdfToNum(s){ const c = String(s).replace(/%/g,'').replace(/,/g,'').trim(); const n = parseFloat(c); return isNaN(n)?null:n; }
-function bankPdfFields(nums){ const o={}; BANK_PDF_FIELD_NAMES.forEach((name,i)=>{ o[name]=bankPdfToNum(nums[i]); }); return o; }
-/* Sums a circle's member regions field-by-field for the flat-layout
-   fallback (no PDF-provided circle subtotal to read instead). Every field
-   except pctRemainingNpaWithAdv is a plain money/count amount or a linear
-   difference of two such amounts (netReductionOverMar26, gapFromTarget --
-   both verified against the source PDF as remainingNpaAsOnDate minus
-   another summed field), so summing member rows is exact, the same as
-   what HO's own "Sub Total" row would contain. pctWithAdvMar26 and
-   pctNetReductionOverPrevMonth are true percentages with an unconfirmed
-   denominator (unused anywhere in the app) -- left null rather than
-   guessed. pctRemainingNpaWithAdv (the one percentage this app actually
-   displays) is recomputed from the summed totals, verified against HO's
-   own "G. TOTAL" row: remainingNpaAsOnDate / totalAdv * 100 matches to
-   the printed decimal. */
-function bankPdfSumRegions(members){
-  const o = {};
-  BANK_PDF_FIELD_NAMES.forEach(name=>{ o[name] = 0; });
-  members.forEach(r=>{
-    BANK_PDF_FIELD_NAMES.forEach(name=>{
-      if(typeof r[name]==='number') o[name] += r[name];
-    });
-  });
-  o.pctWithAdvMar26 = null;
-  o.pctNetReductionOverPrevMonth = null;
-  o.pctRemainingNpaWithAdv = o.totalAdv ? (o.remainingNpaAsOnDate/o.totalAdv*100) : null;
-  return o;
-}
-function bankPdfClusterRows(items, tol){
-  const sorted = [...items].sort((a,b)=>b.y-a.y || a.x-b.x);
-  const rows = []; let current=null, refY=null;
-  for(const it of sorted){
-    if(current && Math.abs(it.y-refY)<=tol) current.push(it);
-    else { current=[it]; refY=it.y; rows.push(current); }
-  }
-  return rows.map(r=>r.sort((a,b)=>a.x-b.x));
-}
-async function parseBankPdf(arrayBuffer){
-  if(!window.pdfjsLib) throw new Error('PDF reader did not load — check your connection and reload the page, then try again.');
-  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/vendor/pdf.worker.min.js';
-  const doc = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  let regions = [], currentCoRegions = [], circles = [], grandTotal = null, asOnDateRaw = null;
-  for(let p=1; p<=doc.numPages; p++){
-    const page = await doc.getPage(p);
-    const content = await page.getTextContent();
-    const items = content.items.map(it=>({x:it.transform[4], y:it.transform[5], str:(it.str||'').trim()})).filter(it=>it.str!=='');
-    const rows = bankPdfClusterRows(items, 3.5);
-    for(const row of rows){
-      const strs = row.map(it=>it.str);
-      if(!asOnDateRaw){
-        const m = strs.join(' ').match(/Dashboard of NPA as on ([\d.]+)/);
-        if(m) asOnDateRaw = m[1];
-      }
-      if(/^\d+$/.test(strs[0]) && strs.length===20){
-        currentCoRegions.push({ sno: parseInt(strs[0],10), region: strs[1], ...bankPdfFields(strs.slice(2)) });
-      } else if(/^Sub Total/.test(strs[0]) && strs.length===19){
-        const coName = strs[0].replace(/^Sub Total\s+/,'');
-        circles.push({ name: coName, ...bankPdfFields(strs.slice(1)) });
-        regions.push(...currentCoRegions.map(r=>({ ...r, co: coName })));
-        currentCoRegions = [];
-      } else if(/^(Total UPGB|G\.\s*TOTAL)/i.test(strs[0]) && strs.length===19){
-        grandTotal = bankPdfFields(strs.slice(1));
-      }
-    }
-  }
-  /* Flat layout: every region row landed in currentCoRegions and never
-     got flushed (no "Sub Total" row ever appeared to trigger it). Assign
-     circles from the fallback map and compute each circle's totals by
-     summing its member regions instead of reading a PDF-provided row. */
-  if(circles.length===0 && currentCoRegions.length>=50){
-    regions = currentCoRegions.map(r=>({ ...r, co: BANK_REGION_CIRCLE[r.region] || 'Unknown' }));
-    const byCircle = new Map();
-    regions.forEach(r=>{
-      if(!byCircle.has(r.co)) byCircle.set(r.co, []);
-      byCircle.get(r.co).push(r);
-    });
-    byCircle.forEach((members, name)=>{ circles.push({ name, ...bankPdfSumRegions(members) }); });
-  }
-  if(!grandTotal || regions.length<50){
-    throw new Error('Could not recognize this PDF\'s layout — expected the "Dashboard of NPA" bank-wide report with region rows and a "Total UPGB"/"G. TOTAL" grand total.');
-  }
-  let asOnDate = null;
-  if(asOnDateRaw){
-    const parts = asOnDateRaw.split('.');
-    if(parts.length===3) asOnDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-  }
-  return { asOnDate, ourRegion:'HATHRAS', ourCircle:'CO Moradabad', bankTotal:grandTotal, circles, regions };
-}
-function handleBankPdfUpload(evt){
-  const file = evt.target.files[0];
-  if(!file) return;
-  const statusEl = document.getElementById('bankPdfUploadStatus');
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try{
-      const parsed = await parseBankPdf(reader.result);
-      __pendingBankData = parsed;
-      BANK_DATA = parsed;
-      const label = document.getElementById('bankPdfStatusLabel');
-      if(label) label.textContent = `${parsed.regions.length} regions loaded (${file.name})`;
-      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${parsed.regions.length} regions across ${parsed.circles.length} circles, as on ${esc(parsed.asOnDate||'unknown date')}. Goes live the next time you hit Publish.</div>`;
-      clearStalePublishStatus();
-      const publishBtn = document.getElementById('publishBtn');
-      if(publishBtn) publishBtn.disabled = false;
-      if(document.querySelector('.view.active')?.dataset.view==='bank') renderBankDashboardBody();
-    } catch(err){
-      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function renderBankDashboard(){
-  const el = document.getElementById('bankDashboardArea');
-  if(!el) return;
-  if(BANK_DATA){ renderBankDashboardBody(); return; }
-  el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading bank-wide NPA data…</p></div>`;
-  fetchJson('data/bank-npa.json?t=' + Date.now())
-    .then(d => { BANK_DATA = d; renderBankDashboardBody(); })
-    .catch(() => {
-      el.innerHTML = `<div class="empty-state"><h2>Could not load bank-wide data</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
-    });
-}
-
-function bankRegionRank(regions, region){
-  const sorted = [...regions].sort((a,b)=>a.pctRemainingNpaWithAdv-b.pctRemainingNpaWithAdv);
-  return sorted.findIndex(r=>r.region===region.region)+1;
-}
-
-function renderBankDashboardBody(){
-  const el = document.getElementById('bankDashboardArea');
-  const d = BANK_DATA;
-  const bank = d.bankTotal;
-  const circle = d.circles.find(c=>c.name===d.ourCircle);
-  const region = d.regions.find(r=>r.region===d.ourRegion);
-  if(!bank || !circle || !region){ el.innerHTML = `<div class="empty-state"><h2>Bank data looks incomplete</h2></div>`; return; }
-
-  document.querySelectorAll('.bank-report-date-val').forEach(e=>{
-    const parts = (d.asOnDate||'').split('-');
-    e.textContent = parts.length===3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : (d.asOnDate||'—');
-  });
-
-  const bankSev = npaPctSeverity(bank.pctRemainingNpaWithAdv);
-  const circleSev = npaPctSeverity(circle.pctRemainingNpaWithAdv);
-  const regionSev = npaPctSeverity(region.pctRemainingNpaWithAdv);
-  const rank = bankRegionRank(d.regions, region);
-
-  const heroRow = `<div class="hero-kpi-row bank-hero-row">
-    ${heroKpiCard({
-      id:'bankHeroTotal', icon:ICON_LANDMARK, label:'Whole Bank — UPGB',
-      tint:'var(--accent-soft)', color:'var(--accent)',
-      fallback: fmtBankCr(bank.remainingNpaAsOnDate),
-      sub: `${bank.branches.toLocaleString('en-IN')} branches · 65 regions<span class="hero-kpi-sub2">Total Advance: ${fmtBankCr(bank.totalAdv)}</span><span class="hero-kpi-sub2" style="color:${bankTabInfo(bank).color}">${bankTabInfo(bank).text}</span>`,
-      badge: `<div class="hero-kpi-badge" style="background:${bankSev.soft};color:${bankSev.color}">${fmtBankPct(bank.pctRemainingNpaWithAdv)} NPA</div>`,
-      corner: bankCornerStats(bank)
-    })}
-    ${heroKpiCard({
-      id:'bankHeroCircle', icon:ICON_MAP, label:'CO Moradabad — Our Circle',
-      tint:'var(--accent-soft)', color:'var(--accent)',
-      fallback: fmtBankCr(circle.remainingNpaAsOnDate),
-      sub: `${circle.branches.toLocaleString('en-IN')} branches · 19 regions<span class="hero-kpi-sub2">Total Advance: ${fmtBankCr(circle.totalAdv)}</span><span class="hero-kpi-sub2" style="color:${bankTabInfo(circle).color}">${bankTabInfo(circle).text}</span>`,
-      badge: `<div class="hero-kpi-badge" style="background:${circleSev.soft};color:${circleSev.color}">${fmtBankPct(circle.pctRemainingNpaWithAdv)} NPA</div>`,
-      corner: bankCornerStats(circle)
-    })}
-    ${heroKpiCard({
-      id:'bankHeroRegion', icon:ICON_STAR, label:'Hathras — Our Region',
-      tint:'rgba(212,165,68,.16)', color:'var(--seal-d)',
-      fallback: fmtBankCr(region.remainingNpaAsOnDate),
-      sub: `${region.branches} branches · rank #${rank} of 65<span class="hero-kpi-sub2">Total Advance: ${fmtBankCr(region.totalAdv)}</span><span class="hero-kpi-sub2" style="color:${bankTabInfo(region).color}">${bankTabInfo(region).text}</span>`,
-      badge: `<div class="hero-kpi-badge" style="background:${regionSev.soft};color:${regionSev.color}">${fmtBankPct(region.pctRemainingNpaWithAdv)} NPA</div>`,
-      corner: bankCornerStats(region)
-    })}
-  </div>`;
-
-  const vsCircle = circle.pctRemainingNpaWithAdv - region.pctRemainingNpaWithAdv;
-  const vsBank = bank.pctRemainingNpaWithAdv - region.pctRemainingNpaWithAdv;
-  const dir = (v) => v>=0 ? 'better' : 'worse';
-  const insight = `<div class="insight-strip">
-    <div class="insight-icon">${svgIcon(ICON_STAR)}</div>
-    <div class="insight-body">
-      <div class="insight-title">Hathras vs the rest of the bank</div>
-      <div class="insight-text">Hathras's NPA ratio (${fmtBankPct(region.pctRemainingNpaWithAdv)}) is ${Math.abs(vsCircle).toFixed(2)} points ${dir(vsCircle)} than CO Moradabad's average and ${Math.abs(vsBank).toFixed(2)} points ${dir(vsBank)} than the whole Bank's average — ranked #${rank} of 65 regions.</div>
-    </div>
-  </div>`;
-
-  const circleCards = d.circles.map(c => {
-    const sev = npaPctSeverity(c.pctRemainingNpaWithAdv);
-    const isOurs = c.name === d.ourCircle;
-    const tab = bankTabInfo(c);
-    return `<div class="circle-card${isOurs?' is-ours':''}">
-      ${isOurs?'<div class="circle-card-tag">OUR CIRCLE</div>':''}
-      <div class="circle-card-name">${esc(c.name)}</div>
-      <div class="circle-card-npa" style="color:${sev.color}">${fmtBankPct(c.pctRemainingNpaWithAdv)}</div>
-      <div class="circle-card-sub">${fmtBankCr(c.remainingNpaAsOnDate)} NPA · ${c.branches.toLocaleString('en-IN')} branches</div>
-      <div class="circle-card-sub" style="color:${tab.color}">${tab.text}</div>
-    </div>`;
-  }).join('');
-
-  /* Categorical fill for the 3 circles (identity, not severity) -- distinct
-     from the green/amber/red status ramp used everywhere else on this tab.
-     #0EA5C4 is a deliberately deepened cyan (not --accent-2's bright dark-
-     theme value, which is tuned for text and reads too pale as a solid fill)
-     -- validated via the dataviz skill's palette checker against both
-     theme surfaces before shipping. */
-  const CIRCLE_FILL_COLORS = { 'CO Gorakhpur':'var(--accent)', 'CO Lucknow':'#0EA5C4', 'CO Moradabad':'var(--seal-d)' };
-  const circleSeg = d.circles.map(c => ({
-    value: c.remainingNpaAsOnDate,
-    color: CIRCLE_FILL_COLORS[c.name] || 'var(--ink-mute)',
-    label: c.name.replace('CO ',''),
-    valueLabel: `${fmtBankCr(c.remainingNpaAsOnDate)} · ${(c.remainingNpaAsOnDate/bank.remainingNpaAsOnDate*100).toFixed(1)}%`,
-  }));
-  const circleDonutCard = `<div class="chart-card">
-    <div class="section-label">NPA Share by Circle<span class="chart-sub">of the whole bank's ${fmtBankCr(bank.remainingNpaAsOnDate)} NPA book</span></div>
-    <div class="donut-flex">
-      ${donutCard(circleSeg, undefined, fmtBankCr(bank.remainingNpaAsOnDate), 'Total NPA')}
-      <div class="donut-legend">${donutLegend(circleSeg)}</div>
-    </div>
-  </div>`;
-
-  // Hathras's own asset-classification mix comes from the separate account-
-  // level dataset (the Hathras-only Dashboard's own data), not the bank-wide
-  // PDF -- that level of detail isn't available for other regions/circles.
-  const hathrasStats = computeDashboardStats('');
-  const assetSeg = ASSET_ORDER.filter(k=>hathrasStats.assetMix[k]).map(k=>({
-    value: hathrasStats.assetMix[k].os,
-    color: ASSET_SEV_COLOR[k],
-    label: assetLabel(k)+' ('+k+')',
-    valueLabel: `${hathrasStats.assetMix[k].count.toLocaleString('en-IN')} · ${fmtCr(hathrasStats.assetMix[k].os)}`,
-  }));
-  const assetDonutCard = `<div class="chart-card">
-    <div class="section-label">Hathras — Asset Classification Mix<span class="chart-sub">by outstanding balance · RBI IRAC norms (only available at Hathras's own account-level detail)</span></div>
-    <div class="donut-flex">
-      ${donutCard(assetSeg, undefined, fmtCr(hathrasStats.totalOS), 'Total O/S')}
-      <div class="donut-legend">${donutLegend(assetSeg)}</div>
-    </div>
-  </div>`;
-
-  const top10Worst = [...d.regions].sort((a,b)=>b.pctRemainingNpaWithAdv-a.pctRemainingNpaWithAdv).slice(0,10);
-  const worstBarItems = top10Worst.map(r => ({
-    label: r.region + (r.region===d.ourRegion?' ★':''),
-    value: r.pctRemainingNpaWithAdv,
-    color: npaPctSeverity(r.pctRemainingNpaWithAdv).color,
-    valueLabel: fmtBankPct(r.pctRemainingNpaWithAdv),
-  }));
-  const worstBarCard = `<div class="chart-card chart-card-wide">
-    <div class="section-label">Top 10 Worst NPA % Regions<span class="chart-sub">out of all 65 · ★ marks Hathras if it appears here</span></div>
-    <div class="bar-list">${barRows(worstBarItems)}</div>
-  </div>`;
-
-  const filterOptions = ['<option value="">All circles (65 regions)</option>']
-    .concat(d.circles.map(c=>`<option value="${esc(c.name)}"${bankRegionFilter===c.name?' selected':''}>${esc(c.name)} only</option>`)).join('');
-  const marchFilterOptions = `
-    <option value="">Since March: All</option>
-    <option value="above"${bankMarchFilter==='above'?' selected':''}>Increased since March</option>
-    <option value="below"${bankMarchFilter==='below'?' selected':''}>Reduced since March</option>`;
-  const targetFilterOptions = `
-    <option value="">vs Target: All</option>
-    <option value="above"${bankTargetFilter==='above'?' selected':''}>Behind Target</option>
-    <option value="below"${bankTargetFilter==='below'?' selected':''}>Ahead of Target</option>`;
-
-  let filteredRegions = bankRegionFilter ? d.regions.filter(r=>r.co===bankRegionFilter) : d.regions.slice();
-  if(bankMarchFilter==='above') filteredRegions = filteredRegions.filter(r=>r.netReductionOverMar26>0);
-  else if(bankMarchFilter==='below') filteredRegions = filteredRegions.filter(r=>r.netReductionOverMar26<=0);
-  if(bankTargetFilter==='above') filteredRegions = filteredRegions.filter(r=>r.gapFromTarget>0);
-  else if(bankTargetFilter==='below') filteredRegions = filteredRegions.filter(r=>r.gapFromTarget<=0);
-  filteredRegions = filteredRegions.sort((a,b)=>b.pctRemainingNpaWithAdv-a.pctRemainingNpaWithAdv);
-
-  const regionTableRows = filteredRegions.map(r => {
-    const sev = npaPctSeverity(r.pctRemainingNpaWithAdv);
-    const isOurs = r.region === d.ourRegion;
-    const isOurCircle = r.co === d.ourCircle;
-    return `<tr class="${isOurs?'is-ours':(isOurCircle?'is-our-circle':'')}">
-      <td>${bankRegionRank(d.regions, r)}</td>
-      <td class="tal">${esc(r.region)}${isOurs?' <span class="badge-pill locked" style="margin-left:6px">★ Ours</span>':''}</td>
-      <td class="tal">${esc(r.co.replace('CO ',''))}</td>
-      <td>${r.branches}</td>
-      <td>${fmtBankCr(r.totalAdv)}</td>
-      <td>${fmtBankCr(r.remainingNpaAsOnDate)}</td>
-      <td><span class="bank-npa-pill" style="background:${sev.soft};color:${sev.color}">${fmtBankPct(r.pctRemainingNpaWithAdv)}</span></td>
-      <td>${fmtBankCr(r.npaMar26)}</td>
-      <td style="color:${r.netReductionOverMar26<=0?'var(--green)':'var(--red)'}">${fmtBankCr(r.netReductionOverMar26)}</td>
-      <td style="color:${r.netReductionDuringMonth<=0?'var(--green)':'var(--red)'}">${fmtBankCr(r.netReductionDuringMonth)}</td>
-      <td style="color:${r.gapFromTarget<=0?'var(--green)':'var(--red)'}">${fmtBankCr(r.gapFromTarget)}</td>
-    </tr>`;
-  }).join('');
-
-  const regionTable = `<div class="chart-card">
-    <div class="list-modal-head">
-      <div>
-        <div class="section-label">All Regions — Ranked by NPA %<span class="chart-sub">worst first · Hathras highlighted · ${filteredRegions.length} of ${d.regions.length} regions shown</span></div>
-      </div>
-    </div>
-    <div class="bank-filter-row">
-      <select id="bankRegionFilterSelect" class="dash-select">${filterOptions}</select>
-      <select id="bankMarchFilterSelect" class="dash-select">${marchFilterOptions}</select>
-      <select id="bankTargetFilterSelect" class="dash-select">${targetFilterOptions}</select>
-    </div>
-    <div class="dash-table-wrap acct-list-scroll">
-      <table class="dash-table">
-        <thead><tr>
-          <th class="tal">Rank</th><th class="tal">Region</th><th class="tal">Circle</th>
-          <th>Br.</th><th>Total Adv.</th><th>NPA (now)</th><th>NPA %</th><th>NPA Mar-26</th><th>Since Mar-26</th><th>Net Reduction</th><th>Gap from Target</th>
-        </tr></thead>
-        <tbody>${regionTableRows}</tbody>
-      </table>
-    </div>
-  </div>`;
-
-  el.innerHTML = heroRow + insight +
-    `<div class="section-label" style="margin-top:26px">Circles<span class="chart-sub">CO Moradabad is our circle</span></div>
-     <div class="circle-card-row">${circleCards}</div>` +
-    `<div class="chart-grid" style="margin-top:6px">${circleDonutCard}${assetDonutCard}${worstBarCard}</div>` +
-    regionTable;
-
-  const filterSel = document.getElementById('bankRegionFilterSelect');
-  if(filterSel) filterSel.onchange = () => { bankRegionFilter = filterSel.value; renderBankDashboardBody(); };
-  const marchFilterSel = document.getElementById('bankMarchFilterSelect');
-  if(marchFilterSel) marchFilterSel.onchange = () => { bankMarchFilter = marchFilterSel.value; renderBankDashboardBody(); };
-  const targetFilterSel = document.getElementById('bankTargetFilterSelect');
-  if(targetFilterSel) targetFilterSel.onchange = () => { bankTargetFilter = targetFilterSel.value; renderBankDashboardBody(); };
 }
 
 /* ---------- Daily PNPA (Potential NPA) -- whole-bank, branch-wise, bucketed by scheme ----------
@@ -4889,7 +4440,6 @@ function switchView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.dataset.view===view));
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   if(view==='dashboard') renderDashboard();
-  if(view==='bank') renderBankDashboard();
   if(view==='pnpa') renderPnpaDashboard();
   if(view==='kccov') renderKccOverdue();
   const mainCol = document.getElementById('mainCol');
@@ -4941,8 +4491,6 @@ function toggleTheme(){
   on('branchContactsUploadDrop','click',()=>document.getElementById('branchContactsFileInput').click());
   on('branchContactsFileInput','change',(e)=>handleBranchContactsUpload(e));
   on('downloadBranchContactsTemplateBtn','click',()=>downloadBranchContactsTemplate());
-  on('bankPdfUploadDrop','click',()=>document.getElementById('bankPdfFileInput').click());
-  on('bankPdfFileInput','change',(e)=>handleBankPdfUpload(e));
   on('pnpaUploadDrop','click',()=>document.getElementById('pnpaFileInput').click());
   on('pnpaFileInput','change',(e)=>handlePnpaUpload(e));
   on('kccOverdueUploadDrop','click',()=>document.getElementById('kccOverdueFileInput').click());

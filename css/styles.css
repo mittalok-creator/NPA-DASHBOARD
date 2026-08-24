@@ -1340,7 +1340,7 @@ body{overscroll-behavior:none}
 @keyframes viewIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
 /* ---------- Dashboard view ---------- */
-#viewDashboard,#viewBank{padding:32px clamp(18px,3.5vw,48px) 60px;max-width:1560px;margin:0 auto}
+#viewDashboard{padding:32px clamp(18px,3.5vw,48px) 60px;max-width:1560px;margin:0 auto}
 .view-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:26px}
 .view-title{margin:0;font-size:clamp(22px,2.6vw,30px);font-weight:800;letter-spacing:-.7px;color:var(--ink);
   background:linear-gradient(135deg,#fff,#a9c6ff 70%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
@@ -1444,33 +1444,12 @@ body{overscroll-behavior:none}
   .hero-kpi-badge{display:inline-block}
 }
 
-/* ---------- Bank-wide NPA Dashboard ---------- */
-.target-chip-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
-.target-chip{flex:1;min-width:170px;padding:12px 14px;border-radius:var(--radius-md);border:1px solid var(--line);background:var(--stripe)}
-.target-chip .tc-label{display:block;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--sub);margin-bottom:4px}
-.target-chip .tc-val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
-.target-chip.ahead .tc-val{color:var(--green)}
-.target-chip.behind .tc-val{color:var(--red)}
-.target-chip .tc-march{display:block;font-size:11px;color:var(--sub);font-weight:600;margin:2px 0;font-variant-numeric:tabular-nums}
-.circle-card-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:14px 0 26px}
-.circle-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px;position:relative;box-shadow:var(--shadow-sm);transition:border-color .18s var(--ease),box-shadow .18s var(--ease)}
-.circle-card.is-ours{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft),var(--shadow-sm)}
-.circle-card-tag{position:absolute;top:-9px;right:14px;background:linear-gradient(135deg,var(--accent),var(--gold-d));color:#fff;font-size:9px;font-weight:800;letter-spacing:.6px;padding:3px 9px;border-radius:6px}
-.circle-card-name{font-weight:800;font-size:14px;color:var(--ink);letter-spacing:-.2px}
-.circle-card-npa{font-size:26px;font-weight:800;margin-top:8px;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
-.circle-card-sub{font-size:11.5px;color:var(--sub);margin-top:4px}
+/* ---------- Shared tab/filter row styling (PNPA, KCC Overdue) ---------- */
 .bank-filter-row{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 14px}
 .bank-filter-row .dash-select{min-width:170px;flex:1}
 .bank-tab-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .bank-tab-btn{background:var(--card);border:1.5px solid var(--line);color:var(--sub);padding:9px 16px;border-radius:20px;font-size:12.5px;font-weight:700;white-space:nowrap;transition:background .15s var(--ease),color .15s var(--ease),border-color .15s var(--ease)}
 .bank-tab-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
-.bank-npa-pill{display:inline-block;padding:3px 10px;border-radius:7px;font-size:11.5px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
-.dash-table tr.is-ours td{background:var(--accent-soft)}
-.dash-table tr.is-our-circle td{background:rgba(58,123,255,.06)}
-:root[data-theme="light"] .dash-table tr.is-our-circle td{background:rgba(27,79,224,.045)}
-@media (max-width:900px){
-  .circle-card-row{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
-}
 
 /* ---------- Dashboard: insight / attention strip ---------- */
 .insight-strip{
@@ -2190,7 +2169,7 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
    Opus mockups Alok shared + the approved feasibility mockup
    (2026-08-14). Scoped entirely to #detailPane (the loan-detail
    screen only, via CSS custom-property overrides) so every other tab
-   (Dashboard, Bank Dashboard, KCC Overdue, search results) keeps its
+   (Dashboard, KCC Overdue, search results) keeps its
    existing blue/cyan accent untouched. Reuses the app's own existing
    --seal/--seal-l/--seal-d brass tokens as the accent rather than
    inventing a new hex, and self-hosts Archivo + IBM Plex Mono the
