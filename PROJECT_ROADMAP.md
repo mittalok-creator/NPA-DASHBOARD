@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Redesign: share card converted from dark to a white/teal light theme (2026-08-29, same day)
+
+Immediately after the cyan-dark redesign shipped, Alok asked to convert it to a light theme. Same structure and content throughout — every class name, every layout rule untouched — only the color values changed, in `css/styles.css`'s `.wa-card*` block. Base flipped from near-black `#060B14` to white `#FFFFFF`, cyan `#2DD4CF` darkened to a teal `#0E9AA0` that actually holds contrast on white (the original cyan reads fine on black but washes out on white), and every "glow" treatment (the logo's cyan halo, the profile card's colored shadow, the Settlement Offer card's diagonal light-sweep) became a soft tint or shadow instead, since a glow effect that reads as *light emitting from a dark surface* has no equivalent on a white one — a literal color-swap without touching those rules would have looked broken, not just lighter. Semantic colors (NPA-age red, amber P&L/badges, green/red settlement impact) all got darkened by the same logic — direct light-on-dark values fail contrast on white, so each was individually picked to hold up against `#FFFFFF` rather than mechanically inverted.
+
+Verified via Playwright against the same two real scenarios already covered (Premvati's single-account card, and the Settlement Offer state with an OTS Amount entered): both render with correct contrast, the real bank logo and "Regional Office Hathras" line both still legible, the Recovery/Sacrifice gauge and every semantic color readable against white. Both share paths and the share menu unaffected; full regression clean.
+
+Files touched: `css/styles.css` (`.wa-card*` recolored), `sw.js` (`CACHE_NAME` v145→v146, matching bump).
+
 ### Redesign: share card rebuilt in Alok's own cyan reference style, with a Recovery gauge, real bank logo, and Regional Office Hathras (2026-08-29, same day)
 
 Alok sent an AI-generated (Nano Banana) mockup of a mobile banking screen — cyan-glow bordered cards, a profile row, two headline stat cards, an account-breakdown grid, and a highlighted "Settlement Offer" callout with a bottom tab bar. Asked for "kuch is tarah redesign karo... apna improvisation kar lena" (redesign somewhat like this, use your own judgment). Adapted rather than copied: dropped ROI/repay-date (a live-loan concept, not an NPA settlement one) for Scheme + Asset Code; dropped the bell icon and bottom tab bar (a static shared image isn't a navigable app); dropped the fabricated "Valid till" date and an untappable "View Details" button; kept Manrope + Inter (tabular, zero-safe) rather than switching to match the reference's generic sans, since that pairing was already approved for this whole app.
