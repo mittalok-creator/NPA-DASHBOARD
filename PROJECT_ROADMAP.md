@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Refinement: share card swaps Dues for O/S, and shows OTS Amount + P&L Impact once a settlement's proposed (2026-08-29, same day)
+
+Three more rounds of feedback on the just-shipped summary-image card. First: trim the share menu's subtitles down to plain "Full PDF" / "Summary Image" headings. Second: add a Total P&L line alongside Total Dues. Third, this round: "use O/S in card everywhere, not total dues" — every per-account "Dues" figure and the bottom bar's "Total Dues" now read O/S (`s.os` / `totalOS`) instead of `totalDuesFor()`; the hero was already "Total O/S Balance" and stayed as-is.
+
+Also added the conditional half of the ask: **if an OTS Amount has actually been typed in for an account, show it with its P&L Impact too.** Per account, `renderShareCard()` now checks `parseOtsAmount(otsAmounts[s.acctNo])` (same helper `renderPrintView()` already uses) — when it's set, a dashed-divider sub-row appears under that account's O/S/P&L showing OTS Amount and P&L Impact (`ots - totalPL`, with the same ▲/▼ arrow convention as the patti's own "Impact on P&L" row). The bottom gold bar swaps too: with no OTS Amount anywhere, it's a single "Total P&L" line (unchanged from the previous round); once at least one account has a figure, it becomes "Total OTS Amount" + "Total P&L Impact" instead — summed only over the accounts that actually have a figure, same partial-settlement convention `renderPrintView()`'s own aggregate totals already use, so an undecided account is never silently counted as zero.
+
+Verified via Playwright against both states on real account data: no-OTS case renders O/S + a single Total P&L bar; typing an OTS Amount into `otsInput-0` (the same input the real Loan Accounts table uses) correctly surfaces the per-account OTS/Impact row and switches the bottom bar to Total OTS Amount + Total P&L Impact, arrow and all. Full regression clean.
+
+Files touched: `js/app.js` (`renderShareCard`), `css/styles.css` (`.wa-ots-row`), `sw.js` (`CACHE_NAME` v143→v144, matching bump).
+
 ### Feature: WhatsApp share gets a second option — a mobile summary image, alongside the full PDF (2026-08-29, same day)
 
 Immediately after the PDF-based WhatsApp share shipped, Alok asked for a mobile-shaped version instead: "eye catching, big fonts, summary and limited data." Mockup-first again — 3 Artifact concepts (Hero Stat / Settlement Ticket / Snapshot Tiles) with Sahdev Singh's real figures, presented in phone-frame previews. He picked the Hero Stat direction, then specified the exact field set he wanted on it (name, branch, Total O/S, account-wise Dues, NPA date, Total Dues, P&L), then asked to also add Asset Code per account. Built a second mockup matching that exact spec and got the go-ahead ("done ye image main share ho jaye") — then, before implementation, he asked for both the full PDF and the new image to stay available rather than one replacing the other.
