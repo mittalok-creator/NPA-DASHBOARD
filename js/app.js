@@ -105,6 +105,99 @@ function printWithPageSize(pageCss){
 }
 function printOtsSheet(){ printWithPageSize('size:A4;margin:12mm'); }
 window.printOtsSheet = printOtsSheet;
+
+/* Slices a tall rendered canvas into as many A4 pages as it needs and
+   returns the finished PDF as a Blob. html2canvas gives back one single
+   image regardless of how many accounts are linked (the print sheet's
+   table just grows taller with more accounts), so a settlement with 3-4
+   linked accounts can easily run past one page -- this crops the source
+   canvas into page-height strips rather than squashing everything onto
+   one page and making it unreadable. */
+function canvasToPdfBlob(canvas){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4', orientation:'portrait', compress:true });
+  const margin = 24;
+  const usableW = doc.internal.pageSize.getWidth() - margin*2;
+  const usableH = doc.internal.pageSize.getHeight() - margin*2;
+  const scale = usableW / canvas.width; // canvas px -> PDF pt
+  const pxPerPage = Math.floor(usableH / scale);
+  // addImage(canvas) with the live HTMLCanvasElement embeds it essentially
+  // uncompressed (width*height*4 bytes, ~9.6MB for one plain settlement
+  // page) -- jsPDF only actually PNG-compresses when it's handed a real
+  // encoded PNG to parse, so every canvas goes through toDataURL() first.
+  if(canvas.height * scale <= usableH){
+    doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, usableW, canvas.height * scale);
+  } else {
+    let renderedPx = 0, first = true;
+    while(renderedPx < canvas.height){
+      const sliceH = Math.min(pxPerPage, canvas.height - renderedPx);
+      const slice = document.createElement('canvas');
+      slice.width = canvas.width; slice.height = sliceH;
+      slice.getContext('2d').drawImage(canvas, 0, renderedPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      if(!first) doc.addPage();
+      doc.addImage(slice.toDataURL('image/png'), 'PNG', margin, margin, usableW, sliceH * scale);
+      renderedPx += sliceH;
+      first = false;
+    }
+  }
+  return doc.output('blob');
+}
+/* Renders the exact same print sheet as printOtsSheet() to a real PDF
+   file client-side (html2canvas -> jsPDF, no server involved), then hands
+   it to the Web Share API so the OS's own share sheet opens with WhatsApp
+   sitting right there -- one tap closer than "Print, save PDF, open
+   WhatsApp, attach it" was before. #printArea is display:none outside of
+   @media print, so html2canvas (which renders the live DOM, not a print
+   simulation) would otherwise capture nothing; it's floated on-screen at
+   -9999px just long enough to rasterize, then restored exactly as it was.
+   navigator.canShare({files}) is the real capability check -- most desktop
+   browsers return false here even though navigator.share itself exists,
+   which is exactly the case the download+wa.me fallback below covers. */
+async function shareOtsOnWhatsApp(){
+  const slots = window.__slots; const custRow = window.__custRow;
+  if(!slots || !custRow) return;
+  renderPrintView();
+  const printEl = document.getElementById('printArea');
+  const prevCss = printEl.style.cssText;
+  printEl.style.cssText = 'display:block;position:fixed;left:-9999px;top:0;width:760px;background:#fff;padding:24px;z-index:-1';
+  if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+  await new Promise(r=>setTimeout(r, 60));
+  let blob;
+  try{
+    const canvas = await html2canvas(printEl, { scale:2, backgroundColor:'#ffffff' });
+    blob = canvasToPdfBlob(canvas);
+  } finally {
+    printEl.style.cssText = prevCss;
+  }
+  const safeName = String(custRow[C.NAME]||'borrower').replace(/[\\/:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,40);
+  const fileName = `OTS_${safeName}_${dateToInputValue(new Date())}.pdf`;
+  const file = new File([blob], fileName, {type:'application/pdf'});
+  const shareText = `UPGB OTS Calculator — ${custRow[C.NAME]||'—'} (Cust ID ${custRow[C.CUST_ID]||'—'})`;
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({ files:[file], title:'UPGB OTS Calculator', text:shareText });
+    }catch(err){
+      if(err && err.name==='AbortError') return; // user closed the share sheet -- not a failure
+      throw err;
+    }
+    return;
+  }
+  // No file-sharing support (every desktop browser today, plus some mobile
+  // ones) -- download the PDF and open a WhatsApp compose window with the
+  // message pre-filled. wa.me can't attach a file itself; the one manual
+  // tap to attach the file that just downloaded is unavoidable here, so
+  // the message says so rather than silently doing less than it promised.
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+  window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' — PDF downloaded, please attach it here.')}`, '_blank');
+}
+window.shareOtsOnWhatsApp = () => shareOtsOnWhatsApp().catch(err=>{
+  console.error(err);
+  alert('Could not prepare the PDF to share. Please try again.');
+});
 /* Illustrative severity bands for NPA % (NPA outstanding / total advance),
    not a claim of official RBI benchmark thresholds -- just enough to spot
    a high-NPA branch/region at a glance. */
@@ -992,6 +1085,9 @@ function openDetail(custId, jumpAcct){
         </button>
         <button class="share-btn" onclick="printOtsSheet()" title="Print / Share" aria-label="Print or share this report">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+        </button>
+        <button class="share-btn" onclick="shareOtsOnWhatsApp()" title="Share on WhatsApp" aria-label="Share this report on WhatsApp">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
         </button>
       </div>
     </div>

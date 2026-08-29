@@ -1,4 +1,4 @@
-const CACHE_NAME = 'upgb-ots-shell-v140';
+const CACHE_NAME = 'upgb-ots-shell-v141';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
@@ -7,16 +7,20 @@ const CACHE_NAME = 'upgb-ots-shell-v140';
 // on every future version bump. pdf.min.js / pdf.worker.min.js were
 // dropped entirely (2026-08-24) along with the Bank Dashboard tab that
 // was their only consumer -- neither is loaded by index.html anymore.
+// html2canvas.min.js / jspdf.umd.min.js (added 2026-08-29, for the
+// WhatsApp share button) are deliberately NOT precached either, same
+// reasoning -- most sessions never tap Share, so the runtime fetch
+// handler below still caches them normally the first time someone does.
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './css/styles.css?v=20260824a',
-  './js/app.js?v=20260824a',
-  './js/auth.js?v=20260824a',
-  './js/publish.js?v=20260824a',
-  './js/splash.js?v=20260824a',
-  './js/vendor/xlsx.full.min.js?v=20260824a',
-  './js/vendor/exceljs.min.js?v=20260824a',
+  './css/styles.css?v=20260829a',
+  './js/app.js?v=20260829a',
+  './js/auth.js?v=20260829a',
+  './js/publish.js?v=20260829a',
+  './js/splash.js?v=20260829a',
+  './js/vendor/xlsx.full.min.js?v=20260829a',
+  './js/vendor/exceljs.min.js?v=20260829a',
   './manifest.webmanifest',
 ];
 

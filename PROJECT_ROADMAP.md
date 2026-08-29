@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-08-24
+Last updated: 2026-08-29
 
 ---
 
@@ -122,6 +122,20 @@ Vercel first**, see notes below).
 **Current milestone**: none — ready to start M7 (fast search) or M9 (UI/UX
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
+
+### Feature: OTS patti (print/PDF sheet) redesigned to Manrope + Inter, plus a direct WhatsApp share button (2026-08-29)
+
+Alok uploaded a real patti PDF (Sahdev Singh's, from Jajan Patti branch) and asked for "clean fonts" on it, with mockups first. The sheet's current typography — Archivo for headers/labels, IBM Plex Mono for every number — was the plain typewriter look he wanted redesigned. Built two mockup options as an Artifact (interactive tab toggle, Sahdev Singh's real figures, exact production layout preserved) rather than guessing: **Option A** (Inter everywhere, varied by weight) and **Option B** (Manrope for the title/labels/headers, Inter for every figure). Alok picked **Option B**.
+
+**Implemented in `css/styles.css`** (`.pv-*` rules, `#printArea`): swapped every `'Archivo'` reference to `'Manrope'` (title, borrower name, meta, table labels/headers, aggregate title — both already self-hosted in this file, no new font embed needed) and every `'IBM Plex Mono'` reference to `'Inter'` (info-grid values, every table figure, aggregate row values), adding `font-variant-numeric:tabular-nums` and the same `font-feature-settings:"zero" 0,"ss01" 0,"ss02" 0,"ss03" 0,"ss04" 0` zero-safety reset already locked in for the on-screen OTS Calculator — a printed `0` can't render slashed either. Existing weight hierarchy (info-grid values bold, plain table rows unweighted, `.pv-strong` rows bold) left untouched; only the font families changed, per the actual request. IBM Plex Mono's `@font-face` blocks are now fully unused (nothing left references them) but were left in place — not part of what was asked, unlike the Bank Dashboard's PDF.js removal below.
+
+**New feature, same message**: Alok also asked for a button that shares the patti PDF straight to WhatsApp on tap. Added a third `.share-btn` (chat-bubble icon) next to the existing Excel-export and Print/Share buttons in the OTS Calculator's detail-pane header. `shareOtsOnWhatsApp()` in `js/app.js`: calls the existing `renderPrintView()`, briefly floats `#printArea` on-screen at `left:-9999px` (it's `display:none` outside `@media print`, so `html2canvas` — which renders the live DOM, not a print simulation — would otherwise capture nothing), waits on `document.fonts.ready` so Manrope/Inter are actually loaded before the capture, rasterizes it with `html2canvas`, then builds a real PDF client-side with `jsPDF` (`canvasToPdfBlob()` — slices the canvas into page-height strips for the rare settlement tall enough to need more than one A4 page, though with today's fixed 16-row table only account count — which affects width, not height — varies, so this is a defensive path more than a currently-exercised one). The resulting file is handed to `navigator.share({files:[file]})` when `navigator.canShare({files})` says the browser supports it (Android Chrome, iOS Safari 15+) — the OS's own native share sheet opens with WhatsApp sitting right there, one tap away; no web API can skip straight past that sheet into one specific third-party app, so "direct" here means the closest a website can get. Where file-sharing isn't supported (every desktop browser today) it falls back to downloading the PDF and opening a `wa.me` compose window with the message pre-filled, telling the user to attach the file themselves — stated plainly rather than pretending the file went along automatically.
+
+Caught one real bug during testing: `jsPDF.addImage(canvas, 'PNG', ...)` handed the live `HTMLCanvasElement` embeds essentially uncompressed pixel data (~9.6 MB for one plain single-page sheet — exactly `width×height×4` bytes) instead of an actual compressed PNG. Fixed two ways, confirmed via a byte-identical before/after test: pass `canvas.toDataURL('image/png')` instead of the raw canvas (so jsPDF has real PNG bytes to parse), and pass `{compress:true}` to the `jsPDF` constructor (turns on FlateDecode stream compression, which is what actually did the heavy lifting — dropped the same sheet to ~186 KB). Verified by saving and rendering the actual generated PDF: correct Manrope/Inter typography, single page, no visible artifacts, clean `0` glyphs.
+
+Vendored `js/vendor/html2canvas.min.js` (v1.4.1) and `js/vendor/jspdf.umd.min.js` (v2.5.1), both MIT-licensed, from cdnjs — self-hosted the same way every other vendor library in this app is, loaded before `app.js`. Deliberately **not** added to `sw.js`'s `SHELL_ASSETS` precache list, same reasoning as the removed `pdf.worker.min.js`: most sessions never tap Share, so the runtime fetch handler caches them normally the first time someone does rather than forcing the download on every load.
+
+Files touched: `css/styles.css`, `js/app.js`, `index.html` (2 new `<script>` tags, cache-bust bump), `sw.js` (`CACHE_NAME` v140→v141, matching bump), `js/vendor/html2canvas.min.js` (new), `js/vendor/jspdf.umd.min.js` (new). Verified via Playwright: correct computed `font-family` on every `.pv-*` element, zero console errors across the full app, the real button click produces a valid, correctly-typeset, ~186 KB single-page PDF through the actual fallback code path (headless Chromium has no `navigator.share`, so this exercises the download+`wa.me` branch specifically).
 
 ### Removed: "Bank Dashboard" tab, permanently (2026-08-24)
 
