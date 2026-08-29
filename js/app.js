@@ -142,18 +142,41 @@ function canvasToPdfBlob(canvas){
   }
   return doc.output('blob');
 }
+/* Shared by both share paths below: hands a finished file to the Web
+   Share API when the browser actually supports sharing files (Android
+   Chrome, iOS Safari 15+) so the OS's own share sheet opens with
+   WhatsApp sitting right there -- one tap closer than "download, open
+   WhatsApp, attach it" was before. navigator.canShare({files}) is the
+   real capability check; most desktop browsers return false here even
+   though navigator.share itself exists, which is exactly the case the
+   download+wa.me fallback covers -- wa.me can't attach a file itself,
+   so that one manual tap to attach what just downloaded is unavoidable,
+   and the message says so rather than silently doing less than promised. */
+async function shareFileOrFallback(blob, fileName, mimeType, shareText){
+  const file = new File([blob], fileName, {type:mimeType});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({ files:[file], title:'UPGB OTS Calculator', text:shareText });
+    }catch(err){
+      if(err && err.name==='AbortError') return; // user closed the share sheet -- not a failure
+      throw err;
+    }
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+  window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ` — ${mimeType==='application/pdf'?'PDF':'image'} downloaded, please attach it here.`)}`, '_blank');
+}
 /* Renders the exact same print sheet as printOtsSheet() to a real PDF
-   file client-side (html2canvas -> jsPDF, no server involved), then hands
-   it to the Web Share API so the OS's own share sheet opens with WhatsApp
-   sitting right there -- one tap closer than "Print, save PDF, open
-   WhatsApp, attach it" was before. #printArea is display:none outside of
-   @media print, so html2canvas (which renders the live DOM, not a print
-   simulation) would otherwise capture nothing; it's floated on-screen at
-   -9999px just long enough to rasterize, then restored exactly as it was.
-   navigator.canShare({files}) is the real capability check -- most desktop
-   browsers return false here even though navigator.share itself exists,
-   which is exactly the case the download+wa.me fallback below covers. */
-async function shareOtsOnWhatsApp(){
+   file client-side (html2canvas -> jsPDF, no server involved). #printArea
+   is display:none outside of @media print, so html2canvas (which renders
+   the live DOM, not a print simulation) would otherwise capture nothing;
+   it's floated on-screen at -9999px just long enough to rasterize, then
+   restored exactly as it was. */
+async function shareOtsPdf(){
   const slots = window.__slots; const custRow = window.__custRow;
   if(!slots || !custRow) return;
   renderPrintView();
@@ -171,33 +194,121 @@ async function shareOtsOnWhatsApp(){
   }
   const safeName = String(custRow[C.NAME]||'borrower').replace(/[\\/:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,40);
   const fileName = `OTS_${safeName}_${dateToInputValue(new Date())}.pdf`;
-  const file = new File([blob], fileName, {type:'application/pdf'});
   const shareText = `UPGB OTS Calculator — ${custRow[C.NAME]||'—'} (Cust ID ${custRow[C.CUST_ID]||'—'})`;
-  if(navigator.canShare && navigator.canShare({files:[file]})){
-    try{
-      await navigator.share({ files:[file], title:'UPGB OTS Calculator', text:shareText });
-    }catch(err){
-      if(err && err.name==='AbortError') return; // user closed the share sheet -- not a failure
-      throw err;
-    }
-    return;
-  }
-  // No file-sharing support (every desktop browser today, plus some mobile
-  // ones) -- download the PDF and open a WhatsApp compose window with the
-  // message pre-filled. wa.me can't attach a file itself; the one manual
-  // tap to attach the file that just downloaded is unavoidable here, so
-  // the message says so rather than silently doing less than it promised.
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = fileName;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 30000);
-  window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' — PDF downloaded, please attach it here.')}`, '_blank');
+  await shareFileOrFallback(blob, fileName, 'application/pdf', shareText);
 }
-window.shareOtsOnWhatsApp = () => shareOtsOnWhatsApp().catch(err=>{
+window.shareOtsPdf = () => shareOtsPdf().catch(err=>{
   console.error(err);
   alert('Could not prepare the PDF to share. Please try again.');
 });
+
+/* The compact, mobile-shaped summary card -- Total O/S as the headline,
+   each linked account's own Dues/P&L/Asset Code, Total Dues closing it
+   out -- built to be shared as an image instead of the full A4 patti,
+   which reads as a wall of small print in a WhatsApp thumbnail. Approved
+   mockup direction: navy/gold "Hero Stat" card, one card = one image.
+   NPA date in the header uses the earliest across linked accounts when
+   they differ (rare, but two accounts under one customer aren't
+   guaranteed to have slipped into NPA on the same date). */
+function renderShareCard(){
+  const slots = window.__slots; const custRow = window.__custRow;
+  if(!slots || !custRow) return;
+  const totalOS = slots.reduce((a,s)=>a+((s.os!=='')?s.os:0),0);
+  let totalDues = 0;
+  slots.forEach(s=>{ const td = totalDuesFor(s); totalDues += (td!==''?td:0); });
+  const npaDates = slots.map(s=>toDate(s.npaDate)).filter(Boolean);
+  const earliestNpa = npaDates.length ? new Date(Math.min(...npaDates.map(d=>d.getTime()))) : null;
+  const solId = esc(custRow[C.SOL_ID])||'';
+  const acctCards = slots.map(s=>{
+    const pl = s.totalPL; const pct = s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'';
+    return `<div class="wa-acct-card">
+      <div class="wa-acct-no"><span>A/c ${esc(s.acctNo)}</span><span class="asset">${esc(s.assetCode)||'—'}</span></div>
+      <div class="wa-acct-vals">
+        <div class="grp"><span class="k">Dues</span><span class="v wa-num">${fmtINR2(totalDuesFor(s))}</span></div>
+        <div class="grp"><span class="k">P&amp;L</span><span class="v pl wa-num">${fmtINR2(pl)}<span class="pct">${pct}</span></span></div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('shareCardArea').innerHTML = `
+    <div class="wa-card">
+      <div class="wa-bank">Uttar Pradesh Gramin Bank</div>
+      <div class="wa-name">${esc(custRow[C.NAME])||'—'}</div>
+      <div class="wa-chiprow">
+        <span class="wa-chip">${esc(custRow[C.SOL_DESC])||''}${solId?` (${solId})`:''}</span>
+        ${earliestNpa?`<span class="wa-chip warn">NPA since ${fmtDate(earliestNpa)}</span>`:''}
+      </div>
+      <div class="wa-hero-eyebrow">Total O/S Balance</div>
+      <div class="wa-hero-num wa-num">${fmtINR2(totalOS)}</div>
+      <div class="wa-acct-list">${acctCards}</div>
+      <div class="wa-total-bar">
+        <span class="k wa-lbl">Total Dues</span>
+        <span class="v wa-num">${fmtINR2(totalDues)}</span>
+      </div>
+      <div class="wa-foot-line">Cust ID ${esc(custRow[C.CUST_ID])||'—'} &middot; as on ${fmtDate(new Date())}</div>
+    </div>
+  `;
+}
+async function shareOtsImage(){
+  const slots = window.__slots; const custRow = window.__custRow;
+  if(!slots || !custRow) return;
+  renderShareCard();
+  const cardEl = document.getElementById('shareCardArea');
+  const prevCss = cardEl.style.cssText;
+  cardEl.style.cssText = 'display:block;position:fixed;left:-9999px;top:0;z-index:-1';
+  if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+  await new Promise(r=>setTimeout(r, 60));
+  let blob;
+  try{
+    const canvas = await html2canvas(cardEl.firstElementChild, { scale:2, backgroundColor:null });
+    blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  } finally {
+    cardEl.style.cssText = prevCss;
+  }
+  const safeName = String(custRow[C.NAME]||'borrower').replace(/[\\/:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,40);
+  const fileName = `OTS_${safeName}_${dateToInputValue(new Date())}.png`;
+  const shareText = `UPGB OTS Calculator — ${custRow[C.NAME]||'—'} (Cust ID ${custRow[C.CUST_ID]||'—'})`;
+  await shareFileOrFallback(blob, fileName, 'image/png', shareText);
+}
+window.shareOtsImage = () => shareOtsImage().catch(err=>{
+  console.error(err);
+  alert('Could not prepare the image to share. Please try again.');
+});
+
+/* Small anchored menu on the WhatsApp share button -- Alok wanted both
+   the full compliance-record PDF AND the quick-glance image available,
+   not one replacing the other, so the button asks which one instead of
+   picking for him. Built and torn down on demand rather than living in
+   the static markup, same pattern as other one-off popovers in this
+   app; a single document-level click listener (registered with `once`)
+   closes it on any outside click without needing to track focus state. */
+function toggleShareOtsMenu(evt){
+  evt.stopPropagation();
+  const existing = document.getElementById('shareOtsMenu');
+  if(existing){ existing.remove(); return; }
+  const btn = evt.currentTarget;
+  const menu = document.createElement('div');
+  menu.id = 'shareOtsMenu';
+  menu.className = 'share-ots-menu';
+  menu.innerHTML = `
+    <button type="button" onclick="event.stopPropagation();document.getElementById('shareOtsMenu').remove();shareOtsPdf()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span>Full PDF <small>the complete patti</small></span>
+    </button>
+    <button type="button" onclick="event.stopPropagation();document.getElementById('shareOtsMenu').remove();shareOtsImage()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      <span>Summary Image <small>name, O/S, dues, P&amp;L</small></span>
+    </button>
+  `;
+  document.body.appendChild(menu);
+  const r = btn.getBoundingClientRect();
+  menu.style.top = (r.bottom + window.scrollY + 6) + 'px';
+  menu.style.right = (window.innerWidth - r.right) + 'px';
+  setTimeout(()=>document.addEventListener('click', function closeMenu(){
+    document.getElementById('shareOtsMenu')?.remove();
+    document.removeEventListener('click', closeMenu);
+  }), 0);
+}
+window.toggleShareOtsMenu = toggleShareOtsMenu;
 /* Illustrative severity bands for NPA % (NPA outstanding / total advance),
    not a claim of official RBI benchmark thresholds -- just enough to spot
    a high-NPA branch/region at a glance. */
@@ -1086,7 +1197,7 @@ function openDetail(custId, jumpAcct){
         <button class="share-btn" onclick="printOtsSheet()" title="Print / Share" aria-label="Print or share this report">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
         </button>
-        <button class="share-btn" onclick="shareOtsOnWhatsApp()" title="Share on WhatsApp" aria-label="Share this report on WhatsApp">
+        <button class="share-btn" onclick="toggleShareOtsMenu(event)" title="Share on WhatsApp" aria-label="Share this report on WhatsApp">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
         </button>
       </div>
