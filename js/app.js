@@ -214,8 +214,11 @@ function renderShareCard(){
   const slots = window.__slots; const custRow = window.__custRow;
   if(!slots || !custRow) return;
   const totalOS = slots.reduce((a,s)=>a+((s.os!=='')?s.os:0),0);
-  let totalDues = 0;
-  slots.forEach(s=>{ const td = totalDuesFor(s); totalDues += (td!==''?td:0); });
+  let totalDues = 0, totalPL = 0;
+  slots.forEach(s=>{
+    const td = totalDuesFor(s); totalDues += (td!==''?td:0);
+    totalPL += (s.totalPL!==''?s.totalPL:0);
+  });
   const npaDates = slots.map(s=>toDate(s.npaDate)).filter(Boolean);
   const earliestNpa = npaDates.length ? new Date(Math.min(...npaDates.map(d=>d.getTime()))) : null;
   const solId = esc(custRow[C.SOL_ID])||'';
@@ -241,8 +244,8 @@ function renderShareCard(){
       <div class="wa-hero-num wa-num">${fmtINR2(totalOS)}</div>
       <div class="wa-acct-list">${acctCards}</div>
       <div class="wa-total-bar">
-        <span class="k wa-lbl">Total Dues</span>
-        <span class="v wa-num">${fmtINR2(totalDues)}</span>
+        <div class="wa-total-row"><span class="k wa-lbl">Total Dues</span><span class="v wa-num">${fmtINR2(totalDues)}</span></div>
+        <div class="wa-total-row sub"><span class="k wa-lbl">Total P&amp;L</span><span class="v wa-num">${fmtINR2(totalPL)}</span></div>
       </div>
       <div class="wa-foot-line">Cust ID ${esc(custRow[C.CUST_ID])||'—'} &middot; as on ${fmtDate(new Date())}</div>
     </div>
@@ -292,11 +295,11 @@ function toggleShareOtsMenu(evt){
   menu.innerHTML = `
     <button type="button" onclick="event.stopPropagation();document.getElementById('shareOtsMenu').remove();shareOtsPdf()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      <span>Full PDF <small>the complete patti</small></span>
+      <span>Full PDF</span>
     </button>
     <button type="button" onclick="event.stopPropagation();document.getElementById('shareOtsMenu').remove();shareOtsImage()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-      <span>Summary Image <small>name, O/S, dues, P&amp;L</small></span>
+      <span>Summary Image</span>
     </button>
   `;
   document.body.appendChild(menu);

@@ -747,7 +747,6 @@ main{padding:20px 16px 40px}
   transition:background .12s var(--ease)}
 .share-ots-menu button:hover{background:var(--accent-soft)}
 .share-ots-menu button svg{flex-shrink:0;color:var(--accent)}
-.share-ots-menu button small{display:block;font-size:10.5px;font-weight:600;color:var(--sub);margin-top:1px}
 .detail-headtext{flex:1;min-width:0}
 .detail-headtext h2{margin:0;font-size:14.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.2px}
 .detail-headtext p{margin:2px 0 0;font-size:11.5px;color:var(--gold-l)}
@@ -1073,9 +1072,12 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .wa-card .wa-acct-vals .v{font-size:14.5px;font-weight:700;margin-top:2px}
 .wa-card .wa-acct-vals .v.pl{color:#D9AD53}
 .wa-card .wa-acct-vals .pct{font-size:10px;font-weight:600;opacity:.6;margin-left:4px}
-.wa-card .wa-total-bar{margin-top:16px;background:#D9AD53;color:#122349;border-radius:14px;padding:14px 17px;display:flex;justify-content:space-between;align-items:center}
+.wa-card .wa-total-bar{margin-top:16px;background:#D9AD53;color:#122349;border-radius:14px;padding:13px 17px}
+.wa-card .wa-total-row{display:flex;justify-content:space-between;align-items:center}
+.wa-card .wa-total-row+.wa-total-row{margin-top:7px;padding-top:7px;border-top:1px solid rgba(18,35,73,.18)}
 .wa-card .wa-total-bar .k{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
 .wa-card .wa-total-bar .v{font-size:20px;font-weight:900}
+.wa-card .wa-total-row.sub .k,.wa-card .wa-total-row.sub .v{font-size:13.5px;font-weight:700}
 .wa-card .wa-foot-line{text-align:center;font-size:9.5px;opacity:.45;margin-top:12px}
 
 /* ---------- Cmd+K command palette ---------- */
