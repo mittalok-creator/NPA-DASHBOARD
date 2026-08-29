@@ -210,64 +210,113 @@ window.shareOtsPdf = () => shareOtsPdf().catch(err=>{
    NPA date in the header uses the earliest across linked accounts when
    they differ (rare, but two accounts under one customer aren't
    guaranteed to have slipped into NPA on the same date). */
+const WA_ICON_COIN = '<svg class="wa-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1.1 1.3-2 3-2s3 .9 3 2-1.3 1.5-3 2-3 .9-3 2 1.3 2 3 2 3-.9 3-2"/></svg>';
+const WA_ICON_TREND = '<svg class="wa-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="3 17 9 11 13 15 21 6"/><polyline points="14 6 21 6 21 13"/></svg>';
+const WA_ICON_DOC = '<svg class="wa-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+const WA_ICON_SEAL = '<svg class="wa-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="8" r="6"/><path d="M9 13.5L7 22l5-3 5 3-2-8.5"/></svg>';
+const WA_ICON_CLOCK = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+/* Initials for the avatar circle -- first letter of up to the first two
+   "words" in the name, same convention as the auth widget's avatar
+   fallback elsewhere in this app when there's no photo to show. */
+function waInitials(name){
+  const words = String(name||'').trim().split(/\s+/).filter(Boolean);
+  return (words[0]?.[0]||'').toUpperCase() + (words[1]?.[0]||'').toUpperCase();
+}
 function renderShareCard(){
   const slots = window.__slots; const custRow = window.__custRow;
   if(!slots || !custRow) return;
+  const single = slots.length===1;
   const totalOS = slots.reduce((a,s)=>a+((s.os!=='')?s.os:0),0);
   let totalPL = 0;
   slots.forEach(s=>{ totalPL += (s.totalPL!==''?s.totalPL:0); });
   const npaDates = slots.map(s=>toDate(s.npaDate)).filter(Boolean);
   const earliestNpa = npaDates.length ? new Date(Math.min(...npaDates.map(d=>d.getTime()))) : null;
+  const npaYears = earliestNpa ? ((Date.now()-earliestNpa.getTime())/(1000*60*60*24*365.25)) : null;
   const solId = esc(custRow[C.SOL_ID])||'';
+  const logoSrc = document.querySelector('.nav-logo')?.src || '';
   // Same partial-settlement convention as renderPrintView()'s aggregate
   // totals: only accounts that actually have an OTS Amount typed in
-  // count toward the OTS/impact sums -- an account with no figure yet
-  // isn't silently treated as zero.
-  let totalOtsSum = 0, totalImpact = 0, anyOts = false;
+  // count toward the OTS/impact/gauge sums -- an account with no figure
+  // yet isn't silently treated as zero (and doesn't count toward the
+  // Recovery % denominator either).
+  let totalOtsSum = 0, totalImpact = 0, totalSacrifice = 0, osOfOtsAccts = 0, anyOts = false;
   const acctCards = slots.map(s=>{
     const pl = s.totalPL; const pct = s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'';
     const ots = parseOtsAmount(otsAmounts[s.acctNo]);
-    let otsRow = '';
     if(ots!==null){
-      const impact = ots - pl;
-      const arrow = impact>0?'▲ ':(impact<0?'▼ ':'');
-      totalOtsSum += ots; totalImpact += impact; anyOts = true;
-      otsRow = `<div class="wa-acct-vals wa-ots-row">
-        <div class="grp"><span class="k">OTS Amount</span><span class="v wa-num">${fmtINR2(ots)}</span></div>
-        <div class="grp"><span class="k">P&amp;L Impact</span><span class="v wa-num">${arrow}${fmtINR2(impact)}</span></div>
-      </div>`;
+      totalOtsSum += ots; totalImpact += (ots-pl); totalSacrifice += (s.os-ots);
+      osOfOtsAccts += s.os; anyOts = true;
     }
-    return `<div class="wa-acct-card">
-      <div class="wa-acct-no"><span>A/c ${esc(s.acctNo)}</span><span class="asset">${esc(s.assetCode)||'—'}</span></div>
-      <div class="wa-acct-vals">
-        <div class="grp"><span class="k">O/S</span><span class="v wa-num">${fmtINR2(s.os)}</span></div>
-        <div class="grp"><span class="k">P&amp;L</span><span class="v pl wa-num">${fmtINR2(pl)}<span class="pct">${pct}</span></span></div>
-      </div>
-      ${otsRow}
+    return `<div class="wa-acct">
+      <div class="no">A/c &middot;&middot;${esc(String(s.acctNo).slice(-6))}</div>
+      <div class="scheme">${esc(s.scheme)||'—'}</div>
+      ${single ? `
+      <div class="row">
+        <div><div class="os wa-num">${fmtINR2(s.os)}</div><span class="badge">${esc(s.assetCode)||'—'}</span></div>
+        <div class="pl">P&amp;L <b class="wa-num">${fmtINR2(pl)}</b><br>${pct}</div>
+      </div>` : `
+      <div class="os wa-num">${fmtINR2(s.os)}</div>
+      <span class="badge">${esc(s.assetCode)||'—'}</span>
+      <div class="pl">P&amp;L <b class="wa-num">${fmtINR2(pl)}</b>${pct}</div>`}
     </div>`;
   }).join('');
-  // Once at least one account has a settlement figure typed in, that
-  // becomes the headline outcome worth sharing -- the bottom bar swaps
-  // from "here's the booked P&L" to "here's the proposed OTS and what it
-  // actually does to the P&L", rather than showing both and burying the
-  // one number that matters.
-  const totalBar = anyOts
-    ? `<div class="wa-total-row"><span class="k wa-lbl">Total OTS Amount</span><span class="v wa-num">${fmtINR2(totalOtsSum)}</span></div>
-       <div class="wa-total-row sub"><span class="k wa-lbl">Total P&amp;L Impact</span><span class="v wa-num">${totalImpact>0?'▲ ':(totalImpact<0?'▼ ':'')}${fmtINR2(totalImpact)}</span></div>`
-    : `<div class="wa-total-row"><span class="k wa-lbl">Total P&amp;L</span><span class="v wa-num">${fmtINR2(totalPL)}</span></div>`;
+  // Once at least one account has a settlement figure typed in, the
+  // Settlement Offer becomes the headline outcome worth sharing -- with
+  // a Recovery vs. Sacrifice gauge underneath, the same visual language
+  // as the live Loan Detail screen's own Recovery Scale.
+  let offerHtml = '';
+  if(anyOts){
+    const arrow = totalImpact>0?'▲':(totalImpact<0?'▼':'');
+    const cls = totalImpact>0?'pos':(totalImpact<0?'neg':'');
+    const recoveryPct = osOfOtsAccts>0 ? (totalOtsSum/osOfOtsAccts*100) : 0;
+    const sacrificePct = 100-recoveryPct;
+    offerHtml = `<div class="wa-offer">
+      <div class="title">${WA_ICON_SEAL}Settlement Offer</div>
+      <div class="amt wa-num">${fmtINR2(totalOtsSum)}</div>
+      <div class="row2">
+        <div class="grp"><div class="k">Total Sacrifice</div><div class="v wa-num">${fmtINR2(totalSacrifice)}</div></div>
+        <div class="grp"><div class="k">P&amp;L Impact</div><div class="v ${cls} wa-num">${arrow} ${fmtINR2(Math.abs(totalImpact))}</div></div>
+      </div>
+      <div class="wa-gauge">
+        <div class="wa-gauge-bar"><div class="fill" style="width:${recoveryPct.toFixed(1)}%"></div><div class="rest" style="width:${sacrificePct.toFixed(1)}%"></div></div>
+        <div class="wa-gauge-labels">
+          <span>Recovered <b>${recoveryPct.toFixed(1)}%</b></span>
+          <span class="sac">Sacrificed <b>${sacrificePct.toFixed(1)}%</b></span>
+        </div>
+      </div>
+    </div>`;
+  }
   document.getElementById('shareCardArea').innerHTML = `
     <div class="wa-card">
-      <div class="wa-bank">Uttar Pradesh Gramin Bank</div>
-      <div class="wa-name">${esc(custRow[C.NAME])||'—'}</div>
-      <div class="wa-chiprow">
-        <span class="wa-chip">${esc(custRow[C.SOL_DESC])||''}${solId?` (${solId})`:''}</span>
-        ${earliestNpa?`<span class="wa-chip warn">NPA since ${fmtDate(earliestNpa)}</span>`:''}
+      <div class="wa-bg-glow"></div>
+      <div class="wa-bg-dots"></div>
+      <div class="wa-seal-wm"></div>
+      <div class="wa-content">
+        <div class="wa-head">
+          ${logoSrc?`<img class="wa-logo-img" src="${logoSrc}" alt="">`:''}
+          <div class="wa-bank-group">
+            <div class="wa-bank">Uttar Pradesh Gramin Bank</div>
+            <div class="wa-bank-sub">Regional Office Hathras</div>
+          </div>
+        </div>
+        <div class="wa-headline-rule"></div>
+        <div class="wa-profile">
+          <div class="wa-avatar">${waInitials(custRow[C.NAME])}</div>
+          <div>
+            <div class="wa-name">${esc(custRow[C.NAME])||'—'}</div>
+            <div class="wa-sub">Cust ID ${esc(custRow[C.CUST_ID])||'—'} &middot; ${esc(custRow[C.SOL_DESC])||''}${solId?` (${solId})`:''}</div>
+          </div>
+          ${npaYears!==null?`<div class="wa-npa-pill">${WA_ICON_CLOCK} ${npaYears.toFixed(1)} yrs in NPA</div>`:''}
+        </div>
+        <div class="wa-stats">
+          <div class="wa-stat"><div class="k wa-lbl">${WA_ICON_COIN}Total O/S Balance</div><div class="v wa-num">${fmtINR2(totalOS)}</div></div>
+          <div class="wa-stat"><div class="k wa-lbl">${WA_ICON_TREND}Total P&amp;L</div><div class="v warn wa-num">${fmtINR2(totalPL)}</div></div>
+        </div>
+        <div class="wa-section-lbl">${WA_ICON_DOC}Account Breakdown</div>
+        <div class="wa-acct-grid${single?' single':''}">${acctCards}</div>
+        ${offerHtml}
+        <div class="wa-foot-line">as on ${fmtDate(new Date())} &middot; UPGB OTS Calculator</div>
       </div>
-      <div class="wa-hero-eyebrow">Total O/S Balance</div>
-      <div class="wa-hero-num wa-num">${fmtINR2(totalOS)}</div>
-      <div class="wa-acct-list">${acctCards}</div>
-      <div class="wa-total-bar">${totalBar}</div>
-      <div class="wa-foot-line">Cust ID ${esc(custRow[C.CUST_ID])||'—'} &middot; as on ${fmtDate(new Date())}</div>
     </div>
   `;
 }

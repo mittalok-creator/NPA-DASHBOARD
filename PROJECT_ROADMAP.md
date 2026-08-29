@@ -123,6 +123,20 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Redesign: share card rebuilt in Alok's own cyan reference style, with a Recovery gauge, real bank logo, and Regional Office Hathras (2026-08-29, same day)
+
+Alok sent an AI-generated (Nano Banana) mockup of a mobile banking screen — cyan-glow bordered cards, a profile row, two headline stat cards, an account-breakdown grid, and a highlighted "Settlement Offer" callout with a bottom tab bar. Asked for "kuch is tarah redesign karo... apna improvisation kar lena" (redesign somewhat like this, use your own judgment). Adapted rather than copied: dropped ROI/repay-date (a live-loan concept, not an NPA settlement one) for Scheme + Asset Code; dropped the bell icon and bottom tab bar (a static shared image isn't a navigable app); dropped the fabricated "Valid till" date and an untappable "View Details" button; kept Manrope + Inter (tabular, zero-safe) rather than switching to match the reference's generic sans, since that pairing was already approved for this whole app.
+
+Two rounds of "dil mange more" follow-up before implementing: (1) added icons on every stat/section label, a Recovery vs. Sacrifice gauge in the Settlement Offer card — borrowed directly from the live Loan Detail screen's own "Recovery Scale" component, so the card echoes an existing pattern instead of inventing a new one — an NPA-age pill, a seal-ring watermark, dot-grid texture, and a light sweep across the offer card; (2) caught that the 2-column account grid would leave half the card empty for a single-loan customer, so single-account cases get a dedicated full-width layout (O/S and P&L side by side instead of stacked) — verified against Premvati's real single-account data before shipping.
+
+**Implementation**: `.wa-card` in `css/styles.css` fully replaced (navy/gold → the cyan-glow palette: `#060B14` base, `#2DD4CF` cyan accent, layered `.wa-bg-glow`/`.wa-bg-dots`/`.wa-seal-wm` background). `renderShareCard()` in `js/app.js` rebuilt around the same live `slots`/`custRow` data as before, plus: `waInitials()` for the avatar circle, `s.scheme` now shown per account, an NPA-age-in-years pill (`(Date.now()-earliestNpa)/365.25`), and the Recovery/Sacrifice gauge math (`recoveryPct = totalOtsSum/osOfOtsAccts*100`, same partial-settlement convention — only accounts with an actual OTS figure count toward the denominator).
+
+**Bank logo + branch, on request**: rather than duplicating the ~98 KB base64 logo already embedded in `index.html`'s `.nav-logo` image, `renderShareCard()` reads it live via `document.querySelector('.nav-logo')?.src` — single source of truth, no asset bloat in `app.js`. Added "Regional Office Hathras" as a subtitle under the bank name in the card header, matching the wording already used in the print sheet and Excel export elsewhere in this app.
+
+Verified via Playwright against real accounts: single-account layout (Premvati, Bati branch) renders the full-width card correctly with the real logo and "Regional Office Hathras" both visible; entering an OTS Amount via the actual `otsInput-0` field correctly surfaces the Settlement Offer card with a working Recovery/Sacrifice gauge (73.9%/26.1% against real figures); both share paths (`shareOtsPdf`/`shareOtsImage`) and the share menu still work; full regression clean, zero console errors.
+
+Files touched: `css/styles.css` (`.wa-card*` fully replaced), `js/app.js` (`renderShareCard`, `waInitials`, `WA_ICON_*`), `sw.js` (`CACHE_NAME` v144→v145, matching bump).
+
 ### Refinement: share card swaps Dues for O/S, and shows OTS Amount + P&L Impact once a settlement's proposed (2026-08-29, same day)
 
 Three more rounds of feedback on the just-shipped summary-image card. First: trim the share menu's subtitles down to plain "Full PDF" / "Summary Image" headings. Second: add a Total P&L line alongside Total Dues. Third, this round: "use O/S in card everywhere, not total dues" — every per-account "Dues" figure and the bottom bar's "Total Dues" now read O/S (`s.os` / `totalOS`) instead of `totalDuesFor()`; the hero was already "Total O/S Balance" and stayed as-is.
