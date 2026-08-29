@@ -214,24 +214,47 @@ function renderShareCard(){
   const slots = window.__slots; const custRow = window.__custRow;
   if(!slots || !custRow) return;
   const totalOS = slots.reduce((a,s)=>a+((s.os!=='')?s.os:0),0);
-  let totalDues = 0, totalPL = 0;
-  slots.forEach(s=>{
-    const td = totalDuesFor(s); totalDues += (td!==''?td:0);
-    totalPL += (s.totalPL!==''?s.totalPL:0);
-  });
+  let totalPL = 0;
+  slots.forEach(s=>{ totalPL += (s.totalPL!==''?s.totalPL:0); });
   const npaDates = slots.map(s=>toDate(s.npaDate)).filter(Boolean);
   const earliestNpa = npaDates.length ? new Date(Math.min(...npaDates.map(d=>d.getTime()))) : null;
   const solId = esc(custRow[C.SOL_ID])||'';
+  // Same partial-settlement convention as renderPrintView()'s aggregate
+  // totals: only accounts that actually have an OTS Amount typed in
+  // count toward the OTS/impact sums -- an account with no figure yet
+  // isn't silently treated as zero.
+  let totalOtsSum = 0, totalImpact = 0, anyOts = false;
   const acctCards = slots.map(s=>{
     const pl = s.totalPL; const pct = s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'';
+    const ots = parseOtsAmount(otsAmounts[s.acctNo]);
+    let otsRow = '';
+    if(ots!==null){
+      const impact = ots - pl;
+      const arrow = impact>0?'▲ ':(impact<0?'▼ ':'');
+      totalOtsSum += ots; totalImpact += impact; anyOts = true;
+      otsRow = `<div class="wa-acct-vals wa-ots-row">
+        <div class="grp"><span class="k">OTS Amount</span><span class="v wa-num">${fmtINR2(ots)}</span></div>
+        <div class="grp"><span class="k">P&amp;L Impact</span><span class="v wa-num">${arrow}${fmtINR2(impact)}</span></div>
+      </div>`;
+    }
     return `<div class="wa-acct-card">
       <div class="wa-acct-no"><span>A/c ${esc(s.acctNo)}</span><span class="asset">${esc(s.assetCode)||'—'}</span></div>
       <div class="wa-acct-vals">
-        <div class="grp"><span class="k">Dues</span><span class="v wa-num">${fmtINR2(totalDuesFor(s))}</span></div>
+        <div class="grp"><span class="k">O/S</span><span class="v wa-num">${fmtINR2(s.os)}</span></div>
         <div class="grp"><span class="k">P&amp;L</span><span class="v pl wa-num">${fmtINR2(pl)}<span class="pct">${pct}</span></span></div>
       </div>
+      ${otsRow}
     </div>`;
   }).join('');
+  // Once at least one account has a settlement figure typed in, that
+  // becomes the headline outcome worth sharing -- the bottom bar swaps
+  // from "here's the booked P&L" to "here's the proposed OTS and what it
+  // actually does to the P&L", rather than showing both and burying the
+  // one number that matters.
+  const totalBar = anyOts
+    ? `<div class="wa-total-row"><span class="k wa-lbl">Total OTS Amount</span><span class="v wa-num">${fmtINR2(totalOtsSum)}</span></div>
+       <div class="wa-total-row sub"><span class="k wa-lbl">Total P&amp;L Impact</span><span class="v wa-num">${totalImpact>0?'▲ ':(totalImpact<0?'▼ ':'')}${fmtINR2(totalImpact)}</span></div>`
+    : `<div class="wa-total-row"><span class="k wa-lbl">Total P&amp;L</span><span class="v wa-num">${fmtINR2(totalPL)}</span></div>`;
   document.getElementById('shareCardArea').innerHTML = `
     <div class="wa-card">
       <div class="wa-bank">Uttar Pradesh Gramin Bank</div>
@@ -243,10 +266,7 @@ function renderShareCard(){
       <div class="wa-hero-eyebrow">Total O/S Balance</div>
       <div class="wa-hero-num wa-num">${fmtINR2(totalOS)}</div>
       <div class="wa-acct-list">${acctCards}</div>
-      <div class="wa-total-bar">
-        <div class="wa-total-row"><span class="k wa-lbl">Total Dues</span><span class="v wa-num">${fmtINR2(totalDues)}</span></div>
-        <div class="wa-total-row sub"><span class="k wa-lbl">Total P&amp;L</span><span class="v wa-num">${fmtINR2(totalPL)}</span></div>
-      </div>
+      <div class="wa-total-bar">${totalBar}</div>
       <div class="wa-foot-line">Cust ID ${esc(custRow[C.CUST_ID])||'—'} &middot; as on ${fmtDate(new Date())}</div>
     </div>
   `;
