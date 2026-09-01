@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Tweak: full account number on the share card, share text trimmed to name + branch only (2026-09-01, same day)
+
+Two follow-ups on the just-shipped Bulletin card. First, each account row showed only the last 6 digits (`A/c ··000012`), masked the same way the print patti abbreviates it — Alok wants the **full** account number visible on the WhatsApp card, so it now reads the complete number (`A/c 160381010000012`) with no truncation; the row already had `min-width:0` on its flex item so the longer string wraps/fits without breaking layout.
+
+Second, the pre-filled WhatsApp message text (shown alongside the shared file, and in the desktop wa.me fallback) previously read "UPGB OTS Calculator — {Name} (Cust ID {ID})" — more than Alok wants attached to a message going out over WhatsApp. Trimmed to **customer name and branch name only**: `{Name} — {Branch}`, e.g. "PREMVATI W/O PREMSHYAM — BATI". Applied identically in both `shareOtsPdf()` and `shareOtsImage()` since they built the same string.
+
+Verified via Playwright: Premvati's card now shows the full 15-digit account number without layout breakage, and the captured wa.me fallback URL's text decodes to exactly `PREMVATI W/O PREMSHYAM — BATI`, no Cust ID or app name.
+
+Files touched: `js/app.js` (`renderShareCard`'s account-no line, `shareText` in both `shareOtsPdf` and `shareOtsImage`), `sw.js` (`CACHE_NAME` v150→v151, matching bump).
+
 ### Redesign: WhatsApp share card rebuilt as "Bulletin" — brand band + colour-coded accounts (2026-09-01, same day)
 
 Alok's read on the white/teal share card (shipped 2026-08-29) was that its design "is not up to the mark" — every section (the two stat cards, each account, the profile row) sat in an identically-styled bordered box, so nothing actually stood out despite the data itself being right. Mockup-first per his instruction ("pahle kuch mockups dikhao"): 2 clean/modern directions built and shown side by side using real accounts (Premvati W/o Premshyam — single account, settled; Sahdev Singh — two accounts, no settlement yet, so both card states were visible) — **A "Ledger"** (flat statement paper, hairline dividers instead of nested boxes, one solid ink-teal panel reserved for the Settlement Offer) and **B "Bulletin"** (a gradient brand band up top carrying the bank's own colour, and colour used as information rather than decoration). Alok approved B outright.
