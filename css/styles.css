@@ -2153,6 +2153,42 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
   .splash-formside{padding-top:26px}
   .splash-key{padding:10px 0}
 }
+/* On an actual phone, the two panels stacked (hero on top of the PIN
+   pad) ran well past one screen's height -- Alok had to scroll to reach
+   the bottom keypad rows and the Login button. That combined height was
+   never actually needed: the hero's decorative elements (the "Secure
+   Access" trust chip, the spacer, the rule) exist to fill space in the
+   two-column desktop layout, not to carry information the PIN screen
+   needs. Compacted hard for phone width specifically -- every hero
+   element shrunk or dropped, every form-side gap tightened -- so the
+   whole login (logo through Login button) fits in one view with no
+   scrolling on ordinary phone screens, verified at 360x740 through
+   412x915 (the small/large ends of common Android viewports). */
+@media (max-width:480px){
+  .splash-screen{padding:8px}
+  .splash-frame{max-width:100%}
+  .splash-hero{padding:14px 20px 12px}
+  .splash-dots{display:none}
+  .splash-badge{width:40px;height:40px;border-radius:12px;padding:6px;box-shadow:0 4px 10px rgba(0,0,0,.18)}
+  .splash-org{font-size:11px;margin-top:8px}
+  .splash-title{font-size:18px;margin-top:6px}
+  .splash-subtitle{font-size:11.5px;margin-top:1px}
+  .splash-rule{display:none}
+  .splash-hero-spacer{display:none}
+  .splash-trust{display:none}
+  .splash-formside{padding:14px 20px 14px}
+  .splash-lockwrap{width:36px;height:36px;margin-bottom:8px}
+  .splash-lockwrap svg{width:18px;height:18px}
+  .splash-welcome{font-size:15px;margin-bottom:12px}
+  .splash-pin-wrap{gap:6px}
+  .splash-pin-label{font-size:9px}
+  .splash-cell{aspect-ratio:1/0.8;font-size:18px;border-radius:11px}
+  .splash-pin-error{font-size:10px;min-height:12px}
+  .splash-pad{margin-top:8px;gap:6px}
+  .splash-key{padding:8px 0;font-size:14px;border-radius:10px}
+  .splash-login-btn{margin-top:10px;padding:11px 0;font-size:13px}
+  .splash-foot{margin-top:8px;font-size:9px}
+}
 @media (prefers-reduced-motion: reduce){
   .splash-pin-wrap.shake{animation:none}
 }

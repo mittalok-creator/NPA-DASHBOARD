@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: login/PIN splash screen now fits one phone screen with no scrolling (2026-09-01, same day)
+
+Alok shared a phone screenshot: on a real device, the stacked hero (logo/bank name/app title/"Secure Access" chip) plus the PIN entry panel below it ran taller than the screen — the keypad's bottom row (7/8/9/0) and the Login button were cut off, needing a scroll to reach, and a scrollbar was visibly showing inside the login card. "Yr mobile par 1 baar main puri screen aaye" — the whole thing should appear in one screen, no scrolling.
+
+The two-panel split layout (branded hero left, PIN form right) is a genuinely desktop-shaped design — `.splash-frame` already stacks them vertically below 819px width, which is correct, but the *combined* stacked height of both panels (hero's badge/org name/title/subtitle/rule/32px spacer/trust chip, then the PIN form's lock icon/welcome text/cells/full numeric pad/Login button/footer) added up to roughly 940–980px, well past what an ordinary phone viewport (600–850px tall) can show at once. A `max-height:100%; overflow-y:auto` on the frame meant it silently became scrollable rather than breaking, which is exactly the "scrollbar peeking out, keys cut off" look in the screenshot.
+
+Added a new `@media (max-width:480px)` block (phone-portrait, distinct from the existing 819px stacking breakpoint and 760px-height tweak) that compacts every element rather than shrinking uniformly: the hero's dots watermark, rule, 32px spacer, and "Secure Access" trust chip are dropped entirely (decorative, not information the PIN screen needs), the badge/lock icon shrink to ~40px, and every remaining margin/padding/font-size on both panels is tightened. Verified via Playwright across 5 realistic phone viewports (iPhone SE 375×667 up through a large Android at 412×915) that the entire login card — logo through the "Designed & Developed by ALOK MITTAL" footer — now renders with zero internal scrolling and the footer fully within the viewport at every size tested; confirmed the PIN pad and unlock flow still work identically (typed the correct PIN, screen unlocked as before).
+
+Files touched: `css/styles.css` (new `@media (max-width:480px)` splash block), `index.html` (cache-bust bump), `sw.js` (`CACHE_NAME` v153→v154, matching bump).
+
 ### Feature: live Sol ID fill-in on the Account Numbers panel (2026-09-01, same day)
 
 Each of the 6 accounts in the Account Numbers reference panel (No. Lien, NPA Expenses, BDWO, KCC, CC, TL) is printed in the source ledger as `XXXX` + a fixed 10-digit suffix — the `XXXX` stands in for whichever branch's own Sol ID it actually is, left blank because the panel is a shared static reference, not branch-specific. Alok asked for a small text box next to the "Account Numbers" heading where he can type a Sol ID, with all 6 accounts filling in live "jaise type karte jao" (as he types) rather than only after a full 4-digit ID is entered, an animation on each account as it updates, and a clean revert to `XXXX` on all 6 the moment the box is cleared.
