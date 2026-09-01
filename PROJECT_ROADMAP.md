@@ -123,6 +123,23 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Redesign: WhatsApp share card rebuilt as "Bulletin" — brand band + colour-coded accounts (2026-09-01, same day)
+
+Alok's read on the white/teal share card (shipped 2026-08-29) was that its design "is not up to the mark" — every section (the two stat cards, each account, the profile row) sat in an identically-styled bordered box, so nothing actually stood out despite the data itself being right. Mockup-first per his instruction ("pahle kuch mockups dikhao"): 2 clean/modern directions built and shown side by side using real accounts (Premvati W/o Premshyam — single account, settled; Sahdev Singh — two accounts, no settlement yet, so both card states were visible) — **A "Ledger"** (flat statement paper, hairline dividers instead of nested boxes, one solid ink-teal panel reserved for the Settlement Offer) and **B "Bulletin"** (a gradient brand band up top carrying the bank's own colour, and colour used as information rather than decoration). Alok approved B outright.
+
+**Implemented exactly as approved**, same data/fields throughout — only `renderShareCard()`'s markup and the `.wa-card*` CSS changed:
+- A solid navy→teal gradient band now carries the bank logo + "Uttar Pradesh Gramin Bank / Regional Office Hathras" (previously a small logo on a plain white header with a separate corner-glow/dot-grid/seal-watermark background treatment — all of that texture is gone, replaced by the band itself doing the identity work).
+- The profile row, both stat tiles (Total O/S, Total P&L), and the Settlement Offer panel all lost their borders in favour of solid soft-tint surfaces (`#EEF8F7` teal-tint, `#FBF3E4` amber-tint) — flatter, calmer, and each section now reads at a distinct visual weight instead of all looking like the same widget.
+- **Each account row now carries a 4px left-edge colour rail keyed to its own asset code** (`SUB_STD` green, `DA1` amber, `DA2` orange, `DA3` red, `LOSS` dark red) — the exact same 5-step severity scale the live Loan Table's result cards already use via `[data-asset]`, so a glance at the card shows which linked account is riskiest without reading the tag text. The old separate 2-column "account grid" (with a distinct wider single-account layout) is gone — accounts are now one straightforward stacked list regardless of count, since the new row design already reads cleanly whether there's 1 or several.
+- The Recovery/Sacrifice gauge became a rounded capsule with a white marker dot at the recovery-% position (previously a plain two-segment bar).
+- The customer-initials avatar circle was dropped — the redesign's profile row leads with the name directly under the brand band instead, so a generated-initials circle no longer had a role; `waInitials()` (now unused everywhere) was removed rather than left dead.
+
+**Also fixed in the same pass** (Alok, same message): NPA age was showing as a decimal-year approximation (`npaYears = daysSince / 365.25`, e.g. "7.9 yrs in NPA") — "npa ki age hai use year and month main kar k likh do," i.e. write it as whole years **and** months, not a decimal. Replaced with `npaAgeStr()`, a calendar-accurate years+months diff (borrows a month from years when the day-of-month hasn't been reached yet, same logic as any real age calculation) — Premvati's account now reads "7 yrs 11 mos in NPA" instead of "7.9 yrs in NPA".
+
+Verified via Playwright against the same two real scenarios used in the mockups: Premvati (single account, OTS ₹45,000 entered, meets Lok Adalat minimum) and Sahdev Singh (two DA2 accounts, no settlement yet) — both render correctly, asset-severity rail colours correct per account, NPA age pill reads "7 yrs 11 mos in NPA" / "3 yrs 8 mos in NPA" respectively, no console errors. Full-PDF share path (`renderPrintView`, untouched) and the share-format menu unaffected.
+
+Files touched: `js/app.js` (`renderShareCard` markup rewrite, `npaAgeStr` added, `waInitials` removed), `css/styles.css` (`.wa-card*` block rewritten for the Bulletin design), `sw.js` (`CACHE_NAME` v149→v150, matching bump).
+
 ### Fix: removed stray "Alok_HATHRAS reference" subtitle, WhatsApp Web desktop-sharing fix (2026-09-01, same day)
 
 Two small direct fixes reported off a screenshot of the Account Numbers panel. First, its header carried a leftover `<span class="edge-panel-count">Alok_HATHRAS reference</span>` subtitle — an internal working label that should never have shipped to the panel Alok actually uses day to day — removed outright, no replacement text needed since the panel's own `<h3>Account Numbers</h3>` already says what it is.
