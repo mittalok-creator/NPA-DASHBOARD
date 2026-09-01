@@ -167,7 +167,19 @@ function canvasToPdfBlob(canvas){
    though navigator.share itself exists, which is exactly the case the
    download+wa.me fallback covers -- wa.me can't attach a file itself,
    so that one manual tap to attach what just downloaded is unavoidable,
-   and the message says so rather than silently doing less than promised. */
+   and the message says so rather than silently doing less than promised.
+
+   Desktop-specific wrinkle Alok hit: WhatsApp Web only allows ONE active
+   browser tab per login -- opening wa.me in a fresh tab while another
+   WhatsApp Web tab is already logged in doesn't reach the compose screen
+   at all, it shows WhatsApp's own "used in another tab" interstitial
+   with a "Use Here" button first. No website can skip that screen (it's
+   WhatsApp's own session lock, not something this app controls), so
+   rather than silently failing to look like it "shared," the pre-filled
+   text now names the interstitial directly. Opening the SAME named
+   window on every share (instead of a fresh "_blank" each time) at least
+   stops repeated shares from this app piling up their own duplicate
+   WhatsApp Web tabs against each other. */
 async function shareFileOrFallback(blob, fileName, mimeType, shareText){
   const file = new File([blob], fileName, {type:mimeType});
   if(navigator.canShare && navigator.canShare({files:[file]})){
@@ -184,7 +196,9 @@ async function shareFileOrFallback(blob, fileName, mimeType, shareText){
   a.href = url; a.download = fileName;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url), 30000);
-  window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ` — ${mimeType==='application/pdf'?'PDF':'image'} downloaded, please attach it here.`)}`, '_blank');
+  const kind = mimeType==='application/pdf'?'PDF':'image';
+  const msg = `${shareText} — ${kind} downloaded to your computer. If WhatsApp shows "used in another tab", tap Use Here, then attach the ${kind} from your Downloads.`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, 'npaOtsWhatsAppShare');
 }
 /* Renders the exact same print sheet as printOtsSheet() to a real PDF
    file client-side (html2canvas -> jsPDF, no server involved). #printArea
