@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: removed stray "Alok_HATHRAS reference" subtitle, WhatsApp Web desktop-sharing fix (2026-09-01, same day)
+
+Two small direct fixes reported off a screenshot of the Account Numbers panel. First, its header carried a leftover `<span class="edge-panel-count">Alok_HATHRAS reference</span>` subtitle — an internal working label that should never have shipped to the panel Alok actually uses day to day — removed outright, no replacement text needed since the panel's own `<h3>Account Numbers</h3>` already says what it is.
+
+Second: on a PC with WhatsApp Web open in a browser tab but no WhatsApp desktop app installed, sharing looked broken. Root cause isn't a bug in this app's code — it's WhatsApp Web's own session lock: it allows only **one** logged-in tab at a time, so opening a fresh `wa.me` link in a new tab (which is what the desktop no-native-share-API fallback path does) doesn't reach the compose screen, it shows WhatsApp's own "used in another tab" interstitial with a "Use Here" button first. No website can skip that screen. Two honest mitigations rather than pretending it isn't there: `shareFileOrFallback()` now opens a consistently-named window (`window.open(url, 'npaOtsWhatsAppShare')`) instead of `'_blank'`, so repeated shares from this app stop piling up their own duplicate WhatsApp Web tabs against each other; and the pre-filled share message now names the interstitial directly and tells the user what to do — "tap Use Here, then attach the [PDF/image] from your Downloads" — instead of silently looking like nothing happened.
+
+Files touched: `index.html` (removed the stray subtitle span, cache-bust bump), `js/app.js` (`shareFileOrFallback` — named window + interstitial-aware message text), `sw.js` (`CACHE_NAME` v148→v149, matching bump).
+
 ### Fix + feature: edge-panel overlap fixed, 2 more static reference panels added (2026-09-01, same day)
 
 Two follow-ups on the Lok Adalat panel just shipped. First, Alok reported the two panels' pull-tabs overlapping. Root cause wasn't the mutual-exclusion logic (that part worked) — it was that `.edge-handle` and `.edge-panel` shared the same `z-index:150`, so whichever panel was later in the DOM rendered on top of the earlier panel's own pull-tab wherever their boxes intersected, showing it half-swallowed. Compounding that: each handle had been given a hand-guessed vertical offset (`top:calc(50% + Npx)`) to stack below the previous one, but rotated vertical text makes longer labels ("Lok Adalat") noticeably taller than shorter ones ("Branches") — the guessed offsets didn't actually clear the real rendered heights, so the handles overlapped each other too, confirmed by measuring actual bounding boxes rather than trusting the CSS to be right.
