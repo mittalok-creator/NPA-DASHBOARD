@@ -8,6 +8,22 @@ const C = {
 };
 const NPA_COLUMN_COUNT = 27;
 const PROV_RATES = {SUB_STD:.10, DA1:.20, DA2:.30, DA3:1, LOSS:1};
+/* Minimum settlement % of O/S Balance under Lok Adalat, by Asset Code, as
+   on 30-06-2026 (Alok's own circular). Substandard accounts aren't in the
+   circular at all -- Lok Adalat OTS doesn't apply to them -- so they're
+   deliberately absent from this table rather than defaulting to some
+   guessed rate; lokAdalatMin() below returns an explicit "not eligible"
+   result for SUB_STD instead of falling through to undefined. This app
+   has no separate "PWO" Asset Code -- every loss-category account is
+   just LOSS -- so a PWO account gets the same 40% as any other LOSS
+   account here. */
+const LOK_ADALAT_RATES = {DA1:.80, DA2:.70, DA3:.50, LOSS:.40};
+function lokAdalatMin(s){
+  if(s.assetCode==='SUB_STD') return {eligible:false};
+  const rate = LOK_ADALAT_RATES[s.assetCode];
+  if(rate===undefined || s.os==='') return null;
+  return {eligible:true, amount:s.os*rate, pct:rate};
+}
 
 /* ---------- Build indexes once ---------- */
 const npaByAcct = new Map();
@@ -240,12 +256,20 @@ function renderShareCard(){
   // yet isn't silently treated as zero (and doesn't count toward the
   // Recovery % denominator either).
   let totalOtsSum = 0, totalImpact = 0, totalSacrifice = 0, osOfOtsAccts = 0, anyOts = false;
+  // Lok Adalat minimum is only meaningful next to an account that's both
+  // settled AND eligible (Substandard accounts have no Lok Adalat floor
+  // at all) -- an ineligible account with an OTS Amount typed in just
+  // sits outside this comparison entirely, same as an unsettled account
+  // sits outside the OTS/impact sums above.
+  let totalLokAdalatMin = 0, anyLokAdalatEligible = false;
   const acctCards = slots.map(s=>{
     const pl = s.totalPL; const pct = s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'';
     const ots = parseOtsAmount(otsAmounts[s.acctNo]);
     if(ots!==null){
       totalOtsSum += ots; totalImpact += (ots-pl); totalSacrifice += (s.os-ots);
       osOfOtsAccts += s.os; anyOts = true;
+      const la = lokAdalatMin(s);
+      if(la && la.eligible){ totalLokAdalatMin += la.amount; anyLokAdalatEligible = true; }
     }
     return `<div class="wa-acct">
       <div class="no">A/c &middot;&middot;${esc(String(s.acctNo).slice(-6))}</div>
@@ -284,6 +308,10 @@ function renderShareCard(){
           <span class="sac">Sacrificed <b>${sacrificePct.toFixed(1)}%</b></span>
         </div>
       </div>
+      ${anyLokAdalatEligible ? `<div class="wa-cmp">
+        <div><div class="k">Lok Adalat Minimum</div><div class="v wa-num">${fmtINR2(totalLokAdalatMin)}</div></div>
+        <span class="wa-met ${totalOtsSum>=totalLokAdalatMin?'yes':'no'}">${totalOtsSum>=totalLokAdalatMin?'✓ Meets minimum':'⚠ Below minimum'}</span>
+      </div>` : ''}
     </div>`;
   }
   document.getElementById('shareCardArea').innerHTML = `
@@ -602,8 +630,23 @@ function toggleBranchPanel(force){
   }
 }
 window.toggleBranchPanel = toggleBranchPanel;
+// Same slide-out pattern as the Branch/Sol ID panel above, but with no
+// search/render step -- the Lok Adalat rate table is 4 static rows
+// straight from the circular, so there's nothing to look up.
+function toggleLokAdalatPanel(force){
+  const panel = document.getElementById('lokAdalatEdgePanel');
+  const backdrop = document.getElementById('lokAdalatEdgeBackdrop');
+  const handle = document.getElementById('lokAdalatEdgeHandle');
+  if(!panel) return;
+  const open = force===undefined ? !panel.classList.contains('open') : force;
+  panel.classList.toggle('open', open);
+  backdrop.classList.toggle('open', open);
+  handle.classList.toggle('active', open);
+  handle.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+window.toggleLokAdalatPanel = toggleLokAdalatPanel;
 document.addEventListener('keydown', (e)=>{
-  if(e.key==='Escape') toggleBranchPanel(false);
+  if(e.key==='Escape'){ toggleBranchPanel(false); toggleLokAdalatPanel(false); }
 });
 
 updateReportDateDisplay();
@@ -1457,6 +1500,7 @@ const LT_ICONS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   avatar: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.6-3.6 4.8-5.5 7.5-5.5s5.9 1.9 7.5 5.5"/>',
   gauge: '<path d="M12 3a9 9 0 0 0-7.6 13.9M12 3a9 9 0 0 1 7.6 13.9"/><path d="M12 12 16 8"/>',
+  scale: '<path d="M12 3v18M5 7h14"/><path d="M5 7l-3 6a4 4 0 0 0 8 0z"/><path d="M19 7l-3 6a4 4 0 0 0 8 0z"/>',
 };
 function ltIcon(name, size){
   const s = size||13;
@@ -1507,6 +1551,18 @@ function loanTableHTML(slots){
   // compared by eye instead of reading six-figure numbers column by column.
   const settleRow = () => `<tr><th scope="row" class="lt-label">${ltIconBadge('gauge')}Settlement Progress</th>${slots.map((s,i)=>`<td id="settleCell-${i}"><span class="dash">—</span></td>`).join('')}</tr>`;
   const eligRow = slots.some(s=>s.notEligible) ? `<tr><th scope="row" class="lt-label"></th>${slots.map(s=>`<td>${s.notEligible?'<span class="eligibility-warn">⚠ Not aged 6mo</span>':''}</td>`).join('')}</tr>` : '';
+  // Shown right above the actual OTS input -- the mandated floor, seen
+  // before typing a proposed figure, not after. Substandard accounts
+  // read "Not Eligible" rather than a rate, since Lok Adalat OTS simply
+  // doesn't apply to them (Alok's own instruction) -- distinct from an
+  // account whose Asset Code isn't in the circular at all, which
+  // shouldn't come up in practice but falls back to "—" defensively.
+  const lokAdalatRow = () => `<tr class="lt-ots-row lt-lokadalat-row"><th scope="row" class="lt-label">${ltIconBadge('scale')}OTS Amt as per Lok Adalat</th>${slots.map(s=>{
+    const la = lokAdalatMin(s);
+    if(!la) return '<td>—</td>';
+    if(!la.eligible) return '<td><span class="lt-lokadalat-na">Not Eligible</span></td>';
+    return `<td>${fmtINR2(la.amount)} <span class="pct-tag">(${(la.pct*100).toFixed(0)}%)</span></td>`;
+  }).join('')}</tr>`;
 
   return `
   <div class="loan-table-wrap">
@@ -1527,6 +1583,7 @@ function loanTableHTML(slots){
       ${row('Provision', 'shield', s=>fmtINR2(s.provision))}
       ${row('Total P&amp;L', 'trend', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
       ${group('Settlement &amp; Impact', 'settlement')}
+      ${lokAdalatRow()}
       ${otsRow()}
       ${settleRow()}
       ${statRow('Total Sacrifice', 'percent', 'totalSac')}
@@ -1823,7 +1880,7 @@ function renderPrintView(){
   // Total Contractual Dues is deliberately NOT in this print/PDF table --
   // it stays on-screen only (loanTableHTML) per Alok's review; Total
   // Sacrifice below reads off Total Dues (+ Interest Reversal), not it.
-  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amount','Total Sacrifice','Impact on P&L']);
+  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amt as per Lok Adalat','OTS Amount','Total Sacrifice','Impact on P&L']);
   // Scheme moved here from the page footer (was repeating the branch name a
   // third time alongside the header and the borrower info grid) -- one row
   // per account, right above O/S Balance where the settlement figures start.
@@ -1843,6 +1900,7 @@ function renderPrintView(){
     ['Interest Reversal', 'rotate', s=>fmtINR2(uriFor(s))],
     ['Provision', 'shield', s=>fmtINR2(s.provision)],
     ['Total P&L', 'trend', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'')],
+    ['OTS Amt as per Lok Adalat', 'scale', s=>{const la=lokAdalatMin(s); if(!la) return '—'; if(!la.eligible) return 'Not Eligible'; return fmtINR2(la.amount)+` (${(la.pct*100).toFixed(0)}%)`;}],
     ['OTS Amount', 'coin', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v);}],
     ['Total Sacrifice', 'percent', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(totalDuesFor(s)-v);}],
     ['Ledger Sacrifice (BDWO Amount)', 'badge', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.os-v);}],
