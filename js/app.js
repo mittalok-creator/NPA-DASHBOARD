@@ -224,7 +224,7 @@ async function shareOtsPdf(){
   }
   const safeName = String(custRow[C.NAME]||'borrower').replace(/[\\/:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,40);
   const fileName = `OTS_${safeName}_${dateToInputValue(new Date())}.pdf`;
-  const shareText = `UPGB OTS Calculator — ${custRow[C.NAME]||'—'} (Cust ID ${custRow[C.CUST_ID]||'—'})`;
+  const shareText = `${custRow[C.NAME]||'—'} — ${custRow[C.SOL_DESC]||'—'}`;
   await shareFileOrFallback(blob, fileName, 'application/pdf', shareText);
 }
 window.shareOtsPdf = () => shareOtsPdf().catch(err=>{
@@ -296,7 +296,7 @@ function renderShareCard(){
     }
     return `<div class="wa-acct" data-asset="${esc(s.assetCode)}">
       <div class="info">
-        <div class="no">A/c &middot;&middot;${esc(String(s.acctNo).slice(-6))}</div>
+        <div class="no">A/c ${esc(s.acctNo)}</div>
         <div class="scheme">${esc(s.scheme)||'—'} &middot; ${esc(s.assetCode)||'—'}</div>
       </div>
       <div class="amts">
@@ -380,7 +380,7 @@ async function shareOtsImage(){
   }
   const safeName = String(custRow[C.NAME]||'borrower').replace(/[\\/:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,40);
   const fileName = `OTS_${safeName}_${dateToInputValue(new Date())}.png`;
-  const shareText = `UPGB OTS Calculator — ${custRow[C.NAME]||'—'} (Cust ID ${custRow[C.CUST_ID]||'—'})`;
+  const shareText = `${custRow[C.NAME]||'—'} — ${custRow[C.SOL_DESC]||'—'}`;
   await shareFileOrFallback(blob, fileName, 'image/png', shareText);
 }
 window.shareOtsImage = () => shareOtsImage().catch(err=>{
