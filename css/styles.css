@@ -2314,6 +2314,18 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
 .lokadalat-note{font-size:12px;line-height:1.6;color:var(--sub);padding:0 2px}
 .ledger-group-lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--accent);margin:14px 0 4px}
 .ledger-group-lbl:first-child{margin-top:2px}
+/* Sol ID entry next to the "Account Numbers" heading -- typing a branch's
+   Sol ID here live-fills the XXXX placeholder in all 6 ledger accounts
+   below (Alok: "sol id niche diye hue sare 6 account no main x ki jagah
+   aa jaye"), clearing it reverts every account back to XXXX. */
+.ledger-head-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ledger-solid-input{width:66px;padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:12px;font-weight:700;font-family:inherit;outline:none;text-align:center;letter-spacing:.5px;transition:border-color .15s var(--ease)}
+.ledger-solid-input:focus{border-color:var(--accent)}
+.ledger-solid-input::placeholder{color:var(--ink-mute);font-weight:600}
+/* A quick colour pulse per keystroke reads as the digits "typing"
+   themselves into each account number rather than just snapping. */
+@keyframes ledgerAcctPulse{0%{color:var(--accent)}100%{color:var(--ink)}}
+.ledger-acct-no.pulse{animation:ledgerAcctPulse .3s ease}
 
 /* ===================================================================
    OTS Calculator reskin -- brass/paper visual language, reference:

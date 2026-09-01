@@ -683,6 +683,31 @@ function toggleSacrificePanel(force){ toggleEdgePanel('sacrifice', force); }
 window.toggleSacrificePanel = toggleSacrificePanel;
 function toggleLedgerAccountsPanel(force){ toggleEdgePanel('ledgerAccounts', force); }
 window.toggleLedgerAccountsPanel = toggleLedgerAccountsPanel;
+/* Sol ID -> ledger account number prefix, live as Alok types. Each of the
+   6 accounts in the Account Numbers panel is XXXX + a fixed 10-digit
+   suffix in the source ledger -- the XXXX stands in for whichever
+   branch's own Sol ID it actually is. Typing a Sol ID into the small
+   input next to the heading fills those 4 placeholder characters in
+   live, one digit at a time (a colour pulse on each account marks the
+   change, so it reads like the digits are typing themselves in);
+   clearing the input reverts every account back to the XXXX placeholder. */
+function initLedgerAcctNumbers(){
+  document.querySelectorAll('#ledgerAccountsEdgePanel .ledger-acct-no').forEach(el=>{
+    if(el.dataset.acctSuffix===undefined) el.dataset.acctSuffix = el.textContent.slice(4);
+  });
+}
+function onLedgerSolIdInput(value){
+  const digits = String(value||'').replace(/\D/g,'').slice(0,4);
+  const input = document.getElementById('ledgerSolIdInput');
+  if(input && input.value!==digits) input.value = digits;
+  const prefix = (digits + 'XXXX').slice(0,4);
+  document.querySelectorAll('#ledgerAccountsEdgePanel .ledger-acct-no').forEach(el=>{
+    el.textContent = prefix + (el.dataset.acctSuffix||'');
+    el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
+  });
+}
+window.onLedgerSolIdInput = onLedgerSolIdInput;
+initLedgerAcctNumbers();
 document.addEventListener('keydown', (e)=>{
   if(e.key==='Escape'){ EDGE_PANEL_KEYS.forEach(k=>toggleEdgePanel(k, false)); }
 });
