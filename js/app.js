@@ -245,23 +245,32 @@ const WA_ICON_TREND = '<svg class="wa-icon" width="12" height="12" viewBox="0 0 
 const WA_ICON_DOC = '<svg class="wa-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
 const WA_ICON_SEAL = '<svg class="wa-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="8" r="6"/><path d="M9 13.5L7 22l5-3 5 3-2-8.5"/></svg>';
 const WA_ICON_CLOCK = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
-/* Initials for the avatar circle -- first letter of up to the first two
-   "words" in the name, same convention as the auth widget's avatar
-   fallback elsewhere in this app when there's no photo to show. */
-function waInitials(name){
-  const words = String(name||'').trim().split(/\s+/).filter(Boolean);
-  return (words[0]?.[0]||'').toUpperCase() + (words[1]?.[0]||'').toUpperCase();
+/* Calendar-accurate years+months since the NPA date, not a /365.25
+   decimal approximation (Alok: "npa ki age hai use year and month main
+   kar k likh do" -- a decimal year reads as a made-up stat next to a
+   real rupee figure, whole years+months reads like something a banker
+   would actually say). Borrows a month from years when the day-of-month
+   hasn't been reached yet this month, same logic as any calendar-age calc. */
+function npaAgeStr(from){
+  const now = new Date();
+  let years = now.getFullYear() - from.getFullYear();
+  let months = now.getMonth() - from.getMonth();
+  if(now.getDate() < from.getDate()) months--;
+  if(months < 0){ years--; months += 12; }
+  if(years <= 0 && months <= 0) return '<1 mo in NPA';
+  const yPart = years>0 ? `${years} yr${years===1?'':'s'}` : '';
+  const mPart = months>0 ? `${months} mo${months===1?'':'s'}` : '';
+  return `${[yPart,mPart].filter(Boolean).join(' ')} in NPA`;
 }
 function renderShareCard(){
   const slots = window.__slots; const custRow = window.__custRow;
   if(!slots || !custRow) return;
-  const single = slots.length===1;
   const totalOS = slots.reduce((a,s)=>a+((s.os!=='')?s.os:0),0);
   let totalPL = 0;
   slots.forEach(s=>{ totalPL += (s.totalPL!==''?s.totalPL:0); });
   const npaDates = slots.map(s=>toDate(s.npaDate)).filter(Boolean);
   const earliestNpa = npaDates.length ? new Date(Math.min(...npaDates.map(d=>d.getTime()))) : null;
-  const npaYears = earliestNpa ? ((Date.now()-earliestNpa.getTime())/(1000*60*60*24*365.25)) : null;
+  const npaAge = earliestNpa ? npaAgeStr(earliestNpa) : null;
   const solId = esc(custRow[C.SOL_ID])||'';
   const logoSrc = document.querySelector('.nav-logo')?.src || '';
   // Same partial-settlement convention as renderPrintView()'s aggregate
@@ -285,17 +294,15 @@ function renderShareCard(){
       const la = lokAdalatMin(s);
       if(la && la.eligible){ totalLokAdalatMin += la.amount; anyLokAdalatEligible = true; }
     }
-    return `<div class="wa-acct">
-      <div class="no">A/c &middot;&middot;${esc(String(s.acctNo).slice(-6))}</div>
-      <div class="scheme">${esc(s.scheme)||'—'}</div>
-      ${single ? `
-      <div class="row">
-        <div><div class="os wa-num">${fmtINR2(s.os)}</div><span class="badge">${esc(s.assetCode)||'—'}</span></div>
-        <div class="pl">P&amp;L <b class="wa-num">${fmtINR2(pl)}</b><br>${pct}</div>
-      </div>` : `
-      <div class="os wa-num">${fmtINR2(s.os)}</div>
-      <span class="badge">${esc(s.assetCode)||'—'}</span>
-      <div class="pl">P&amp;L <b class="wa-num">${fmtINR2(pl)}</b>${pct}</div>`}
+    return `<div class="wa-acct" data-asset="${esc(s.assetCode)}">
+      <div class="info">
+        <div class="no">A/c &middot;&middot;${esc(String(s.acctNo).slice(-6))}</div>
+        <div class="scheme">${esc(s.scheme)||'—'} &middot; ${esc(s.assetCode)||'—'}</div>
+      </div>
+      <div class="amts">
+        <div class="os wa-num">${fmtINR2(s.os)}</div>
+        <div class="pl">P&amp;L ${fmtINR2(pl)}${pct}</div>
+      </div>
     </div>`;
   }).join('');
   // Once at least one account has a settlement figure typed in, the
@@ -315,12 +322,10 @@ function renderShareCard(){
         <div class="grp"><div class="k">Total Sacrifice</div><div class="v wa-num">${fmtINR2(totalSacrifice)}</div></div>
         <div class="grp"><div class="k">P&amp;L Impact</div><div class="v ${cls} wa-num">${arrow} ${fmtINR2(Math.abs(totalImpact))}</div></div>
       </div>
-      <div class="wa-gauge">
-        <div class="wa-gauge-bar"><div class="fill" style="width:${recoveryPct.toFixed(1)}%"></div><div class="rest" style="width:${sacrificePct.toFixed(1)}%"></div></div>
-        <div class="wa-gauge-labels">
-          <span>Recovered <b>${recoveryPct.toFixed(1)}%</b></span>
-          <span class="sac">Sacrificed <b>${sacrificePct.toFixed(1)}%</b></span>
-        </div>
+      <div class="wa-gauge"><div class="fill" style="width:${recoveryPct.toFixed(1)}%"></div><div class="dot" style="left:${recoveryPct.toFixed(1)}%"></div></div>
+      <div class="wa-gauge-labels">
+        <span>Recovered <b>${recoveryPct.toFixed(1)}%</b></span>
+        <span class="sac">Sacrificed <b>${sacrificePct.toFixed(1)}%</b></span>
       </div>
       ${anyLokAdalatEligible ? `<div class="wa-cmp">
         <div><div class="k">Lok Adalat Minimum</div><div class="v wa-num">${fmtINR2(totalLokAdalatMin)}</div></div>
@@ -330,32 +335,27 @@ function renderShareCard(){
   }
   document.getElementById('shareCardArea').innerHTML = `
     <div class="wa-card">
-      <div class="wa-bg-glow"></div>
-      <div class="wa-bg-dots"></div>
-      <div class="wa-seal-wm"></div>
-      <div class="wa-content">
-        <div class="wa-head">
-          ${logoSrc?`<img class="wa-logo-img" src="${logoSrc}" alt="">`:''}
-          <div class="wa-bank-group">
-            <div class="wa-bank">Uttar Pradesh Gramin Bank</div>
-            <div class="wa-bank-sub">Regional Office Hathras</div>
-          </div>
+      <div class="wa-band">
+        ${logoSrc?`<img class="wa-logo-img" src="${logoSrc}" alt="">`:''}
+        <div class="wa-bank-group">
+          <div class="wa-bank">Uttar Pradesh Gramin Bank</div>
+          <div class="wa-bank-sub">Regional Office Hathras</div>
         </div>
-        <div class="wa-headline-rule"></div>
+      </div>
+      <div class="wa-content">
         <div class="wa-profile">
-          <div class="wa-avatar">${waInitials(custRow[C.NAME])}</div>
           <div>
             <div class="wa-name">${esc(custRow[C.NAME])||'—'}</div>
             <div class="wa-sub">Cust ID ${esc(custRow[C.CUST_ID])||'—'} &middot; ${esc(custRow[C.SOL_DESC])||''}${solId?` (${solId})`:''}</div>
           </div>
-          ${npaYears!==null?`<div class="wa-npa-pill">${WA_ICON_CLOCK} ${npaYears.toFixed(1)} yrs in NPA</div>`:''}
+          ${npaAge!==null?`<div class="wa-npa-pill">${WA_ICON_CLOCK} ${npaAge}</div>`:''}
         </div>
         <div class="wa-stats">
           <div class="wa-stat"><div class="k wa-lbl">${WA_ICON_COIN}Total O/S Balance</div><div class="v wa-num">${fmtINR2(totalOS)}</div></div>
-          <div class="wa-stat"><div class="k wa-lbl">${WA_ICON_TREND}Total P&amp;L</div><div class="v warn wa-num">${fmtINR2(totalPL)}</div></div>
+          <div class="wa-stat warn"><div class="k wa-lbl">${WA_ICON_TREND}Total P&amp;L</div><div class="v wa-num">${fmtINR2(totalPL)}</div></div>
         </div>
         <div class="wa-section-lbl">${WA_ICON_DOC}Account Breakdown</div>
-        <div class="wa-acct-grid${single?' single':''}">${acctCards}</div>
+        ${acctCards}
         ${offerHtml}
         <div class="wa-foot-line">as on ${fmtDate(new Date())} &middot; UPGB OTS Calculator</div>
       </div>
