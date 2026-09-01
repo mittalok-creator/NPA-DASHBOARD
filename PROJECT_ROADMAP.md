@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Feature: live Sol ID fill-in on the Account Numbers panel (2026-09-01, same day)
+
+Each of the 6 accounts in the Account Numbers reference panel (No. Lien, NPA Expenses, BDWO, KCC, CC, TL) is printed in the source ledger as `XXXX` + a fixed 10-digit suffix — the `XXXX` stands in for whichever branch's own Sol ID it actually is, left blank because the panel is a shared static reference, not branch-specific. Alok asked for a small text box next to the "Account Numbers" heading where he can type a Sol ID, with all 6 accounts filling in live "jaise type karte jao" (as he types) rather than only after a full 4-digit ID is entered, an animation on each account as it updates, and a clean revert to `XXXX` on all 6 the moment the box is cleared.
+
+Built exactly as described: a small pill input (`#ledgerSolIdInput`, numeric-only, capped at 4 digits) sits right beside the panel's `<h3>`. Each account number's real suffix is captured once into a `data-acct-suffix` attribute on page load (from its own already-rendered text, so the 10-digit suffixes aren't duplicated a second time anywhere in the code); `onLedgerSolIdInput()` then rebuilds every account's displayed text on every keystroke as `(typed digits + 'XXXX').slice(0,4) + suffix` — so "9" alone shows `9XXX...`, "92" shows `92XX...`, and "9269" completes it, digit by digit exactly like typing rather than jumping straight from placeholder to final. A brief colour pulse (`color: var(--accent) → var(--ink)` over 0.3s) fires on each account on every update, giving the live-fill a "typing itself in" feel. Clearing the input runs the same rebuild with zero digits, which resolves back to plain `XXXX` on all 6.
+
+Verified via Playwright: typed "9269" one character at a time and captured all 6 account numbers after each keystroke completed correctly (`9269` + each account's own suffix); clearing the input reverted all 6 back to their original `XXXX` + suffix text exactly. No console errors, panel's centering (fixed same day, above) unaffected.
+
+Files touched: `index.html` (Sol ID input in the panel head, each account number wrapped in a `.ledger-acct-no` span, cache-bust bump), `css/styles.css` (`.ledger-head-row`, `.ledger-solid-input`, `.ledger-acct-no.pulse` keyframe), `js/app.js` (`initLedgerAcctNumbers`, `onLedgerSolIdInput`), `sw.js` (`CACHE_NAME` v152→v153, matching bump).
+
 ### Fix: compact edge panels (Lok Adalat / Sacrifice Delegation / Account Numbers) now centered vertically (2026-09-01, same day)
 
 Alok: "slide bar ko open karne main use left screen k top se shuru ho rahe hai aur niche tak nahi aa pa rahe wo theek nahi lag rahe" — the 3 content-sized reference panels (`.edge-panel-compact`) were pinned to `top:0`, so they sat stuck flush against the top of the screen with a chunk of empty space below (each was `max-height:80vh`, well short of the viewport), unbalanced rather than looking placed. Only the full-height Branch/Sol ID directory panel is meant to run edge-to-edge; the 3 compact ones never needed that anchor.
