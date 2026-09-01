@@ -3,7 +3,7 @@
 This file is the single source of truth for project status. It is updated at
 the end of every milestone. Read this first in any new session.
 
-Last updated: 2026-08-29
+Last updated: 2026-09-01
 
 ---
 
@@ -122,6 +122,22 @@ Vercel first**, see notes below).
 **Current milestone**: none — ready to start M7 (fast search) or M9 (UI/UX
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
+
+### Feature: Lok Adalat minimum settlement % — a new calculated row everywhere OTS Amount already shows (2026-09-01)
+
+Alok shared UPGB's own circular (minimum settlement % of O/S Balance by NPA Asset Category, as on 30-06-2026: DA1 80%, DA2 70%, DA3 50%, LOSS & PWO 40%) and asked for a new row — "OTS Amount as per Lok Adalat" — everywhere OTS Amount already shows, so whoever's settling an account sees the mandated floor before typing a proposed figure. Mockup-first: 3 tabs (on-screen Loan Table, print/PDF patti, WhatsApp Summary Image) built with illustrative accounts spanning DA1/DA2/DA3/LOSS to show the rate actually changing per category, plus two flagged questions before implementing — this app has no separate "PWO" Asset Code (every loss-category account is just `LOSS`, so PWO gets the same 40% as any other Loss account here), and Substandard accounts aren't in the circular at all. Alok's answer on Substandard: "Not Eligible," not a guessed rate or a blank — Lok Adalat OTS simply doesn't apply to those accounts. Approved, then asked to also add the rate table itself to a slide-out reference panel, "like the Branch/Sol ID one."
+
+**Shared calc** (`js/app.js`): `LOK_ADALAT_RATES` (`{DA1:.80, DA2:.70, DA3:.50, LOSS:.40}`) and `lokAdalatMin(s)` — returns `{eligible:false}` for `SUB_STD`, `{eligible:true, amount, pct}` for the four rated codes, `null` for anything else (defensive fallback, shouldn't come up in practice). One function, three consumers:
+- **On-screen Loan Table** (`loanTableHTML`): new `lokAdalatRow()` sits directly above the real `Settlement (OTS) Amount` input row, reusing `.lt-ots-row`'s existing (already theme-aware across all 3 themes/scopes) gold-tint styling rather than duplicating that whole override matrix — just a thin border added to keep the two adjacent gold rows from visually merging. Added a new `scale` icon to `LT_ICONS` for it.
+- **Print/PDF patti** (`renderPrintView`): same row, same position, in `STRONG_ROWS` (bold) like the other settlement-critical rows.
+- **WhatsApp Summary Image** (`renderShareCard`): the existing Settlement Offer card (only shown once an OTS Amount is entered) gets a new comparison line — **Lok Adalat Minimum** vs. the account's own OTS figure — with a **Meets minimum** (green) / **Below minimum** (red) pill. Summed the same partial-settlement way as the existing Total OTS/Impact sums: only accounts that are both settled (OTS entered) *and* eligible (not `SUB_STD`) count toward the total, so an ineligible account with a manually-negotiated OTS typed in doesn't skew the comparison.
+- **Excel export deliberately left untouched** — it wasn't part of the approved mockups (which covered only these 3 views), and its row system is formula-driven against a fixed `OTS_XL_ROW_LABELS` order with its own hidden-sheet rate-lookup pattern; adding it there is a separate, more involved change than what was shown and approved.
+
+**New reference panel**: a second slide-out edge panel (`#lokAdalatEdgePanel`), built as a near-exact copy of the existing Branch/Sol ID panel's pull-tab pattern (`.edge-handle`/`.edge-backdrop`/`.edge-panel`) but with no search step, since the rate table is 4 static rows. Its pull-tab (`.edge-handle-2`) is positioned 86px below the Branches tab so the two don't overlap — both share the base `.edge-handle` positioning and mobile breakpoint, only the vertical offset differs. `toggleLokAdalatPanel()` mirrors `toggleBranchPanel()` exactly (open/close/Escape-key handling), just without the render-on-open step.
+
+Verified via Playwright against real accounts: DA3 account (O/S ₹81,244.70) correctly shows ₹40,622.35 (50%) on both the on-screen table and the print patti; WhatsApp card tested at both an OTS Amount below (₹30,000 vs. the ₹40,622.35 floor → red "Below minimum") and above (₹45,000 → green "Meets minimum") the calculated minimum, both rendering correctly. Two edge-handles confirmed stacked without overlap; the new panel opens with the correct static rate table. Full regression and both share paths unaffected.
+
+Files touched: `js/app.js` (`LOK_ADALAT_RATES`, `lokAdalatMin`, `lokAdalatRow` in `loanTableHTML`, new row in `renderPrintView`'s `rows`, comparison block in `renderShareCard`, `toggleLokAdalatPanel`, `scale` icon), `css/styles.css` (`.lt-lokadalat-row`/`.lt-lokadalat-na`, `.wa-cmp`/`.wa-met`, `.edge-handle-2`, `.lokadalat-rate-table`/`.lokadalat-note`), `index.html` (second edge-panel markup, cache-bust bump), `sw.js` (`CACHE_NAME` v146→v147, matching bump).
 
 ### Redesign: share card converted from dark to a white/teal light theme (2026-08-29, same day)
 

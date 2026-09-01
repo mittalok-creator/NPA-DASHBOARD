@@ -839,6 +839,12 @@ main{padding:20px 16px 40px}
 .lt-ots-input{width:104px;border:none;background:transparent;font-size:16px;font-weight:500;color:var(--ink);text-align:right;outline:none;border-bottom:2px solid var(--accent);padding:2px 0;transition:border-color .18s var(--ease)}
 .lt-ots-input:focus{border-color:var(--accent-2)}
 .lt-ots-cell .pct-tag{font-size:10.5px;font-weight:700;color:var(--gold-l);white-space:nowrap}
+/* Sits directly above the real OTS input row and shares its gold tint
+   (same "read this before deciding" family) -- the border keeps the two
+   from visually merging into one block since both use an identical
+   background. */
+.loan-table tr.lt-lokadalat-row td{border-bottom:1px solid var(--line)}
+.lt-lokadalat-na{font-size:11px;font-weight:700;color:var(--ink-mute);font-style:italic}
 .loan-table td[id^="impact-"]{font-weight:500;font-size:14px;border-radius:8px;transition:background .2s var(--ease)}
 .loan-table td[id^="impact-"].pos{color:var(--pos);background:var(--pos-soft)}
 .loan-table td[id^="impact-"].neg{color:var(--neg);background:var(--neg-soft)}
@@ -1120,6 +1126,12 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .wa-card .wa-gauge-labels{display:flex;justify-content:space-between;margin-top:6px;font-size:9px;font-weight:700;color:#5C7A80}
 .wa-card .wa-gauge-labels b{color:#1E8E5A;font-weight:800}
 .wa-card .wa-gauge-labels .sac b{color:#B8790A}
+.wa-card .wa-cmp{margin-top:12px;padding-top:11px;border-top:1px dashed rgba(14,154,160,.35);display:flex;justify-content:space-between;align-items:center}
+.wa-card .wa-cmp .k{font-size:9.5px;font-weight:700;color:#5C7A80;text-transform:uppercase;letter-spacing:.2px}
+.wa-card .wa-cmp .v{font-size:13.5px;font-weight:800;margin-top:2px;color:#101820}
+.wa-card .wa-met{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;padding:4px 9px;border-radius:20px;white-space:nowrap}
+.wa-card .wa-met.yes{background:rgba(30,142,90,.12);color:#1E8E5A}
+.wa-card .wa-met.no{background:rgba(192,57,43,.12);color:#C0392B}
 .wa-card .wa-foot-line{margin-top:auto;padding-top:14px;text-align:center;font-size:9px;color:#7A8A90}
 
 /* ---------- Cmd+K command palette ---------- */
@@ -2261,6 +2273,18 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
   .edge-handle{padding:12px 6px}
   .edge-handle span{font-size:9.5px}
 }
+/* Second pull-tab, stacked below Branches rather than centered on its
+   own -- two handles both vertically centered would overlap. */
+.edge-handle.edge-handle-2{top:calc(50% + 86px)}
+@media (max-width:699px){
+  .edge-handle.edge-handle-2{top:calc(50% + 72px)}
+}
+.lokadalat-rate-table{width:100%;border-collapse:collapse;font-size:13px;margin:2px 0 14px}
+.lokadalat-rate-table th,.lokadalat-rate-table td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line)}
+.lokadalat-rate-table th{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--sub)}
+.lokadalat-rate-table td b{color:var(--accent);font-weight:800;font-size:14px}
+.lokadalat-rate-table tr.na-row td{color:var(--ink-mute);font-style:italic}
+.lokadalat-note{font-size:12px;line-height:1.6;color:var(--sub);padding:0 2px}
 
 /* ===================================================================
    OTS Calculator reskin -- brass/paper visual language, reference:
