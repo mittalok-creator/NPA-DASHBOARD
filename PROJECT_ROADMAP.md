@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: compact edge panels (Lok Adalat / Sacrifice Delegation / Account Numbers) now centered vertically (2026-09-01, same day)
+
+Alok: "slide bar ko open karne main use left screen k top se shuru ho rahe hai aur niche tak nahi aa pa rahe wo theek nahi lag rahe" — the 3 content-sized reference panels (`.edge-panel-compact`) were pinned to `top:0`, so they sat stuck flush against the top of the screen with a chunk of empty space below (each was `max-height:80vh`, well short of the viewport), unbalanced rather than looking placed. Only the full-height Branch/Sol ID directory panel is meant to run edge-to-edge; the 3 compact ones never needed that anchor.
+
+Fixed by centering them vertically instead: `top:50%` plus a `translateY(-50%)` folded into the same `transform` property that already drives the horizontal slide-in/out (`translate(100%,-50%)` closed → `translate(0,-50%)` open), so the slide animation still works exactly as before, just anchored to the vertical middle instead of the top. Corners changed from "square on top, rounded only at the bottom" to fully rounded on all four sides, since the panel is no longer flush against any screen edge except the right (where it always docks). Verified via Playwright on all 3 compact panels plus the full-height Branch panel (left untouched, still edge-to-edge): each compact panel's gap above and below is now identical (0.0px difference, e.g. Lok Adalat: 212.7px both sides at a 900px-tall viewport), confirming true vertical centering rather than an eyeballed offset.
+
+Files touched: `css/styles.css` (`.edge-panel.edge-panel-compact` repositioned, new `.edge-panel.edge-panel-compact.open` transform), `sw.js` (`CACHE_NAME` v151→v152, matching bump).
+
 ### Tweak: full account number on the share card, share text trimmed to name + branch only (2026-09-01, same day)
 
 Two follow-ups on the just-shipped Bulletin card. First, each account row showed only the last 6 digits (`A/c ··000012`), masked the same way the print patti abbreviates it — Alok wants the **full** account number visible on the WhatsApp card, so it now reads the complete number (`A/c 160381010000012`) with no truncation; the row already had `min-width:0` on its flex item so the longer string wraps/fits without breaking layout.

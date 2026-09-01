@@ -2225,10 +2225,18 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
 .edge-panel.open{transform:translateX(0)}
 /* A reference table with no search/scroll needs (Lok Adalat's 4 rows,
    unlike the full-height Branch/Sol ID directory) shouldn't claim the
-   whole screen height -- sized to its own content instead, rounded off
-   at the bottom, so whatever's open behind it stays visible below. */
-.edge-panel.edge-panel-compact{top:0;bottom:auto;max-height:80vh;overflow-y:auto;
-  border-radius:0 0 0 16px;box-shadow:-14px 14px 40px rgba(0,0,0,.28)}
+   whole screen height -- sized to its own content instead. Originally
+   pinned to top:0, which left it stuck flush against the top of the
+   screen with empty space below (Alok: "left screen k top se shuru ho
+   rahe hai aur niche tak aa nahi pa rahe" -- unbalanced, not centered).
+   Vertically centered instead (top:50% + a translateY baked into the
+   same transform that already handles the horizontal slide-in/out), so
+   it floats with equal breathing room above and below, background
+   visible on every side rather than only underneath. */
+.edge-panel.edge-panel-compact{top:50%;bottom:auto;max-height:80vh;overflow-y:auto;
+  transform:translate(100%,-50%);
+  border-radius:16px;box-shadow:-16px 20px 48px -10px rgba(0,0,0,.32)}
+.edge-panel.edge-panel-compact.open{transform:translate(0,-50%)}
 .edge-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:18px 16px 14px;border-bottom:1px solid var(--line);flex-shrink:0}
 .edge-panel-headtext{display:flex;flex-direction:column;gap:2px;min-width:0}
 .edge-panel-head h3{margin:0;font-size:15px;font-weight:800;color:var(--ink);letter-spacing:-.2px}
