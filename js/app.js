@@ -612,41 +612,65 @@ function showBranchCard(newId){
 window.showBranchCard = showBranchCard;
 function filterBranchList(){ renderBranchList(document.getElementById('branchListSearch').value); }
 window.filterBranchList = filterBranchList;
-function toggleBranchPanel(force){
-  const panel = document.getElementById('branchEdgePanel');
-  const backdrop = document.getElementById('branchEdgeBackdrop');
-  const handle = document.getElementById('branchEdgeHandle');
+// All edge panels are position:fixed at the same top-right corner and
+// their pull-tabs stack down the same right edge -- with 4 of them now
+// (Branch/Sol ID, Lok Adalat, Sacrifice Delegation, Account Details),
+// letting more than one open at once stacked their headers directly on
+// top of each other (a real report from Alok, back when there were only
+// two). Every panel now goes through this one generic toggle: opening
+// one force-closes every other panel, and hides every OTHER handle
+// while any panel is open -- a handle's own glass/blur styling was
+// designed to sit over page content, not over another panel's opaque
+// background, so leaving a sibling handle visible while a panel covers
+// part of it just looked broken (text half-swallowed) rather than
+// actually being unclickable; hiding it entirely is the honest fix.
+const EDGE_PANEL_KEYS = ['branch','lokAdalat','sacrifice','ledgerAccounts'];
+function edgePanelEls(key){
+  return {
+    panel: document.getElementById(key+'EdgePanel'),
+    backdrop: document.getElementById(key+'EdgeBackdrop'),
+    handle: document.getElementById(key+'EdgeHandle'),
+  };
+}
+function toggleEdgePanel(key, force){
+  const {panel, backdrop, handle} = edgePanelEls(key);
   if(!panel) return;
   const open = force===undefined ? !panel.classList.contains('open') : force;
+  EDGE_PANEL_KEYS.forEach(k=>{
+    if(k===key) return;
+    const other = edgePanelEls(k);
+    if(other.panel){
+      other.panel.classList.remove('open');
+      other.backdrop.classList.remove('open');
+      other.handle.classList.remove('active');
+      other.handle.setAttribute('aria-expanded','false');
+    }
+  });
   panel.classList.toggle('open', open);
   backdrop.classList.toggle('open', open);
   handle.classList.toggle('active', open);
   handle.setAttribute('aria-expanded', open ? 'true' : 'false');
-  if(open){
+  EDGE_PANEL_KEYS.forEach(k=>{
+    if(k===key) return;
+    edgePanelEls(k).handle?.classList.toggle('edge-handle-hidden', open);
+  });
+  if(key==='branch' && open){
     renderBranchList('');
     const search = document.getElementById('branchListSearch');
     search.value = '';
     setTimeout(()=>search.focus(), 260);
   }
 }
+function toggleBranchPanel(force){ toggleEdgePanel('branch', force); }
 window.toggleBranchPanel = toggleBranchPanel;
-// Same slide-out pattern as the Branch/Sol ID panel above, but with no
-// search/render step -- the Lok Adalat rate table is 4 static rows
-// straight from the circular, so there's nothing to look up.
-function toggleLokAdalatPanel(force){
-  const panel = document.getElementById('lokAdalatEdgePanel');
-  const backdrop = document.getElementById('lokAdalatEdgeBackdrop');
-  const handle = document.getElementById('lokAdalatEdgeHandle');
-  if(!panel) return;
-  const open = force===undefined ? !panel.classList.contains('open') : force;
-  panel.classList.toggle('open', open);
-  backdrop.classList.toggle('open', open);
-  handle.classList.toggle('active', open);
-  handle.setAttribute('aria-expanded', open ? 'true' : 'false');
-}
+function toggleLokAdalatPanel(force){ toggleEdgePanel('lokAdalat', force); }
 window.toggleLokAdalatPanel = toggleLokAdalatPanel;
+function toggleSacrificePanel(force){ toggleEdgePanel('sacrifice', force); }
+window.toggleSacrificePanel = toggleSacrificePanel;
+function toggleLedgerAccountsPanel(force){ toggleEdgePanel('ledgerAccounts', force); }
+window.toggleLedgerAccountsPanel = toggleLedgerAccountsPanel;
 document.addEventListener('keydown', (e)=>{
-  if(e.key==='Escape'){ toggleBranchPanel(false); toggleLokAdalatPanel(false); }
+  if(e.key==='Escape'){ EDGE_PANEL_KEYS.forEach(k=>toggleEdgePanel(k, false)); }
 });
 
 updateReportDateDisplay();

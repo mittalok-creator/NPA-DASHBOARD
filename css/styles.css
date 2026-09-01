@@ -2192,8 +2192,22 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
    Android edge panel or the Edge browser's side panel. z-index sits above
    modals (100) and the command palette (120) so it's reachable from
    anywhere, matching "kisi bhi tab par bas click karte hi" from the ask. */
+/* One flex column holds all 4 pull-tabs, rather than each being
+   independently position:fixed with a hand-guessed vertical offset --
+   that broke the moment label lengths differed (rotated text makes
+   "Lok Adalat" noticeably taller than "Branches"), stacking them with
+   real overlap. Flexbox measures each button's actual rendered height
+   and gaps them correctly regardless of how long a future label is.
+   Above both .edge-panel and .edge-backdrop (same z-index:150) --
+   otherwise whichever panel is later in the DOM visually covers an
+   earlier panel's own pull-tab wherever their boxes intersect, and
+   blocks clicking it too. A handle must always stay reachable so its
+   panel can be switched to directly. */
+.edge-handle-rail{
+  position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:151;
+  display:flex;flex-direction:column;gap:10px;
+}
 .edge-handle{
-  position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:150;
   display:flex;flex-direction:column;align-items:center;gap:6px;
   padding:14px 8px;border:1px solid var(--glass-border);border-right:none;border-radius:14px 0 0 14px;
   background:var(--glass-fill);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
@@ -2211,6 +2225,12 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
   display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s var(--ease);
 }
 .edge-panel.open{transform:translateX(0)}
+/* A reference table with no search/scroll needs (Lok Adalat's 4 rows,
+   unlike the full-height Branch/Sol ID directory) shouldn't claim the
+   whole screen height -- sized to its own content instead, rounded off
+   at the bottom, so whatever's open behind it stays visible below. */
+.edge-panel.edge-panel-compact{top:0;bottom:auto;max-height:80vh;overflow-y:auto;
+  border-radius:0 0 0 16px;box-shadow:-14px 14px 40px rgba(0,0,0,.28)}
 .edge-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:18px 16px 14px;border-bottom:1px solid var(--line);flex-shrink:0}
 .edge-panel-headtext{display:flex;flex-direction:column;gap:2px;min-width:0}
 .edge-panel-head h3{margin:0;font-size:15px;font-weight:800;color:var(--ink);letter-spacing:-.2px}
@@ -2273,18 +2293,21 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
   .edge-handle{padding:12px 6px}
   .edge-handle span{font-size:9.5px}
 }
-/* Second pull-tab, stacked below Branches rather than centered on its
-   own -- two handles both vertically centered would overlap. */
-.edge-handle.edge-handle-2{top:calc(50% + 86px)}
-@media (max-width:699px){
-  .edge-handle.edge-handle-2{top:calc(50% + 72px)}
-}
+/* While any one panel is open, every OTHER handle hides entirely rather
+   than staying put -- a handle's glass/blur styling assumes it's sitting
+   over page content, not over another panel's opaque background, so a
+   handle whose position happens to overlap the open panel would render
+   half-swallowed instead of cleanly on top of it. */
+.edge-handle.edge-handle-hidden{opacity:0;pointer-events:none;transition:opacity .16s var(--ease)}
 .lokadalat-rate-table{width:100%;border-collapse:collapse;font-size:13px;margin:2px 0 14px}
 .lokadalat-rate-table th,.lokadalat-rate-table td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line)}
 .lokadalat-rate-table th{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--sub)}
 .lokadalat-rate-table td b{color:var(--accent);font-weight:800;font-size:14px}
 .lokadalat-rate-table tr.na-row td{color:var(--ink-mute);font-style:italic}
+.lokadalat-rate-table td.mono{font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink)}
 .lokadalat-note{font-size:12px;line-height:1.6;color:var(--sub);padding:0 2px}
+.ledger-group-lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--accent);margin:14px 0 4px}
+.ledger-group-lbl:first-child{margin-top:2px}
 
 /* ===================================================================
    OTS Calculator reskin -- brass/paper visual language, reference:
