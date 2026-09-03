@@ -1026,8 +1026,20 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    already established by the OTS Calculator's own on-screen theme, never
    the WhatsApp share card's separate teal. Typography (Manrope for
    headings/labels, Inter with the zero-safety `font-feature-settings`
-   for every figure) is unchanged from the 2026-08-29 font pass. */
-.pv-topbar{height:5px;background:linear-gradient(90deg,#B3812A,#D4A544 60%,#B3812A);margin:-24px -24px 20px}
+   for every figure) is unchanged from the 2026-08-29 font pass.
+   Vertical spacing throughout (row padding, section margins) is tuned
+   deliberately tight -- canvasToPdfBlob() only ever fits the sheet on
+   one PDF page when the captured canvas height clears its computed
+   per-page pixel budget (js/app.js), and this letterhead's first pass
+   came in ~40px over that on a single account (same row count
+   regardless of how many accounts are linked, since accounts add
+   columns, not rows) -- silently spilling a near-empty second page.
+   Trimmed with real margin to spare; if new rows/sections are added
+   later, re-check with a real html2canvas capture (not a plain page
+   screenshot -- canvasToPdfBlob renders through html2canvas in
+   isolation, not the live page's own layout) rather than assuming
+   the existing margin still holds. */
+.pv-topbar{height:5px;background:linear-gradient(90deg,#B3812A,#D4A544 60%,#B3812A);margin:-24px -24px 16px}
 .pv-brandrow{display:flex;align-items:center;gap:11px}
 /* object-fit:contain + no border-radius -- a circular crop (as tried in
    the mockup review) cut off the bank name lettering under the logo's
@@ -1039,7 +1051,7 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .pv-doctitle-rule{width:46px;height:3px;background:#B3812A;border-radius:2px;margin:9px auto 0}
 .pv-meta{display:flex;justify-content:center;gap:26px;font-size:10.5px;font-weight:600;color:#5B6472;margin-top:12px;padding-bottom:16px;border-bottom:1px solid #DEDACD}
 .pv-meta b{color:#111;font-weight:800}
-.pv-borrower{margin-top:16px;border:1px solid #DEDACD;border-radius:8px;padding:14px 16px}
+.pv-borrower{margin-top:13px;border:1px solid #DEDACD;border-radius:8px;padding:11px 16px}
 .pv-name{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:13.5px;font-weight:800;color:#111}
 .pv-addr{font-size:10px;color:#5B6472;margin-top:2px}
 /* One flat 4-across grid (Cust ID/Mobile/PAN/Aadhar, then SB A/c/Balance
@@ -1052,7 +1064,7 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .pv-sec-lbl{display:flex;align-items:center;gap:8px;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:9.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#8A5F1E;margin:18px 0 2px}
 .pv-sec-lbl::after{content:'';flex:1;height:1px;background:#DEDACD}
 .pv-table{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:4px;margin-bottom:10px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"zero" 0,"ss01" 0,"ss02" 0,"ss03" 0,"ss04" 0}
-.pv-table th,.pv-table td{padding:6px 4px 6px 10px;text-align:right;line-height:1.2;color:#111;border-bottom:1px solid #DEDACD}
+.pv-table th,.pv-table td{padding:4.5px 4px 4.5px 10px;text-align:right;line-height:1.2;color:#111;border-bottom:1px solid #DEDACD}
 .pv-table th:first-child,.pv-table td.pv-label{text-align:left;font-weight:700;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:normal;font-feature-settings:normal;color:#3A3F47}
 .pv-table thead th{font-weight:800;padding-bottom:7px;color:#111;border-bottom:2px solid #111;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:normal;font-feature-settings:normal}
 /* Key settlement figures (O/S Balance, Total Dues, Total P&L, OTS Amount,
@@ -1062,9 +1074,9 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    top border marks where the emphasis starts, same "which rows matter"
    convention as the on-screen loan table's own lt-strong rows, done with
    weight/size/rule instead of a tint. */
-.pv-table tr.pv-strong td{font-weight:800;font-size:11.5px;border-top:1.5px solid #111;padding-top:8px}
+.pv-table tr.pv-strong td{font-weight:800;font-size:11.5px;border-top:1.5px solid #111;padding-top:6px}
 .pv-table tr.pv-strong td.pv-label{color:#111}
-.pv-agg{margin-top:20px;border:1.5px solid #111;border-radius:8px;padding:14px 18px 12px}
+.pv-agg{margin-top:15px;border:1.5px solid #111;border-radius:8px;padding:11px 18px 9px}
 .pv-agg-title{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:9.5px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;margin-bottom:9px;color:#8A5F1E}
 .pv-agg-row{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;font-weight:700;padding:5px 0;border-bottom:1px dashed #DEDACD;color:#3A3F47}
 .pv-agg-row:last-child{border-bottom:none}
@@ -1075,7 +1087,7 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .pv-agg-row.pv-agg-hero{padding:8px 0}
 .pv-agg-row.pv-agg-hero span:first-child{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-weight:800;font-size:12px;color:#111}
 .pv-agg-row.pv-agg-hero span:last-child{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-weight:800;font-size:16px}
-.pv-foot{margin-top:18px;text-align:center;font-size:9px;color:#8B93A0;letter-spacing:.2px}
+.pv-foot{margin-top:13px;text-align:center;font-size:9px;color:#8B93A0;letter-spacing:.2px}
 
 /* ---------- WhatsApp share card (2026-08-29, light theme) ----------
    A separate, mobile-shaped summary -- bank identity, borrower profile,
