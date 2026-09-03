@@ -1004,37 +1004,57 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    it directly on the container, once, restarts the chain for every
    descendant that doesn't set its own font-family (.pv-table/.pv-meta/
    .pv-agg-row's *value* span still layer the numeric font on top). */
-#printArea{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif}
-/* Plain/professional print sheet (2026-08-14) -- no icons, no accent
-   color anywhere; every visual distinction (header band, strong-row
-   emphasis) comes from weight, size and border alone, the way a real
-   bank statement or settlement letter is typeset. This also sidesteps
-   the print-contrast note above entirely -- pure black-on-white never
-   halftones on a laser printer, unlike any tint ever could.
-   Typography (2026-08-29): swapped Archivo/IBM Plex Mono for Manrope
-   (title, labels, headers) + Inter (every figure) -- the same pairing
-   approved as "Option B" in the patti-redesign mockup, and the same
-   zero-safety `font-feature-settings` already locked in for the
-   on-screen OTS Calculator, so a printed `0` can never render slashed. */
-.pv-header{text-align:center;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px}
-.pv-title{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:17px;font-weight:800;letter-spacing:.6px;color:#000}
-.pv-sub{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:10.5px;color:#000;margin-top:2px;font-weight:600}
-.pv-meta{display:flex;justify-content:center;gap:24px;font-size:10.5px;color:#000;margin-top:4px;font-weight:600}
-.pv-borrower{margin-bottom:10px}
-.pv-name{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14.5px;font-weight:800;color:#000}
-.pv-addr{font-size:10.5px;color:#222;margin-top:1px}
-/* Two explicit side-by-side columns -- Mobile/PAN/Aadhar on the left,
-   SB A/c/Balance on the right -- instead of a single interleaved grid,
-   so each group of fields stays visually together on its own side. */
-.pv-info-grid{display:flex;gap:24px;margin-top:6px}
-.pv-info-col{flex:1;min-width:0}
-.pv-info-col div{display:flex;justify-content:space-between;font-size:10.5px;border-bottom:1px solid #999;padding:2px 0}
-.pv-info-grid .k{color:#333;font-weight:600}
-.pv-info-grid .v{font-weight:800;color:#000;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"zero" 0,"ss01" 0,"ss02" 0,"ss03" 0,"ss04" 0}
-.pv-table{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:10px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"zero" 0,"ss01" 0,"ss02" 0,"ss03" 0,"ss04" 0}
-.pv-table th,.pv-table td{border:1px solid #555;padding:3px 8px;text-align:right;line-height:1.2;color:#000}
-.pv-table th:first-child,.pv-table td.pv-label{text-align:left;font-weight:700;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:normal;font-feature-settings:normal}
-.pv-table thead th{font-weight:800;padding:5px 8px;color:#000;border-bottom:2px solid #000;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:normal;font-feature-settings:normal}
+/* overflow:hidden clips .pv-topbar's negative-margin bleed (below) exactly
+   at the sheet's own edge -- without it, the sliver of the bar pulled
+   outside printArea's own box renders against whatever sits behind it on
+   the real page instead of the sheet's white, a thin strip of the app's
+   own background grid showing through at the very top of the capture. */
+#printArea{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#111;overflow:hidden}
+/* "OTS Settlement Statement" letterhead redesign (2026-09-03) -- replaced
+   the plain centered black-on-white grid (every particular boxed in its
+   own bordered cell, no distinction between a supporting figure and the
+   one a manager actually reads first) with a proper letterhead: a thin
+   brass top bar and bank identity block, hairline rules in place of a
+   full grid, and a bordered summary panel for the aggregate totals with
+   its two headline figures (Total OTS Amount, Total Sacrifice) set
+   larger. Renamed from the internal "patti" nickname to an actual
+   document title per Alok's request -- this is what a bank officer would
+   call it on the sheet itself, "patti" never was. Still pure black ink
+   for every figure (prints fine on any office printer, and sidesteps
+   halftoning on a laser printer that any tinted fill risks) -- only the
+   rules, section labels, and top bar carry colour, and only the brass
+   already established by the OTS Calculator's own on-screen theme, never
+   the WhatsApp share card's separate teal. Typography (Manrope for
+   headings/labels, Inter with the zero-safety `font-feature-settings`
+   for every figure) is unchanged from the 2026-08-29 font pass. */
+.pv-topbar{height:5px;background:linear-gradient(90deg,#B3812A,#D4A544 60%,#B3812A);margin:-24px -24px 20px}
+.pv-brandrow{display:flex;align-items:center;gap:11px}
+/* object-fit:contain + no border-radius -- a circular crop (as tried in
+   the mockup review) cut off the bank name lettering under the logo's
+   leaf mark; a letterhead shows a logo whole, not as an avatar. */
+.pv-logo{width:34px;height:34px;object-fit:contain;flex-shrink:0}
+.pv-bank{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:12.5px;font-weight:800;color:#111;line-height:1.3}
+.pv-bank-sub{font-size:10px;color:#5B6472;font-weight:600;margin-top:1px}
+.pv-doctitle{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-weight:800;font-size:19px;letter-spacing:.5px;text-align:center;margin-top:18px;text-transform:uppercase;color:#111}
+.pv-doctitle-rule{width:46px;height:3px;background:#B3812A;border-radius:2px;margin:9px auto 0}
+.pv-meta{display:flex;justify-content:center;gap:26px;font-size:10.5px;font-weight:600;color:#5B6472;margin-top:12px;padding-bottom:16px;border-bottom:1px solid #DEDACD}
+.pv-meta b{color:#111;font-weight:800}
+.pv-borrower{margin-top:16px;border:1px solid #DEDACD;border-radius:8px;padding:14px 16px}
+.pv-name{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:13.5px;font-weight:800;color:#111}
+.pv-addr{font-size:10px;color:#5B6472;margin-top:2px}
+/* One flat 4-across grid (Cust ID/Mobile/PAN/Aadhar, then SB A/c/Balance
+   wrapping to a second row) replaces the old two explicit side-by-side
+   columns -- fewer visual groupings to parse, and it scales cleanly
+   whether there are 4 fields or 6. */
+.pv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 16px;margin-top:12px}
+.pv-grid .k{font-size:8.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:#5B6472}
+.pv-grid .v{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-weight:700;font-size:11px;margin-top:3px;color:#111;font-variant-numeric:tabular-nums;font-feature-settings:"zero" 0,"ss01" 0,"ss02" 0,"ss03" 0,"ss04" 0}
+.pv-sec-lbl{display:flex;align-items:center;gap:8px;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:9.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#8A5F1E;margin:18px 0 2px}
+.pv-sec-lbl::after{content:'';flex:1;height:1px;background:#DEDACD}
+.pv-table{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:4px;margin-bottom:10px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"zero" 0,"ss01" 0,"ss02" 0,"ss03" 0,"ss04" 0}
+.pv-table th,.pv-table td{padding:6px 4px 6px 10px;text-align:right;line-height:1.2;color:#111;border-bottom:1px solid #DEDACD}
+.pv-table th:first-child,.pv-table td.pv-label{text-align:left;font-weight:700;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:normal;font-feature-settings:normal;color:#3A3F47}
+.pv-table thead th{font-weight:800;padding-bottom:7px;color:#111;border-bottom:2px solid #111;font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:normal;font-feature-settings:normal}
 /* Key settlement figures (O/S Balance, Total Dues, Total P&L, OTS Amount,
    Total Sacrifice, Impact on P&L) -- the numbers someone actually reads
    this sheet for -- get bolder and a hair larger so they read at a glance
@@ -1042,11 +1062,20 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    top border marks where the emphasis starts, same "which rows matter"
    convention as the on-screen loan table's own lt-strong rows, done with
    weight/size/rule instead of a tint. */
-.pv-table tr.pv-strong td{font-weight:800;font-size:11.5px;border-top:1.5px solid #000}
-.pv-agg{margin-bottom:8px}
-.pv-agg-title{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:11px;font-weight:800;letter-spacing:2.5px;text-align:center;margin-bottom:5px;color:#000}
-.pv-agg-row{display:flex;justify-content:space-between;font-size:12.5px;font-weight:800;padding:4px 6px;border-bottom:1px solid #999;color:#000}
-.pv-agg-row span:last-child{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"zero" 0,"ss01" 0,"ss02" 0,"ss03" 0,"ss04" 0}
+.pv-table tr.pv-strong td{font-weight:800;font-size:11.5px;border-top:1.5px solid #111;padding-top:8px}
+.pv-table tr.pv-strong td.pv-label{color:#111}
+.pv-agg{margin-top:20px;border:1.5px solid #111;border-radius:8px;padding:14px 18px 12px}
+.pv-agg-title{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:9.5px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;margin-bottom:9px;color:#8A5F1E}
+.pv-agg-row{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;font-weight:700;padding:5px 0;border-bottom:1px dashed #DEDACD;color:#3A3F47}
+.pv-agg-row:last-child{border-bottom:none}
+.pv-agg-row span:last-child{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"zero" 0,"ss01" 0,"ss02" 0,"ss03" 0,"ss04" 0;color:#111}
+/* The two figures a manager actually reads this sheet for -- set larger
+   than the rest of the totals, same "lead with the number that matters"
+   principle as the strong particulars rows above. */
+.pv-agg-row.pv-agg-hero{padding:8px 0}
+.pv-agg-row.pv-agg-hero span:first-child{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-weight:800;font-size:12px;color:#111}
+.pv-agg-row.pv-agg-hero span:last-child{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-weight:800;font-size:16px}
+.pv-foot{margin-top:18px;text-align:center;font-size:9px;color:#8B93A0;letter-spacing:.2px}
 
 /* ---------- WhatsApp share card (2026-08-29, light theme) ----------
    A separate, mobile-shaped summary -- bank identity, borrower profile,
@@ -1054,7 +1083,7 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    P&L/Asset Code, and a Settlement Offer card (with a Recovery vs.
    Sacrifice gauge, same visual language as the live Loan Detail screen's
    own Recovery Scale) once an OTS Amount is actually entered -- instead
-   of sharing the full A4 patti, which reads as a wall of small print in
+   of sharing the full A4 Settlement Statement, which reads as a wall of small print in
    a WhatsApp thumbnail. Same structure as the cyan-dark version it
    replaced, recolored to a white/teal palette per Alok's "light theme
    main convert kar do" -- every dark-surface/glow treatment became a

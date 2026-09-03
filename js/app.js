@@ -234,7 +234,7 @@ window.shareOtsPdf = () => shareOtsPdf().catch(err=>{
 
 /* The compact, mobile-shaped summary card -- Total O/S as the headline,
    each linked account's own Dues/P&L/Asset Code, Total Dues closing it
-   out -- built to be shared as an image instead of the full A4 patti,
+   out -- built to be shared as an image instead of the full A4 Settlement Statement,
    which reads as a wall of small print in a WhatsApp thumbnail. Approved
    mockup direction: navy/gold "Hero Stat" card, one card = one image.
    NPA date in the header uses the earliest across linked accounts when
@@ -1980,40 +1980,41 @@ function renderPrintView(){
   // below -- same one-mention-only convention as the earlier branch-name
   // dedup fix.
   const solId = esc(custRow[C.SOL_ID])||'';
+  const logoSrc = document.querySelector('.nav-logo')?.src || '';
   document.getElementById('printArea').innerHTML = `
-    <div class="pv-header">
-      <div class="pv-title">UPGB OTS CALCULATOR</div>
-      <div class="pv-sub">Uttar Pradesh Gramin Bank (Regional Office Hathras)</div>
-      <div class="pv-meta"><span>Report Date: ${fmtDate(new Date())}</span><span>Branch: ${esc(custRow[C.SOL_DESC])||''}${solId?` (${solId})`:''}</span></div>
+    <div class="pv-topbar"></div>
+    <div class="pv-brandrow">
+      ${logoSrc?`<img class="pv-logo" src="${logoSrc}" alt="">`:''}
+      <div><div class="pv-bank">Uttar Pradesh Gramin Bank</div><div class="pv-bank-sub">Regional Office Hathras</div></div>
     </div>
+    <div class="pv-doctitle">OTS Settlement Statement<div class="pv-doctitle-rule"></div></div>
+    <div class="pv-meta"><span>Report Date <b>${fmtDate(new Date())}</b></span><span>Branch <b>${esc(custRow[C.SOL_DESC])||''}${solId?` (${solId})`:''}</b></span></div>
     <div class="pv-borrower">
       <div class="pv-name">${esc(custRow[C.NAME])||'—'}</div>
       <div class="pv-addr">${esc(custRow[C.ADDR])||'—'}</div>
-      <div class="pv-info-grid">
-        <div class="pv-info-col">
-          <div><span class="k">Cust ID</span><span class="v">${esc(custRow[C.CUST_ID])||'—'}</span></div>
-          <div><span class="k">Mobile</span><span class="v">${esc(custRow[C.PHONE])||'—'}</span></div>
-          <div><span class="k">PAN</span><span class="v">${esc(custRow[C.PAN])||'—'}</span></div>
-          <div><span class="k">Aadhar</span><span class="v">${esc(custRow[C.AADHAR])||'—'}</span></div>
-        </div>
-        <div class="pv-info-col">
-          <div><span class="k">SB A/c</span><span class="v">${esc(custRow[C.SB_ACCT])||'—'}</span></div>
-          <div><span class="k">SB Balance</span><span class="v">${fmtINR2(custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL])}</span></div>
-        </div>
+      <div class="pv-grid">
+        <div><div class="k">Cust ID</div><div class="v">${esc(custRow[C.CUST_ID])||'—'}</div></div>
+        <div><div class="k">Mobile</div><div class="v">${esc(custRow[C.PHONE])||'—'}</div></div>
+        <div><div class="k">PAN</div><div class="v">${esc(custRow[C.PAN])||'—'}</div></div>
+        <div><div class="k">Aadhar</div><div class="v">${esc(custRow[C.AADHAR])||'—'}</div></div>
+        <div><div class="k">SB A/c</div><div class="v">${esc(custRow[C.SB_ACCT])||'—'}</div></div>
+        <div><div class="k">SB Balance</div><div class="v">${fmtINR2(custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL])}</div></div>
       </div>
     </div>
+    <div class="pv-sec-lbl">Particulars</div>
     <table class="pv-table">
       <thead><tr><th>Particulars</th>${slots.map(s=>`<th>${esc(s.acctNo)}</th>`).join('')}</tr></thead>
       <tbody>${tableRows}</tbody>
     </table>
     <div class="pv-agg">
-      <div class="pv-agg-title">A G G R E G A T E&nbsp;&nbsp;T O T A L S</div>
+      <div class="pv-agg-title">Aggregate Totals</div>
       <div class="pv-agg-row"><span>Total O/S Balance</span><span>${fmtINR2(totalOS)}</span></div>
       <div class="pv-agg-row"><span>Total Dues</span><span>${fmtINR2(totalDues)}</span></div>
-      <div class="pv-agg-row"><span>Total OTS Amount</span><span>${anyOts?fmtINR2(totalOtsSum):'—'}</span></div>
+      <div class="pv-agg-row pv-agg-hero"><span>Total OTS Amount</span><span>${anyOts?fmtINR2(totalOtsSum):'—'}</span></div>
       <div class="pv-agg-row"><span>Total Ledger Sacrifice</span><span>${anyOts?fmtINR2(totalLedgerSac):'—'}</span></div>
-      <div class="pv-agg-row"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(totalDues-totalOtsSum):'—'}</span></div>
+      <div class="pv-agg-row pv-agg-hero"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(totalDues-totalOtsSum):'—'}</span></div>
     </div>
+    <div class="pv-foot">UPGB OTS Calculator &middot; Designed &amp; Developed by Alok Mittal</div>
   `;
 }
 
