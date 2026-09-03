@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: OTS Settlement Statement spilling onto a silent second PDF page (2026-09-03, same day)
+
+Alok: "set this to only 1 page." The just-shipped letterhead redesign's added breathing room (bordered borrower panel, section label, bordered totals panel) pushed the sheet's total height just past `canvasToPdfBlob()`'s (js/app.js) one-page budget — measured on a real capture at ~40px over, out of roughly 2,200px available at the export scale. `canvasToPdfBlob()` already has multi-page fallback logic for content that's genuinely too long for one page (it slices the canvas and adds pages automatically), so it didn't error or warn — it silently produced a 2-page PDF where the second page was almost entirely blank except for a spillover sliver (the footer line, in practice).
+
+Root cause is fixed-row-count arithmetic, not per-customer: the particulars table always has the same 17 rows regardless of how many accounts are linked (accounts add columns, not rows), so a single-account and a multi-account statement are exactly the same height — meaning this was going to affect every single statement generated, not an edge case for customers with more linked loans.
+
+Trimmed vertical spacing throughout with real margin to spare rather than shaving it down to the exact limit: table row padding (6px → 4.5px vertical, the single biggest lever across 17 rows), strong-row top padding (8px → 6px), and the top bar/borrower panel/totals panel/footer margins each tightened a few px. Re-verified against the same real `canvasToPdfBlob()` page-fit math (not just a visual check): the redesigned sheet now renders at ~763pt against a ~794pt one-page budget — about 31pt (roughly 1.1cm) of margin to spare — confirmed on both the single-account and 2-account real examples used throughout this redesign. Visually still reads as comfortably spaced, not cramped.
+
+Files touched: `css/styles.css` (`.pv-*` spacing trimmed, explanatory comment added warning future edits to re-check page-fit with a real `html2canvas` capture rather than assuming the margin still holds), `index.html` (cache-bust bump), `sw.js` (`CACHE_NAME` v156→v157, matching bump).
+
 ### Redesign: printed/PDF sheet rebuilt as "OTS Settlement Statement" (2026-09-03)
 
 Alok asked what else could improve in the app's design/formatting. The one clear remaining gap: the printed/PDF compliance sheet still carried its original plain black-on-white grid from before the WhatsApp card, splash screen, and edge panels were all redone this week — every particular boxed in its own bordered cell at identical visual weight, no distinction between a supporting figure and the number a manager actually reads this sheet for. Mockup-first per the established workflow: built and shown a letterhead-style redesign using two real accounts (Sanjay Kumar — single account, Bamnai branch; Lochan Singh — two linked accounts, Komari branch), approved outright ("theek hai, ise implement kar do").
