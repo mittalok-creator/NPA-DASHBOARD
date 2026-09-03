@@ -123,6 +123,20 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: default theme now respects the device's own light/dark setting (2026-09-03)
+
+Alok relayed feedback from colleagues that the dark theme "eyes par pressure daal raha hai" (strains the eyes). Investigated rather than taking the complaint at face value: the fonts complaint didn't hold up (Inter/Manrope/IBM Plex Mono are all legitimate modern professional typefaces), and the light theme is already a deliberately tuned warm-ivory palette with WCAG-AA contrast fixes documented inline — but the dark-theme complaint had real substance. The app opened in dark theme **by default on every first visit, regardless of the device's own light/dark OS setting** — there was no `prefers-color-scheme` check at all, only an explicit `localStorage` override for users who'd already found and used the in-app toggle. For a daytime branch-office tool used under bright ambient light, forcing dark on everyone who hadn't yet discovered the toggle is exactly backwards.
+
+Root cause was actually two compounding bugs, not one:
+1. The `<head>` script that stamps `data-theme` before first paint only ever checked for a *stored* `'light'` value — it never consulted `window.matchMedia('(prefers-color-scheme: light)')` at all, so a phone/PC already set to light mode still got dark by default.
+2. Worse, `wireChrome()` (in `js/app.js`, runs on every load) called `applyTheme()` unconditionally to sync the toggle's label text — and `applyTheme()` always wrote its argument straight back into `localStorage`. That silently converted "no explicit preference, currently showing dark" into "user explicitly chose dark" the very first time the page ever loaded, *before anyone had touched anything* — which would have permanently defeated any OS-preference check going forward even after adding one, since the stored value would already say `'dark'` explicitly.
+
+Fixed both: the head script now falls back to `prefers-color-scheme: light` when nothing is stored (leaving it unset, i.e. dark, only when the OS prefers dark or exposes no preference); `applyTheme(theme, persist)` gained a `persist` parameter (default `true`, so a real click via `toggleTheme()` still saves as before), and `wireChrome()`'s startup call now passes `persist:false` — it only syncs the visible label/attribute to whatever the head script already resolved, never writes to `localStorage` on its own.
+
+Verified via Playwright across 5 scenarios: OS set to light with nothing stored → opens light (previously always opened dark); OS set to dark with nothing stored → still opens dark (unchanged, correct); no OS signal exposed at all → opens light (matches real browsers' own light-first assumption); clicking the toggle → switches and persists to `localStorage` exactly as before; reloading after an explicit toggle → the explicit choice sticks regardless of the OS's own setting, confirming a real user's choice can never be silently overridden by this fix.
+
+Files touched: `index.html` (head theme-init script, cache-bust bump), `js/app.js` (`applyTheme` gains `persist` param, `wireChrome` passes `persist:false`), `sw.js` (`CACHE_NAME` v154→v155, matching bump).
+
 ### Fix: login/PIN splash screen now fits one phone screen with no scrolling (2026-09-01, same day)
 
 Alok shared a phone screenshot: on a real device, the stacked hero (logo/bank name/app title/"Secure Access" chip) plus the PIN entry panel below it ran taller than the screen — the keypad's bottom row (7/8/9/0) and the Login button were cut off, needing a scroll to reach, and a scrollbar was visibly showing inside the login card. "Yr mobile par 1 baar main puri screen aaye" — the whole thing should appear in one screen, no scrolling.
