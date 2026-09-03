@@ -4848,9 +4848,20 @@ function switchView(view){
 window.switchView = switchView;
 
 /* ---------- Light / dark theme toggle ---------- */
-function applyTheme(theme){
+/* `persist` defaults to true (an actual user click via toggleTheme should
+   always be remembered). wireChrome's own startup call passes false --
+   it only exists to sync the label/attribute to whatever the <head>
+   script already resolved (stored choice, else the OS's own light/dark
+   setting), and used to unconditionally re-save that resolution to
+   localStorage on every single load. That silently turned "no explicit
+   preference yet, currently showing dark" into "explicitly chose dark"
+   after a person's very first visit -- before they'd even looked at the
+   screen -- which permanently defeated the OS-preference check above
+   from then on. Only a real toggle-button click should ever write to
+   localStorage. */
+function applyTheme(theme, persist){
   document.documentElement.setAttribute('data-theme', theme==='light'?'light':'dark');
-  try{ localStorage.setItem('upgb-theme', theme); }catch(e){}
+  if(persist!==false){ try{ localStorage.setItem('upgb-theme', theme); }catch(e){} }
   const label = document.getElementById('themeToggleLabel');
   if(label) label.textContent = theme==='light' ? 'Dark Mode' : 'Light Mode';
 }
@@ -4862,7 +4873,7 @@ function toggleTheme(){
 /* ---------- Wire static chrome (nav, header icons, modals) ---------- */
 (function wireChrome(){
   const on = (id, evt, fn) => { const e=document.getElementById(id); if(e) e.addEventListener(evt, fn); };
-  applyTheme(document.documentElement.getAttribute('data-theme')==='light' ? 'light' : 'dark');
+  applyTheme(document.documentElement.getAttribute('data-theme')==='light' ? 'light' : 'dark', false);
   on('themeToggleBtn','click',()=>toggleTheme());
   on('themeToggleBtnMobile','click',()=>toggleTheme());
   const openUpdateModalAsAdmin = () => {
