@@ -837,10 +837,20 @@ function runSearch(){
       matches.push(r);
     }
   }
-  // Alok's request -- results list reads more naturally sorted A-Z by
-  // borrower name than in raw data order, regardless of which field
-  // (account/cust ID/mobile/etc.) was actually searched on.
-  matches.sort((a,b)=>String(a[C.NAME]||'').localeCompare(String(b[C.NAME]||''), 'en', {sensitivity:'base'}));
+  // Alok's original request -- results list reads more naturally sorted
+  // A-Z by borrower name than in raw data order. Refined for the Account
+  // No. search specifically (2026-09-05): typing digits of an account
+  // number is scanning for a near-match among the results, so those sort
+  // by account number itself (numeric-aware, so "...0009" sorts before
+  // "...0010") -- name order was unrelated to what was actually typed.
+  // Every other mode (Cust ID/Mobile/Aadhar/PAN/SB No.) keeps the by-name
+  // sort, since a search on one of those has no natural numeric order of
+  // its own to fall back on.
+  if(mode.id==='acct'){
+    matches.sort((a,b)=>String(a[C.ACCT_NO]||'').localeCompare(String(b[C.ACCT_NO]||''), undefined, {numeric:true}));
+  } else {
+    matches.sort((a,b)=>String(a[C.NAME]||'').localeCompare(String(b[C.NAME]||''), 'en', {sensitivity:'base'}));
+  }
   renderResults(matches, mode);
 }
 
