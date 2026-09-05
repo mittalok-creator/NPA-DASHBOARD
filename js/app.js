@@ -757,7 +757,11 @@ function computeSlot(slot){
   const uci125 = os!=='' ? computeUCI(os, slot.npaDate, slot.scheme, 12.5) : '';
   // Total Dues = O/S + UCI@8.5% + Interest Reversal.
   const totalDues = (os!=='' && uci!=='') ? os+uci+uri : '';
-  const totalContractualDues = (os!=='' && uci125!=='') ? os+uci125 : '';
+  // Total Contractual Dues = O/S + UCI@12.5% + Interest Reversal -- same
+  // Interest Reversal that folds into Total Dues above, previously left
+  // out here entirely (Alok: typing Interest Reversal updated Total Dues
+  // but not Total Contractual Dues).
+  const totalContractualDues = (os!=='' && uci125!=='') ? os+uci125+uri : '';
   // Net O/S is always identical to O/S Balance -- not a separate figure --
   // so Provision is calculated directly on O/S Balance (by asset code).
   const netOutstanding = os;
@@ -1344,6 +1348,12 @@ function uriFor(s){
 function totalDuesFor(s){
   return (s.os!=='' && s.uci!=='') ? s.os + s.uci + uriFor(s) : '';
 }
+// Total Contractual Dues = O/S + UCI@12.5% + Interest Reversal -- same
+// live uriFor() dependency as totalDuesFor() above, so typing an Interest
+// Reversal override updates this figure too, not just Total Dues.
+function totalContractualDuesFor(s){
+  return (s.os!=='' && s.uci125!=='') ? s.os + s.uci125 + uriFor(s) : '';
+}
 
 function openDetail(custId, jumpAcct){
   const custRow = byCustId.get(custId);
@@ -1609,6 +1619,7 @@ function loanTableHTML(slots){
           oninput="onUriInput(${i},'${esc(String(s.acctNo))}')">
       </div></td>`).join('')}</tr>`;
   const totalDuesRow = () => `<tr class="lt-strong"><th scope="row" class="lt-label">${ltIconBadge('layers')}Total Dues</th>${slots.map((s,i)=>`<td id="totalDues-${i}">—</td>`).join('')}</tr>`;
+  const totalContractualDuesRow = () => `<tr class="lt-strong lt-divider"><th scope="row" class="lt-label">${ltIconBadge('layers')}Total Contractual Dues</th>${slots.map((s,i)=>`<td id="totalContractualDues-${i}">—</td>`).join('')}</tr>`;
   // Settlement Progress: OTS Amount as a share of Total Dues, drawn as a
   // thin fill bar plus a printed percentage -- lets four accounts be
   // compared by eye instead of reading six-figure numbers column by column.
@@ -1642,7 +1653,7 @@ function loanTableHTML(slots){
       ${uriRow()}
       ${row('UCI @ 8.5%', 'percent', s=>fmtINR2(s.uci))}
       ${totalDuesRow()}
-      ${row('Total Contractual Dues', 'layers', s=>fmtINR2(s.totalContractualDues), 'lt-strong lt-divider')}
+      ${totalContractualDuesRow()}
       ${row('Provision', 'shield', s=>fmtINR2(s.provision))}
       ${row('Total P&amp;L', 'trend', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` <span class="pct-tag">(${(s.ratio*100).toFixed(1)}%)</span>`:''), 'lt-strong lt-divider')}
       ${group('Settlement &amp; Impact', 'settlement')}
@@ -1717,13 +1728,16 @@ function recalcLoan(i){
   const impactEl = document.getElementById('impact-'+i);
   const pctEl = document.getElementById('pctNetOs-'+i);
   const totalDuesEl = document.getElementById('totalDues-'+i);
+  const totalContractualDuesEl = document.getElementById('totalContractualDues-'+i);
   const settleCellEl = document.getElementById('settleCell-'+i);
 
-  // Total Dues (O/S + UCI + Interest Reversal) depends on Interest Reversal,
-  // not on OTS Amount, so it must update unconditionally -- even while OTS
-  // Amount is still blank.
+  // Total Dues (O/S + UCI + Interest Reversal) and Total Contractual Dues
+  // (O/S + UCI@12.5% + Interest Reversal) both depend on Interest Reversal,
+  // not on OTS Amount, so both must update unconditionally -- even while
+  // OTS Amount is still blank.
   const totalDues = totalDuesFor(s);
   if(totalDuesEl) totalDuesEl.textContent = fmtINR2(totalDues);
+  if(totalContractualDuesEl) totalContractualDuesEl.textContent = fmtINR2(totalContractualDuesFor(s));
 
   if(ots===''||isNaN(ots)){
     [totalSacEl,ledgerEl,impactEl].forEach(e=>e.textContent='—');
