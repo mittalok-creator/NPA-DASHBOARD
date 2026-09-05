@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: Interest Reversal wasn't folding into Total Contractual Dues (2026-09-05)
+
+Alok: "interest reversal ka amount total dues main to add ho raha hai but total contractual dues main nahi ho raha hai" -- typing an Interest Reversal override correctly updated the on-screen Total Dues figure live, but Total Contractual Dues right below it never moved. Root cause: `computeSlot()`'s formula for Total Contractual Dues was `O/S + UCI@12.5%` only -- Interest Reversal was never part of it at all, static or live -- while Total Dues had always included it (`O/S + UCI@8.5% + Interest Reversal`). The on-screen Loan Table row for Total Contractual Dues also just read that static, load-time snapshot directly (`s.totalContractualDues`), with no live-update wiring the way Total Dues already had one (a dedicated `totalDues-${i}` cell refreshed by `recalcLoan()` on every keystroke) -- so even the static baseline's own original Interest Reversal value from the daily data was never reflected, let alone a typed override.
+
+Fixed both halves to mirror Total Dues exactly: `computeSlot()`'s static formula now includes `uri` (`O/S + UCI@12.5% + Interest Reversal`), and a new live `totalContractualDuesFor(s)` helper (parallel to the existing `totalDuesFor(s)`) recomputes off `uriFor(s)` so a typed override is reflected immediately. The Loan Table row was converted from the generic static `row()` helper to a dedicated `totalContractualDuesRow()` with its own `totalContractualDues-${i}` cell, wired into `recalcLoan()` right alongside Total Dues -- both now update on the exact same Interest Reversal keystroke.
+
+Verified via Playwright: typed Interest Reversal = ₹5,000 on a real account and confirmed both Total Dues and Total Contractual Dues increased by exactly ₹5,000 in the same render pass.
+
+Files touched: `js/app.js` (`computeSlot()`'s static formula, new `totalContractualDuesFor()`, `loanTableHTML()`'s row markup, `recalcLoan()`), `index.html` (cache-bust bump), `sw.js` (`CACHE_NAME` v157→v158, matching bump).
+
 ### Fix: OTS Settlement Statement spilling onto a silent second PDF page (2026-09-03, same day)
 
 Alok: "set this to only 1 page." The just-shipped letterhead redesign's added breathing room (bordered borrower panel, section label, bordered totals panel) pushed the sheet's total height just past `canvasToPdfBlob()`'s (js/app.js) one-page budget — measured on a real capture at ~40px over, out of roughly 2,200px available at the export scale. `canvasToPdfBlob()` already has multi-page fallback logic for content that's genuinely too long for one page (it slices the canvas and adds pages automatically), so it didn't error or warn — it silently produced a 2-page PDF where the second page was almost entirely blank except for a spillover sliver (the footer line, in practice).
