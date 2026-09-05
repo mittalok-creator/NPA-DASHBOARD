@@ -820,6 +820,27 @@ searchInput.addEventListener('input', ()=>{
 searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ clearTimeout(__liveSearchTimer); runSearch(); } });
 function clearSearch(){ searchInput.value=''; clearBtn.style.display='none'; clearTimeout(__liveSearchTimer); renderEmpty(); }
 
+// Result-list sort state, same shape as acctListState below (list of
+// plain {acctNo,name,...} objects rather than raw NPA rows, so the
+// existing generic applySort()/nextSort()/updateSortIcons() machinery --
+// already used by the Dashboard's All Accounts table and the Branch/Sol
+// ID list modals -- can drive this table too instead of a bespoke sort).
+let resultListState = {list:[], sort:{key:'name',dir:'asc'}};
+function renderResultsTable(){
+  const sorted = applySort(resultListState.list, resultListState.sort);
+  updateSortIcons('resultsHead', resultListState.sort);
+  const tbody = document.getElementById('resultsBody');
+  if(tbody) tbody.innerHTML = resultRowsHtml(sorted);
+}
+// Alok's request, 2026-09-05: "yahan bhi sort ka filter de do account and
+// customer par... z to a like" -- clickable Account/Customer headers,
+// toggling ascending/descending on repeat clicks the same way every other
+// sortable table in this app already works.
+function sortResultsBy(key){
+  resultListState.sort = nextSort(resultListState.sort, key);
+  renderResultsTable();
+}
+window.sortResultsBy = sortResultsBy;
 function runSearch(){
   const q = searchInput.value.trim().toLowerCase();
   if(!q){ renderEmpty(); return; }
@@ -840,17 +861,14 @@ function runSearch(){
   // Alok's original request -- results list reads more naturally sorted
   // A-Z by borrower name than in raw data order. Refined for the Account
   // No. search specifically (2026-09-05): typing digits of an account
-  // number is scanning for a near-match among the results, so those sort
-  // by account number itself (numeric-aware, so "...0009" sorts before
-  // "...0010") -- name order was unrelated to what was actually typed.
-  // Every other mode (Cust ID/Mobile/Aadhar/PAN/SB No.) keeps the by-name
-  // sort, since a search on one of those has no natural numeric order of
-  // its own to fall back on.
-  if(mode.id==='acct'){
-    matches.sort((a,b)=>String(a[C.ACCT_NO]||'').localeCompare(String(b[C.ACCT_NO]||''), undefined, {numeric:true}));
-  } else {
-    matches.sort((a,b)=>String(a[C.NAME]||'').localeCompare(String(b[C.NAME]||''), 'en', {sensitivity:'base'}));
-  }
+  // number is scanning for a near-match among the results, so those default
+  // to sorting by account number itself (numeric-aware -- see applySort()'s
+  // acctNo handling below) rather than name, which is unrelated to what was
+  // actually typed. Every other mode (Cust ID/Mobile/Aadhar/PAN/SB No.)
+  // keeps the by-name default. A fresh search (new query or mode change)
+  // always resets to this default, even if a header click had switched the
+  // sort during the previous result set.
+  resultListState.sort = {key: mode.id==='acct' ? 'acctNo' : 'name', dir:'asc'};
   renderResults(matches, mode);
 }
 
@@ -1277,6 +1295,15 @@ function renderEmpty(){
 // Customer, Branch, Asset, O/S Balance), so the search behaves the same
 // way as every other account list in the app: type -> a plain scrollable
 // list of matches -> tap a row -> the full OTS Calculator detail opens.
+function resultRowsHtml(list){
+  return list.map(c=>`<tr class="clickable" onclick="openDetail('${esc(c.custId)}','${esc(c.acctNo)}')">
+      <td>${esc(c.acctNo)}</td>
+      <td class="tal">${esc(c.name)||'—'}</td>
+      <td class="tal">${esc(c.branch)||'—'}</td>
+      <td>${c.asset?`<span class="badge-pill ${esc(c.asset)}" title="${esc(assetLabel(c.asset))}">${esc(c.asset)}</span>`:'—'}</td>
+      <td>${fmtINR2(c.os)}</td>
+    </tr>`).join('');
+}
 function renderResults(matches, mode){
   __lastSearchMatches = matches; __lastSearchMode = mode;
   const el = document.getElementById('mainArea');
@@ -1287,33 +1314,37 @@ function renderResults(matches, mode){
       `<div>No borrower matches that ${esc(mode.label)}.<br>Try a different value or search mode.</div></div></div>`;
     return;
   }
-  const rows = matches.map(r=>{
-    const asset = r[C.ASSET]||'';
-    const os = typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : '';
-    const custId = String(r[C.CUST_ID]);
-    const acctNoStr = String(r[C.ACCT_NO]);
-    return `<tr class="clickable" onclick="openDetail('${esc(custId)}','${esc(acctNoStr)}')">
-      <td>${esc(acctNoStr)}</td>
-      <td class="tal">${esc(r[C.NAME])||'—'}</td>
-      <td class="tal">${esc(r[C.SOL_DESC])||'—'}</td>
-      <td>${asset?`<span class="badge-pill ${esc(asset)}" title="${esc(assetLabel(asset))}">${esc(asset)}</span>`:'—'}</td>
-      <td>${fmtINR2(os)}</td>
-    </tr>`;
-  }).join('');
+  resultListState.list = matches.map(r=>({
+    acctNo: String(r[C.ACCT_NO]),
+    name: r[C.NAME]||'',
+    branch: r[C.SOL_DESC]||'',
+    asset: r[C.ASSET]||'',
+    os: typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : 0,
+    custId: String(r[C.CUST_ID]),
+  }));
+  const sorted = applySort(resultListState.list, resultListState.sort);
   /* .ots-results carries the brass tokens, the same way .ots-start and the
      hero card above it do -- without it the tab reads brass at the top,
      sapphire through the result list, then brass again on the detail
-     screen the list leads into. */
+     screen the list leads into. Account/Customer headers are sortable
+     (Alok's request) via the same generic applySort()/nextSort() engine
+     already driving the Dashboard's All Accounts table and the Branch/Sol
+     ID list modals -- clicking either toggles ascending/descending the
+     same way those do, keyboard-activatable too via the shared th.sortable
+     Enter/Space handler registered once, near applySort() itself. */
   el.innerHTML = `<div class="ots-results">` +
     `<div class="results-hint">${matches.length} match${matches.length>1?'es':''} found</div>` +
     `<div class="dash-table-wrap acct-list-scroll">
       <table class="dash-table">
-        <thead><tr>
-          <th>Account</th><th class="tal">Customer</th><th class="tal">Branch</th><th>Asset</th><th>O/S Balance</th>
+        <thead id="resultsHead"><tr>
+          <th class="sortable" data-key="acctNo" tabindex="0" role="button" aria-sort="none" onclick="sortResultsBy('acctNo')">Account<span class="sort-ic">▾</span></th>
+          <th class="tal sortable" data-key="name" tabindex="0" role="button" aria-sort="none" onclick="sortResultsBy('name')">Customer<span class="sort-ic">▾</span></th>
+          <th class="tal">Branch</th><th>Asset</th><th>O/S Balance</th>
         </tr></thead>
-        <tbody>${rows}</tbody>
+        <tbody id="resultsBody">${resultRowsHtml(sorted)}</tbody>
       </table>
     </div></div>`;
+  updateSortIcons('resultsHead', resultListState.sort);
 }
 
 /* ---------- Detail view ----------

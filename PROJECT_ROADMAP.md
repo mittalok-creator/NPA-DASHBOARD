@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Feature: sortable Account/Customer headers on the search results list (2026-09-05, same day)
+
+Alok, right after the mode-aware default sort above: "yahan bhi sort ka filter de do account and customer par ab to z to a like" -- wanted an actual manual toggle on top of the new default, not just a smarter one-time ordering. Rather than build a bespoke sort toggle, found and reused a richer sortable-table system already established elsewhere in this app (the Dashboard's "All Accounts" table, and the Branch/Sol ID list modals) -- `applySort()`/`nextSort()`/`updateSortIcons()`, a shared keyboard handler for `th.sortable` (Enter/Space triggers the same click), and matching `.sortable`/`.sort-ic`/`.sort-asc`/`.sort-desc` CSS already in place. That system sorts plain `{acctNo, name, ...}` objects, not raw NPA data rows, so `renderResults()` now maps each match into that shape once (`resultListState.list`) instead of re-deriving fields inline in the row template.
+
+Account and Customer column headers are now clickable (Branch/Asset/O/S Balance stay static, matching exactly what was asked for) -- a click sorts ascending, a repeat click on the same column toggles to descending, and a click on the other column switches to it ascending, with a small ▾ arrow that highlights and rotates to mark the active column and direction. The mode-aware default from the fix above still sets the *initial* order when a fresh search runs; a header click only overrides it for that result set.
+
+Verified via Playwright: searched "151635" in Account No. mode (559 real matches) and clicked through Customer-ascending, Customer-descending, Account-ascending, and Account-descending in sequence, confirming the result list re-sorts correctly and the active header's arrow updates each time.
+
+Files touched: `js/app.js` (`resultListState`, `renderResultsTable()`, `sortResultsBy()`, `resultRowsHtml()`, `renderResults()` rewritten to build the shaped list and sortable headers), `index.html` (cache-bust bump), `sw.js` (`CACHE_NAME` v159→v160, matching bump).
+
 ### Fix: Account No. search results sorted by account number, not name (2026-09-05, same day)
 
 Alok: "ots calculator main pahle 6 digit type karte hi jo accounts aayenge wo accounts wise sort kar k do" -- the live search (kicks in once 6+ characters are typed) has always sorted every result list alphabetically by borrower name, per an earlier explicit request of Alok's own, regardless of which field was actually searched on. That made sense for Mobile/Aadhar/PAN/Cust ID/SB No. searches, but not for the default Account No. search: typing digits of an account number is scanning for a near-match among similar numbers, and a name-ordered list has no relationship to what was actually typed.
