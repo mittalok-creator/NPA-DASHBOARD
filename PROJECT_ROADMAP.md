@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: Account No. search results sorted by account number, not name (2026-09-05, same day)
+
+Alok: "ots calculator main pahle 6 digit type karte hi jo accounts aayenge wo accounts wise sort kar k do" -- the live search (kicks in once 6+ characters are typed) has always sorted every result list alphabetically by borrower name, per an earlier explicit request of Alok's own, regardless of which field was actually searched on. That made sense for Mobile/Aadhar/PAN/Cust ID/SB No. searches, but not for the default Account No. search: typing digits of an account number is scanning for a near-match among similar numbers, and a name-ordered list has no relationship to what was actually typed.
+
+Refined `runSearch()`'s sort to be mode-aware: the Account No. mode now sorts by account number itself, numeric-aware (`"...0009"` before `"...0010"`, not lexicographic), while every other search mode keeps the existing by-name sort, since none of Cust ID/Mobile/Aadhar/PAN/SB No. has a natural numeric order of its own to fall back on.
+
+Verified via Playwright: searched "151635" in Account No. mode (559 real matches) and confirmed the full result list renders in strict ascending account-number order; searched a mobile-number prefix in Mobile No. mode (1,133 real matches) and confirmed that list is unaffected, still strict A-Z by name.
+
+Files touched: `js/app.js` (`runSearch()`'s sort branches by `mode.id`), `index.html` (cache-bust bump), `sw.js` (`CACHE_NAME` v158→v159, matching bump).
+
 ### Fix: Interest Reversal wasn't folding into Total Contractual Dues (2026-09-05)
 
 Alok: "interest reversal ka amount total dues main to add ho raha hai but total contractual dues main nahi ho raha hai" -- typing an Interest Reversal override correctly updated the on-screen Total Dues figure live, but Total Contractual Dues right below it never moved. Root cause: `computeSlot()`'s formula for Total Contractual Dues was `O/S + UCI@12.5%` only -- Interest Reversal was never part of it at all, static or live -- while Total Dues had always included it (`O/S + UCI@8.5% + Interest Reversal`). The on-screen Loan Table row for Total Contractual Dues also just read that static, load-time snapshot directly (`s.totalContractualDues`), with no live-update wiring the way Total Dues already had one (a dedicated `totalDues-${i}` cell refreshed by `recalcLoan()` on every keystroke) -- so even the static baseline's own original Interest Reversal value from the daily data was never reflected, let alone a typed override.
