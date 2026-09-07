@@ -741,10 +741,16 @@ let onedriveFolderStack = []; // [{id,name}, ...] -- stack[0].id is always null 
 // Current folder's raw Graph items plus the live filter text and sort
 // column/direction -- kept separate from the fetch itself so typing in
 // the filter box or clicking a column header only ever re-renders the
-// table body (onedriveRefreshRows), never re-hits the network, and never
+// list/grid area (onedriveRenderListArea), never re-hits the network, and never
 // touches the filter <input> itself so it never loses focus/cursor
 // position mid-keystroke.
-let onedriveListState = {rawItems:[], filterText:'', sort:{key:'name', dir:'asc'}};
+// view: 'list' or 'grid' (Google Drive-style toggle, 2026-09-07 UI
+// refresh); remembered across visits the same way the theme toggle is,
+// since it's a pure display preference with no bearing on the data itself.
+let onedriveListState = {rawItems:[], filterText:'', sort:{key:'name', dir:'asc'}, view: onedriveSavedView()};
+function onedriveSavedView(){
+  try{ return localStorage.getItem('upgb-onedrive-view')==='grid' ? 'grid' : 'list'; }catch(e){ return 'list'; }
+}
 // msal-browser v3 requires `await instance.initialize()` before calling
 // any other MSAL API (loginPopup, getAllAccounts, acquireTokenSilent) --
 // the actual real-world failure hit here ("uninitialized_public_client_
@@ -773,7 +779,15 @@ async function onedriveGetToken(interactive){
     }catch(e){ /* falls through to interactive below */ }
   }
   if(interactive===false) throw new Error('sign-in required');
-  const r = await app.loginPopup({ scopes:['Files.Read'] });
+  // prompt:'select_account' forces Microsoft's own login page to show its
+  // account-chooser screen every time, even when the browser already has
+  // an active Microsoft SSO session for some account -- without it,
+  // login.live.com silently continues straight into that cached account's
+  // own sign-in flow (e.g. an Authenticator "Get a sign-in request" push
+  // screen) with no visible way to pick a different account at all. Real
+  // production report: Alok couldn't switch to a different Microsoft
+  // account on another device because this screen never appeared.
+  const r = await app.loginPopup({ scopes:['Files.Read'], prompt:'select_account' });
   return r.accessToken;
 }
 function onedriveConnectScreenHtml(statusMsg){
@@ -913,6 +927,31 @@ function onedriveVisibleItems(){
   // keeps whatever order the column just gave it.
   return sorted.slice().sort((a,b)=> a.isFolder===b.isFolder ? 0 : (a.isFolder?-1:1));
 }
+// Google Drive-style file icons: one flat folder glyph, plus a page
+// glyph colour-coded by extension (red=PDF, green=spreadsheet, blue=doc,
+// orange=slides, purple=image, grey=archive/other) so files are
+// scannable by icon colour/shape alone, the same convention Drive and
+// OneDrive's own web apps both use -- not a copy of either's actual
+// trademarked logo art, just the same colour-by-type idea.
+const ONEDRIVE_EXT_CLASS = {
+  pdf:'od-ic-pdf',
+  doc:'od-ic-doc', docx:'od-ic-doc',
+  xls:'od-ic-sheet', xlsx:'od-ic-sheet', csv:'od-ic-sheet',
+  ppt:'od-ic-slide', pptx:'od-ic-slide',
+  jpg:'od-ic-img', jpeg:'od-ic-img', png:'od-ic-img', gif:'od-ic-img', webp:'od-ic-img', svg:'od-ic-img', bmp:'od-ic-img',
+  zip:'od-ic-zip', rar:'od-ic-zip', '7z':'od-ic-zip',
+  txt:'od-ic-text',
+};
+function onedriveIconSvg(name, isFolder){
+  if(isFolder) return `<svg class="od-ic od-ic-folder" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.44a1.5 1.5 0 0 1 1.06.44l1.06 1.06a1.5 1.5 0 0 0 1.06.44H19.5A1.5 1.5 0 0 1 21 8.44v8.56a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17V6.5Z"/></svg>`;
+  const ext = String(name||'').split('.').pop().toLowerCase();
+  const cls = ONEDRIVE_EXT_CLASS[ext] || 'od-ic-generic';
+  return `<svg class="od-ic ${cls}" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+    <path fill="currentColor" fill-opacity=".16" d="M6 2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"/>
+    <path fill="currentColor" d="M13 2v5h5z"/>
+    <path fill="none" stroke="currentColor" stroke-width="1.6" d="M6 2h7l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"/>
+  </svg>`;
+}
 function onedriveRowsHtml(items){
   if(!items.length){
     const msg = onedriveListState.filterText.trim() ? 'No items match your filter.' : 'This folder is empty.';
@@ -923,21 +962,21 @@ function onedriveRowsHtml(items){
     if(it.isFolder){
       return `<tr class="onedrive-row onedrive-folder" data-id="${esc(it.id)}" data-name="${esc(it.name)}" onclick="onedriveOpenFolderFromEl(this)">
         <td class="tal onedrive-name-cell">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          ${onedriveIconSvg(it.name, true)}
           <span class="onedrive-name">${esc(it.name)}</span>
         </td>
-        <td>${it.childCount!==null?it.childCount+' item'+(it.childCount===1?'':'s'):'—'}</td>
         <td class="tal">${modifiedTxt}</td>
-        <td>—</td>
+        <td>${it.childCount!==null?it.childCount+' item'+(it.childCount===1?'':'s'):'—'}</td>
+        <td class="onedrive-actions-cell"></td>
       </tr>`;
     }
     return `<tr class="onedrive-row onedrive-file">
       <td class="tal onedrive-name-cell">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        ${onedriveIconSvg(it.name, false)}
         <span class="onedrive-name">${esc(it.name)}</span>
       </td>
-      <td>${onedriveFmtSize(it.size)}</td>
       <td class="tal">${modifiedTxt}</td>
+      <td>${onedriveFmtSize(it.size)}</td>
       <td class="onedrive-actions-cell">
         ${it.webUrl ? `<a class="onedrive-action-btn" href="${esc(it.webUrl)}" target="_blank" rel="noopener" title="Open in OneDrive" aria-label="Open ${esc(it.name)} in OneDrive"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></a>` : ''}
         ${it.downloadUrl ? `<a class="onedrive-action-btn onedrive-dl-btn" href="${esc(it.downloadUrl)}" target="_blank" rel="noopener" title="Download" aria-label="Download ${esc(it.name)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 19h16"/></svg></a>` : ''}
@@ -945,64 +984,120 @@ function onedriveRowsHtml(items){
     </tr>`;
   }).join('');
 }
-// Re-renders only the table body plus header sort icons -- called on
-// every filter keystroke and column-header click, never re-fetches from
-// Graph and never touches the filter <input> node itself (so typing
-// never loses focus/cursor position).
-function onedriveRefreshRows(){
-  const tbody = document.getElementById('onedrivePageRows');
-  if(!tbody) return;
-  tbody.innerHTML = onedriveRowsHtml(onedriveVisibleItems());
-  updateSortIcons('onedrivePageHead', onedriveListState.sort);
+// Grid view (Drive's card-tile layout) -- same shaped items as the list,
+// just rendered as tiles with a bigger icon and the name/meta below it,
+// instead of table rows. Folders and files share one grid; folders still
+// sort ahead per onedriveVisibleItems().
+function onedriveGridHtml(items){
+  if(!items.length){
+    const msg = onedriveListState.filterText.trim() ? 'No items match your filter.' : 'This folder is empty.';
+    return `<div class="onedrive-empty-cell">${esc(msg)}</div>`;
+  }
+  return `<div class="onedrive-grid">${items.map(it=>{
+    const modifiedTxt = it.modified ? fmtDate(new Date(it.modified)) : '';
+    const meta = it.isFolder
+      ? (it.childCount!==null ? it.childCount+' item'+(it.childCount===1?'':'s') : '')
+      : [onedriveFmtSize(it.size), modifiedTxt].filter(Boolean).join(' · ');
+    const openAttrs = it.isFolder ? ` data-id="${esc(it.id)}" data-name="${esc(it.name)}" onclick="onedriveOpenFolderFromEl(this)"` : '';
+    return `<div class="onedrive-card ${it.isFolder?'onedrive-folder':'onedrive-file'}"${openAttrs} tabindex="0" role="${it.isFolder?'button':'group'}" aria-label="${esc(it.name)}">
+      <div class="onedrive-card-icon">${onedriveIconSvg(it.name, it.isFolder)}</div>
+      <div class="onedrive-card-name" title="${esc(it.name)}">${esc(it.name)}</div>
+      <div class="onedrive-card-meta">${esc(meta)}</div>
+      ${!it.isFolder ? `<div class="onedrive-card-actions">
+        ${it.webUrl ? `<a class="onedrive-action-btn" href="${esc(it.webUrl)}" target="_blank" rel="noopener" title="Open in OneDrive" aria-label="Open ${esc(it.name)} in OneDrive" onclick="event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></a>` : ''}
+        ${it.downloadUrl ? `<a class="onedrive-action-btn onedrive-dl-btn" href="${esc(it.downloadUrl)}" target="_blank" rel="noopener" title="Download" aria-label="Download ${esc(it.name)}" onclick="event.stopPropagation()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 19h16"/></svg></a>` : ''}
+      </div>` : ''}
+    </div>`;
+  }).join('')}</div>`;
+}
+// Renders just the list/grid content area (table or card grid, per
+// onedriveListState.view) -- called on every filter keystroke, sort
+// click, and view-toggle click, never re-fetching from Graph and never
+// touching the toolbar/filter <input> itself (so typing never loses
+// focus/cursor position, and the view toggle's own active state survives
+// a content-only re-render).
+function onedriveRenderListArea(){
+  const area = document.getElementById('onedriveListArea');
+  if(!area) return;
+  const items = onedriveVisibleItems();
+  if(onedriveListState.view==='grid'){
+    area.innerHTML = onedriveGridHtml(items);
+  }else{
+    area.innerHTML = `<div class="onedrive-table-wrap">
+      <table class="onedrive-list">
+        <thead id="onedrivePageHead"><tr>
+          <th class="tal sortable" data-key="name" tabindex="0" role="button" aria-sort="none" onclick="onedriveSortBy('name')">Name<span class="sort-ic">▾</span></th>
+          <th class="tal sortable" data-key="modified" tabindex="0" role="button" aria-sort="none" onclick="onedriveSortBy('modified')">Last modified<span class="sort-ic">▾</span></th>
+          <th class="sortable" data-key="size" tabindex="0" role="button" aria-sort="none" onclick="onedriveSortBy('size')">File size<span class="sort-ic">▾</span></th>
+          <th class="onedrive-col-actions" aria-hidden="true"></th>
+        </tr></thead>
+        <tbody id="onedrivePageRows">${onedriveRowsHtml(items)}</tbody>
+      </table>
+    </div>`;
+    updateSortIcons('onedrivePageHead', onedriveListState.sort);
+  }
 }
 function onedriveSortBy(key){
   onedriveListState.sort = nextSort(onedriveListState.sort, key);
-  onedriveRefreshRows();
+  onedriveRenderListArea();
 }
 window.onedriveSortBy = onedriveSortBy;
 function onedriveFilterInput(value){
   onedriveListState.filterText = value;
-  onedriveRefreshRows();
+  onedriveRenderListArea();
 }
 window.onedriveFilterInput = onedriveFilterInput;
-// Full render (toolbar + table) -- called only after a genuine folder
-// fetch, since the breadcrumb/Back-button state actually changes then;
-// filtering and sorting within an already-loaded folder go through
-// onedriveRefreshRows() above instead, which never rebuilds this shell.
+// List/Grid toggle (Google Drive's signature control) -- swaps only the
+// content area, leaves the toolbar (breadcrumb/search/Back/sign-out)
+// untouched, and remembers the choice in localStorage the same way the
+// theme toggle does.
+function onedriveSetView(view){
+  if(onedriveListState.view===view) return;
+  onedriveListState.view = view;
+  try{ localStorage.setItem('upgb-onedrive-view', view); }catch(e){}
+  document.querySelectorAll('.onedrive-view-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+  onedriveRenderListArea();
+}
+window.onedriveSetView = onedriveSetView;
+// Full render (toolbar + list/grid area) -- called only after a genuine
+// folder fetch, since the breadcrumb/Back-button state actually changes
+// then; filtering, sorting, and switching view within an already-loaded
+// folder go through onedriveRenderListArea() above instead, which never
+// rebuilds this toolbar shell.
 function onedriveRenderFolderView(){
   const canGoBack = onedriveFolderStack.length>1;
+  const crumbSep = '<svg class="onedrive-crumb-sep" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
   const breadcrumb = onedriveFolderStack.map((f,i)=>{
     const last = i===onedriveFolderStack.length-1;
     return `<span class="onedrive-crumb${last?' current':''}"${last?'':` onclick="onedriveGoTo(${i})"`}>${esc(f.name)}</span>`;
-  }).join('<span class="onedrive-crumb-sep">/</span>');
+  }).join(crumbSep);
+  const view = onedriveListState.view;
   document.getElementById('onedrivePageBody').innerHTML = `
     <div class="onedrive-toolbar">
       <button type="button" class="onedrive-back-btn" onclick="onedriveGoBack()" ${canGoBack?'':'disabled'} aria-label="Back one folder">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Back
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <div class="onedrive-breadcrumb">${breadcrumb}</div>
       <div class="onedrive-toolbar-spacer"></div>
-      <div class="onedrive-filter-wrap">
+      <div class="onedrive-search-pill">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" class="onedrive-filter-input" placeholder="Filter this folder…" value="${esc(onedriveListState.filterText)}" oninput="onedriveFilterInput(this.value)" aria-label="Filter files in this folder">
+        <input type="text" placeholder="Search in this folder" value="${esc(onedriveListState.filterText)}" oninput="onedriveFilterInput(this.value)" aria-label="Filter files in this folder">
+      </div>
+      <div class="onedrive-view-toggle" role="group" aria-label="View">
+        <button type="button" class="onedrive-view-btn${view==='list'?' active':''}" data-view="list" onclick="onedriveSetView('list')" title="List view" aria-label="List view">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+        </button>
+        <button type="button" class="onedrive-view-btn${view==='grid'?' active':''}" data-view="grid" onclick="onedriveSetView('grid')" title="Grid view" aria-label="Grid view">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>
+        </button>
       </div>
       <button type="button" class="onedrive-icon-btn" onclick="onedriveLoadCurrentFolder()" title="Refresh" aria-label="Refresh this folder">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 12a9 9 0 11-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
       </button>
       <button type="button" class="onedrive-signout-btn" onclick="onedriveSignOut()">Sign out</button>
     </div>
-    <div class="onedrive-table-wrap">
-      <table class="dash-table onedrive-table">
-        <thead id="onedrivePageHead"><tr>
-          <th class="tal sortable" data-key="name" tabindex="0" role="button" aria-sort="none" onclick="onedriveSortBy('name')">Name<span class="sort-ic">▾</span></th>
-          <th class="sortable" data-key="size" tabindex="0" role="button" aria-sort="none" onclick="onedriveSortBy('size')">Size<span class="sort-ic">▾</span></th>
-          <th class="tal sortable" data-key="modified" tabindex="0" role="button" aria-sort="none" onclick="onedriveSortBy('modified')">Modified<span class="sort-ic">▾</span></th>
-          <th>Actions</th>
-        </tr></thead>
-        <tbody id="onedrivePageRows">${onedriveRowsHtml(onedriveVisibleItems())}</tbody>
-      </table>
-    </div>`;
-  updateSortIcons('onedrivePageHead', onedriveListState.sort);
+    <div id="onedriveListArea"></div>`;
+  onedriveRenderListArea();
 }
 /* Sol ID -> ledger account number prefix, live as Alok types. Each of the
    6 accounts in the Account Numbers panel is XXXX + a fixed 10-digit
