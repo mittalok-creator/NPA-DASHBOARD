@@ -779,7 +779,14 @@ async function onedriveConnect(){
     await onedriveLoadCurrentFolder();
   }catch(err){
     console.error(err);
-    document.getElementById('onedriveBody').innerHTML = onedriveConnectScreenHtml('Could not sign in. Please try again.');
+    // Surfaces MSAL's own error code/message (e.g. "popup_window_error",
+    // an AADSTS#### redirect-URI mismatch, "user_cancelled") right in the
+    // panel instead of one generic string for every failure -- otherwise
+    // diagnosing a real sign-in problem needs someone to open DevTools
+    // and read the console, which isn't realistic for most users of this
+    // app to be asked to do.
+    const detail = (err && (err.errorCode || err.name)) ? `${err.errorCode||err.name}${err.errorMessage?': '+err.errorMessage:(err.message?': '+err.message:'')}` : (err && err.message) || 'Unknown error';
+    document.getElementById('onedriveBody').innerHTML = onedriveConnectScreenHtml(`Could not sign in — ${detail}`);
   }
 }
 window.onedriveConnect = onedriveConnect;

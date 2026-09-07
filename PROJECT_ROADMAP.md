@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: OneDrive panel now surfaces the real sign-in error (2026-09-07, same day)
+
+Alok tried "Connect OneDrive" on the just-shipped panel and hit "Could not sign in. Please try again." — the generic fallback string the panel showed for *any* failure, useless for actually diagnosing what went wrong (a redirect-URI mismatch, a blocked popup, a cancelled login, an account-type mismatch all looked identical). Real MSAL errors already carry a specific `errorCode` (e.g. `popup_window_error`) and message, but `onedriveConnect()`'s catch block discarded all of that and showed one hardcoded sentence regardless.
+
+Now surfaces MSAL's own error code and message directly in the panel (e.g. "Could not sign in — popup_window_error: Error opening popup window..."), so the actual cause is visible without anyone needing to open DevTools and read the console — not realistic to ask of most people using this app. Verified via Playwright with a mocked `loginPopup` failure carrying a realistic MSAL error shape: confirmed the specific code and message both render in the panel.
+
+This directly unblocks diagnosing Alok's actual failure — waiting on him to retry and report back what the panel now actually says.
+
+Files touched: `js/app.js` (`onedriveConnect()`'s catch block), `css/styles.css` (`.onedrive-status` sized/wrapped for a longer error string), `index.html` (cache-bust bump), `sw.js` (`CACHE_NAME` v161→v162, matching bump).
+
 ### Feature: read-only OneDrive browser panel (2026-09-07)
 
 Alok: "Mere paas mera personal one drive ka access hai to kya ham yahan ek FTP type kuch bana sakte hain kya jisse ham data download kar saken?" -- clarified over a few messages down to something specific: **one-way only**, nothing from this app ever uploads to OneDrive; just browse and download whatever's already sitting in his OneDrive folders, from inside the dashboard.
