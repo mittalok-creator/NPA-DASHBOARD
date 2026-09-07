@@ -828,12 +828,21 @@ async function onedriveLoadCurrentFolder(){
       ? `https://graph.microsoft.com/v1.0/me/drive/root:/${ONEDRIVE_ROOT_PATH.split('/').map(encodeURIComponent).join('/')}:/children?${select}&${order}&$top=200`
       : `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(cur.id)}/children?${select}&${order}&$top=200`;
     const res = await fetch(url, { headers:{ Authorization:'Bearer '+token } });
-    if(!res.ok) throw new Error('Graph API error '+res.status);
+    if(!res.ok){
+      // Same reasoning as the sign-in error fix above -- Graph's own
+      // error body (e.g. "itemNotFound: The resource could not be
+      // found" for a wrong/renamed folder path, or "accessDenied") is
+      // far more useful than a bare HTTP status for actually diagnosing
+      // a real failure, and there's no DevTools access to fall back on.
+      let detail = `HTTP ${res.status}`;
+      try{ const errBody = await res.json(); if(errBody && errBody.error) detail += ` — ${errBody.error.code}: ${errBody.error.message}`; }catch(e){}
+      throw new Error(detail);
+    }
     const data = await res.json();
     onedriveRenderList(data.value||[]);
   }catch(err){
     console.error(err);
-    body.innerHTML = `<div class="onedrive-error">Could not load this folder.<br><button type="button" class="onedrive-retry-btn" onclick="onedriveLoadCurrentFolder()">Retry</button></div>`;
+    body.innerHTML = `<div class="onedrive-error">Could not load this folder — ${esc(err.message||String(err))}<br><button type="button" class="onedrive-retry-btn" onclick="onedriveLoadCurrentFolder()">Retry</button></div>`;
   }
 }
 window.onedriveLoadCurrentFolder = onedriveLoadCurrentFolder;

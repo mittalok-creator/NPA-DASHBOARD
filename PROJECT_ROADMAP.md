@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: OneDrive folder-load also showed a generic error, same pattern as sign-in (2026-09-07, same day)
+
+Progress: Alok's retry got past sign-in cleanly this time (the `initialize()` fix worked) and landed on the folder-loading step -- but hit "Could not load this folder." with no further detail, the exact same generic-error problem as the sign-in screen had, just in `onedriveLoadCurrentFolder()`'s catch block instead of `onedriveConnect()`'s. Same fix, same reasoning: no DevTools access to fall back on, so the panel needs to say what actually happened.
+
+Now parses Microsoft Graph's own error body on a failed request (Graph returns a structured `{error:{code,message}}`, e.g. `itemNotFound: The resource could not be found` for a folder path that doesn't exist or was renamed, or `accessDenied` for a permission/consent problem) and shows the HTTP status plus that code and message directly in the panel, instead of a bare "Could not load this folder." Verified via Playwright with a mocked 404 `itemNotFound` Graph response: confirmed the full detail renders correctly, including after clicking Retry.
+
+This should now show Alok exactly why his specific folder request is failing (most likely either the scoped path `UPGB/Recovery/ALOK_MITTAL/HATHRAS` not matching his real OneDrive folder structure exactly, or a permissions/consent gap) -- waiting on him to retry and report what it now says.
+
+Files touched: `js/app.js` (`onedriveLoadCurrentFolder()`'s error handling parses and surfaces the Graph error body), `index.html` (cache-bust bump), `sw.js` (`CACHE_NAME` v163→v164, matching bump).
+
 ### Fix: OneDrive sign-in was failing on every attempt -- missing MSAL initialize() (2026-09-07, same day)
 
 The error-detail fix above immediately paid off: Alok retried and the panel now showed the real cause instead of a guess -- `uninitialized_public_client_application: You must call and await the initialize function before attempting to call any other MSAL API`. Root cause: `msal-browser` v3 (self-hosted here) added a hard requirement that didn't exist in v2 -- `await instance.initialize()` must be called and awaited before touching any other MSAL method (`loginPopup`, `getAllAccounts`, `acquireTokenSilent`, all of it). `onedriveMsal()` only ever did `new msal.PublicClientApplication({...})` and returned it immediately, so every single sign-in attempt was always going to hit this exact error -- not an edge case, the only possible outcome as shipped.
