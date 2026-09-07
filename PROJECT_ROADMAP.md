@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: invalid $orderby was the real reason OneDrive folders never loaded (2026-09-07, same day)
+
+The error-surfacing fix above paid off again immediately: Alok's retry now showed `HTTP 400 — BadRequest: The $orderby expression must evaluate to a single value of primitive type.` — a genuine, previously invisible bug in the Graph query itself, not a sign-in or permissions issue at all. `onedriveLoadCurrentFolder()`'s request used `$orderby=folder desc,name asc` to try to put folders ahead of files server-side, but Graph's `folder` property is a complex facet object (`{childCount:N}`), not a primitive field -- Graph's `$orderby` only accepts primitives, so this request was always going to fail with a 400, on literally the very first folder load for anyone, every time.
+
+Fixed by not asking Graph to sort by a non-primitive at all: the request now uses plain `$orderby=name`, and folders are moved ahead of files with a client-side stable sort afterwards (`Array.prototype.sort` is stable in every engine this app runs in, so items already name-ascending from Graph's own ordering stay name-ascending within each group -- the sort only reorders folders ahead of files, nothing else).
+
+Verified via Playwright with a realistic mocked Graph response (folders and files interleaved, as Graph would actually return with `$orderby=name`): confirmed the request URL no longer contains the invalid `folder desc` clause, and the rendered list correctly shows folders first (in their own name-ascending order), then files (in theirs), with no error.
+
+Files touched: `js/app.js` (`onedriveLoadCurrentFolder()`'s query string and client-side folder-first sort), `index.html` (cache-bust bump), `sw.js` (`CACHE_NAME` v164→v165, matching bump).
+
 ### Fix: OneDrive folder-load also showed a generic error, same pattern as sign-in (2026-09-07, same day)
 
 Progress: Alok's retry got past sign-in cleanly this time (the `initialize()` fix worked) and landed on the folder-loading step -- but hit "Could not load this folder." with no further detail, the exact same generic-error problem as the sign-in screen had, just in `onedriveLoadCurrentFolder()`'s catch block instead of `onedriveConnect()`'s. Same fix, same reasoning: no DevTools access to fall back on, so the panel needs to say what actually happened.
