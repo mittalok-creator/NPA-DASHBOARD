@@ -862,7 +862,12 @@ async function onedriveLoadCurrentFolder(){
     onedriveRenderFolderView();
   }catch(err){
     console.error(err);
-    body.innerHTML = `<div class="onedrive-error">Could not load this folder — ${esc(err.message||String(err))}<br><button type="button" class="onedrive-retry-btn" onclick="onedriveLoadCurrentFolder()">Retry</button></div>`;
+    // Retry alone strands anyone signed in with the wrong Microsoft
+    // account (e.g. a different personal account on another device) --
+    // retrying just re-fails with the same account every time, and this
+    // was the only OneDrive error screen with no way to sign out and
+    // switch accounts. Sign out is offered alongside Retry here too.
+    body.innerHTML = `<div class="onedrive-error">Could not load this folder — ${esc(err.message||String(err))}<div class="onedrive-error-actions"><button type="button" class="onedrive-retry-btn" onclick="onedriveLoadCurrentFolder()">Retry</button><button type="button" class="onedrive-signout-btn" onclick="onedriveSignOut()">Sign out</button></div></div>`;
   }
 }
 window.onedriveLoadCurrentFolder = onedriveLoadCurrentFolder;

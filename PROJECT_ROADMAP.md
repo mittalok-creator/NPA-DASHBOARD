@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: OneDrive folder-load error screen had no Sign out option (2026-09-07, same day)
+
+Alok flagged a real gap: if a different Microsoft account gets signed in on another device (e.g. by mistake), Graph correctly refuses to load the scoped HATHRAS folder for that account and an error screen appears — but that specific error screen (`onedriveLoadCurrentFolder()`'s `!res.ok` branch) only ever offered a "Retry" button. Retry re-sends the exact same request with the exact same (wrong) account's token, so it just fails again every time, with no way to switch accounts short of clearing browser data.
+
+Fixed by adding a "Sign out" button alongside "Retry" on this error screen specifically (the sign-in error screen and the normal folder-view toolbar already both had one). Clicking it now behaves exactly like the existing sign-out flow — clears the MSAL session and folder state, returns to the "Connect OneDrive" screen — so switching to the correct account is one click away instead of a dead end.
+
+Verified via Playwright: simulated a signed-in account with a mocked Graph `403 accessDenied` response (the real shape Graph returns when an account has no access to a given path), confirmed both "Retry" and "Sign out" render on the error screen, and confirmed clicking "Sign out" returns to the Connect screen.
+
+Files touched: `js/app.js` (`onedriveLoadCurrentFolder()`'s error branch), `css/styles.css` (`.onedrive-error-actions` wrapper for the two-button row), `index.html`/`sw.js` (cache-bust bump `20260907f`→`20260907g`, `CACHE_NAME` v166→v167).
+
 ### OneDrive: moved from a slide-out panel to a full main-nav tab, plus Back/sort/filter/actions (2026-09-07, same day)
 
 Once sign-in and folder browsing were both confirmed working end-to-end, Alok asked for the OneDrive feature to move out of the slide-out edge panel and into a proper tool-tab that shows data across the full page, with a Back option, and "many more as per your recommendation" — plus, in a follow-up, an explicit sign-out (and sign-in) control.
