@@ -123,6 +123,22 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OneDrive: Google Drive-style visual redesign, plus a real sign-in bug fix (2026-09-07, same day)
+
+Alok asked for the OneDrive tab's look to match Google Drive's own UI ("Ise google drive jaisa UI bana do"). Redesigned the file browser accordingly:
+
+- **Colour-coded file-type icons**: a flat folder glyph plus a page glyph colour-coded by extension (red=PDF, green=spreadsheet, blue=doc, orange=slides, purple=image, grey=archive/plain-text/unknown) — the same colour-by-type convention Drive and OneDrive's own web apps both use, in both list and grid views (`onedriveIconSvg()`).
+- **List/Grid view toggle**: a segmented pill control (Drive's signature feature) switches between the existing row-table layout and a new card-tile grid layout (`onedriveGridHtml()`), each folder/file rendered as a tile with a big icon, name, and item-count/size+date underneath. The choice is remembered in `localStorage` (`upgb-onedrive-view`) the same way the theme toggle is, and survives folder navigation without needing to be reset each time.
+- **Rounded pill search box** replacing the old boxy filter input, styled like Drive's own search bar, with an accent focus ring.
+- **Cleaner list rows**: dropped the app's usual bold banker-style table header (used everywhere else for financial figures) in favour of a flat, hairline-divided row list with no header fill — reads like a file manager instead of a ledger. Row actions (Open in OneDrive / Download) now only appear on hover instead of sitting on screen permanently, matching Drive's own reveal-on-hover convention.
+- **Breadcrumb polish**: chevron arrows instead of plain "/" separators, current folder in bold, each ancestor a rounded hover-highlighted chip — plus the Back button restyled as a plain circular icon button.
+
+**Real bug fixed along the way**: while reviewing this, Alok reported that when a wrong Microsoft account was already signed into the browser (e.g. from another device/profile), the Microsoft sign-in popup jumped straight into that account's own passwordless "Get a sign-in request" flow with no way to pick a different account at all. Root cause: `onedriveGetToken()`'s `loginPopup()` call never told Microsoft's own login page to show its account-chooser screen, so Microsoft silently continued with whatever account already had an active SSO session in that browser. Fixed by adding `prompt: 'select_account'` to the `loginPopup()` scopes request — a standard OIDC/Entra ID parameter that forces the account-chooser screen ("Pick an account" / "Use another account") every time, regardless of any existing SSO session.
+
+Verified via Playwright: confirmed `loginPopup()` is now called with `prompt:'select_account'`; confirmed file-type icon colours render correctly per extension in both views; confirmed sorting, filtering, and folder navigation all still work identically in both list and grid mode; confirmed the view choice persists in `localStorage` across a subfolder-open/Back round-trip; screenshots reviewed in both dark and light theme for contrast.
+
+Files touched: `js/app.js` (`onedriveIconSvg()`, `onedriveGridHtml()`, `onedriveRenderListArea()`, `onedriveSetView()` all new; `onedriveRowsHtml()`, `onedriveRenderFolderView()` rewritten; `onedriveGetToken()`'s `loginPopup()` call), `css/styles.css` (full rewrite of the OneDrive toolbar/list/grid rules), `index.html`/`sw.js` (cache-bust bump `20260907g`→`20260907h`, `CACHE_NAME` v167→v168).
+
 ### Fix: OneDrive folder-load error screen had no Sign out option (2026-09-07, same day)
 
 Alok flagged a real gap: if a different Microsoft account gets signed in on another device (e.g. by mistake), Graph correctly refuses to load the scoped HATHRAS folder for that account and an error screen appears — but that specific error screen (`onedriveLoadCurrentFolder()`'s `!res.ok` branch) only ever offered a "Retry" button. Retry re-sends the exact same request with the exact same (wrong) account's token, so it just fails again every time, with no way to switch accounts short of clearing browser data.
