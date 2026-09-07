@@ -823,7 +823,13 @@ async function onedriveLoadCurrentFolder(){
   try{
     const token = await onedriveGetToken(true);
     const select = '$select=id,name,folder,file,size,%40microsoft.graph.downloadUrl';
-    const order = '$orderby=folder desc,name asc';
+    // Graph's $orderby only accepts primitive fields -- "folder" is a
+    // complex facet object ({childCount:N}), not a primitive, so sorting
+    // by it (to put folders first) throws a 400 BadRequest, confirmed by
+    // a real request: "The $orderby expression must evaluate to a single
+    // value of primitive type." Sort by name here (Graph's own job) and
+    // separate folders from files client-side afterwards instead.
+    const order = '$orderby=name';
     const url = cur.id===null
       ? `https://graph.microsoft.com/v1.0/me/drive/root:/${ONEDRIVE_ROOT_PATH.split('/').map(encodeURIComponent).join('/')}:/children?${select}&${order}&$top=200`
       : `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(cur.id)}/children?${select}&${order}&$top=200`;
@@ -839,7 +845,15 @@ async function onedriveLoadCurrentFolder(){
       throw new Error(detail);
     }
     const data = await res.json();
-    onedriveRenderList(data.value||[]);
+    // Array.prototype.sort is a stable sort in every engine this app runs
+    // in, so items already name-ascending from Graph's own $orderby stay
+    // name-ascending within each group here -- this only reorders folders
+    // ahead of files, it doesn't re-sort within either group.
+    const items = (data.value||[]).slice().sort((a,b)=>{
+      const aFolder = !!a.folder, bFolder = !!b.folder;
+      return aFolder===bFolder ? 0 : (aFolder ? -1 : 1);
+    });
+    onedriveRenderList(items);
   }catch(err){
     console.error(err);
     body.innerHTML = `<div class="onedrive-error">Could not load this folder — ${esc(err.message||String(err))}<br><button type="button" class="onedrive-retry-btn" onclick="onedriveLoadCurrentFolder()">Retry</button></div>`;
