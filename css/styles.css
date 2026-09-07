@@ -2404,6 +2404,35 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
 @keyframes ledgerAcctPulse{0%{color:var(--accent)}100%{color:var(--ink)}}
 .ledger-acct-no.pulse{animation:ledgerAcctPulse .3s ease}
 
+/* ---------- OneDrive browser panel (2026-09-07) ---------- */
+.onedrive-connect{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:32px 16px}
+.onedrive-connect svg{color:var(--accent);opacity:.85}
+.onedrive-connect p{font-size:12.5px;color:var(--sub);line-height:1.6;max-width:280px;margin:0}
+.onedrive-connect-btn{padding:11px 22px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--gold-d,var(--accent)));color:#fff;font-size:13px;font-weight:800;cursor:pointer;transition:transform .12s var(--ease)}
+.onedrive-connect-btn:active{transform:scale(.97)}
+.onedrive-status{font-size:11.5px;color:var(--sub);min-height:14px}
+.onedrive-loading,.onedrive-empty{padding:24px 16px;text-align:center;color:var(--ink-mute);font-size:12.5px}
+.onedrive-error{padding:24px 16px;text-align:center;color:var(--red);font-size:12.5px;line-height:1.6}
+.onedrive-retry-btn{margin-top:8px;padding:7px 16px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);font-size:12px;font-weight:700;cursor:pointer}
+.onedrive-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 2px 10px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.onedrive-breadcrumb{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:11.5px;font-weight:700;color:var(--sub);min-width:0}
+.onedrive-crumb{cursor:pointer;white-space:nowrap}
+.onedrive-crumb:hover{color:var(--accent-2)}
+.onedrive-crumb.current{color:var(--ink);cursor:default}
+.onedrive-crumb-sep{color:var(--ink-mute)}
+.onedrive-signout-btn{flex-shrink:0;font-size:11px;font-weight:700;color:var(--sub);background:none;border:1px solid var(--line);border-radius:8px;padding:5px 10px;cursor:pointer}
+.onedrive-signout-btn:hover{color:var(--ink);border-color:var(--accent-2)}
+.onedrive-list{display:flex;flex-direction:column;gap:2px}
+.onedrive-row{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:9px;transition:background .12s var(--ease)}
+.onedrive-row.onedrive-folder{cursor:pointer}
+.onedrive-row.onedrive-folder:hover{background:var(--accent-soft)}
+.onedrive-row svg{flex-shrink:0;color:var(--ink-mute)}
+.onedrive-row.onedrive-folder svg{color:var(--accent-2)}
+.onedrive-name{flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.onedrive-meta{flex-shrink:0;font-size:10.5px;color:var(--ink-mute);font-variant-numeric:tabular-nums}
+.onedrive-dl-btn{flex-shrink:0;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;color:var(--accent-2);background:var(--accent-soft);transition:transform .12s var(--ease)}
+.onedrive-dl-btn:hover{transform:scale(1.08)}
+
 /* ===================================================================
    OTS Calculator reskin -- brass/paper visual language, reference:
    Opus mockups Alok shared + the approved feasibility mockup
