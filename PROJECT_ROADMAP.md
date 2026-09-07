@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: OneDrive sign-in was failing on every attempt -- missing MSAL initialize() (2026-09-07, same day)
+
+The error-detail fix above immediately paid off: Alok retried and the panel now showed the real cause instead of a guess -- `uninitialized_public_client_application: You must call and await the initialize function before attempting to call any other MSAL API`. Root cause: `msal-browser` v3 (self-hosted here) added a hard requirement that didn't exist in v2 -- `await instance.initialize()` must be called and awaited before touching any other MSAL method (`loginPopup`, `getAllAccounts`, `acquireTokenSilent`, all of it). `onedriveMsal()` only ever did `new msal.PublicClientApplication({...})` and returned it immediately, so every single sign-in attempt was always going to hit this exact error -- not an edge case, the only possible outcome as shipped.
+
+Fixed by making `onedriveMsal()` async: it now calls `initialize()` once on first construction and caches that promise (`onedriveMsalReady`) so every caller -- `onedriveGetToken()`, `onedriveTryResume()` (fires automatically when the panel opens), `onedriveSignOut()` -- awaits the same initialization instead of racing separate ones or skipping it. All three call sites updated to `await onedriveMsal()` instead of calling it synchronously.
+
+Verified two ways: (1) the existing mocked-MSAL Playwright flow (login → folder browse → subfolder navigation → sign-out) still passes end-to-end with the mock's own `initialize()` stub included; (2) constructed a real `msal.PublicClientApplication` with the actual production config and confirmed `await app.initialize()` now resolves with no error and `getAllAccounts()` works immediately after, against the genuine self-hosted library, not a stand-in. The real interactive login popup itself still can't be exercised here (needs an actual personal Microsoft account) -- that's the one piece still waiting on Alok's own retry.
+
+Files touched: `js/app.js` (`onedriveMsal()` made async with a cached `initialize()` promise; `onedriveGetToken`, `onedriveTryResume`, `onedriveSignOut` all updated to await it), `index.html` (cache-bust bump), `sw.js` (`CACHE_NAME` v162→v163, matching bump).
+
 ### Fix: OneDrive panel now surfaces the real sign-in error (2026-09-07, same day)
 
 Alok tried "Connect OneDrive" on the just-shipped panel and hit "Could not sign in. Please try again." — the generic fallback string the panel showed for *any* failure, useless for actually diagnosing what went wrong (a redirect-URI mismatch, a blocked popup, a cancelled login, an account-type mismatch all looked identical). Real MSAL errors already carry a specific `errorCode` (e.g. `popup_window_error`) and message, but `onedriveConnect()`'s catch block discarded all of that and showed one hardcoded sentence regardless.
