@@ -638,7 +638,7 @@ window.filterBranchList = filterBranchList;
 // background, so leaving a sibling handle visible while a panel covers
 // part of it just looked broken (text half-swallowed) rather than
 // actually being unclickable; hiding it entirely is the honest fix.
-const EDGE_PANEL_KEYS = ['branch','lokAdalat','sacrifice','ledgerAccounts'];
+const EDGE_PANEL_KEYS = ['branch','lokAdalat','sacrifice','ledgerAccounts','onedrive'];
 function edgePanelEls(key){
   return {
     panel: document.getElementById(key+'EdgePanel'),
@@ -683,6 +683,180 @@ function toggleSacrificePanel(force){ toggleEdgePanel('sacrifice', force); }
 window.toggleSacrificePanel = toggleSacrificePanel;
 function toggleLedgerAccountsPanel(force){ toggleEdgePanel('ledgerAccounts', force); }
 window.toggleLedgerAccountsPanel = toggleLedgerAccountsPanel;
+function toggleOnedrivePanel(force){
+  const wasOpen = document.getElementById('onedriveEdgePanel')?.classList.contains('open');
+  const willOpen = force===undefined ? !wasOpen : force;
+  toggleEdgePanel('onedrive', force);
+  // Resume a still-valid sign-in silently (no popup) whenever the panel is
+  // opened, rather than always showing the Connect screen first -- once
+  // signed in, reopening the panel should go straight back into the
+  // folder, not ask again every time.
+  if(willOpen && !wasOpen) onedriveTryResume();
+}
+window.toggleOnedrivePanel = toggleOnedrivePanel;
+async function onedriveTryResume(){
+  try{
+    if(onedriveMsal().getAllAccounts().length){
+      onedriveFolderStack = [{id:null, name:ONEDRIVE_ROOT_LABEL}];
+      await onedriveLoadCurrentFolder();
+    }
+  }catch(e){ /* not signed in yet -- the Connect screen already showing is correct */ }
+}
+
+/* ---------- OneDrive browser (Alok's request, 2026-09-07) ----------
+   "Mujhe is dashboard se kuch bhi download nahi karna bas ek one way
+   ftp chahiye... jo bhi data one drive k folders main save hai wo seen
+   ho sake and download kar saken" -- read-only, browse + download only,
+   nothing from this app is ever written back to OneDrive. Whoever opens
+   this panel signs into THEIR OWN personal Microsoft account via a
+   popup -- it's a general "browse your own OneDrive from here" panel,
+   not tied to any one person's account.
+
+   Auth: MSAL.js (js/vendor/msal-browser.min.js, self-hosted like every
+   other vendor lib in this app) against an app registration Alok created
+   himself in Microsoft Entra ID ("NPA DASHBOARD", Personal Microsoft
+   account users only) -- an unavoidable one-time step only he could do,
+   since it requires signing into a Microsoft/Azure account. The Client ID
+   and redirect URI below are that registration's own public identifiers,
+   not secrets (an SPA app registration has no client secret at all --
+   that's the whole point of the "Single-page application" platform type).
+   Files.Read (not Files.ReadWrite) is the only Graph permission requested,
+   matching the one-way, read-only intent at the API level too, not just
+   in this UI.
+
+   Scoped to one folder tree, not Alok's whole OneDrive: he asked for
+   "D:\OneDrive\UPGB\Recovery\ALOK_MITTAL\HATHRAS" (his own OneDrive
+   sync client's local mount point) and everything under it, specifically
+   -- "D:\OneDrive\" is just where OneDrive happens to be mounted on his
+   own PC, not part of the actual cloud path, so the path Graph itself
+   needs is everything after that: UPGB/Recovery/ALOK_MITTAL/HATHRAS.
+   Opening the panel loads straight into that folder's own contents
+   (resolved by path, once); every subfolder from there on is navigated
+   by its own Graph item ID, same as any folder. There's no way back out
+   above HATHRAS from inside the panel -- the breadcrumb's root entry
+   *is* HATHRAS, not OneDrive's real root. */
+const ONEDRIVE_CLIENT_ID = 'ad7b5590-643c-4b07-9814-8fd890e1568d';
+const ONEDRIVE_REDIRECT_URI = 'https://npadashboard.alokmittal.net';
+const ONEDRIVE_ROOT_PATH = 'UPGB/Recovery/ALOK_MITTAL/HATHRAS';
+const ONEDRIVE_ROOT_LABEL = 'HATHRAS';
+let onedriveMsalApp = null;
+let onedriveFolderStack = []; // [{id,name}, ...] -- stack[0].id is always null (root path lookup)
+function onedriveMsal(){
+  if(!onedriveMsalApp){
+    onedriveMsalApp = new msal.PublicClientApplication({
+      auth: { clientId: ONEDRIVE_CLIENT_ID, authority: 'https://login.microsoftonline.com/consumers', redirectUri: ONEDRIVE_REDIRECT_URI },
+      cache: { cacheLocation: 'localStorage' },
+    });
+  }
+  return onedriveMsalApp;
+}
+async function onedriveGetToken(interactive){
+  const app = onedriveMsal();
+  const accounts = app.getAllAccounts();
+  if(accounts.length){
+    try{
+      const r = await app.acquireTokenSilent({ scopes:['Files.Read'], account: accounts[0] });
+      return r.accessToken;
+    }catch(e){ /* falls through to interactive below */ }
+  }
+  if(interactive===false) throw new Error('sign-in required');
+  const r = await app.loginPopup({ scopes:['Files.Read'] });
+  return r.accessToken;
+}
+function onedriveConnectScreenHtml(statusMsg){
+  return `<div class="onedrive-connect">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7.5 17a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.5 8a4 4 0 0 1 .5 7.97"/><path d="M9 17h9"/></svg>
+      <p>Sign in with your personal Microsoft account to browse and download files from your own OneDrive. Nothing from this app is ever uploaded there.</p>
+      <button type="button" class="onedrive-connect-btn" onclick="onedriveConnect()">Connect OneDrive</button>
+      <div class="onedrive-status">${esc(statusMsg||'')}</div>
+    </div>`;
+}
+async function onedriveConnect(){
+  document.getElementById('onedriveBody').innerHTML = onedriveConnectScreenHtml('Signing in…');
+  try{
+    await onedriveGetToken(true);
+    onedriveFolderStack = [{id:null, name:ONEDRIVE_ROOT_LABEL}];
+    await onedriveLoadCurrentFolder();
+  }catch(err){
+    console.error(err);
+    document.getElementById('onedriveBody').innerHTML = onedriveConnectScreenHtml('Could not sign in. Please try again.');
+  }
+}
+window.onedriveConnect = onedriveConnect;
+function onedriveSignOut(){
+  const app = onedriveMsal();
+  const accounts = app.getAllAccounts();
+  if(accounts.length) app.logoutPopup({ account: accounts[0] }).catch(()=>{});
+  onedriveFolderStack = [];
+  document.getElementById('onedriveBody').innerHTML = onedriveConnectScreenHtml();
+}
+window.onedriveSignOut = onedriveSignOut;
+function onedriveFmtSize(bytes){
+  if(typeof bytes!=='number') return '';
+  if(bytes<1024) return bytes+' B';
+  if(bytes<1024*1024) return (bytes/1024).toFixed(1)+' KB';
+  if(bytes<1024*1024*1024) return (bytes/1024/1024).toFixed(1)+' MB';
+  return (bytes/1024/1024/1024).toFixed(2)+' GB';
+}
+async function onedriveLoadCurrentFolder(){
+  const cur = onedriveFolderStack[onedriveFolderStack.length-1];
+  const body = document.getElementById('onedriveBody');
+  body.innerHTML = `<div class="onedrive-loading">Loading…</div>`;
+  try{
+    const token = await onedriveGetToken(true);
+    const select = '$select=id,name,folder,file,size,%40microsoft.graph.downloadUrl';
+    const order = '$orderby=folder desc,name asc';
+    const url = cur.id===null
+      ? `https://graph.microsoft.com/v1.0/me/drive/root:/${ONEDRIVE_ROOT_PATH.split('/').map(encodeURIComponent).join('/')}:/children?${select}&${order}&$top=200`
+      : `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(cur.id)}/children?${select}&${order}&$top=200`;
+    const res = await fetch(url, { headers:{ Authorization:'Bearer '+token } });
+    if(!res.ok) throw new Error('Graph API error '+res.status);
+    const data = await res.json();
+    onedriveRenderList(data.value||[]);
+  }catch(err){
+    console.error(err);
+    body.innerHTML = `<div class="onedrive-error">Could not load this folder.<br><button type="button" class="onedrive-retry-btn" onclick="onedriveLoadCurrentFolder()">Retry</button></div>`;
+  }
+}
+window.onedriveLoadCurrentFolder = onedriveLoadCurrentFolder;
+function onedriveOpenFolderFromEl(el){
+  onedriveFolderStack.push({ id: el.dataset.id, name: el.dataset.name });
+  onedriveLoadCurrentFolder();
+}
+window.onedriveOpenFolderFromEl = onedriveOpenFolderFromEl;
+function onedriveGoTo(index){
+  onedriveFolderStack = onedriveFolderStack.slice(0, index+1);
+  onedriveLoadCurrentFolder();
+}
+window.onedriveGoTo = onedriveGoTo;
+function onedriveRenderList(items){
+  const breadcrumb = onedriveFolderStack.map((f,i)=>{
+    const last = i===onedriveFolderStack.length-1;
+    return `<span class="onedrive-crumb${last?' current':''}"${last?'':` onclick="onedriveGoTo(${i})"`}>${esc(f.name)}</span>`;
+  }).join('<span class="onedrive-crumb-sep">/</span>');
+  const rows = items.length ? items.map(it=>{
+    if(it.folder){
+      return `<div class="onedrive-row onedrive-folder" data-id="${esc(it.id)}" data-name="${esc(it.name)}" onclick="onedriveOpenFolderFromEl(this)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span class="onedrive-name">${esc(it.name)}</span>
+        <span class="onedrive-meta">${it.folder.childCount!==undefined?it.folder.childCount+' item'+(it.folder.childCount===1?'':'s'):''}</span>
+      </div>`;
+    }
+    const dlUrl = it['@microsoft.graph.downloadUrl'];
+    return `<div class="onedrive-row onedrive-file">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span class="onedrive-name">${esc(it.name)}</span>
+      <span class="onedrive-meta">${onedriveFmtSize(it.size)}</span>
+      ${dlUrl ? `<a class="onedrive-dl-btn" href="${esc(dlUrl)}" target="_blank" rel="noopener" aria-label="Download ${esc(it.name)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 19h16"/></svg></a>` : ''}
+    </div>`;
+  }).join('') : `<div class="onedrive-empty">This folder is empty.</div>`;
+  document.getElementById('onedriveBody').innerHTML = `
+    <div class="onedrive-toolbar">
+      <div class="onedrive-breadcrumb">${breadcrumb}</div>
+      <button type="button" class="onedrive-signout-btn" onclick="onedriveSignOut()">Sign out</button>
+    </div>
+    <div class="onedrive-list">${rows}</div>`;
+}
 /* Sol ID -> ledger account number prefix, live as Alok types. Each of the
    6 accounts in the Account Numbers panel is XXXX + a fixed 10-digit
    suffix in the source ledger -- the XXXX stands in for whichever
