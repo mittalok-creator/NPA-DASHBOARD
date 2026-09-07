@@ -696,7 +696,8 @@ function toggleOnedrivePanel(force){
 window.toggleOnedrivePanel = toggleOnedrivePanel;
 async function onedriveTryResume(){
   try{
-    if(onedriveMsal().getAllAccounts().length){
+    const app = await onedriveMsal();
+    if(app.getAllAccounts().length){
       onedriveFolderStack = [{id:null, name:ONEDRIVE_ROOT_LABEL}];
       await onedriveLoadCurrentFolder();
     }
@@ -740,18 +741,28 @@ const ONEDRIVE_REDIRECT_URI = 'https://npadashboard.alokmittal.net';
 const ONEDRIVE_ROOT_PATH = 'UPGB/Recovery/ALOK_MITTAL/HATHRAS';
 const ONEDRIVE_ROOT_LABEL = 'HATHRAS';
 let onedriveMsalApp = null;
+let onedriveMsalReady = null; // the in-flight/completed initialize() promise, shared across concurrent callers
 let onedriveFolderStack = []; // [{id,name}, ...] -- stack[0].id is always null (root path lookup)
-function onedriveMsal(){
+// msal-browser v3 requires `await instance.initialize()` before calling
+// any other MSAL API (loginPopup, getAllAccounts, acquireTokenSilent) --
+// the actual real-world failure hit here ("uninitialized_public_client_
+// application") -- unlike v2, where the constructor alone was usable
+// immediately. onedriveMsalReady caches that one initialize() call so
+// concurrent callers (e.g. onedriveTryResume firing right as the panel
+// opens) all await the same promise instead of racing separate ones.
+async function onedriveMsal(){
   if(!onedriveMsalApp){
     onedriveMsalApp = new msal.PublicClientApplication({
       auth: { clientId: ONEDRIVE_CLIENT_ID, authority: 'https://login.microsoftonline.com/consumers', redirectUri: ONEDRIVE_REDIRECT_URI },
       cache: { cacheLocation: 'localStorage' },
     });
+    onedriveMsalReady = onedriveMsalApp.initialize();
   }
+  await onedriveMsalReady;
   return onedriveMsalApp;
 }
 async function onedriveGetToken(interactive){
-  const app = onedriveMsal();
+  const app = await onedriveMsal();
   const accounts = app.getAllAccounts();
   if(accounts.length){
     try{
@@ -790,8 +801,8 @@ async function onedriveConnect(){
   }
 }
 window.onedriveConnect = onedriveConnect;
-function onedriveSignOut(){
-  const app = onedriveMsal();
+async function onedriveSignOut(){
+  const app = await onedriveMsal();
   const accounts = app.getAllAccounts();
   if(accounts.length) app.logoutPopup({ account: accounts[0] }).catch(()=>{});
   onedriveFolderStack = [];
