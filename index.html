@@ -576,6 +576,10 @@
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
     <span>Accounts</span>
   </button>
+  <button type="button" class="edge-handle" id="onedriveEdgeHandle" onclick="toggleOnedrivePanel()" aria-label="OneDrive files" aria-expanded="false" aria-controls="onedriveEdgePanel" title="OneDrive Files">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M7.5 17a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.5 8a4 4 0 0 1 .5 7.97"/><path d="M9 17h9"/></svg>
+    <span>OneDrive</span>
+  </button>
 </div>
 <div class="edge-backdrop" id="branchEdgeBackdrop" onclick="toggleBranchPanel(false)"></div>
 <aside class="edge-panel" id="branchEdgePanel" aria-label="Branch and Sol ID list">
@@ -689,6 +693,33 @@
   </div>
 </aside>
 
+<!-- Fifth edge panel -- read-only OneDrive browser, Alok's own request:
+     "jo bhi data one drive k folders main save hai wo seen ho sake and
+     download kar saken" (browse and download only, nothing ever goes
+     the other way). Whoever opens this signs into THEIR OWN personal
+     Microsoft account via a popup (js/app.js, MSAL) -- this never touches
+     Alok's OneDrive specifically, it's a general "browse your own
+     OneDrive from here" panel available to anyone using the app. -->
+<div class="edge-backdrop" id="onedriveEdgeBackdrop" onclick="toggleOnedrivePanel(false)"></div>
+<aside class="edge-panel" id="onedriveEdgePanel" aria-label="OneDrive files">
+  <div class="edge-panel-head">
+    <div class="edge-panel-headtext">
+      <h3>OneDrive Files</h3>
+      <span class="edge-panel-count">Browse &amp; download only</span>
+    </div>
+    <button type="button" class="modal-close-x" onclick="toggleOnedrivePanel(false)" aria-label="Close">✕</button>
+  </div>
+  <div class="edge-panel-body" id="onedriveBody">
+    <div class="onedrive-connect">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7.5 17a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.5 8a4 4 0 0 1 .5 7.97"/><path d="M9 17h9"/></svg>
+      <p>Sign in with your personal Microsoft account to browse and download files from your own OneDrive. Nothing from this app is ever uploaded there.</p>
+      <button type="button" class="onedrive-connect-btn" onclick="onedriveConnect()">Connect OneDrive</button>
+      <div class="onedrive-status" id="onedriveStatus"></div>
+    </div>
+  </div>
+</aside>
+
+<script src="js/vendor/msal-browser.min.js?v=20260907a"></script>
 <script src="js/vendor/xlsx.full.min.js?v=20260905c"></script>
 <!-- SheetJS (above) only writes number formats, not cell styles (fonts,
      fills, borders) in its free Community Edition -- ExcelJS is used
