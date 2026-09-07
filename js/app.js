@@ -638,7 +638,7 @@ window.filterBranchList = filterBranchList;
 // background, so leaving a sibling handle visible while a panel covers
 // part of it just looked broken (text half-swallowed) rather than
 // actually being unclickable; hiding it entirely is the honest fix.
-const EDGE_PANEL_KEYS = ['branch','lokAdalat','sacrifice','ledgerAccounts','onedrive'];
+const EDGE_PANEL_KEYS = ['branch','lokAdalat','sacrifice','ledgerAccounts'];
 function edgePanelEls(key){
   return {
     panel: document.getElementById(key+'EdgePanel'),
@@ -683,17 +683,6 @@ function toggleSacrificePanel(force){ toggleEdgePanel('sacrifice', force); }
 window.toggleSacrificePanel = toggleSacrificePanel;
 function toggleLedgerAccountsPanel(force){ toggleEdgePanel('ledgerAccounts', force); }
 window.toggleLedgerAccountsPanel = toggleLedgerAccountsPanel;
-function toggleOnedrivePanel(force){
-  const wasOpen = document.getElementById('onedriveEdgePanel')?.classList.contains('open');
-  const willOpen = force===undefined ? !wasOpen : force;
-  toggleEdgePanel('onedrive', force);
-  // Resume a still-valid sign-in silently (no popup) whenever the panel is
-  // opened, rather than always showing the Connect screen first -- once
-  // signed in, reopening the panel should go straight back into the
-  // folder, not ask again every time.
-  if(willOpen && !wasOpen) onedriveTryResume();
-}
-window.toggleOnedrivePanel = toggleOnedrivePanel;
 async function onedriveTryResume(){
   try{
     const app = await onedriveMsal();
@@ -709,9 +698,14 @@ async function onedriveTryResume(){
    ftp chahiye... jo bhi data one drive k folders main save hai wo seen
    ho sake and download kar saken" -- read-only, browse + download only,
    nothing from this app is ever written back to OneDrive. Whoever opens
-   this panel signs into THEIR OWN personal Microsoft account via a
-   popup -- it's a general "browse your own OneDrive from here" panel,
-   not tied to any one person's account.
+   this screen signs into THEIR OWN personal Microsoft account via a
+   popup -- it's a general "browse your own OneDrive from here" tab, not
+   tied to any one person's account. Originally a slide-out edge panel;
+   moved to a full page/tab (2026-09-07, same day) per Alok's follow-up
+   ("tool tabs main set karo... pure page par data show ho, back k
+   options hon") -- same auth/Graph logic below, now with the room for a
+   proper sortable table, a filter box, and an explicit Back button
+   alongside the breadcrumb, on top of what he originally asked for.
 
    Auth: MSAL.js (js/vendor/msal-browser.min.js, self-hosted like every
    other vendor lib in this app) against an app registration Alok created
@@ -731,11 +725,12 @@ async function onedriveTryResume(){
    -- "D:\OneDrive\" is just where OneDrive happens to be mounted on his
    own PC, not part of the actual cloud path, so the path Graph itself
    needs is everything after that: UPGB/Recovery/ALOK_MITTAL/HATHRAS.
-   Opening the panel loads straight into that folder's own contents
+   Opening the tab loads straight into that folder's own contents
    (resolved by path, once); every subfolder from there on is navigated
    by its own Graph item ID, same as any folder. There's no way back out
-   above HATHRAS from inside the panel -- the breadcrumb's root entry
-   *is* HATHRAS, not OneDrive's real root. */
+   above HATHRAS from inside this screen -- the breadcrumb's root entry
+   *is* HATHRAS, not OneDrive's real root, and the Back button disables
+   itself there rather than exiting the scoped tree. */
 const ONEDRIVE_CLIENT_ID = 'ad7b5590-643c-4b07-9814-8fd890e1568d';
 const ONEDRIVE_REDIRECT_URI = 'https://npadashboard.alokmittal.net';
 const ONEDRIVE_ROOT_PATH = 'UPGB/Recovery/ALOK_MITTAL/HATHRAS';
@@ -743,12 +738,19 @@ const ONEDRIVE_ROOT_LABEL = 'HATHRAS';
 let onedriveMsalApp = null;
 let onedriveMsalReady = null; // the in-flight/completed initialize() promise, shared across concurrent callers
 let onedriveFolderStack = []; // [{id,name}, ...] -- stack[0].id is always null (root path lookup)
+// Current folder's raw Graph items plus the live filter text and sort
+// column/direction -- kept separate from the fetch itself so typing in
+// the filter box or clicking a column header only ever re-renders the
+// table body (onedriveRefreshRows), never re-hits the network, and never
+// touches the filter <input> itself so it never loses focus/cursor
+// position mid-keystroke.
+let onedriveListState = {rawItems:[], filterText:'', sort:{key:'name', dir:'asc'}};
 // msal-browser v3 requires `await instance.initialize()` before calling
 // any other MSAL API (loginPopup, getAllAccounts, acquireTokenSilent) --
 // the actual real-world failure hit here ("uninitialized_public_client_
 // application") -- unlike v2, where the constructor alone was usable
 // immediately. onedriveMsalReady caches that one initialize() call so
-// concurrent callers (e.g. onedriveTryResume firing right as the panel
+// concurrent callers (e.g. onedriveTryResume firing right as the tab
 // opens) all await the same promise instead of racing separate ones.
 async function onedriveMsal(){
   if(!onedriveMsalApp){
@@ -783,7 +785,7 @@ function onedriveConnectScreenHtml(statusMsg){
     </div>`;
 }
 async function onedriveConnect(){
-  document.getElementById('onedriveBody').innerHTML = onedriveConnectScreenHtml('Signing in…');
+  document.getElementById('onedrivePageBody').innerHTML = onedriveConnectScreenHtml('Signing in…');
   try{
     await onedriveGetToken(true);
     onedriveFolderStack = [{id:null, name:ONEDRIVE_ROOT_LABEL}];
@@ -792,21 +794,25 @@ async function onedriveConnect(){
     console.error(err);
     // Surfaces MSAL's own error code/message (e.g. "popup_window_error",
     // an AADSTS#### redirect-URI mismatch, "user_cancelled") right in the
-    // panel instead of one generic string for every failure -- otherwise
+    // screen instead of one generic string for every failure -- otherwise
     // diagnosing a real sign-in problem needs someone to open DevTools
     // and read the console, which isn't realistic for most users of this
     // app to be asked to do.
     const detail = (err && (err.errorCode || err.name)) ? `${err.errorCode||err.name}${err.errorMessage?': '+err.errorMessage:(err.message?': '+err.message:'')}` : (err && err.message) || 'Unknown error';
-    document.getElementById('onedriveBody').innerHTML = onedriveConnectScreenHtml(`Could not sign in — ${detail}`);
+    document.getElementById('onedrivePageBody').innerHTML = onedriveConnectScreenHtml(`Could not sign in — ${detail}`);
   }
 }
 window.onedriveConnect = onedriveConnect;
+// Explicit sign-out (Alok's request) returns to the same Connect screen
+// used for a fresh sign-in -- both states are always one click away from
+// each other, never just one or the other.
 async function onedriveSignOut(){
   const app = await onedriveMsal();
   const accounts = app.getAllAccounts();
   if(accounts.length) app.logoutPopup({ account: accounts[0] }).catch(()=>{});
   onedriveFolderStack = [];
-  document.getElementById('onedriveBody').innerHTML = onedriveConnectScreenHtml();
+  onedriveListState = {rawItems:[], filterText:'', sort:{key:'name', dir:'asc'}};
+  document.getElementById('onedrivePageBody').innerHTML = onedriveConnectScreenHtml();
 }
 window.onedriveSignOut = onedriveSignOut;
 function onedriveFmtSize(bytes){
@@ -818,17 +824,23 @@ function onedriveFmtSize(bytes){
 }
 async function onedriveLoadCurrentFolder(){
   const cur = onedriveFolderStack[onedriveFolderStack.length-1];
-  const body = document.getElementById('onedriveBody');
+  const body = document.getElementById('onedrivePageBody');
   body.innerHTML = `<div class="onedrive-loading">Loading…</div>`;
   try{
     const token = await onedriveGetToken(true);
-    const select = '$select=id,name,folder,file,size,%40microsoft.graph.downloadUrl';
+    // lastModifiedDateTime/webUrl added for the Modified column and the
+    // "Open in OneDrive" action (both new in the full-page redesign) --
+    // both are ordinary DriveItem properties Graph already returns for
+    // folders as well as files, no extra request needed.
+    const select = '$select=id,name,folder,file,size,lastModifiedDateTime,webUrl,%40microsoft.graph.downloadUrl';
     // Graph's $orderby only accepts primitive fields -- "folder" is a
     // complex facet object ({childCount:N}), not a primitive, so sorting
     // by it (to put folders first) throws a 400 BadRequest, confirmed by
     // a real request: "The $orderby expression must evaluate to a single
-    // value of primitive type." Sort by name here (Graph's own job) and
-    // separate folders from files client-side afterwards instead.
+    // value of primitive type." Sort by name here (Graph's own job); the
+    // column-sortable table below does its own client-side ordering on
+    // top of whatever Graph returns, including folders-first regardless
+    // of the chosen column.
     const order = '$orderby=name';
     const url = cur.id===null
       ? `https://graph.microsoft.com/v1.0/me/drive/root:/${ONEDRIVE_ROOT_PATH.split('/').map(encodeURIComponent).join('/')}:/children?${select}&${order}&$top=200`
@@ -845,15 +857,9 @@ async function onedriveLoadCurrentFolder(){
       throw new Error(detail);
     }
     const data = await res.json();
-    // Array.prototype.sort is a stable sort in every engine this app runs
-    // in, so items already name-ascending from Graph's own $orderby stay
-    // name-ascending within each group here -- this only reorders folders
-    // ahead of files, it doesn't re-sort within either group.
-    const items = (data.value||[]).slice().sort((a,b)=>{
-      const aFolder = !!a.folder, bFolder = !!b.folder;
-      return aFolder===bFolder ? 0 : (aFolder ? -1 : 1);
-    });
-    onedriveRenderList(items);
+    onedriveListState.rawItems = data.value||[];
+    onedriveListState.filterText = ''; // a filter is contextual to the folder it was typed in
+    onedriveRenderFolderView();
   }catch(err){
     console.error(err);
     body.innerHTML = `<div class="onedrive-error">Could not load this folder — ${esc(err.message||String(err))}<br><button type="button" class="onedrive-retry-btn" onclick="onedriveLoadCurrentFolder()">Retry</button></div>`;
@@ -870,33 +876,128 @@ function onedriveGoTo(index){
   onedriveLoadCurrentFolder();
 }
 window.onedriveGoTo = onedriveGoTo;
-function onedriveRenderList(items){
+// Explicit Back button (Alok's request), alongside the breadcrumb rather
+// than instead of it -- pops exactly one level, same as clicking the
+// breadcrumb's second-to-last entry, disables itself at HATHRAS (the
+// scoped root) since there's nowhere to go back to from there.
+function onedriveGoBack(){
+  if(onedriveFolderStack.length<=1) return;
+  onedriveFolderStack.pop();
+  onedriveLoadCurrentFolder();
+}
+window.onedriveGoBack = onedriveGoBack;
+// Applies the live filter text and current sort to the folder's raw
+// items, shaping each into the plain-object form applySort()/the row
+// template expect (same {key: value} convention as every other sortable
+// list in this app -- see resultListState/acctListState elsewhere).
+function onedriveVisibleItems(){
+  const q = onedriveListState.filterText.trim().toLowerCase();
+  const raw = q ? onedriveListState.rawItems.filter(it=>String(it.name||'').toLowerCase().includes(q)) : onedriveListState.rawItems;
+  const shaped = raw.map(it=>({
+    id: it.id, name: it.name, isFolder: !!it.folder,
+    size: typeof it.size==='number' ? it.size : null,
+    modified: it.lastModifiedDateTime || null,
+    childCount: it.folder && it.folder.childCount!==undefined ? it.folder.childCount : null,
+    downloadUrl: it['@microsoft.graph.downloadUrl'] || null,
+    webUrl: it.webUrl || null,
+  }));
+  const sorted = applySort(shaped, onedriveListState.sort);
+  // Folders lead regardless of the chosen sort column -- the same
+  // convention Explorer and OneDrive's own web app use -- via a second
+  // stable pass on top of applySort()'s own stable sort, so each group
+  // keeps whatever order the column just gave it.
+  return sorted.slice().sort((a,b)=> a.isFolder===b.isFolder ? 0 : (a.isFolder?-1:1));
+}
+function onedriveRowsHtml(items){
+  if(!items.length){
+    const msg = onedriveListState.filterText.trim() ? 'No items match your filter.' : 'This folder is empty.';
+    return `<tr><td colspan="4" class="onedrive-empty-cell">${esc(msg)}</td></tr>`;
+  }
+  return items.map(it=>{
+    const modifiedTxt = it.modified ? fmtDate(new Date(it.modified)) : '—';
+    if(it.isFolder){
+      return `<tr class="onedrive-row onedrive-folder" data-id="${esc(it.id)}" data-name="${esc(it.name)}" onclick="onedriveOpenFolderFromEl(this)">
+        <td class="tal onedrive-name-cell">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="onedrive-name">${esc(it.name)}</span>
+        </td>
+        <td>${it.childCount!==null?it.childCount+' item'+(it.childCount===1?'':'s'):'—'}</td>
+        <td class="tal">${modifiedTxt}</td>
+        <td>—</td>
+      </tr>`;
+    }
+    return `<tr class="onedrive-row onedrive-file">
+      <td class="tal onedrive-name-cell">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="onedrive-name">${esc(it.name)}</span>
+      </td>
+      <td>${onedriveFmtSize(it.size)}</td>
+      <td class="tal">${modifiedTxt}</td>
+      <td class="onedrive-actions-cell">
+        ${it.webUrl ? `<a class="onedrive-action-btn" href="${esc(it.webUrl)}" target="_blank" rel="noopener" title="Open in OneDrive" aria-label="Open ${esc(it.name)} in OneDrive"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></a>` : ''}
+        ${it.downloadUrl ? `<a class="onedrive-action-btn onedrive-dl-btn" href="${esc(it.downloadUrl)}" target="_blank" rel="noopener" title="Download" aria-label="Download ${esc(it.name)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 19h16"/></svg></a>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+// Re-renders only the table body plus header sort icons -- called on
+// every filter keystroke and column-header click, never re-fetches from
+// Graph and never touches the filter <input> node itself (so typing
+// never loses focus/cursor position).
+function onedriveRefreshRows(){
+  const tbody = document.getElementById('onedrivePageRows');
+  if(!tbody) return;
+  tbody.innerHTML = onedriveRowsHtml(onedriveVisibleItems());
+  updateSortIcons('onedrivePageHead', onedriveListState.sort);
+}
+function onedriveSortBy(key){
+  onedriveListState.sort = nextSort(onedriveListState.sort, key);
+  onedriveRefreshRows();
+}
+window.onedriveSortBy = onedriveSortBy;
+function onedriveFilterInput(value){
+  onedriveListState.filterText = value;
+  onedriveRefreshRows();
+}
+window.onedriveFilterInput = onedriveFilterInput;
+// Full render (toolbar + table) -- called only after a genuine folder
+// fetch, since the breadcrumb/Back-button state actually changes then;
+// filtering and sorting within an already-loaded folder go through
+// onedriveRefreshRows() above instead, which never rebuilds this shell.
+function onedriveRenderFolderView(){
+  const canGoBack = onedriveFolderStack.length>1;
   const breadcrumb = onedriveFolderStack.map((f,i)=>{
     const last = i===onedriveFolderStack.length-1;
     return `<span class="onedrive-crumb${last?' current':''}"${last?'':` onclick="onedriveGoTo(${i})"`}>${esc(f.name)}</span>`;
   }).join('<span class="onedrive-crumb-sep">/</span>');
-  const rows = items.length ? items.map(it=>{
-    if(it.folder){
-      return `<div class="onedrive-row onedrive-folder" data-id="${esc(it.id)}" data-name="${esc(it.name)}" onclick="onedriveOpenFolderFromEl(this)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <span class="onedrive-name">${esc(it.name)}</span>
-        <span class="onedrive-meta">${it.folder.childCount!==undefined?it.folder.childCount+' item'+(it.folder.childCount===1?'':'s'):''}</span>
-      </div>`;
-    }
-    const dlUrl = it['@microsoft.graph.downloadUrl'];
-    return `<div class="onedrive-row onedrive-file">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      <span class="onedrive-name">${esc(it.name)}</span>
-      <span class="onedrive-meta">${onedriveFmtSize(it.size)}</span>
-      ${dlUrl ? `<a class="onedrive-dl-btn" href="${esc(dlUrl)}" target="_blank" rel="noopener" aria-label="Download ${esc(it.name)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 19h16"/></svg></a>` : ''}
-    </div>`;
-  }).join('') : `<div class="onedrive-empty">This folder is empty.</div>`;
-  document.getElementById('onedriveBody').innerHTML = `
+  document.getElementById('onedrivePageBody').innerHTML = `
     <div class="onedrive-toolbar">
+      <button type="button" class="onedrive-back-btn" onclick="onedriveGoBack()" ${canGoBack?'':'disabled'} aria-label="Back one folder">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Back
+      </button>
       <div class="onedrive-breadcrumb">${breadcrumb}</div>
+      <div class="onedrive-toolbar-spacer"></div>
+      <div class="onedrive-filter-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" class="onedrive-filter-input" placeholder="Filter this folder…" value="${esc(onedriveListState.filterText)}" oninput="onedriveFilterInput(this.value)" aria-label="Filter files in this folder">
+      </div>
+      <button type="button" class="onedrive-icon-btn" onclick="onedriveLoadCurrentFolder()" title="Refresh" aria-label="Refresh this folder">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 12a9 9 0 11-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+      </button>
       <button type="button" class="onedrive-signout-btn" onclick="onedriveSignOut()">Sign out</button>
     </div>
-    <div class="onedrive-list">${rows}</div>`;
+    <div class="onedrive-table-wrap">
+      <table class="dash-table onedrive-table">
+        <thead id="onedrivePageHead"><tr>
+          <th class="tal sortable" data-key="name" tabindex="0" role="button" aria-sort="none" onclick="onedriveSortBy('name')">Name<span class="sort-ic">▾</span></th>
+          <th class="sortable" data-key="size" tabindex="0" role="button" aria-sort="none" onclick="onedriveSortBy('size')">Size<span class="sort-ic">▾</span></th>
+          <th class="tal sortable" data-key="modified" tabindex="0" role="button" aria-sort="none" onclick="onedriveSortBy('modified')">Modified<span class="sort-ic">▾</span></th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody id="onedrivePageRows">${onedriveRowsHtml(onedriveVisibleItems())}</tbody>
+      </table>
+    </div>`;
+  updateSortIcons('onedrivePageHead', onedriveListState.sort);
 }
 /* Sol ID -> ledger account number prefix, live as Alok types. Each of the
    6 accounts in the Account Numbers panel is XXXX + a fixed 10-digit
@@ -5113,6 +5214,13 @@ function switchView(view){
   if(view==='dashboard') renderDashboard();
   if(view==='pnpa') renderPnpaDashboard();
   if(view==='kccov') renderKccOverdue();
+  // Resume a still-valid OneDrive sign-in silently (no popup) whenever
+  // this tab is opened while it's still showing the Connect screen --
+  // once signed in, coming back to the tab should go straight into the
+  // last folder, not ask again every time. Skipped once a folder is
+  // already showing, so switching away and back doesn't reset browsing
+  // state (filter text, current folder, scroll position).
+  if(view==='onedrive' && document.querySelector('#onedrivePageBody .onedrive-connect')) onedriveTryResume();
   const mainCol = document.getElementById('mainCol');
   if(mainCol) mainCol.scrollTop = 0;
 }

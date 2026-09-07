@@ -123,6 +123,24 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OneDrive: moved from a slide-out panel to a full main-nav tab, plus Back/sort/filter/actions (2026-09-07, same day)
+
+Once sign-in and folder browsing were both confirmed working end-to-end, Alok asked for the OneDrive feature to move out of the slide-out edge panel and into a proper tool-tab that shows data across the full page, with a Back option, and "many more as per your recommendation" — plus, in a follow-up, an explicit sign-out (and sign-in) control.
+
+- **Full-page tab, not a panel**: removed the edge-panel entry point (handle button, backdrop, slide-out `<aside>`) entirely and added a real `data-view="onedrive"` item to both the desktop nav's "Tools" section and the mobile bottom tab bar, alongside a new full-width `<section class="view" data-view="onedrive">`. Clicking the tab now shows the file browser across the whole content area, exactly like Dashboard or Search, instead of a narrow slide-out strip.
+- **Back navigation**: added an explicit Back button (disabled at the scoped HATHRAS root, enabled inside any subfolder) plus the existing breadcrumb trail, so moving up the folder tree no longer depends on the breadcrumb alone.
+- **Sortable columns**: Name, Size, and Modified columns are now sortable (ascending/descending toggle, same generic `applySort`/`nextSort`/`updateSortIcons` engine used everywhere else in the app for consistency), with folders always kept ahead of files regardless of sort column.
+- **Filter box**: a live text filter narrows the current folder's file/folder list instantly, without any extra network call — typing filters the already-fetched folder contents client-side.
+- **Explicit sign-in / sign-out**: a visible "Sign out" button sits in the toolbar whenever signed in; signing out clears the session and returns to the same "Connect OneDrive" sign-in screen used for the first-time login.
+- **Row actions**: each file row now has both an "Open in OneDrive" link (via Graph's `webUrl`) and a "Download" link (via Graph's direct `@microsoft.graph.downloadUrl`) — still strictly one-way (browse/download only; nothing from this app is ever uploaded back to OneDrive).
+- **Modified column formatting**: dates render via `fmtDate()`, keeping the DD-MM-YYYY rule consistent with the rest of the app.
+
+Verified via two Playwright scripts against mocked MSAL + Graph responses: tab activation and full-page rendering, connect→folder flow, initial folder-first/name-ascending order, Back button's disabled/enabled states at root vs. subfolder, unambiguous sort-direction toggling on the Modified column (checked via the `aria-sort` attribute across two clicks), live filtering, subfolder open/back round-trip with correct breadcrumb updates, sign-out→sign-in cycle, and confirmation that every old edge-panel DOM element (`onedriveEdgeHandle`, `onedriveEdgePanel`, `onedriveEdgeBackdrop`) is fully gone. A screenshot of the finished full-page view was also reviewed for visual polish.
+
+As before, the real interactive Microsoft sign-in popup itself cannot be exercised in this sandbox — this change reuses the exact same (already-proven-working) authentication code from the panel version, just rendered in a different container, so the risk of regression there is low, but a quick live check is still worth doing.
+
+Files touched: `index.html` (removed edge-panel markup, added desktop + mobile nav-items and the new full-page `#viewOnedrive` section, cache-bust bump), `css/styles.css` (removed old `.onedrive-*` panel styles, added new full-page layout styles), `js/app.js` (removed `toggleOnedrivePanel`, added `onedriveListState`, `onedriveVisibleItems()`, `onedriveRowsHtml()`, `onedriveRefreshRows()`, `onedriveSortBy()`, `onedriveFilterInput()`, `onedriveGoBack()`, `onedriveRenderFolderView()`; `switchView()` now resumes an existing OneDrive session when the tab is opened), `sw.js` (`CACHE_NAME` v165→v166, matching bump; comment updated to say "tab" instead of "panel").
+
 ### Fix: invalid $orderby was the real reason OneDrive folders never loaded (2026-09-07, same day)
 
 The error-surfacing fix above paid off again immediately: Alok's retry now showed `HTTP 400 — BadRequest: The $orderby expression must evaluate to a single value of primitive type.` — a genuine, previously invisible bug in the Graph query itself, not a sign-in or permissions issue at all. `onedriveLoadCurrentFolder()`'s request used `$orderby=folder desc,name asc` to try to put folders ahead of files server-side, but Graph's `folder` property is a complex facet object (`{childCount:N}`), not a primitive field -- Graph's `$orderby` only accepts primitives, so this request was always going to fail with a 400, on literally the very first folder load for anyone, every time.
