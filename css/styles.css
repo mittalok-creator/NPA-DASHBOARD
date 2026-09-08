@@ -984,6 +984,44 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .eligible-banner.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0)}
 .eligible-banner-close{margin-left:auto;flex-shrink:0;font-size:15px;opacity:.85;cursor:pointer}
 
+/* ---------- Branch-prefix peek (2026-09-08) ----------
+   Small, informational-only overlay: typing 2-4 digits of an Account No.
+   shows which branches that old Sol ID prefix could belong to. Fixed to
+   the viewport (not the search card) so it reads like a little terminal
+   readout floating in the corner rather than part of the form -- a
+   deliberately different visual language (dark/mono/green) from the rest
+   of the app on purpose, same idea in both light and dark theme, since
+   it's a novelty touch rather than a themed UI surface. pointer-events:
+   none throughout -- there is nothing to click, ever. */
+.branch-peek{
+  position:fixed; top:165px; right:14px; z-index:200;
+  width:158px; max-width:46vw;
+  background:rgba(8,14,10,.94);
+  border:1px solid rgba(94,255,150,.32);
+  border-radius:9px;
+  padding:8px 10px 7px;
+  font-family:ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;
+  font-size:11px; line-height:1.6;
+  color:#7CFFA6;
+  box-shadow:0 12px 30px rgba(0,0,0,.4),0 0 18px rgba(60,255,140,.06);
+  opacity:0; transform:translateY(-6px) scale(.96);
+  pointer-events:none;
+  transition:opacity .15s ease,transform .15s ease;
+}
+.branch-peek.show{opacity:1;transform:translateY(0) scale(1)}
+.bp-head{
+  display:flex; align-items:center; gap:2px;
+  font-size:9px; letter-spacing:.8px; text-transform:uppercase;
+  color:rgba(124,255,166,.62); margin-bottom:4px;
+}
+.bp-cursor{animation:bpBlink 1s step-end infinite}
+@keyframes bpBlink{50%{opacity:0}}
+.bp-row{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.bp-more{margin-top:3px;color:rgba(124,255,166,.42);font-size:9.5px;font-style:italic}
+@media (max-width:640px){
+  .branch-peek{top:auto;bottom:88px;right:10px;width:138px;font-size:10px}
+}
+
 /* ---------- Print view ----------
    Sized to reliably fit the OTS Calculator sheet (header + borrower info +
    the fixed 18-row particulars table + aggregate totals + footer) on a
