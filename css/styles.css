@@ -995,13 +995,13 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    none throughout -- there is nothing to click, ever. */
 .branch-peek{
   position:fixed; top:165px; right:14px; z-index:200;
-  width:158px; max-width:46vw;
-  background:rgba(8,14,10,.94);
+  width:198px; max-width:58vw;
+  background:rgba(8,14,10,.95);
   border:1px solid rgba(94,255,150,.32);
   border-radius:9px;
-  padding:8px 10px 7px;
+  padding:8px 11px 7px;
   font-family:ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;
-  font-size:11px; line-height:1.6;
+  font-size:12px; line-height:1.65;
   color:#7CFFA6;
   box-shadow:0 12px 30px rgba(0,0,0,.4),0 0 18px rgba(60,255,140,.06);
   opacity:0; transform:translateY(-6px) scale(.96);
@@ -1016,10 +1016,15 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 }
 .bp-cursor{animation:bpBlink 1s step-end infinite}
 @keyframes bpBlink{50%{opacity:0}}
-.bp-row{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.bp-row{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Sol ID: bright, bold, high-contrast white-green and never scrambled --
+   Alok asked for it to be "clearly visible" alongside the branch name. */
+.bp-sol{color:#EFFFF4;font-weight:800}
+.bp-sep{color:rgba(124,255,166,.45);margin:0 4px}
+.bp-name{color:#7CFFA6;font-weight:700}
 .bp-more{margin-top:3px;color:rgba(124,255,166,.42);font-size:9.5px;font-style:italic}
 @media (max-width:640px){
-  .branch-peek{top:auto;bottom:88px;right:10px;width:138px;font-size:10px}
+  .branch-peek{top:auto;bottom:88px;right:10px;width:172px;font-size:11px}
 }
 
 /* ---------- Print view ----------

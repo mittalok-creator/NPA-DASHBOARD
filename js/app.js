@@ -1247,14 +1247,14 @@ function clearSearch(){ searchInput.value=''; clearBtn.style.display='none'; cle
    keystroke, gone the moment a 5th digit goes in or the field empties.
    Deliberately scoped to searchMode==='acct' only -- a Sol ID prefix has
    no meaning for Cust ID/Mobile/Aadhar/PAN/SB No. searches. */
-const BRANCH_PEEK_MIN = 2, BRANCH_PEEK_MAX = 4, BRANCH_PEEK_LIMIT = 8;
+const BRANCH_PEEK_MIN = 2, BRANCH_PEEK_MAX = 4, BRANCH_PEEK_LIMIT = 6;
 function updateBranchPeek(raw){
   const digits = raw.replace(/\D/g,'');
   if(searchMode!=='acct' || digits.length<BRANCH_PEEK_MIN || digits.length>BRANCH_PEEK_MAX){
     hideBranchPeek();
     return;
   }
-  const matches = BRANCH_LIST.filter(([oldId])=>String(oldId).startsWith(digits)).map(([,,name])=>name);
+  const matches = BRANCH_LIST.filter(([oldId])=>String(oldId).startsWith(digits)).map(([oldId,,name])=>({oldId, name}));
   if(!matches.length){ hideBranchPeek(); return; }
   renderBranchPeek(digits, matches);
 }
@@ -1269,13 +1269,16 @@ function renderBranchPeek(digits, matches){
   if(!panel) return;
   const shown = matches.slice(0, BRANCH_PEEK_LIMIT);
   const extra = matches.length - shown.length;
+  // Sol ID sits in its own static span, never scrambled -- Alok asked for
+  // it to be "clearly visible", so it stays crisp throughout the decode
+  // animation instead of dissolving into glyphs along with the name.
   panel.innerHTML = `<div class="bp-head">SOL ${esc(digits)}<span class="bp-cursor">▌</span></div>`
-    + shown.map((_,i)=>`<div class="bp-row" data-i="${i}"></div>`).join('')
+    + shown.map((m,i)=>`<div class="bp-row" data-i="${i}"><span class="bp-sol">${esc(m.oldId)}</span><span class="bp-sep">–</span><span class="bp-name"></span></div>`).join('')
     + (extra>0 ? `<div class="bp-more">+${extra} more</div>` : '');
   panel.classList.add('show');
   panel.setAttribute('aria-hidden','false');
   panel.querySelectorAll('.bp-row').forEach((row,i)=>{
-    scrambleInto(row, shown[i], {duration:280, delay:i*40});
+    scrambleInto(row.querySelector('.bp-name'), shown[i].name, {duration:280, delay:i*40});
   });
 }
 // Generic "decode" text reveal -- characters resolve left-to-right out of

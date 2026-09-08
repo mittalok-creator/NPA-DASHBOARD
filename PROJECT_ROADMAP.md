@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Tweak: branch-prefix peek now shows Sol ID alongside the branch name (2026-09-08, same day)
+
+Immediate follow-up on the branch-prefix peek above: Alok asked for the Sol ID to show too, as "Sol ID - Branch Name", "clearly visible". Each row now renders as a static, always-crisp Sol ID (bold, bright white-green, e.g. `16010`) followed by a dash and the branch name -- only the name still runs through the decode/scramble animation, the Sol ID itself never dissolves into glyphs, so it stays legible throughout. Panel widened (158px→198px) to fit the longer rows comfortably, and the row cap was trimmed from 8 to 6 (with the "+N more" line adjusting accordingly) so the panel stays compact enough not to overlap the card below it now that each row is wider.
+
+Verified via Playwright: rows now read e.g. `16010–Bajna`, `16100–Pali Kheda`, matching `BRANCH_LIST` exactly; re-ran every earlier peek scenario (1/2/3/4/5-digit boundaries, clear, mode-switch) unchanged and still correct; reviewed screenshots in light theme, dark theme, and mobile to confirm the panel no longer overlaps the OTS Worksheet card underneath it.
+
+Files touched: `js/app.js` (`updateBranchPeek()`, `renderBranchPeek()`), `css/styles.css` (`.branch-peek` width, `.bp-sol`/`.bp-sep`/`.bp-name`), `index.html`/`sw.js` (cache-bust bump `20260908c`→`20260908d`, `CACHE_NAME` v171→v172).
+
 ### New: branch-prefix "peek" while typing an Account No. (2026-09-08, same day)
 
 Alok asked for a purely informational touch on the OTS Calculator's search box: type the first 2 digits of an Account No. and a small readout should show which branches that old Sol ID prefix could belong to -- narrowing live as more digits go in, gone entirely past 4 digits -- "unse karna kuch nahi hai bas show hon" (nothing to click, just show), with "hacker type animation... light and small space... something unique."
