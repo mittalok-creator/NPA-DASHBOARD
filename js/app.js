@@ -2898,6 +2898,20 @@ function detectHoHeader(headerCells){
   return header.indexOf('accountno')>=0 && header.indexOf('customerid')>=0 && header.indexOf('category')>=0;
 }
 function parseHoDate(v){
+  // A stray Date instance here would only ever come from SheetJS's own
+  // cellDates:true conversion, which we deliberately no longer request
+  // (see the XLSX.read() call sites -- 2026-09-08 fix) precisely because
+  // it silently returns a date shifted almost a full day off from the
+  // one it was given whenever the browser's local timezone is ahead of
+  // UTC (as IST always is): reading a genuine Excel date cell for
+  // 15-Mar-2026 through cellDates:true came back reading as 14-Mar in
+  // BOTH local and UTC getters, since the underlying instant itself is
+  // shifted, not just its interpretation. Excel date-typed cells now
+  // arrive here as their raw serial number instead, handled correctly by
+  // excelSerialToDate() (a fixed local-midnight epoch + whole-day
+  // increments, immune to this since India has no DST). This branch
+  // stays only as a defensive fallback for a genuinely-clean Date object
+  // constructed elsewhere (e.g. new Date(y,m-1,d) local time).
   if(v instanceof Date) return v;
   if(typeof v==='number') return excelSerialToDate(v);
   if(typeof v==='string' && v.trim()){
@@ -2910,9 +2924,17 @@ function parseHoDate(v){
 }
 function earlierRaw(rawA, rawB){
   const dA = parseHoDate(rawA), dB = parseHoDate(rawB);
-  if(dA && dB) return dA<=dB ? normalizeCell(rawA) : normalizeCell(rawB);
-  if(dA) return normalizeCell(rawA);
-  if(dB) return normalizeCell(rawB);
+  // Format off the already-correct parsed Date rather than re-deriving
+  // from the raw cell via normalizeCell() -- normalizeCell() only knows
+  // how to turn a Date INSTANCE into text; a raw Excel serial number
+  // (which is what genuine date-typed cells are now, per the comment in
+  // parseHoDate() above) would otherwise pass straight through
+  // unconverted and land in NPA Date as a bare number like "46096"
+  // instead of "15-03-2026" -- exactly what CLAUDE.md's date-format rule
+  // warns against.
+  if(dA && dB) return fmtDate(dA<=dB ? dA : dB);
+  if(dA) return fmtDate(dA);
+  if(dB) return fmtDate(dB);
   return '';
 }
 function cellStr(row, i){ return i>=0 ? String(row[i]==null?'':row[i]).trim() : ''; }
@@ -2971,7 +2993,12 @@ function mapHoRowsToNpa(headerCells, dataRows){
     out[0] = custId+':'+slot; out[2] = slot; out[3] = cellStr(row,iSol); out[4] = branchRaw;
     out[5] = custId; out[6] = acctNo; out[7] = cellStr(row,iName);
     out[9] = cellStr(row,iMobile);
-    out[13] = cellStr(row,iScheme); out[14] = normalizeCell(iSanctDt>=0?row[iSanctDt]:'');
+    // fmtDate(parseHoDate(...)) here, not normalizeCell() -- same reason
+    // as earlierRaw() above: a genuine date-typed Sanction Date cell now
+    // arrives as a raw Excel serial number, which normalizeCell() would
+    // otherwise pass straight through unconverted.
+    const sanctDt = iSanctDt>=0 ? parseHoDate(row[iSanctDt]) : null;
+    out[13] = cellStr(row,iScheme); out[14] = sanctDt ? fmtDate(sanctDt) : normalizeCell(iSanctDt>=0?row[iSanctDt]:'');
     out[15] = parseFloat(row[iLimit])||0; out[16] = parseFloat(row[iBal])||0;
     out[18] = (iInttRev>=0 && row[iInttRev]!=='' && row[iInttRev]!=null) ? (parseFloat(row[iInttRev])||0) : '';
     out[19] = cat; out[20] = npaDate; out[21] = cat; out[22] = npaDate; out[23] = npaDate;
@@ -3129,7 +3156,7 @@ function handleBranchContactsUpload(evt){
         hIdx = findHeaderRowIndex(allRows, headerHints);
       } else {
         const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        const wb = XLSX.read(data, {type:'array'});
         allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
         hIdx = findHeaderRowIndex(allRows, headerHints);
       }
@@ -3315,7 +3342,7 @@ function handleFileUpload(evt){
         parsed = { header: csvRows[0]||[], rows: csvRows.slice(1), isHoFormat: true };
       } else {
         const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        const wb = XLSX.read(data, {type:'array'});
         const firstRaw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
         const header = firstRaw[0]||[];
         parsed = { header, rows: firstRaw.slice(1), isHoFormat: detectHoHeader(header), wb };
@@ -3348,7 +3375,7 @@ function handleMasterFileUpload(evt){
         header = csvRows[hIdx]||[]; rows = csvRows.slice(hIdx+1);
       } else {
         const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        const wb = XLSX.read(data, {type:'array'});
         const sheetName = wb.SheetNames.find(n=>!/field\s*reference/i.test(n)) || wb.SheetNames[0];
         const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
         const hIdx = findHeaderRowIndex(raw, headerHints);
@@ -3399,7 +3426,7 @@ function handleBranchAdvUpload(evt){
         hIdx = findHeaderRowIndex(allRows, headerHints);
       } else {
         const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        const wb = XLSX.read(data, {type:'array'});
         const sheetName = wb.SheetNames.find(n=>/daily\s*follow[\s-]*up/i.test(n))
           || wb.SheetNames.find(n=>!/field\s*reference|npa\s*list|holiday|gap/i.test(n))
           || wb.SheetNames[0];
@@ -4725,7 +4752,7 @@ function handlePnpaUpload(evt){
         header = allRows[0]||[]; dataRows = allRows.slice(1);
       } else {
         const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        const wb = XLSX.read(data, {type:'array'});
         const sheetName = wb.SheetNames.find(n=>/pnpa/i.test(n)) || wb.SheetNames[0];
         const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
         header = raw[0]||[]; dataRows = raw.slice(1);
@@ -5010,7 +5037,12 @@ function handleKccOverdueUpload(evt){
         header = allRows[0]||[]; dataRows = allRows.slice(1);
       } else {
         const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, {type:'array', cellDates:true});
+        // No cellDates:true (Alok's audit, 2026-09-08): it silently
+        // returned Cust NPA Date one full day early, every time, in IST
+        // -- see the comment on parseHoDate() for the exact mechanism.
+        // Every date column below goes through toDate(), which already
+        // converts the raw Excel serial number correctly on its own.
+        const wb = XLSX.read(data, {type:'array'});
         const sheetName = wb.SheetNames.find(n=>/kcc|overdue/i.test(n)) || wb.SheetNames[0];
         const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
         header = raw[0]||[]; dataRows = raw.slice(1);
