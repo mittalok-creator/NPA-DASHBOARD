@@ -2153,7 +2153,14 @@ function onOtsInput(i, acctNo){
 
 function onUriInput(i, acctNo){
   const v = document.getElementById('uriInput-'+i).value;
-  if(v==='') delete interestReversalOverrides[acctNo]; else interestReversalOverrides[acctNo] = v;
+  // A blank field means literal 0, same as typing "0" -- NOT "clear the
+  // override and fall back to the master-data default". That fallback
+  // used to be harmless because every account's master default was 0,
+  // but broke visibly once real per-account Interest Reversal defaults
+  // were seeded (2026-09-08): clearing the field silently brought back a
+  // non-zero master value instead of 0, so Total Dues/Total Contractual
+  // Dues looked like they weren't reacting to "set it to 0" at all.
+  interestReversalOverrides[acctNo] = v==='' ? '0' : v;
   saveUriOverrides();
   recalcLoan(i);
   recalcAggregate();
