@@ -5440,9 +5440,15 @@ function kccovShowBranchAccounts(bucket, branch, custNpaDate){
 window.kccovShowBranchAccounts = kccovShowBranchAccounts;
 
 /* ---------- Nav / view switching ---------- */
+// OneDrive/PassSheet are reached only via the Utility hub now (2026-09-08),
+// not their own nav-rail items -- the "Utility" nav-item stays highlighted
+// as their parent while viewing either, so the rail never shows nothing
+// active at all.
+const UTILITY_CHILD_VIEWS = ['onedrive','passsheet'];
 function switchView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.dataset.view===view));
-  document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+  document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active',
+    b.dataset.view===view || (UTILITY_CHILD_VIEWS.includes(view) && b.dataset.view==='utility')));
   if(view==='dashboard') renderDashboard();
   if(view==='pnpa') renderPnpaDashboard();
   if(view==='kccov') renderKccOverdue();
@@ -5481,6 +5487,55 @@ function toggleTheme(){
   applyTheme(current==='light' ? 'dark' : 'light');
 }
 
+/* ---------- Settings flyout (Alok's request, 2026-09-08) ----------
+   Refresh/Theme/Sign-in used to be three separate rail buttons; now
+   #settingsBtnNav opens this one flyout instead of the Update Data modal
+   directly. The menu is a persistent element (see .settings-menu in
+   styles.css) -- toggled via a class, never recreated -- so auth.js's own
+   references to #githubSignInBtn/#authUserInfo etc. stay valid no matter
+   how many times this opens and closes. */
+function toggleSettingsMenu(){
+  const menu = document.getElementById('settingsMenu');
+  const trigger = document.getElementById('settingsBtnNav');
+  if(!menu || !trigger) return;
+  if(menu.classList.contains('show')){ closeSettingsMenu(); return; }
+  const r = trigger.getBoundingClientRect();
+  menu.style.left = (r.right + 10) + 'px';
+  // Settings sits near the bottom of the rail, so opening straight down
+  // from its top edge can push the menu (and the sign-in widget at its
+  // very end) below the viewport on shorter screens -- measure the menu's
+  // real height once it's actually laid out (.show first, invisible via
+  // opacity, then position, then reveal) and anchor it to the trigger's
+  // BOTTOM edge growing upward whenever growing downward wouldn't fit.
+  menu.style.visibility = 'hidden';
+  menu.classList.add('show');
+  const menuH = menu.getBoundingClientRect().height;
+  const fitsBelow = r.top + menuH <= window.innerHeight - 8;
+  menu.style.top = (fitsBelow ? Math.max(8, r.top) : Math.max(8, r.bottom - menuH)) + 'px';
+  menu.style.visibility = '';
+  trigger.setAttribute('aria-expanded','true');
+}
+function closeSettingsMenu(){
+  document.getElementById('settingsMenu')?.classList.remove('show');
+  document.getElementById('settingsBtnNav')?.setAttribute('aria-expanded','false');
+}
+window.toggleSettingsMenu = toggleSettingsMenu;
+// Close on outside click, Escape, or after any action taken inside the
+// menu itself (Refresh/Theme/Upload Data/Sign in/Sign out all trigger
+// their own effect first -- this listener is on the menu itself so it
+// only ever fires after that effect's own click handler already ran,
+// same-element listeners fire in attach order, then this fires again on
+// the bubble to the ancestor -- so nothing here is skipped or reordered).
+document.addEventListener('click', (e)=>{
+  const menu = document.getElementById('settingsMenu');
+  const trigger = document.getElementById('settingsBtnNav');
+  if(!menu || !menu.classList.contains('show')) return;
+  if(menu.contains(e.target) || trigger?.contains(e.target)) return;
+  closeSettingsMenu();
+});
+document.getElementById('settingsMenu')?.addEventListener('click', ()=>closeSettingsMenu());
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMenu(); });
+
 /* ---------- Wire static chrome (nav, header icons, modals) ---------- */
 (function wireChrome(){
   const on = (id, evt, fn) => { const e=document.getElementById(id); if(e) e.addEventListener(evt, fn); };
@@ -5492,7 +5547,14 @@ function toggleTheme(){
   };
   on('updateDataBtn','click',openUpdateModalAsAdmin);
   on('settingsBtn','click',openUpdateModalAsAdmin);
-  on('settingsBtnNav','click',openUpdateModalAsAdmin);
+  // settingsBtnNav (sidebar) no longer opens Update Data directly (Alok's
+  // request, 2026-09-08) -- it now toggles the settings flyout, which
+  // holds Refresh/Theme/Sign-in (all still completely ungated -- see the
+  // long comment on .settings-menu-wrap in index.html) plus an "Upload
+  // Data" item inside the menu that still runs through
+  // openUpdateModalAsAdmin exactly as this button itself used to, via the
+  // generic [data-open-data] wiring a few lines down.
+  on('settingsBtnNav','click',(e)=>toggleSettingsMenu(e));
   on('cmdkBtnNav','click',()=>openCmdk());
   on('cmdkBtnNavMobile','click',()=>openCmdk());
   on('listModalCloseX','click',()=>closeListModal());

@@ -1502,6 +1502,50 @@ body{overscroll-behavior:none}
 .nav-spacer{flex:1}
 .nav-item-ghost{font-weight:600;color:var(--chrome-mute)}
 .nav-item-ghost:hover{color:var(--chrome-ink)}
+
+/* ---------- Settings flyout (2026-09-08) ----------
+   Refresh / Theme / Sign-in used to be three separate always-visible rail
+   buttons; now they're one "Settings" trigger that opens this menu. It's a
+   PERSISTENT element (display:none by default, shown via .show), not
+   created/destroyed on each open like .share-ots-menu -- auth.js keeps
+   live references to #githubSignInBtn/#authUserInfo etc. and those must
+   never be recreated out from under it. Positioned via inline top/left set
+   in toggleSettingsMenu() (js/app.js), flown out to the right of the
+   narrow rail same as any sidebar-attached flyout would be. */
+.settings-menu-wrap{position:relative}
+.settings-menu{position:fixed;z-index:130;display:none;flex-direction:column;gap:2px;
+  min-width:220px;padding:8px;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;box-shadow:var(--shadow-lg,0 12px 28px -8px rgba(0,0,0,.4))}
+.settings-menu.show{display:flex}
+.settings-menu-item{display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;
+  text-align:left;padding:9px 10px;border-radius:9px;color:var(--ink);font:inherit;font-size:12.5px;
+  font-weight:700;cursor:pointer;transition:background .12s var(--ease)}
+.settings-menu-item:hover{background:var(--accent-soft)}
+.settings-menu-item svg{flex-shrink:0;color:var(--accent)}
+.settings-menu-divider{height:1px;background:var(--line);margin:5px 4px}
+/* The auth widget and its children keep their own established look
+   (.auth-signin-btn etc. below) -- just re-homed inside this menu instead
+   of .nav-foot, so it needs no styling changes of its own, only a touch
+   less bottom margin now that it's the menu's last item, not a standalone
+   block sitting above a separate signature line. */
+.settings-menu .auth-widget{margin:2px 2px 0}
+
+/* ---------- "Back to Utility" link on OneDrive/PassSheet's own headers,
+   and the Utility hub page's own card grid (2026-09-08) ---------- */
+.page-back-link{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;
+  background:none;border:none;padding:2px 0 4px;margin:0;font-size:12px;font-weight:700;
+  color:var(--sub);cursor:pointer;transition:color .12s var(--ease)}
+.page-back-link:hover{color:var(--accent-2)}
+.utility-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.utility-card{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;
+  padding:20px 18px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg,16px);
+  cursor:pointer;transition:border-color .15s var(--ease),box-shadow .15s var(--ease),transform .12s var(--ease)}
+.utility-card:hover{border-color:var(--accent-2);box-shadow:0 10px 26px -12px rgba(0,0,0,.28);transform:translateY(-1px)}
+.utility-card-icon{display:flex;align-items:center;justify-content:center;width:44px;height:44px;
+  border-radius:12px;background:var(--accent-soft);color:var(--accent-2)}
+.utility-card-title{font-size:14.5px;font-weight:800;color:var(--ink)}
+.utility-card-desc{font-size:12px;color:var(--sub);line-height:1.5}
+
 .nav-foot{padding:0 14px;font-size:10.5px;color:var(--chrome-mute);letter-spacing:.2px;
   max-height:0;opacity:0;overflow:hidden;pointer-events:none;transition:opacity .12s var(--ease)}
 #sideNav:hover .nav-foot,#sideNav:focus-within .nav-foot{max-height:220px;opacity:1;padding:14px 16px 18px 2px;pointer-events:auto}
