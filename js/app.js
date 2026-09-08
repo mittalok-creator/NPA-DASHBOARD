@@ -1277,6 +1277,7 @@ function renderBranchPeek(digits, matches){
     + (extra>0 ? `<div class="bp-more">+${extra} more</div>` : '');
   panel.classList.add('show');
   panel.setAttribute('aria-hidden','false');
+  repositionBranchPeekForKeyboard(); // the panel is only ever shown while actively typing, so the on-screen keyboard is almost always up on mobile right now
   panel.querySelectorAll('.bp-row').forEach((row,i)=>{
     scrambleInto(row.querySelector('.bp-name'), shown[i].name, {duration:280, delay:i*40});
   });
@@ -1305,6 +1306,27 @@ function scrambleInto(el, text, opts){
   }
   if(el.__peekRaf) cancelAnimationFrame(el.__peekRaf);
   el.__peekRaf = requestAnimationFrame(frame);
+}
+// Mobile fix (Alok's report, screenshot showed the panel gone once the
+// on-screen keyboard opened): the CSS below anchors the mobile panel to a
+// fixed distance from the bottom of the viewport, which is exactly where
+// the keyboard sits -- and the panel is only ever visible while actively
+// typing digits, i.e. almost always with the keyboard already up. A fixed
+// pixel guess can't account for how tall any given device's keyboard
+// actually is, so this reads the real gap from visualViewport (the area
+// the keyboard covers) and pushes the panel up above it live, resizing as
+// the keyboard opens/closes/changes (e.g. switching to a suggestions bar).
+const BRANCH_PEEK_MOBILE_MQ = window.matchMedia('(max-width:640px)');
+function repositionBranchPeekForKeyboard(){
+  const panel = document.getElementById('branchPeekPanel');
+  if(!panel) return;
+  if(!BRANCH_PEEK_MOBILE_MQ.matches || !window.visualViewport){ panel.style.bottom = ''; return; }
+  const covered = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+  panel.style.bottom = (88 + covered) + 'px'; // 88px clears the bottom tab bar when no keyboard is up
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', repositionBranchPeekForKeyboard);
+  window.visualViewport.addEventListener('scroll', repositionBranchPeekForKeyboard);
 }
 
 // Result-list sort state, same shape as acctListState below (list of

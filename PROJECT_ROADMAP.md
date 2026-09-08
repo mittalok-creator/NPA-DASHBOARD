@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: branch-prefix peek was hiding behind the mobile keyboard (2026-09-08, same day)
+
+Alok's screenshots showed the peek panel completely gone once the on-screen keyboard actually opened on his phone -- the mobile CSS anchored it a fixed 88px from the bottom of the viewport, which is exactly the area the keyboard covers, and the panel is only ever shown while actively typing digits, i.e. essentially always with the keyboard already up.
+
+A different fixed pixel guess wouldn't have been reliable either -- keyboard height varies by device, by whether a suggestions bar is showing, and by keyboard app. Fixed properly using the `visualViewport` API instead: `repositionBranchPeekForKeyboard()` reads how much of the viewport the keyboard is actually covering right now (`window.innerHeight - visualViewport.height - visualViewport.offsetTop`) and sets the panel's `bottom` to clear it live, re-running on every `visualViewport` `resize`/`scroll` event (keyboard open, close, or height change) and once immediately whenever the panel is shown. Falls back to the original fixed 88px (clearing the bottom tab bar) when there's no keyboard, `visualViewport` isn't supported, or the viewport is desktop-sized.
+
+Verified via Playwright with a mocked `visualViewport` object driven manually (real mobile keyboards don't render under Chromium's device emulation, even headed, so the covered-height *effect* was simulated directly): with the mock reporting the full viewport height, the panel sits at its normal `bottom:88px`; shrinking the mock's reported height by 300px (simulating a keyboard covering 300px) and firing `resize` moves the panel to `bottom:388px`, confirmed via bounding-box math to sit clear above the covered region; reverting the mock's height back to full moves it back to `88px`. Re-ran every existing desktop peek scenario (151/16/161/etc.) to confirm no regression there.
+
+Files touched: `js/app.js` (`repositionBranchPeekForKeyboard()`, wired into `visualViewport`'s `resize`/`scroll` events and called once from `renderBranchPeek()`), `index.html`/`sw.js` (cache-bust bump `20260908e`→`20260908f`, `CACHE_NAME` v173→v174).
+
 ### Tweak: branch-prefix peek now shows up to 10 branches, full rows (2026-09-08, same day)
 
 Alok asked for 10 branches to show instead of 6, giving the example "151 ki puri list 1519 tak" -- there are exactly 10 branches whose old Sol ID starts with "151" (15100 Eihan through 15190 Ladpur), and he wanted all 10 visible, not truncated behind "+N more". Bumped `BRANCH_PEEK_LIMIT` from 6 to 10, and widened the panel (198px→240px desktop, 172px→208px mobile) since the longest real branch name ("Hathras Service Branch", paired with its Sol ID) was clipping with ellipsis at the old width -- full rows are non-negotiable when the whole point is a clear read.
