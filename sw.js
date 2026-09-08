@@ -1,4 +1,4 @@
-const CACHE_NAME = 'upgb-ots-shell-v174';
+const CACHE_NAME = 'upgb-ots-shell-v175';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
@@ -6,22 +6,24 @@ const CACHE_NAME = 'upgb-ots-shell-v174';
 // the current versioned URL instead. Keep these in sync with index.html
 // on every future version bump. pdf.min.js / pdf.worker.min.js were
 // dropped entirely (2026-08-24) along with the Bank Dashboard tab that
-// was their only consumer -- neither is loaded by index.html anymore.
-// html2canvas.min.js / jspdf.umd.min.js (added 2026-08-29, for the
-// WhatsApp share button) and msal-browser.min.js (added 2026-09-07, for
-// the OneDrive tab) are deliberately NOT precached either, same
-// reasoning -- most sessions never tap Share or OneDrive, so the runtime
+// was their only consumer, then re-added (2026-09-08) self-hosted for the
+// PassSheet tool -- neither is loaded by index.html itself, only by
+// tools/passsheet.html. html2canvas.min.js / jspdf.umd.min.js (added
+// 2026-08-29, for the WhatsApp share button), msal-browser.min.js (added
+// 2026-09-07, for the OneDrive tab), and pdf.min.js/pdf.worker.min.js
+// above are all deliberately NOT precached either, same reasoning --
+// most sessions never tap Share, OneDrive, or PassSheet, so the runtime
 // fetch handler below still caches them normally the first time someone does.
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './css/styles.css?v=20260908f',
-  './js/app.js?v=20260908f',
-  './js/auth.js?v=20260908f',
-  './js/publish.js?v=20260908f',
-  './js/splash.js?v=20260908f',
-  './js/vendor/xlsx.full.min.js?v=20260908f',
-  './js/vendor/exceljs.min.js?v=20260908f',
+  './css/styles.css?v=20260908g',
+  './js/app.js?v=20260908g',
+  './js/auth.js?v=20260908g',
+  './js/publish.js?v=20260908g',
+  './js/splash.js?v=20260908g',
+  './js/vendor/xlsx.full.min.js?v=20260908g',
+  './js/vendor/exceljs.min.js?v=20260908g',
   './manifest.webmanifest',
 ];
 
