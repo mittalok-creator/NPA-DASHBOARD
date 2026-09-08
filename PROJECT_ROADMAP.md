@@ -123,6 +123,20 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### New: branch-prefix "peek" while typing an Account No. (2026-09-08, same day)
+
+Alok asked for a purely informational touch on the OTS Calculator's search box: type the first 2 digits of an Account No. and a small readout should show which branches that old Sol ID prefix could belong to -- narrowing live as more digits go in, gone entirely past 4 digits -- "unse karna kuch nahi hai bas show hon" (nothing to click, just show), with "hacker type animation... light and small space... something unique."
+
+- **Trigger**: only while searching by Account No. (`searchMode==='acct'` -- a Sol ID prefix means nothing for Cust ID/Mobile/Aadhar/PAN/SB No.), and only while the typed digit count is 2, 3, or 4 -- shown at exactly the range Alok described, hidden below and above it.
+- **Match**: filters `BRANCH_LIST` (already in `js/app.js`, `[oldSolId, newSolId, name]` tuples) by whether the old Sol ID starts with the typed digits -- e.g. "16" matches Bajna (16010) first, "161" narrows to Pali Kheda (16100) first, exactly the two examples Alok gave. Capped at 8 branch names with a "+N more" line so the panel stays small even for a 2-digit prefix that matches a couple dozen branches.
+- **Placement**: a small, fixed-position panel in the screen's top-right corner (bottom-right above the tab bar on mobile), independent of page scroll -- deliberately given its own dark/monospace/green terminal look rather than following the app's own light/dark theme, since it's a novelty touch, not a themed UI surface. `pointer-events:none` throughout, since there's genuinely nothing to click.
+- **Animation**: a "decode" text-reveal effect (`scrambleInto()`) -- each branch name resolves left-to-right out of scrambled terminal glyphs (`!<>-_\/[]{}=+*^?#$%01`) over ~280ms, with each subsequent row starting slightly later (40ms stagger) for a rippling terminal-readout feel. Respects `prefers-reduced-motion` exactly like the rest of the app's animations (`animateNumber()`), jumping straight to final text when motion is reduced.
+- Also wired into switching search mode (via the mode-pill click handler) and clearing the field, so leaving Account No. mode or clearing the box hides it immediately rather than leaving a stale panel on screen.
+
+Verified via Playwright: 1 digit → hidden; "16" → visible, Bajna first, 8 shown + "+8 more"; "161" → visible, Pali Kheda first, 7 shown, no "+more"; "1610" → narrows to just Pali Kheda; "16100" (5 digits) → hidden; clearing the field → hidden; switching to Cust ID mid-digit → hidden immediately. Screenshots reviewed in both light and dark theme, and at a mobile viewport (390px) confirming the panel repositions above the bottom tab bar instead of overlapping it. Confirmed no regression to the existing 6+-digit live search/sort behaviour on the same input.
+
+Files touched: `index.html` (`#branchPeekPanel`), `js/app.js` (`updateBranchPeek()`, `renderBranchPeek()`, `hideBranchPeek()`, `scrambleInto()`, wired into the search input's existing `input` listener, the mode-pill click handler, and `clearSearch()`), `css/styles.css` (`.branch-peek` and related rules), `index.html`/`sw.js` (cache-bust bump `20260908b`→`20260908c`, `CACHE_NAME` v170→v171).
+
 ### Fix: every Excel date upload was silently reading dates one day early, in IST (2026-09-08, same day)
 
 Alok flagged that the KCC Overdue "Datewise Calendar" always showed Cust NPA Date one day before the real date, and asked for a full audit before any fix. That audit found a genuine, serious, and much wider bug than just this one screen.

@@ -1213,6 +1213,7 @@ SEARCH_MODES.forEach(m=>{
     searchMode=m.id;
     pillsEl.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
     searchInputEl.placeholder = m.ph;
+    updateBranchPeek(searchInputEl.value.trim()); // hides if leaving Account No., shows if arriving with digits already typed
     if(searchInputEl.value.trim()) runSearch(); else renderEmpty();
   };
   pillsEl.appendChild(b);
@@ -1229,12 +1230,79 @@ searchInput.addEventListener('input', ()=>{
   clearBtn.style.display = searchInput.value ? 'flex' : 'none';
   clearTimeout(__liveSearchTimer);
   const q = searchInput.value.trim();
+  updateBranchPeek(q);
   if(!q){ renderEmpty(); return; }
   if(q.length<6) return; // wait for at least 6 characters before suggesting
   __liveSearchTimer = setTimeout(()=>runSearch(), 160);
 });
 searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ clearTimeout(__liveSearchTimer); runSearch(); } });
-function clearSearch(){ searchInput.value=''; clearBtn.style.display='none'; clearTimeout(__liveSearchTimer); renderEmpty(); }
+function clearSearch(){ searchInput.value=''; clearBtn.style.display='none'; clearTimeout(__liveSearchTimer); hideBranchPeek(); renderEmpty(); }
+
+/* ---------- Branch-prefix peek (Alok's request, 2026-09-08) ----------
+   "jab main pahle 2 digit type karun to... branches k name right corner
+   main show hon... jab 4 digit se jyada type kar dun to wo na dikhe" --
+   purely informational, nothing to click: while searching by Account No.,
+   typing 2-4 digits shows which branches' old Sol ID (BRANCH_LIST's first
+   element, e.g. 16010) starts with those digits, live-narrowing on every
+   keystroke, gone the moment a 5th digit goes in or the field empties.
+   Deliberately scoped to searchMode==='acct' only -- a Sol ID prefix has
+   no meaning for Cust ID/Mobile/Aadhar/PAN/SB No. searches. */
+const BRANCH_PEEK_MIN = 2, BRANCH_PEEK_MAX = 4, BRANCH_PEEK_LIMIT = 8;
+function updateBranchPeek(raw){
+  const digits = raw.replace(/\D/g,'');
+  if(searchMode!=='acct' || digits.length<BRANCH_PEEK_MIN || digits.length>BRANCH_PEEK_MAX){
+    hideBranchPeek();
+    return;
+  }
+  const matches = BRANCH_LIST.filter(([oldId])=>String(oldId).startsWith(digits)).map(([,,name])=>name);
+  if(!matches.length){ hideBranchPeek(); return; }
+  renderBranchPeek(digits, matches);
+}
+function hideBranchPeek(){
+  const panel = document.getElementById('branchPeekPanel');
+  if(!panel) return;
+  panel.classList.remove('show');
+  panel.setAttribute('aria-hidden','true');
+}
+function renderBranchPeek(digits, matches){
+  const panel = document.getElementById('branchPeekPanel');
+  if(!panel) return;
+  const shown = matches.slice(0, BRANCH_PEEK_LIMIT);
+  const extra = matches.length - shown.length;
+  panel.innerHTML = `<div class="bp-head">SOL ${esc(digits)}<span class="bp-cursor">▌</span></div>`
+    + shown.map((_,i)=>`<div class="bp-row" data-i="${i}"></div>`).join('')
+    + (extra>0 ? `<div class="bp-more">+${extra} more</div>` : '');
+  panel.classList.add('show');
+  panel.setAttribute('aria-hidden','false');
+  panel.querySelectorAll('.bp-row').forEach((row,i)=>{
+    scrambleInto(row, shown[i], {duration:280, delay:i*40});
+  });
+}
+// Generic "decode" text reveal -- characters resolve left-to-right out of
+// a scrambled glyph set, classic terminal/hacker-console effect. Used only
+// for the branch peek above for now, kept generic in case something else
+// wants the same treatment later. Respects prefers-reduced-motion like
+// every other animation in this app (see animateNumber()).
+const BRANCH_PEEK_GLYPHS = '!<>-_\\/[]{}=+*^?#$%01';
+function scrambleInto(el, text, opts){
+  opts = opts || {};
+  if(__reduceMotion){ el.textContent = text; return; }
+  const duration = opts.duration || 280, delay = opts.delay || 0;
+  const startAt = performance.now() + delay;
+  function frame(now){
+    if(now<startAt){ el.__peekRaf = requestAnimationFrame(frame); return; }
+    const t = Math.min(1, (now-startAt)/duration);
+    const lockCount = Math.ceil(t*text.length);
+    let out = '';
+    for(let i=0;i<text.length;i++){
+      out += (i<lockCount || text[i]===' ') ? text[i] : BRANCH_PEEK_GLYPHS[(Math.random()*BRANCH_PEEK_GLYPHS.length)|0];
+    }
+    el.textContent = out;
+    if(t<1) el.__peekRaf = requestAnimationFrame(frame); else el.textContent = text;
+  }
+  if(el.__peekRaf) cancelAnimationFrame(el.__peekRaf);
+  el.__peekRaf = requestAnimationFrame(frame);
+}
 
 // Result-list sort state, same shape as acctListState below (list of
 // plain {acctNo,name,...} objects rather than raw NPA rows, so the
