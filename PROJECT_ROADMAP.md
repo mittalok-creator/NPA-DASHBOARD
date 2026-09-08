@@ -123,6 +123,21 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Data update: seeded Interest Reversal figures from Alok's own file (2026-09-08)
+
+Alok supplied `Interest_Reversal.xlsx` (Account_Number + Interest Reversal amount, 9,821 rows) and asked for it to fill the OTS Calculator's Interest Reversal field as the *default* value per account -- staying editable, defaulting to 0 wherever there's no data for an account, same as the field already behaves today.
+
+Turned out no code change was needed at all: the Interest Reversal field's live-editable behaviour (`uriFor()` in `js/app.js`) already prefers a per-account typed override (kept in `localStorage`) over a base value read straight from the published dataset's `uri_tot` column (row index 18, `C.URI`) -- and falls back to 0 when that column is blank. That base column simply had almost no data in it yet (93 of 13,671 NPA accounts). So this was purely a **data update**, not a feature: joined Alok's file into `data/latest.json`'s `uri_tot` column by exact account number match.
+
+- 8,988 of the file's 9,783 unique accounts matched a current NPA account and were updated.
+- 795 accounts in the file don't correspond to any account in the current NPA dataset (most likely settled/recovered/no longer NPA since the file was prepared) -- left untouched, nothing to set them on.
+- One account (`152835100104258`) appeared twice in the source file with two different amounts (23,646 vs 20,146) -- the later of the two was used.
+- Two accounts already carried an old, unrelated `uri_tot` value that didn't match anything in the new file (221→5,525 and 683→1,736) -- overwritten with the new file's figure, per "jahan ye data hai wahan is list se aa jaye" (this list is the source of truth for the accounts it covers). The other 91 accounts with pre-existing non-zero values that the new file doesn't mention were left exactly as they were.
+
+Verified in-browser: an account covered by the file now shows its Interest Reversal amount pre-filled on load (e.g. account `161573210000110` shows `5525`), Total Dues reflects it immediately, and typing over it still live-updates Total Dues/Total Contractual Dues exactly as before -- the field never became read-only. An account not in the file still shows blank/0 by default, as before.
+
+Files touched: `data/latest.json` only (the `uri_tot` value for 8,988 matching NPA rows) -- no `js/app.js`/`css/styles.css`/cache-bust changes, since this data file isn't service-worker-precached and the app always fetches it fresh with its own cache-busting `?t=` query param.
+
 ### OneDrive: Google Drive-style visual redesign, plus a real sign-in bug fix (2026-09-07, same day)
 
 Alok asked for the OneDrive tab's look to match Google Drive's own UI ("Ise google drive jaisa UI bana do"). Redesigned the file browser accordingly:
