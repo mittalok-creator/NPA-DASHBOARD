@@ -1247,7 +1247,7 @@ function clearSearch(){ searchInput.value=''; clearBtn.style.display='none'; cle
    keystroke, gone the moment a 5th digit goes in or the field empties.
    Deliberately scoped to searchMode==='acct' only -- a Sol ID prefix has
    no meaning for Cust ID/Mobile/Aadhar/PAN/SB No. searches. */
-const BRANCH_PEEK_MIN = 2, BRANCH_PEEK_MAX = 4, BRANCH_PEEK_LIMIT = 6;
+const BRANCH_PEEK_MIN = 2, BRANCH_PEEK_MAX = 4, BRANCH_PEEK_LIMIT = 10;
 function updateBranchPeek(raw){
   const digits = raw.replace(/\D/g,'');
   if(searchMode!=='acct' || digits.length<BRANCH_PEEK_MIN || digits.length>BRANCH_PEEK_MAX){

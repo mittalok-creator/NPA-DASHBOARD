@@ -995,7 +995,7 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    none throughout -- there is nothing to click, ever. */
 .branch-peek{
   position:fixed; top:165px; right:14px; z-index:200;
-  width:198px; max-width:58vw;
+  width:240px; max-width:64vw;
   background:rgba(8,14,10,.95);
   border:1px solid rgba(94,255,150,.32);
   border-radius:9px;
@@ -1024,7 +1024,7 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .bp-name{color:#7CFFA6;font-weight:700}
 .bp-more{margin-top:3px;color:rgba(124,255,166,.42);font-size:9.5px;font-style:italic}
 @media (max-width:640px){
-  .branch-peek{top:auto;bottom:88px;right:10px;width:172px;font-size:11px}
+  .branch-peek{top:auto;bottom:88px;right:10px;width:208px;max-width:60vw;font-size:11px}
 }
 
 /* ---------- Print view ----------

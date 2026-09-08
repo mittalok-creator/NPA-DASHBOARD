@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Tweak: branch-prefix peek now shows up to 10 branches, full rows (2026-09-08, same day)
+
+Alok asked for 10 branches to show instead of 6, giving the example "151 ki puri list 1519 tak" -- there are exactly 10 branches whose old Sol ID starts with "151" (15100 Eihan through 15190 Ladpur), and he wanted all 10 visible, not truncated behind "+N more". Bumped `BRANCH_PEEK_LIMIT` from 6 to 10, and widened the panel (198px→240px desktop, 172px→208px mobile) since the longest real branch name ("Hathras Service Branch", paired with its Sol ID) was clipping with ellipsis at the old width -- full rows are non-negotiable when the whole point is a clear read.
+
+Verified via Playwright: typing "151" now shows all 10 matching branches with no "+more" line, none of them truncated (including "15140–Hathras Service Branch" in full); "16" (16 total matches) now shows 10 + "+6 more"; re-checked light theme, dark theme, and mobile screenshots for layout.
+
+Files touched: `js/app.js` (`BRANCH_PEEK_LIMIT`), `css/styles.css` (`.branch-peek` width, desktop and mobile), `index.html`/`sw.js` (cache-bust bump `20260908d`→`20260908e`, `CACHE_NAME` v172→v173).
+
 ### Tweak: branch-prefix peek now shows Sol ID alongside the branch name (2026-09-08, same day)
 
 Immediate follow-up on the branch-prefix peek above: Alok asked for the Sol ID to show too, as "Sol ID - Branch Name", "clearly visible". Each row now renders as a static, always-crisp Sol ID (bold, bright white-green, e.g. `16010`) followed by a dash and the branch name -- only the name still runs through the decode/scramble animation, the Sol ID itself never dissolves into glyphs, so it stays legible throughout. Panel widened (158px→198px) to fit the longer rows comfortably, and the row cap was trimmed from 8 to 6 (with the "+N more" line adjusting accordingly) so the panel stays compact enough not to overlap the card below it now that each row is wider.
