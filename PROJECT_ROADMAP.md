@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: clearing Interest Reversal to 0 silently brought back the seeded master value (2026-09-08, same day)
+
+Immediately surfaced by the data seed above: Alok reported that setting Interest Reversal to 0 stopped changing Total Dues/Total Contractual Dues. Root cause was in `onUriInput()` (`js/app.js`) -- a blank/cleared field was treated as "delete the override, fall back to the master-data default (`s.uri`)", not as an explicit 0. That fallback was invisible before the data seed, since every account's master default was 0 anyway (blank override -> fall back to 0 -> same result as an explicit 0). Once real non-zero per-account defaults existed (the seed above), clearing the field silently brought that non-zero master value straight back instead of showing 0 -- so "setting it to 0" visibly failed to change Total Dues for any account the file had touched.
+
+Reproduced first to confirm the exact mechanism before fixing: on account `161573210000110` (base Interest Reversal 5,525), typing the literal digit "0" into the field correctly dropped Total Dues by 5,525, but backspacing the field fully blank left Total Dues completely unchanged -- proving the bug was specifically in how a *blank* field was handled, not in the calculation itself.
+
+Fixed by making `onUriInput()` treat a blank field exactly like typing "0" (stores the override as `'0'` instead of deleting it), so clearing the field and typing "0" now always produce the same, correct result. Verified via Playwright: both actions now reduce Total Dues/Total Contractual Dues by the same amount; the 0-override survives a page reload (still shows blank with the "0" placeholder, visually indistinguishable from a true default-0 account, but Total Dues stays correctly reduced); and typing a real value back in afterwards still live-updates everything exactly as before -- the field never stopped being editable.
+
+Files touched: `js/app.js` (`onUriInput()`), `index.html`/`sw.js` (cache-bust bump `20260907h`→`20260908a`, `CACHE_NAME` v168→v169).
+
 ### Data update: seeded Interest Reversal figures from Alok's own file (2026-09-08)
 
 Alok supplied `Interest_Reversal.xlsx` (Account_Number + Interest Reversal amount, 9,821 rows) and asked for it to fill the OTS Calculator's Interest Reversal field as the *default* value per account -- staying editable, defaulting to 0 wherever there's no data for an account, same as the field already behaves today.
