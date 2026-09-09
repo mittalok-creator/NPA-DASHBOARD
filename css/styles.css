@@ -179,7 +179,16 @@
   color-scheme: dark;
   --font-body:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
   --font-display:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
-  --font-mono:ui-monospace,'SF Mono','Cascadia Code',Consolas,monospace;
+  /* Was the OS's own ui-monospace stack -- looked fine on a Mac (San
+     Francisco Mono) but fell back to whatever generic monospace font
+     each Windows/Android/Linux box happened to have, which render soft
+     and inconsistent, and some render "0" and "O" as near-identical
+     blobs. Standardising on the self-hosted Inter (already embedded
+     below, weights 100-900) makes every digit crisp and identical
+     across devices -- same numeral face already approved for the OTS
+     Calculator reskin's #detailPane scope below, now the app-wide
+     default instead of a one-screen exception. */
+  --font-mono:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
   --surface-pattern:none; --surface-pattern-size:22px 22px;
 
   /* structural ink-slate scale — layered dark surfaces, never pure black */
@@ -253,6 +262,11 @@ body{
   font-family:var(--font-body);
   background:var(--bg);color:var(--ink);
   font-variant-numeric:tabular-nums;
+  /* Inter has no OpenType "zero" feature at all (its GSUB table carries
+     none), so its 0 can never render slashed/dotted regardless of these
+     settings -- kept anyway as belt-and-braces against a future font
+     swap reintroducing an ambiguous zero glyph app-wide. */
+  font-feature-settings:"zero" 0,"ss01" 0,"ss02" 0,"ss03" 0,"ss04" 0;
   letter-spacing:-.05px;
   line-height:1.5;
 }
