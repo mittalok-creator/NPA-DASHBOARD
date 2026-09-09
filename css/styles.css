@@ -1025,17 +1025,15 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .eligible-banner{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-12px);z-index:110;background:linear-gradient(135deg,var(--red),#a13d35);color:#fff;padding:14px 18px;border-radius:14px;box-shadow:0 22px 48px rgba(0,0,0,.34);max-width:min(90vw,520px);display:none;align-items:center;gap:12px;font-weight:700;font-size:13px;opacity:0;transition:opacity .2s var(--ease),transform .2s var(--ease)}
 .eligible-banner.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0)}
 .eligible-banner-close{margin-left:auto;flex-shrink:0;font-size:15px;opacity:.85;cursor:pointer}
-/* Same shape/behaviour as .eligible-banner above, in brass rather than red
-   -- informational (a hold, instruction, reminder an Admin left on this
-   account), not a warning. --seal/--seal-l/--seal-d are the same
-   theme-independent brass tokens the OTS Calculator itself runs on; the
-   #241d08 text matches the existing .badge-pill.locked convention for
-   text-on-brass. top is left unset here (falls back to 18px, same as
+/* Same shape/behaviour/colour as .eligible-banner above -- Alok asked for
+   this one in red too (2026-09-09), same reasoning: it needs to stand out
+   enough that it's never skipped by accident, same as the eligibility
+   warning. top is left unset here (falls back to 18px, same as
    .eligible-banner) and only overridden inline by
    positionSpecialNoteBanner() in js/app.js when the eligible banner is
    also showing for the same borrower, so the two stack instead of
    overlapping. */
-.special-note-banner{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-12px);z-index:110;background:linear-gradient(135deg,var(--seal-l),var(--seal-d));color:#241d08;padding:14px 18px;border-radius:14px;box-shadow:0 22px 48px rgba(0,0,0,.34);max-width:min(90vw,520px);display:none;align-items:center;gap:12px;font-weight:700;font-size:13px;opacity:0;transition:opacity .2s var(--ease),transform .2s var(--ease),top .2s var(--ease)}
+.special-note-banner{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-12px);z-index:110;background:linear-gradient(135deg,var(--red),#a13d35);color:#fff;padding:14px 18px;border-radius:14px;box-shadow:0 22px 48px rgba(0,0,0,.34);max-width:min(90vw,520px);display:none;align-items:center;gap:12px;font-weight:700;font-size:13px;opacity:0;transition:opacity .2s var(--ease),transform .2s var(--ease),top .2s var(--ease)}
 .special-note-banner.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0)}
 .special-note-banner-close{margin-left:auto;flex-shrink:0;font-size:15px;opacity:.85;cursor:pointer}
 
