@@ -1615,8 +1615,16 @@ body{overscroll-behavior:none}
    covering it (nested z-index never escapes a parent stacking context). */
 #detailPane.open{z-index:95}
 .view{display:none}
-.view.active{display:block;animation:viewIn .38s var(--ease)}
-@keyframes viewIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.view.active{display:block;animation:viewIn .34s var(--ease) both}
+@keyframes viewIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+/* Brief exit fade, played on the OUTGOING view by switchView() before the
+   display:none/.active swap -- .view{display:none} is instant with no
+   transition of its own, so without this the previous screen used to just
+   vanish outright the instant a nav item was clicked, then the new one
+   popped in a beat later. Kept short (120ms) so navigation still feels
+   snappy, not sluggish. */
+.view.view-leave{animation:viewLeave .12s var(--ease) both}
+@keyframes viewLeave{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(-6px) scale(.99)}}
 
 /* ---------- Dashboard view ---------- */
 #viewDashboard{padding:32px clamp(18px,3.5vw,48px) 60px;max-width:1560px;margin:0 auto}
@@ -2229,6 +2237,14 @@ header.app-head::before,.detail-head::before{
 table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px;width:100%}
 .kccov-cal-table th,.kccov-cal-table td{white-space:nowrap;text-align:right;padding:9px 12px;font-variant-numeric:tabular-nums}
 .kccov-cal-table thead th{background:var(--table-head);color:var(--head-ink);font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:800;position:sticky;top:0;z-index:3}
+.kccov-cal-table th.sortable{cursor:pointer;user-select:none;transition:color .15s var(--ease)}
+.kccov-cal-table th.sortable:hover{color:var(--accent-2)}
+.kccov-cal-table th.sortable .sort-ic{display:inline-block;width:11px;text-align:center;margin-left:3px;font-size:8px;opacity:.4;transition:opacity .15s var(--ease),transform .15s var(--ease)}
+.kccov-cal-table th.sortable.sort-desc .sort-ic{opacity:1;color:var(--accent-2)}
+.kccov-cal-table th.sortable.sort-asc .sort-ic{opacity:1;color:var(--accent-2);transform:rotate(180deg)}
+:root[data-theme="light"] .kccov-cal-table th.sortable:hover{color:var(--accent)}
+:root[data-theme="light"] .kccov-cal-table th.sortable.sort-desc .sort-ic{color:var(--accent)}
+:root[data-theme="light"] .kccov-cal-table th.sortable.sort-asc .sort-ic{color:var(--accent)}
 .kccov-cal-table thead th.kccov-cal-sol,.kccov-cal-table thead th.kccov-cal-branch{text-align:left;z-index:4}
 .kccov-cal-table thead th.kccov-cal-sol{left:0}
 .kccov-cal-table thead th.kccov-cal-branch{left:64px}
