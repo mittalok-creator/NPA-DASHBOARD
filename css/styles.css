@@ -773,10 +773,17 @@ main{padding:20px 16px 40px}
 /* ---------- Cards ---------- */
 .card{background:var(--card);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);margin-bottom:16px;border:1px solid var(--line);animation:riseIn .35s var(--ease)}
 .card.borrower-card{padding:18px 20px}
-.bcard-top{display:flex;align-items:center;gap:12px}
+.bcard-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.bcard-title-col{flex:1;min-width:0}
 .bavatar{width:42px;height:42px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .borrower-card .bname{font-size:17px;font-weight:800;color:var(--ink);letter-spacing:-.3px}
 .borrower-card .baddr{font-size:12.5px;color:var(--sub);margin-top:3px;line-height:1.5}
+/* Branch name at the top, same weight/size as the borrower's name -- Alok's
+   request: it used to only appear buried in the info-grid below, so you had
+   to scan for it every time instead of seeing it at a glance alongside who
+   the borrower is. flex-wrap on .bcard-top lets it drop to its own full-
+   width line on narrow screens instead of squeezing/truncating. */
+.bcard-branch{font-size:17px;font-weight:800;color:var(--ink);letter-spacing:-.3px;text-align:right;flex-shrink:0;margin-left:auto}
 .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-top:14px}
 .info-grid .k{font-size:9.5px;text-transform:uppercase;color:var(--sub);font-weight:700;letter-spacing:.7px}
 .info-grid .v{font-size:13.5px;font-weight:700;color:var(--ink);margin-top:3px;word-break:break-word}

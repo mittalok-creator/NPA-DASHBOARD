@@ -2052,10 +2052,11 @@ function drawDetailBody(custRow, slots, prevOts){
     <div class="card borrower-card">
       <div class="bcard-top">
         <div class="bavatar" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.6-3.6 4.8-5.5 7.5-5.5s5.9 1.9 7.5 5.5"/></svg></div>
-        <div>
+        <div class="bcard-title-col">
           <div class="bname">${esc(custRow[C.NAME])||'—'}</div>
           <div class="baddr">${esc(custRow[C.ADDR])||'—'}</div>
         </div>
+        <div class="bcard-branch">${esc(custRow[C.SOL_DESC])||'—'}</div>
       </div>
       <div class="info-grid">
         <div><div class="k">Cust ID</div><div class="v">${esc(custRow[C.CUST_ID])||'—'}</div></div>
