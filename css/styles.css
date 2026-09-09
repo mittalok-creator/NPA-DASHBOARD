@@ -1035,7 +1035,13 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    overlapping. */
 .special-note-banner{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-12px);z-index:110;background:linear-gradient(135deg,var(--red),#a13d35);color:#fff;padding:14px 18px;border-radius:14px;box-shadow:0 22px 48px rgba(0,0,0,.34);max-width:min(90vw,520px);display:none;align-items:center;gap:12px;font-weight:700;font-size:13px;opacity:0;transition:opacity .2s var(--ease),transform .2s var(--ease),top .2s var(--ease)}
 .special-note-banner.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0)}
-.special-note-banner-close{margin-left:auto;flex-shrink:0;font-size:15px;opacity:.85;cursor:pointer}
+/* A real <button>, not a decorative span like .eligible-banner-close --
+   this is the ONLY way to dismiss .special-note-banner (see the markup
+   comment in index.html), so it needs to be its own focusable, labeled
+   control rather than relying on the whole banner being clickable. */
+.special-note-banner-close{margin-left:auto;flex-shrink:0;font-size:15px;opacity:.85;cursor:pointer;background:none;border:none;color:inherit;font-family:inherit;padding:4px}
+.special-note-banner-close:hover,.special-note-banner-close:focus-visible{opacity:1}
+.special-note-banner-close:focus-visible{outline:2px solid #fff;outline-offset:1px;border-radius:4px}
 
 /* ---------- Settings -> Update Data -> Special Note (Admin) ---------- */
 .special-note-lookup-row{padding:9px 12px;border-radius:10px;font-size:12px;font-weight:700;margin:8px 0}
@@ -1492,8 +1498,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg)}
    opened at scrollTop 0) with a tap that has even a slight vertical
    drag -- completely normal on a touchscreen -- rubber-banded
    #detailPane and triggered a real page reload on top of the banner's
-   own dismiss, on any PWA/mobile Chrome with pull-to-refresh enabled. */
-body{overscroll-behavior:none}
+   own dismiss, on any PWA/mobile Chrome with pull-to-refresh enabled.
+   Setting it on html too, alongside body -- some mobile browser versions
+   key their pull-to-refresh check off the document's own overscroll
+   chain rather than only the specific dragged element, so belt-and-
+   suspenders here costs nothing (neither html nor body scroll anyway). */
+html,body{overscroll-behavior:none}
 #mainCol,#detailPane.open{overscroll-behavior:none}
 
 #bgFx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}

@@ -6003,7 +6003,10 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('publishCancelBtn','click',()=>closePublishReview());
   on('publishConfirmBtn','click',()=>confirmPublish());
   on('eligibleBanner','click',()=>{ document.getElementById('eligibleBanner').classList.remove('show'); positionSpecialNoteBanner(); });
-  on('specialNoteBanner','click',()=>document.getElementById('specialNoteBanner').classList.remove('show'));
+  // Unlike #eligibleBanner (click anywhere to dismiss), only the explicit
+  // close button dismisses #specialNoteBanner -- a note is important
+  // enough that a stray tap on the banner itself shouldn't hide it.
+  on('specialNoteBannerCloseBtn','click',()=>document.getElementById('specialNoteBanner').classList.remove('show'));
   on('specialNoteAcctInput','input',()=>onSpecialNoteAcctInput());
   on('specialNoteText','input',()=>onSpecialNoteTextInput());
   on('specialNoteSaveBtn','click',()=>saveSpecialNote());
