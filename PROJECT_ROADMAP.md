@@ -123,13 +123,13 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
-### UCI @ 8.5% row now shows its own tenure (2026-09-09, same day)
+### UCI @ 8.5% row now shows its own tenure, in the heading (2026-09-09, same day)
 
-Alok asked for the anchor-to-today date range to show next to "UCI @ 8.5%" on the Loan Detail card, e.g. "₹98,000.77 (30-09-2021 to 09-09-2026)" — the UCI figure alone didn't say what period it was actually being charged over.
+Alok asked for the anchor-to-today date range to show next to "UCI @ 8.5%" on the Loan Detail card, e.g. "UCI @ 8.5% (30-09-2021 to 09-09-2026)" — the UCI figure alone didn't say what period it was actually being charged over. First pass appended the dates to the *value* cell instead of the row's heading; Alok caught it immediately ("output tab main nahi, heading tab main") and it was corrected the same session, before merging.
 
-`computeUCI()`'s scheme-dependent anchor-date logic (CC004's Mar/Sep-24 cycle vs. every other scheme's end-of-month rule) was inlined and only ever used to feed the day-count math, with no way to read the anchor back out. Extracted it into its own `uciAnchorDate(npaDateRaw, scheme)` helper — `computeUCI()` now calls it instead of duplicating the rule — and added `uciTenureTag(s)`, which formats `(anchor to today)` through `fmtDate()` (DD-MM-YYYY, per CLAUDE.md) as a `.pct-tag` badge, matching the existing pattern already used for Total P&L's percentage. Wired into `loanTableHTML()`'s UCI row and, in plain-text form (matching that view's own existing convention, e.g. Total P&L's parenthetical), into `renderPrintView()`'s UCI row too, so the printed/shared statement carries the same detail.
+`computeUCI()`'s scheme-dependent anchor-date logic (CC004's Mar/Sep-24 cycle vs. every other scheme's end-of-month rule) was inlined and only ever used to feed the day-count math, with no way to read the anchor back out. Extracted it into its own `uciAnchorDate(npaDateRaw, scheme)` helper — `computeUCI()` now calls it instead of duplicating the rule — and added `uciLabelWithTenure(slots)`, which builds the full `"UCI @ 8.5% (anchor to today)"` label string (dates via `fmtDate()`, DD-MM-YYYY per CLAUDE.md). Wired into `loanTableHTML()`'s UCI row label (`th.lt-label`) and `renderPrintView()`'s equivalent row, so both the on-screen card and the printed/shared statement carry it.
 
-Computed per account/column, not once for the whole row — two linked accounts on the same borrower can have different NPA dates and therefore different anchors, so a single shared tenure would have been wrong for one of them whenever they differ. Verified: `₹8,023.70 (30-11-2025 to 09-09-2026)` rendered correctly for a real test account.
+The row label is one shared cell across every linked account/column, not a per-column heading, so a genuinely per-account tenure isn't representable there when a borrower's accounts have different NPA dates (and therefore different anchors) -- picks the first account with a computable UCI as the one the heading reflects, exact for the overwhelmingly common single-account case. Verified: the heading reads `UCI @ 8.5% (30-11-2025 to 09-09-2026)` for a real test account, with the value cell back to a plain amount.
 
 ### Branch Manager/Recovery Officer contact fields removed from Branch List and Branch Profile; app-wide numeral font switched to self-hosted Inter (2026-09-09)
 

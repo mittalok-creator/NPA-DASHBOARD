@@ -1151,16 +1151,19 @@ function computeUCI(os, npaDateRaw, scheme, rate){
   if(!anchor) return '';
   return os*rate/100*(daysBetween(new Date(),anchor)/365);
 }
-/* Small "(anchor date to today)" tag shown next to the UCI @ 8.5% label on
-   screen -- Alok's request, so the tenure UCI is actually being charged
-   over is visible at a glance instead of being an opaque number. Per
-   account/column (not the row as a whole), since two accounts on the same
-   borrower can have different NPA dates and therefore different anchors. */
-function uciTenureTag(s){
-  if(s.uci==='') return '';
-  const anchor = uciAnchorDate(s.npaDate, s.scheme);
-  if(!anchor) return '';
-  return ` <span class="pct-tag">(${fmtDate(anchor)} to ${fmtDate(new Date())})</span>`;
+/* "UCI @ 8.5% (anchor date to today)" -- Alok's request, in the row's own
+   HEADING, not appended to each account's figure. The row label is one
+   shared cell across every account/column though (th.lt-label, not a
+   per-column th), so a genuinely per-account tenure isn't representable
+   there when a borrower's linked accounts have different NPA dates (and
+   therefore different anchors) -- picks the first account that actually
+   has a computable UCI/anchor as the one the heading shows, which is
+   exact for the overwhelmingly common single-account case and a
+   reasonable, clearly-labelled-as-one-figure approximation otherwise. */
+function uciLabelWithTenure(slots){
+  const s = (slots||[]).find(x=>x.uci!=='');
+  const anchor = s ? uciAnchorDate(s.npaDate, s.scheme) : null;
+  return anchor ? `UCI @ 8.5% (${fmtDate(anchor)} to ${fmtDate(new Date())})` : 'UCI @ 8.5%';
 }
 /* Row -> loan-slot shape. Split out of lookupLoanSlot so the OTS
    Worksheet can build the same slot straight from an account number,
@@ -2242,7 +2245,7 @@ function loanTableHTML(slots){
       ${row('O/S Balance', 'coin', s=>fmtINR2(s.os), 'lt-strong')}
       ${group('Dues &amp; Provisioning', 'dues')}
       ${uriRow()}
-      ${row('UCI @ 8.5%', 'percent', s=>fmtINR2(s.uci) + uciTenureTag(s))}
+      ${row(uciLabelWithTenure(slots), 'percent', s=>fmtINR2(s.uci))}
       ${totalDuesRow()}
       ${totalContractualDuesRow()}
       ${row('Provision', 'shield', s=>fmtINR2(s.provision))}
@@ -2587,11 +2590,7 @@ function renderPrintView(){
     ['Days in NPA', 'clock', s=>s.daysNpa!==''?s.daysNpa.toLocaleString('en-IN')+' days':'—'],
     ['Scheme', 'tag', s=>esc(s.scheme)||'—'],
     ['O/S Balance', 'coin', s=>fmtINR2(s.os)],
-    ['UCI @ 8.5%', 'percent', s=>{
-      if(s.uci==='') return fmtINR2(s.uci);
-      const anchor = uciAnchorDate(s.npaDate, s.scheme);
-      return fmtINR2(s.uci) + (anchor ? ` (${fmtDate(anchor)} to ${fmtDate(new Date())})` : '');
-    }],
+    [uciLabelWithTenure(slots), 'percent', s=>fmtINR2(s.uci)],
     ['Total Dues', 'layers', s=>fmtINR2(totalDuesFor(s))],
     ['Interest Reversal', 'rotate', s=>fmtINR2(uriFor(s))],
     ['Provision', 'shield', s=>fmtINR2(s.provision)],
