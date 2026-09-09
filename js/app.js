@@ -5182,6 +5182,11 @@ let kccovMonthFilter = '';
 let kccovDateFrom = '';
 let kccovDateTo = '';
 let kccovView = 'summary'; // 'summary' | 'calendar'
+// Datewise Calendar's own column sort -- {key:'sol'|'branch'|'total'|<date
+// string>, dir:'asc'|'desc'}. Starts null so renderKccOverdueCalendar()
+// can tell "never sorted yet" apart from "user explicitly re-sorted" and
+// pick today's date column as the one-time default only in the former case.
+let kccovCalSort = null;
 function setKccovSchemeTab(tab){ kccovSchemeTab = tab; renderKccOverdueBody(); }
 window.setKccovSchemeTab = setKccovSchemeTab;
 function setKccovDateMode(mode){ kccovDateMode = mode; renderKccOverdueBody(); }
@@ -5473,7 +5478,30 @@ function renderKccOverdueCalendar(filteredRows){
   const matrix = [...byBranch.values()].map(e=>{
     const row = dates.map(d=>e.cells[d]||0);
     return { name:e.name, sol:e.sol, row, total: row.reduce((a,c)=>a+c,0) };
-  }).filter(m=>m.total>0).sort((a,b)=>b.total-a.total);
+  }).filter(m=>m.total>0);
+
+  /* Default sort, first time this view is opened this session: today's own
+     date column, highest slippage first -- that's the one column a banker
+     opening this screen almost always wants to see first. Falls back to the
+     previous default (worst branch overall) if today has no slippage
+     recorded at all, rather than sorting by a column that's all zeros. */
+  if(!kccovCalSort){
+    const todayStr = fmtDate(new Date());
+    kccovCalSort = dates.includes(todayStr) ? {key:todayStr, dir:'desc'} : {key:'total', dir:'desc'};
+  }
+  const kccovCalSortValue = (m, key) => {
+    if(key==='sol') return m.sol==null ? -Infinity : m.sol;
+    if(key==='branch') return m.name.toLowerCase();
+    if(key==='total') return m.total;
+    const ci = dates.indexOf(key);
+    return ci>=0 ? m.row[ci] : 0;
+  };
+  matrix.sort((a,b)=>{
+    const av = kccovCalSortValue(a, kccovCalSort.key), bv = kccovCalSortValue(b, kccovCalSort.key);
+    if(av<bv) return kccovCalSort.dir==='asc'?-1:1;
+    if(av>bv) return kccovCalSort.dir==='asc'?1:-1;
+    return 0;
+  });
 
   if(labelEl) labelEl.innerHTML = `${esc(activeScheme.label)} — Datewise Slippage, worst branch first<span class="chart-sub">Scheme ${esc(activeScheme.code)} · ${scopeLabel} · ${matrix.length.toLocaleString('en-IN')} branch(es) shown · amounts in ₹ Lakh · tap a cell to see the account list</span>`;
 
@@ -5500,7 +5528,12 @@ function renderKccOverdueCalendar(filteredRows){
   }
 
   const fmtLakh = v => (v/1e5).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const thead = `<tr><th class="kccov-cal-sol">Sol ID</th><th class="kccov-cal-branch">Branch</th>${dates.map(d=>`<th>${esc(d.slice(0,5))}</th>`).join('')}<th class="kccov-cal-total">Total</th></tr>`;
+  const calSortTh = (key, label, cls) => {
+    const active = kccovCalSort.key===key;
+    const classes = [cls, 'sortable', active ? (kccovCalSort.dir==='asc'?'sort-asc':'sort-desc') : ''].filter(Boolean).join(' ');
+    return `<th class="${classes}" data-key="${esc(key)}" tabindex="0" role="button" aria-sort="${active?(kccovCalSort.dir==='asc'?'ascending':'descending'):'none'}" onclick="sortKccovCal('${esc(key)}')">${label}<span class="sort-ic">▾</span></th>`;
+  };
+  const thead = `<tr>${calSortTh('sol','Sol ID','kccov-cal-sol')}${calSortTh('branch','Branch','kccov-cal-branch')}${dates.map(d=>calSortTh(d, esc(d.slice(0,5)))).join('')}${calSortTh('total','Total','kccov-cal-total')}</tr>`;
   const rowsHtml = matrix.map((m,i)=>{
     const cells = m.row.map((v,ci)=>{
       if(v<=0) return `<td><span class="kccov-cal-cell kccov-cal-blank">–</span></td>`;
@@ -5518,6 +5551,20 @@ function renderKccOverdueCalendar(filteredRows){
     </table>
   </div>`;
 }
+/* Sol ID/Branch default to A-Z on first click (nextSort()'s own
+   convention for name-like columns elsewhere in the app); every date
+   column and Total default to highest-first, since that's almost always
+   what you're scanning for in a slippage table. Re-renders the whole KCC
+   Overdue body, same as every other filter/tab change on this view. */
+function sortKccovCal(key){
+  if(kccovCalSort && kccovCalSort.key===key){
+    kccovCalSort = {key, dir: kccovCalSort.dir==='asc'?'desc':'asc'};
+  } else {
+    kccovCalSort = {key, dir: (key==='branch'||key==='sol') ? 'asc' : 'desc'};
+  }
+  renderKccOverdueBody();
+}
+window.sortKccovCal = sortKccovCal;
 
 const KCCOV_ACCT_LIST_HEAD = '<tr>'
   +'<th class="sortable" data-key="acctNo" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'acctNo\')">Account<span class="sort-ic">▾</span></th>'
@@ -5563,22 +5610,45 @@ window.kccovShowBranchAccounts = kccovShowBranchAccounts;
 // as their parent while viewing either, so the rail never shows nothing
 // active at all.
 const UTILITY_CHILD_VIEWS = ['onedrive','passsheet'];
+/* Screen switches used to be an instant cut -- .view{display:none} has no
+   transition of its own, so the outgoing screen just vanished the moment a
+   nav item was clicked, then the incoming one popped in a beat later (its
+   own viewIn entrance animation was always there, but with nothing before
+   it the whole thing read as "blank, then a new screen" rather than one
+   continuous motion). Now the outgoing view gets a brief (120ms) fade+
+   settle first via the .view-leave class/keyframe in styles.css, and only
+   once that's done does the actual class swap + re-render + the existing
+   (now slightly richer, fade+scale) viewIn entrance happen -- one
+   unbroken transition instead of two disconnected snaps. Skipped entirely
+   under prefers-reduced-motion, and on the very first call (no current
+   view yet, e.g. app startup), so neither adds any actual delay there. */
 function switchView(view){
-  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.dataset.view===view));
-  document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active',
-    b.dataset.view===view || (UTILITY_CHILD_VIEWS.includes(view) && b.dataset.view==='utility')));
-  if(view==='dashboard') renderDashboard();
-  if(view==='pnpa') renderPnpaDashboard();
-  if(view==='kccov') renderKccOverdue();
-  // Resume a still-valid OneDrive sign-in silently (no popup) whenever
-  // this tab is opened while it's still showing the Connect screen --
-  // once signed in, coming back to the tab should go straight into the
-  // last folder, not ask again every time. Skipped once a folder is
-  // already showing, so switching away and back doesn't reset browsing
-  // state (filter text, current folder, scroll position).
-  if(view==='onedrive' && document.querySelector('#onedrivePageBody .onedrive-connect')) onedriveTryResume();
-  const mainCol = document.getElementById('mainCol');
-  if(mainCol) mainCol.scrollTop = 0;
+  const current = document.querySelector('.view.active');
+  const target = document.querySelector(`.view[data-view="${view}"]`);
+  const doSwitch = () => {
+    document.querySelectorAll('.view').forEach(v=>{ v.classList.toggle('active', v.dataset.view===view); v.classList.remove('view-leave'); });
+    document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active',
+      b.dataset.view===view || (UTILITY_CHILD_VIEWS.includes(view) && b.dataset.view==='utility')));
+    if(view==='dashboard') renderDashboard();
+    if(view==='pnpa') renderPnpaDashboard();
+    if(view==='kccov') renderKccOverdue();
+    // Resume a still-valid OneDrive sign-in silently (no popup) whenever
+    // this tab is opened while it's still showing the Connect screen --
+    // once signed in, coming back to the tab should go straight into the
+    // last folder, not ask again every time. Skipped once a folder is
+    // already showing, so switching away and back doesn't reset browsing
+    // state (filter text, current folder, scroll position).
+    if(view==='onedrive' && document.querySelector('#onedrivePageBody .onedrive-connect')) onedriveTryResume();
+    const mainCol = document.getElementById('mainCol');
+    if(mainCol) mainCol.scrollTop = 0;
+  };
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(current && current!==target && !reduceMotion){
+    current.classList.add('view-leave');
+    setTimeout(doSwitch, 120);
+  } else {
+    doSwitch();
+  }
 }
 window.switchView = switchView;
 
