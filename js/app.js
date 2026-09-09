@@ -2706,7 +2706,22 @@ async function exportOtsExcel(){
 
   const reportDateRow = r;
   set(`A${reportDateRow}`, 'Report Date', {font:{bold:true, color:{argb:'FF333333'}}, border:false});
-  set(`B${reportDateRow}`, dateVal(new Date()), {numFmt:XL_DATE_FMT, font:{bold:true, color:{argb:'FF000000'}}, border:XL_BORDER_ALL});
+  /* On screen, "days since X" (computeUCI, Days in NPA, etc.) is
+     daysBetween(today, anchor) = Math.round((today-anchor)/86400000),
+     with `today` carrying the current time-of-day -- so it rounds UP to
+     the next day once past noon, not just at midnight. Excel's live
+     formulas below do plain subtraction between two date serials with no
+     rounding, so writing the raw `new Date()` (full timestamp) here made
+     every day-count -- and everything downstream of it (UCI, Total Dues,
+     Total Sacrifice, Impact on P&L) -- silently drift from the on-screen
+     figure by up to a day's interest on every export, worse the later in
+     the day it ran. Snapping to the SAME nearest-midnight the on-screen
+     Math.round would resolve to (before noon -> today 00:00, at/after
+     noon -> tomorrow 00:00) makes Excel's plain subtraction land on the
+     identical whole-day count instead. */
+  const reportDateSnapshot = new Date();
+  reportDateSnapshot.setHours(reportDateSnapshot.getHours()>=12 ? 24 : 0, 0, 0, 0);
+  set(`B${reportDateRow}`, dateVal(reportDateSnapshot), {numFmt:XL_DATE_FMT, font:{bold:true, color:{argb:'FF000000'}}, border:XL_BORDER_ALL});
   addNote(`B${reportDateRow}`, 'Editable. Every UCI, Days in NPA and dues figure below recalculates off this date.');
   set(`C${reportDateRow}`, 'Branch', {font:{bold:true, color:{argb:'FF333333'}}, border:false});
   ws.mergeCells(reportDateRow,4,reportDateRow,SPAN);
@@ -5721,6 +5736,25 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{
     b.addEventListener('click',()=>switchView(b.dataset.view));
   });
+  /* #sideNav's rail is only 76px in normal document flow -- .nav-shell
+     (the full-width, 252px, position:absolute panel with the logo/labels)
+     is an overlay that expands over it on #sideNav:hover/:focus-within.
+     A mouse click on any button inside it leaves that button focused
+     (standard browser behaviour), which keeps :focus-within matching --
+     and therefore the rail stuck expanded, covering ~130px of whatever
+     content sits behind it -- until focus happens to land on something
+     else entirely unrelated. Confirmed via Playwright: clicking a nav
+     item and moving the mouse away still left .nav-shell at 252px and the
+     Dashboard's leftmost KPI card genuinely hidden underneath it. Blurring
+     on mouseleave releases any focus still trapped inside the rail the
+     moment the cursor actually leaves it, so it collapses back to 76px
+     exactly when a real user's eyes would expect it to. */
+  const sideNavEl = document.getElementById('sideNav');
+  if(sideNavEl){
+    sideNavEl.addEventListener('mouseleave', ()=>{
+      if(sideNavEl.contains(document.activeElement)) document.activeElement.blur();
+    });
+  }
   document.querySelectorAll('[data-open-data]').forEach(b=>{
     b.addEventListener('click',openUpdateModalAsAdmin);
   });
