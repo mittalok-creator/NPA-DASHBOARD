@@ -1124,7 +1124,15 @@ updateReportDateDisplay();
 /* ---------- Core formula engine (1:1 with the OTS sheet) ---------- */
 function computeUCI(os, npaDateRaw, scheme, rate){
   rate = rate===undefined ? 8.5 : rate;
-  if(!os || !npaDateRaw) return '';
+  // Was `if(!os || !npaDateRaw)` -- os===0 is a real, valid O/S Balance
+  // (a fully-recovered-but-not-yet-declassified NPA, say), not "blank", but
+  // `!os` treats 0 the same as '' (the actual blank sentinel used
+  // elsewhere), so it silently returned '' for a zero O/S account. That
+  // then propagated into computeSlot(): Total P&L came out ₹0 (correct,
+  // since it doesn't gate on uci) while Total Dues came out "—" instead of
+  // ₹0 (wrong), and the account was then silently dropped from every
+  // Total-Dues-based aggregate even though it's a perfectly real account.
+  if(os==null || os==='' || !npaDateRaw) return '';
   const npaDate = toDate(npaDateRaw);
   if(!npaDate) return '';
   const today = new Date();
@@ -1597,10 +1605,18 @@ async function exportOtsWorksheet(){
        two derived columns and the totals -- the way the single-borrower
        export already behaves. The constants they need (Total Dues and Total
        P&L, which no column on this sheet carries) are folded into the
-       formula as the row's own difference, so nothing silently goes stale. */
-    const r2 = v => Math.round(v*100)/100; // to the paisa, matching fmtINR2 on screen
-    const dues = r.sacrifice==='' ? null : r2(r.ots + r.sacrifice);
-    const pl   = r.impact===''    ? null : r2(r.ots - r.impact);
+       formula as the row's own difference, so nothing silently goes stale.
+       Deliberately NOT rounded to the paisa here (that used to happen, "to
+       match fmtINR2 on screen") -- the on-screen Worksheet total instead
+       sums every row's raw, full-precision Sacrifice/Impact and rounds only
+       that one final sum for display. Pre-rounding each row's constant
+       before Excel's own SUM() ran on them made the exported grand total a
+       sum-of-rounded-values rather than a round-of-the-sum, drifting a few
+       paisa-to-rupees from the on-screen total on a large book. Passing the
+       raw values through (numFmt still rounds how they're DISPLAYED, just
+       not what's stored) makes both totals agree exactly. */
+    const dues = r.sacrifice==='' ? null : r.ots + r.sacrifice;
+    const pl   = r.impact===''    ? null : r.ots - r.impact;
     set(`G${n}`, dues===null ? null : {formula:`(${dues})-F${n}`}, {numFmt:XL_INR_FMT});
     set(`H${n}`, pl===null   ? null : {formula:`F${n}-(${pl})`},   {numFmt:XL_INR_FMT_PL});
   });
@@ -2351,11 +2367,21 @@ function recalcLoan(i){
 
 function recalcAggregate(){
   const slots = window.__slots;
-  let totalOts=0, any=false;
+  let totalOts=0;
   slots.forEach(s=>{
     const v = parseOtsAmount(otsAmounts[s.acctNo]);
-    if(v!==null){ totalOts+=v; any=true; }
+    if(v!==null) totalOts+=v;
   });
+  // Alok's explicit call: for a multi-account borrower, this whole panel
+  // only ever shows real numbers once EVERY linked account has an OTS
+  // Amount typed in -- not as soon as any one of them does. It used to sum
+  // Total Dues over all the accounts but OTS Amount over only the filled
+  // ones, so Total Sacrifice/Impact/Recovery Scale could look meaningful
+  // while actually mixing two different sets of accounts. Now the whole
+  // panel stays "—" (identical to the "nothing typed yet" state) until
+  // every account is filled, at which point totalOts already correctly
+  // covers the same full set liveTotalDues does.
+  const allFilled = slots.length>0 && slots.every(s=>parseOtsAmount(otsAmounts[s.acctNo])!==null);
   // Total Dues is live (Interest Reversal is editable and folds into it),
   // so the aggregate sum must be recomputed fresh, not read from a stale
   // snapshot. Total P&L no longer depends on Interest Reversal, so
@@ -2366,29 +2392,29 @@ function recalcAggregate(){
   // formula in recalcLoan()); Interest Reversal is already folded into
   // Total Dues, so it isn't added again here.
   const aggTotalSac = liveTotalDues - totalOts;
-  document.getElementById('aggOts') && (document.getElementById('aggOts').textContent = any?fmtINR2(totalOts):'—');
-  document.getElementById('aggSac') && (document.getElementById('aggSac').textContent = any?fmtINR2(aggTotalSac):'—');
-  const otsTxt = any?fmtINR2(totalOts):'—';
+  document.getElementById('aggOts') && (document.getElementById('aggOts').textContent = allFilled?fmtINR2(totalOts):'—');
+  document.getElementById('aggSac') && (document.getElementById('aggSac').textContent = allFilled?fmtINR2(aggTotalSac):'—');
+  const otsTxt = allFilled?fmtINR2(totalOts):'—';
   const railOts = document.getElementById('railOts'); if(railOts) railOts.textContent = otsTxt;
   const railOts2 = document.getElementById('railOts2'); if(railOts2) railOts2.textContent = otsTxt;
   const railDues = document.getElementById('railDues'); if(railDues) railDues.textContent = fmtINR2(liveTotalDues);
   const railPLLeft = document.getElementById('railPLLeft');
   if(railPLLeft){
-    const impact = any ? (totalOts - window.__totalPL) : '';
+    const impact = allFilled ? (totalOts - window.__totalPL) : '';
     railPLLeft.textContent = impact===''?'—':(impact>0?'+':(impact<0?'−':'')) + fmtINR2(Math.abs(impact));
     railPLLeft.classList.remove('pos','neg');
     if(impact!==''){ if(impact>0) railPLLeft.classList.add('pos'); else if(impact<0) railPLLeft.classList.add('neg'); }
   }
-  const railSac = document.getElementById('railSac'); if(railSac) railSac.textContent = any?fmtINR2(aggTotalSac):'—';
+  const railSac = document.getElementById('railSac'); if(railSac) railSac.textContent = allFilled?fmtINR2(aggTotalSac):'—';
   // Live aggregate summary panel (shown for multi-account borrowers) --
   // the hero ring shows settlement progress (OTS as a share of Total
   // Dues), the same figure the old unlabeled #aggBar::after ring drove,
   // now with a real percentage printed inside it.
-  const pct = (any && liveTotalDues>0) ? Math.max(0,Math.min(100,(totalOts/liveTotalDues)*100)) : 0;
+  const pct = (allFilled && liveTotalDues>0) ? Math.max(0,Math.min(100,(totalOts/liveTotalDues)*100)) : 0;
   const heroRingEl = document.getElementById('aggHeroRing');
   if(heroRingEl) heroRingEl.style.setProperty('--pct', pct.toFixed(1));
   const heroRingPctEl = document.getElementById('aggHeroRingPct');
-  if(heroRingPctEl) heroRingPctEl.textContent = (any && liveTotalDues>0) ? pct.toFixed(0)+'%' : '—';
+  if(heroRingPctEl) heroRingPctEl.textContent = (allFilled && liveTotalDues>0) ? pct.toFixed(0)+'%' : '—';
   const heroSubEl = document.getElementById('aggHeroSub');
   if(heroSubEl) heroSubEl.textContent = `across ${slots.length} account${slots.length>1?'s':''} · O/S ${fmtCr(window.__totalOS)}`;
   // Alok's request -- the ring only ever showed OTS as a share of Total
@@ -2396,11 +2422,11 @@ function recalcAggregate(){
   // run well above/below the O/S share depending on how much UCI/Interest
   // Reversal is in play), not just whichever one the ring happens to draw.
   const pctDuesEl = document.getElementById('aggPctDues');
-  if(pctDuesEl) pctDuesEl.textContent = (any && liveTotalDues>0) ? pct.toFixed(1)+'%' : '—';
+  if(pctDuesEl) pctDuesEl.textContent = (allFilled && liveTotalDues>0) ? pct.toFixed(1)+'%' : '—';
   const pctOsEl = document.getElementById('aggPctOs');
   if(pctOsEl){
     const totalOsForPct = window.__totalOS;
-    const pctOs = (any && totalOsForPct>0) ? Math.max(0,(totalOts/totalOsForPct)*100) : null;
+    const pctOs = (allFilled && totalOsForPct>0) ? Math.max(0,(totalOts/totalOsForPct)*100) : null;
     pctOsEl.textContent = pctOs!==null ? pctOs.toFixed(1)+'%' : '—';
   }
 
@@ -2410,16 +2436,16 @@ function recalcAggregate(){
     // above) -- the tight aggBar sidebar column needs the single <wbr>
     // after ₹ so a figure that doesn't fit wraps cleanly onto its own
     // line instead of splitting mid-digit.
-    aggOtsEl.innerHTML = any ? fmtINR2Wrap(totalOts) : '—';
+    aggOtsEl.innerHTML = allFilled ? fmtINR2Wrap(totalOts) : '—';
     const aggNetOsEl = document.getElementById('aggTotNetOs');
     if(aggNetOsEl) aggNetOsEl.innerHTML = fmtINR2Wrap(window.__totalNetOS);
     const aggPLEl = document.getElementById('aggTotPL');
     if(aggPLEl) aggPLEl.innerHTML = fmtINR2Wrap(window.__totalPL);
     const aggSacEl = document.getElementById('aggTotSac');
-    if(aggSacEl) aggSacEl.innerHTML = any?fmtINR2Wrap(aggTotalSac):'—';
+    if(aggSacEl) aggSacEl.innerHTML = allFilled?fmtINR2Wrap(aggTotalSac):'—';
     const aggImpEl = document.getElementById('aggTotImpact');
     if(aggImpEl){
-      const impact = any ? (totalOts - window.__totalPL) : '';
+      const impact = allFilled ? (totalOts - window.__totalPL) : '';
       aggImpEl.classList.remove('pos','neg');
       if(impact===''){ aggImpEl.innerHTML='—'; }
       else {
@@ -2452,7 +2478,7 @@ function recalcAggregate(){
     // sidebar's edge. Re-anchor it inward there instead of clipping.
     needleValEl.style.transform = needlePct<10 ? 'translateX(-6px)' : (needlePct>90 ? 'translateX(calc(-100% + 6px))' : 'translateX(-50%)');
     const prev = (typeof needleValEl.__val==='number') ? needleValEl.__val : 0;
-    if(any){
+    if(allFilled){
       needleValEl.__val = totalOts;
       animateNumber(needleValEl, prev, totalOts, v=>fmtCr(v), 450);
     } else {
@@ -2495,8 +2521,8 @@ function recalcAggregate(){
     el.__val = newVal;
     animateNumber(el, prev, newVal, v=>fmtINR2(v), 450);
   };
-  animateWfVal(document.getElementById('aggWfCash'), totalOts, any);
-  animateWfVal(document.getElementById('aggWfLedger'), ledgerSac, any);
+  animateWfVal(document.getElementById('aggWfCash'), totalOts, allFilled);
+  animateWfVal(document.getElementById('aggWfLedger'), ledgerSac, allFilled);
   animateWfVal(document.getElementById('aggWfUci'), uci, true);
 
   renderPrintView();
@@ -2514,8 +2540,15 @@ function renderPrintView(){
   function otsFor(s){
     return parseOtsAmount(otsAmounts[s.acctNo]);
   }
-  let totalOtsSum = 0, totalLedgerSac = 0, anyOts = false;
-  slots.forEach(s=>{ const v = otsFor(s); if(v!==null){ totalOtsSum+=v; totalLedgerSac+=(s.os-v); anyOts=true; } });
+  let totalOtsSum = 0, totalLedgerSac = 0;
+  slots.forEach(s=>{ const v = otsFor(s); if(v!==null){ totalOtsSum+=v; totalLedgerSac+=(s.os-v); } });
+  // Same "all or nothing" rule as the live aggregate sidebar
+  // (recalcAggregate()): Total Dues above sums every linked account, so
+  // Total OTS Amount/Ledger Sacrifice/Sacrifice below only show real
+  // figures once every account has one typed -- otherwise this printed/
+  // shared sheet would mix "all accounts' dues" against "only some
+  // accounts' OTS Amount" the same way the sidebar used to.
+  const allOtsFilled = slots.length>0 && slots.every(s=>otsFor(s)!==null);
 
   // Rows the sheet is actually read for -- bolded/enlarged in print (see
   // .pv-table tr.pv-strong in styles.css) so they stand out from the
@@ -2591,9 +2624,9 @@ function renderPrintView(){
       <div class="pv-agg-title">Aggregate Totals</div>
       <div class="pv-agg-row"><span>Total O/S Balance</span><span>${fmtINR2(totalOS)}</span></div>
       <div class="pv-agg-row"><span>Total Dues</span><span>${fmtINR2(totalDues)}</span></div>
-      <div class="pv-agg-row pv-agg-hero"><span>Total OTS Amount</span><span>${anyOts?fmtINR2(totalOtsSum):'—'}</span></div>
-      <div class="pv-agg-row"><span>Total Ledger Sacrifice</span><span>${anyOts?fmtINR2(totalLedgerSac):'—'}</span></div>
-      <div class="pv-agg-row pv-agg-hero"><span>Total Sacrifice</span><span>${anyOts?fmtINR2(totalDues-totalOtsSum):'—'}</span></div>
+      <div class="pv-agg-row pv-agg-hero"><span>Total OTS Amount</span><span>${allOtsFilled?fmtINR2(totalOtsSum):'—'}</span></div>
+      <div class="pv-agg-row"><span>Total Ledger Sacrifice</span><span>${allOtsFilled?fmtINR2(totalLedgerSac):'—'}</span></div>
+      <div class="pv-agg-row pv-agg-hero"><span>Total Sacrifice</span><span>${allOtsFilled?fmtINR2(totalDues-totalOtsSum):'—'}</span></div>
     </div>
     <div class="pv-foot">UPGB OTS Calculator &middot; Designed &amp; Developed by Alok Mittal</div>
   `;
