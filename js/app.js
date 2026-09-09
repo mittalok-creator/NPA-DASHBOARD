@@ -1122,6 +1122,20 @@ document.addEventListener('keydown', (e)=>{
 updateReportDateDisplay();
 
 /* ---------- Core formula engine (1:1 with the OTS sheet) ---------- */
+// Extracted out of computeUCI so the UCI tenure shown next to "UCI @ 8.5%"
+// on screen (uciTenureTag(), below) can compute the exact same anchor date
+// without duplicating this scheme-dependent rule a second time.
+function uciAnchorDate(npaDateRaw, scheme){
+  const npaDate = toDate(npaDateRaw);
+  if(!npaDate) return null;
+  if(scheme==='CC004'){
+    const y = npaDate.getFullYear();
+    const sep24=new Date(y,8,24), mar24=new Date(y,2,24);
+    return npaDate>sep24?sep24:(npaDate>mar24?mar24:new Date(y-1,8,24));
+  }
+  const eom = endOfMonth(npaDate);
+  return sameDate(npaDate,eom) ? new Date(npaDate.getFullYear(),npaDate.getMonth(),29) : endOfMonth(new Date(npaDate.getFullYear(),npaDate.getMonth()-1,1));
+}
 function computeUCI(os, npaDateRaw, scheme, rate){
   rate = rate===undefined ? 8.5 : rate;
   // Was `if(!os || !npaDateRaw)` -- os===0 is a real, valid O/S Balance
@@ -1133,19 +1147,23 @@ function computeUCI(os, npaDateRaw, scheme, rate){
   // ₹0 (wrong), and the account was then silently dropped from every
   // Total-Dues-based aggregate even though it's a perfectly real account.
   if(os==null || os==='' || !npaDateRaw) return '';
-  const npaDate = toDate(npaDateRaw);
-  if(!npaDate) return '';
-  const today = new Date();
-  let anchor;
-  if(scheme==='CC004'){
-    const y = npaDate.getFullYear();
-    const sep24=new Date(y,8,24), mar24=new Date(y,2,24);
-    anchor = npaDate>sep24?sep24:(npaDate>mar24?mar24:new Date(y-1,8,24));
-  } else {
-    const eom = endOfMonth(npaDate);
-    anchor = sameDate(npaDate,eom) ? new Date(npaDate.getFullYear(),npaDate.getMonth(),29) : endOfMonth(new Date(npaDate.getFullYear(),npaDate.getMonth()-1,1));
-  }
-  return os*rate/100*(daysBetween(today,anchor)/365);
+  const anchor = uciAnchorDate(npaDateRaw, scheme);
+  if(!anchor) return '';
+  return os*rate/100*(daysBetween(new Date(),anchor)/365);
+}
+/* "UCI @ 8.5% (anchor date to today)" -- Alok's request, in the row's own
+   HEADING, not appended to each account's figure. The row label is one
+   shared cell across every account/column though (th.lt-label, not a
+   per-column th), so a genuinely per-account tenure isn't representable
+   there when a borrower's linked accounts have different NPA dates (and
+   therefore different anchors) -- picks the first account that actually
+   has a computable UCI/anchor as the one the heading shows, which is
+   exact for the overwhelmingly common single-account case and a
+   reasonable, clearly-labelled-as-one-figure approximation otherwise. */
+function uciLabelWithTenure(slots){
+  const s = (slots||[]).find(x=>x.uci!=='');
+  const anchor = s ? uciAnchorDate(s.npaDate, s.scheme) : null;
+  return anchor ? `UCI @ 8.5% (${fmtDate(anchor)} to ${fmtDate(new Date())})` : 'UCI @ 8.5%';
 }
 /* Row -> loan-slot shape. Split out of lookupLoanSlot so the OTS
    Worksheet can build the same slot straight from an account number,
@@ -2227,7 +2245,7 @@ function loanTableHTML(slots){
       ${row('O/S Balance', 'coin', s=>fmtINR2(s.os), 'lt-strong')}
       ${group('Dues &amp; Provisioning', 'dues')}
       ${uriRow()}
-      ${row('UCI @ 8.5%', 'percent', s=>fmtINR2(s.uci))}
+      ${row(uciLabelWithTenure(slots), 'percent', s=>fmtINR2(s.uci))}
       ${totalDuesRow()}
       ${totalContractualDuesRow()}
       ${row('Provision', 'shield', s=>fmtINR2(s.provision))}
@@ -2572,7 +2590,7 @@ function renderPrintView(){
     ['Days in NPA', 'clock', s=>s.daysNpa!==''?s.daysNpa.toLocaleString('en-IN')+' days':'—'],
     ['Scheme', 'tag', s=>esc(s.scheme)||'—'],
     ['O/S Balance', 'coin', s=>fmtINR2(s.os)],
-    ['UCI @ 8.5%', 'percent', s=>fmtINR2(s.uci)],
+    [uciLabelWithTenure(slots), 'percent', s=>fmtINR2(s.uci)],
     ['Total Dues', 'layers', s=>fmtINR2(totalDuesFor(s))],
     ['Interest Reversal', 'rotate', s=>fmtINR2(uriFor(s))],
     ['Provision', 'shield', s=>fmtINR2(s.provision)],
