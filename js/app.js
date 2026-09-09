@@ -4529,15 +4529,11 @@ function dashboardBranchInfoCard(branchFilter, s){
   const bc = DATA.branchContacts[solId] || {};
   const listEntry = BRANCH_LIST.find(([,nid])=>String(nid)===String(solId));
   const oldId = listEntry ? listEntry[0] : '';
-  const telLink = (num) => num ? `<a href="tel:${esc(num)}" onclick="event.stopPropagation()">${esc(num)}</a>${waIconLink(num)}` : '';
   const item = (label,val) => val ? `<div><div class="k">${esc(label)}</div><div class="v">${val}</div></div>` : '';
   const masterAddress = masterAddressOf(meta);
   const address = esc(bc.address) || (masterAddress ? esc(masterAddress) : '');
-  const roleLabels = branchRoleLabels(Number(solId));
   const items = [
     item('District', meta.district ? esc(meta.district) : ''),
-    item(roleLabels.mgrLabel, bc.mgr ? `${esc(bc.mgr)}${bc.mgrMobile?'<span class="v-with-wa"> · '+telLink(bc.mgrMobile)+'</span>':''}` : ''),
-    item(roleLabels.roLabel, bc.roName ? `${esc(bc.roName)}${bc.roMobile?'<span class="v-with-wa"> · '+telLink(bc.roMobile)+'</span>':''}` : ''),
     item('Branch Email', meta.email ? `<a href="mailto:${esc(meta.email)}" onclick="event.stopPropagation()">${esc(meta.email)}</a>` : ''),
     item('Address', address),
   ].filter(Boolean).join('');
