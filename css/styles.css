@@ -1481,7 +1481,20 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    (appended after the reused component stylesheet; cascade wins) */
 
 html,body{margin:0;height:100%;overflow:hidden;background:var(--bg)}
+/* html/body themselves never scroll (overflow:hidden above) -- the app's
+   real scrolling happens inside #mainCol and #detailPane.open, each its
+   own scroll container. overscroll-behavior:none on body alone is
+   therefore a no-op: a browser only suppresses the native
+   rubber-band/pull-to-refresh gesture on the element actually being
+   dragged, not on an ancestor that was never scrollable in the first
+   place. Real bug this caused: dismissing the Special Note/eligibility
+   banner (both sit right at the top of #detailPane, which is freshly
+   opened at scrollTop 0) with a tap that has even a slight vertical
+   drag -- completely normal on a touchscreen -- rubber-banded
+   #detailPane and triggered a real page reload on top of the banner's
+   own dismiss, on any PWA/mobile Chrome with pull-to-refresh enabled. */
 body{overscroll-behavior:none}
+#mainCol,#detailPane.open{overscroll-behavior:none}
 
 #bgFx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 #bgFx::before,#bgFx::after{content:"";position:absolute;border-radius:50%;filter:blur(120px);opacity:.12}

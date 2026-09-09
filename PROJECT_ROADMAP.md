@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: dismissing a top banner could trigger a real page reload on mobile (2026-09-09, same day)
+
+Alok noticed dismissing the Special Note/eligibility banner with a single tap sometimes also refreshed the whole page. Root cause: `html,body{overflow:hidden}` already means neither ever scrolls, so the pre-existing `body{overscroll-behavior:none}` was a no-op — a browser only suppresses the native rubber-band/pull-to-refresh gesture on the element actually being dragged, not on an ancestor that was never scrollable. The app's real scrolling happens inside `#mainCol` and `#detailPane.open` (its own separate scroll container), neither of which had `overscroll-behavior` set. Both banners sit at the very top of `#detailPane`, freshly opened at `scrollTop:0` — a tap with even the slight vertical drag a touchscreen tap normally has rubber-banded that container and triggered a real pull-to-refresh reload on top of the banner's own (working) dismiss, on any mobile Chrome/PWA with that gesture enabled. Fixed by adding `overscroll-behavior:none` to `#mainCol` and `#detailPane.open` as well, so the drag is contained where it actually happens. Verified via `getComputedStyle` that both now resolve to `overscroll-behavior-y: none`.
+
 ### Special Note banner recoloured to red (2026-09-09, same day, follow-up)
 
 Shipped in brass initially, matching the OTS Calculator's own accent since a Special Note is informational rather than a warning — Alok asked for it in red instead, same reasoning as the existing "Not eligible" banner: it needs to stand out enough that it's never skipped by accident. `.special-note-banner` now uses the same `var(--red)`/`#a13d35` gradient and white text as `.eligible-banner`; everything else (shape, click-to-dismiss, the stacking logic that drops it below the eligibility banner when both apply to the same borrower) is unchanged.
