@@ -50,6 +50,15 @@ DATA.branchAdvances = DATA.branchAdvances || {};
    schedule, not reset on a daily NPA update" treatment as branchAdvances
    above. */
 DATA.branchContacts = DATA.branchContacts || {};
+/* Special Note -- keyed by Account No. (string), added one at a time by
+   the Admin via Update Data -> Special Note (see wireChrome's
+   specialNoteSaveBtn wiring). {note, updatedAt, updatedBy} per account.
+   Same "own slow-moving schedule, not reset on a daily NPA update"
+   treatment as branchAdvances/branchContacts above -- a note stays on an
+   account across daily uploads until the Admin removes it. Shown to
+   every viewer (not just Admin) as a banner at the top of that account's
+   Loan Detail screen -- see drawDetailBody. */
+DATA.specialNotes = DATA.specialNotes || {};
 
 /* ---------- Date helpers (NPA dates are raw Excel serials) ---------- */
 const XL_EPOCH = new Date(1899,11,30);
@@ -2064,6 +2073,7 @@ function closeDetail(){
   document.getElementById('railLeft').classList.remove('show');
   document.getElementById('railRight').classList.remove('show');
   document.getElementById('eligibleBanner').classList.remove('show');
+  document.getElementById('specialNoteBanner')?.classList.remove('show');
   /* Coming back from a borrower, the start screen behind it is stale -- the
      visit just entered Recently Opened, and any OTS Amount typed changes
      both that row and the worksheet bar's totals. Only redrawn when the
@@ -2142,6 +2152,44 @@ function drawDetailBody(custRow, slots, prevOts){
   } else {
     banner.classList.remove('show');
   }
+
+  // Special Note -- Admin-authored, per Account No., set via Update Data ->
+  // Special Note. Shown to every viewer, not just Admin, the same way the
+  // "Not eligible" banner above is -- but it's informational (a hold, an
+  // instruction, a reminder), not a warning, so it reads in brass rather
+  // than red. Collected across every linked account on this borrower, not
+  // just the one initially searched, since Alok tags a note by Account No.
+  // and a borrower can have several.
+  const notedSlots = slots
+    .map(s => ({acctNo: s.acctNo, note: (DATA.specialNotes||{})[String(s.acctNo)]}))
+    .filter(x => x.note && x.note.note);
+  const noteBanner = document.getElementById('specialNoteBanner');
+  if(noteBanner){
+    if(notedSlots.length){
+      const text = notedSlots.length===1
+        ? notedSlots[0].note.note
+        : notedSlots.map(x => `A/c ${x.acctNo}: ${x.note.note}`).join('  ·  ');
+      document.getElementById('specialNoteBannerText').textContent = text;
+      noteBanner.classList.add('show');
+    } else {
+      noteBanner.classList.remove('show');
+    }
+  }
+  positionSpecialNoteBanner();
+}
+/* The "Not eligible" and "Special Note" banners share the same fixed
+   top-center spot (see .eligible-banner/.special-note-banner in
+   styles.css) so a single banner always lands dead center -- but the two
+   are independent conditions and can both be true for the same borrower
+   at once. Rather than hard-coding a second banner permanently lower
+   (leaving an odd gap whenever the first one is hidden), measure the
+   first banner's actual rendered height, since its text (and therefore
+   height) varies with how many not-eligible accounts are listed. */
+function positionSpecialNoteBanner(){
+  const eb = document.getElementById('eligibleBanner');
+  const nb = document.getElementById('specialNoteBanner');
+  if(!nb) return;
+  nb.style.top = (eb && eb.classList.contains('show')) ? (eb.getBoundingClientRect().bottom + 10) + 'px' : '';
 }
 
 // Small stroke-icon library for the loan table's row/section labels --
@@ -2966,7 +3014,7 @@ window.exportOtsExcel = exportOtsExcel;
 function toggleUpdateModal(show){
   document.getElementById('updateModalOverlay').classList.toggle('show', show);
   closePublishReview();
-  if(show) loadVersionHistory();
+  if(show){ loadVersionHistory(); renderSpecialNoteList(); }
   if(!show){
     document.getElementById('uploadStatus').innerHTML='';
     document.getElementById('uploadSummary').innerHTML='';
@@ -2979,6 +3027,10 @@ function toggleUpdateModal(show){
     __pendingData = null;
     __pendingAsOnDate = null;
     __lastValidation = null;
+    const acctInput = document.getElementById('specialNoteAcctInput');
+    if(acctInput) acctInput.value = '';
+    document.getElementById('specialNoteStatus').innerHTML = '';
+    onSpecialNoteAcctInput();
   }
 }
 function openUpdateModal(){ toggleUpdateModal(true); }
@@ -3345,6 +3397,123 @@ function handleBranchContactsUpload(evt){
   };
   if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
 }
+
+/* Special Note -- Admin types an Account No. one at a time (no file
+   upload), sees the matching name/branch immediately via the same
+   npaByAcct index Search uses, types a note and saves it. Writes straight
+   into DATA.specialNotes and unlocks Publish, the same "no separate Apply
+   step" pattern handleBranchContactsUpload above uses for a small
+   side-dataset -- goes live for every viewer, not just Admin, the next
+   time Publish to Live Site is pressed. Displayed on that account's Loan
+   Detail screen by drawDetailBody's specialNoteBanner block. */
+function onSpecialNoteAcctInput(){
+  const input = document.getElementById('specialNoteAcctInput');
+  const lookupEl = document.getElementById('specialNoteLookup');
+  const textEl = document.getElementById('specialNoteText');
+  const removeBtn = document.getElementById('specialNoteRemoveBtn');
+  const saveBtn = document.getElementById('specialNoteSaveBtn');
+  if(!input || !lookupEl || !textEl || !removeBtn || !saveBtn) return;
+  const acctNo = input.value.trim();
+  if(!acctNo){
+    lookupEl.innerHTML = '';
+    textEl.value = '';
+    textEl.disabled = true;
+    removeBtn.disabled = true;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Save Note';
+    return;
+  }
+  const row = npaByAcct.get(acctNo);
+  if(!row){
+    lookupEl.innerHTML = `<div class="special-note-lookup-row notfound">⚠ Account not found in current NPA data</div>`;
+    textEl.value = '';
+    textEl.disabled = true;
+    removeBtn.disabled = true;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Save Note';
+    return;
+  }
+  const existing = (DATA.specialNotes||{})[acctNo];
+  lookupEl.innerHTML = `<div class="special-note-lookup-row found">✔ ${esc(row[C.NAME])||'—'} · ${esc(row[C.SOL_DESC])||'—'}</div>`;
+  textEl.disabled = false;
+  textEl.value = existing ? existing.note : '';
+  removeBtn.disabled = !existing;
+  saveBtn.textContent = existing ? 'Update Note' : 'Save Note';
+  onSpecialNoteTextInput();
+}
+function onSpecialNoteTextInput(){
+  const textEl = document.getElementById('specialNoteText');
+  const saveBtn = document.getElementById('specialNoteSaveBtn');
+  if(!textEl || !saveBtn) return;
+  saveBtn.disabled = textEl.disabled || !textEl.value.trim();
+}
+function saveSpecialNote(){
+  const input = document.getElementById('specialNoteAcctInput');
+  const textEl = document.getElementById('specialNoteText');
+  const statusEl = document.getElementById('specialNoteStatus');
+  if(!input || !textEl) return;
+  const acctNo = input.value.trim();
+  const note = textEl.value.trim();
+  const row = npaByAcct.get(acctNo);
+  if(!acctNo || !row || !note) return;
+  const user = (window.UPGBAuth && window.UPGBAuth.getCurrentUser()) || {};
+  DATA.specialNotes = DATA.specialNotes || {};
+  DATA.specialNotes[acctNo] = { note, updatedAt: new Date().toISOString(), updatedBy: user.login || null };
+  if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Note saved for A/c ${esc(acctNo)} — ${esc(row[C.NAME])||'—'}. Goes live for everyone on Publish.</div>`;
+  clearStalePublishStatus();
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+  onSpecialNoteAcctInput();
+  renderSpecialNoteList();
+}
+function removeSpecialNote(){
+  const input = document.getElementById('specialNoteAcctInput');
+  if(input) removeSpecialNoteByAcct(input.value.trim());
+}
+function removeSpecialNoteByAcct(acctNo){
+  if(!acctNo || !DATA.specialNotes || !DATA.specialNotes[acctNo]) return;
+  const row = npaByAcct.get(acctNo);
+  delete DATA.specialNotes[acctNo];
+  const statusEl = document.getElementById('specialNoteStatus');
+  if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Note removed for A/c ${esc(acctNo)}${row?(' — '+esc(row[C.NAME])):''}. Goes live for everyone on Publish.</div>`;
+  clearStalePublishStatus();
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+  const input = document.getElementById('specialNoteAcctInput');
+  if(input && input.value.trim()===acctNo) onSpecialNoteAcctInput();
+  renderSpecialNoteList();
+}
+function loadSpecialNoteIntoEditor(acctNo){
+  const input = document.getElementById('specialNoteAcctInput');
+  if(!input) return;
+  input.value = acctNo;
+  onSpecialNoteAcctInput();
+  input.focus();
+}
+function renderSpecialNoteList(){
+  const listEl = document.getElementById('specialNoteList');
+  const countEl = document.getElementById('specialNoteCountLabel');
+  const notes = DATA.specialNotes || {};
+  const acctNos = Object.keys(notes);
+  if(countEl) countEl.textContent = acctNos.length ? `${acctNos.length.toLocaleString('en-IN')} saved` : 'none saved';
+  if(!listEl) return;
+  if(!acctNos.length){ listEl.innerHTML = ''; return; }
+  listEl.innerHTML = acctNos.map(acctNo => {
+    const row = npaByAcct.get(acctNo);
+    const name = row ? (row[C.NAME]||'—') : 'not in current NPA data';
+    return `<div class="special-note-list-item">
+      <div class="special-note-list-body">
+        <div class="special-note-list-acct">A/c ${esc(acctNo)} <span>${esc(name)}</span></div>
+        <div class="special-note-list-text">${esc(notes[acctNo].note)}</div>
+      </div>
+      <button type="button" class="special-note-list-edit" onclick="loadSpecialNoteIntoEditor('${esc(acctNo)}')" aria-label="Edit note for account ${esc(acctNo)}">Edit</button>
+      <button type="button" class="special-note-list-remove" onclick="removeSpecialNoteByAcct('${esc(acctNo)}')" aria-label="Remove note for account ${esc(acctNo)}">✕</button>
+    </div>`;
+  }).join('');
+}
+window.loadSpecialNoteIntoEditor = loadSpecialNoteIntoEditor;
+window.removeSpecialNoteByAcct = removeSpecialNoteByAcct;
+
 function carryForwardMapFromCurrentData(){
   const map = new Map();
   DATA.npa.rows.forEach(r=>{
@@ -3896,6 +4065,10 @@ function openPublishReview(){
     kccovLabel = `KCC Overdue (${__pendingKccOverdueData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingKccOverdueData.asOnDate||''})`;
     items.push(publishReviewItemRow({ icon: ICON_TARGET, title: 'KCC Overdue', sub: `${__pendingKccOverdueData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingKccOverdueData.asOnDate||'')}` }));
   }
+  const specialNoteCount = Object.keys(DATA.specialNotes||{}).length;
+  if(specialNoteCount){
+    items.push(publishReviewItemRow({ icon: ICON_NOTE, title: 'Special Notes', maybe: true, sub: `${specialNoteCount.toLocaleString('en-IN')} account(s) with a note` }));
+  }
   document.getElementById('publishReviewSummary').innerHTML = `
     ${addedLine}
     ${staleLine}
@@ -3904,7 +4077,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -4576,6 +4749,7 @@ const ICON_LANDMARK = '<path d="M3 21h18"/><path d="M3 10h18"/><path d="M5 6l7-3
 const ICON_MAP = '<path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/>';
 const ICON_STAR = '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>';
 const ICON_TARGET = '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>';
+const ICON_NOTE = '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1 1.11-1.79l1-.5a2 2 0 0 1 1.78 0l1 .5A2 2 0 0 1 15 10.76V15H9Z"/><path d="M8 15h8l1 2H7l1-2Z"/>';
 function svgIcon(pathData){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathData}</svg>`; }
 
 function heroKpiCard(opts){
@@ -5828,7 +6002,12 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('publishBtn','click',()=>openPublishReview());
   on('publishCancelBtn','click',()=>closePublishReview());
   on('publishConfirmBtn','click',()=>confirmPublish());
-  on('eligibleBanner','click',()=>document.getElementById('eligibleBanner').classList.remove('show'));
+  on('eligibleBanner','click',()=>{ document.getElementById('eligibleBanner').classList.remove('show'); positionSpecialNoteBanner(); });
+  on('specialNoteBanner','click',()=>document.getElementById('specialNoteBanner').classList.remove('show'));
+  on('specialNoteAcctInput','input',()=>onSpecialNoteAcctInput());
+  on('specialNoteText','input',()=>onSpecialNoteTextInput());
+  on('specialNoteSaveBtn','click',()=>saveSpecialNote());
+  on('specialNoteRemoveBtn','click',()=>removeSpecialNote());
   on('dashBranchFilter','change',()=>renderDashboardSmooth());
   // One consolidated Refresh button (top header/sidebar) always does a full
   // page reload, for every view. It used to branch per-view -- Bank
