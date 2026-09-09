@@ -2790,7 +2790,11 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
 :root[data-theme="light"] #detailPane{
   --accent:var(--seal-d); --accent-2:var(--seal); --accent-soft:rgba(212,165,68,.12);
   --gold:var(--seal-d); --gold-l:var(--seal-d); --gold-d:var(--seal-d); --gold-soft:rgba(212,165,68,.10);
-  --bg:#EDEFF3;
+  /* Was --bg:#EDEFF3 -- a cool, light bluish-gray, distinctly different
+     from the warm ivory (#F5F2EA) every other screen in the app uses.
+     Alok explicitly wants the OTS Calculator on the same ivory as
+     everywhere else, so this no longer overrides --bg at all -- it just
+     inherits the normal light-theme value from :root[data-theme="light"]. */
   --stripe:rgba(58,44,15,.025); --stripe-label:rgba(58,44,15,.035);
 }
 :root[data-theme="light"] #detailPane .loan-table tr.lt-ots-row td{background:rgba(212,165,68,.05)}
