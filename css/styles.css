@@ -676,6 +676,11 @@ main{padding:20px 16px 40px}
 
 .results-hint{font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.9px;margin:4px 2px 14px;display:flex;align-items:center;gap:10px}
 .results-hint::after{content:"";flex:1;height:3px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.results-hint-row{display:flex;align-items:center;gap:12px;margin:4px 2px 14px}
+.results-hint-row .results-hint{margin:0;flex:1;min-width:0}
+.export-xl-btn{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 13px;border-radius:8px;border:none;background:linear-gradient(160deg,var(--accent),var(--accent-2));color:#fff;font:inherit;font-weight:700;font-size:11.5px;cursor:pointer;box-shadow:0 6px 16px var(--accent-soft);white-space:nowrap;flex-shrink:0;transition:filter .15s var(--ease)}
+.export-xl-btn:hover{filter:brightness(1.08)}
+.export-xl-btn:active{transform:translateY(1px)}
 
 /* ---------- Result cards ---------- */
 .result-card{background:var(--card);border-radius:var(--radius-lg);padding:20px 20px 20px 23px;box-shadow:var(--shadow-sm);margin-bottom:14px;position:relative;overflow:hidden;transition:transform .2s var(--ease),box-shadow .2s var(--ease),border-color .2s var(--ease);border:1px solid var(--line);animation:riseIn .35s var(--ease)}
@@ -899,6 +904,20 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .modal-sheet p{font-size:13px;color:var(--sub);line-height:1.65;margin:0 0 10px}
 .modal-close{width:100%;padding:13px;border:none;border-radius:var(--radius-md);background:var(--navy-900);color:#fff;font-weight:800;margin-top:8px;transition:background .18s var(--ease)}
 .modal-close:hover{background:var(--navy-800)}
+
+/* Shared bottom-center confirmation toast (showToast() in js/app.js) --
+   z-index:200 so it clears an open modal-overlay (100), but stays below
+   the splash/data-loading full-screen overlays (9998/9999) where a fire-
+   and-forget confirmation wouldn't make sense anyway. */
+.app-toast{
+  position:fixed; left:50%; bottom:26px; z-index:200;
+  transform:translate(-50%,14px);
+  background:var(--card); border:1px solid var(--line); color:var(--ink);
+  padding:11px 18px; border-radius:11px; font-size:12.5px; font-weight:700;
+  box-shadow:var(--shadow); opacity:0; pointer-events:none;
+  transition:opacity .22s var(--ease), transform .22s var(--ease);
+}
+.app-toast.show{opacity:1; transform:translate(-50%,0)}
 
 .upload-drop{border:2px dashed var(--line);border-radius:14px;padding:26px 16px;text-align:center;margin-bottom:12px;transition:border-color .15s,background .15s}
 .upload-drop:hover{border-color:var(--accent);background:var(--gold-soft)}
@@ -1250,6 +1269,9 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .cmdk-item .ci-sub{font-size:11.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .cmdk-item .ci-badge{flex-shrink:0}
 .cmdk-empty{padding:30px 20px;text-align:center;color:var(--sub);font-size:13px}
+.cmdk-group-label{display:flex;align-items:center;gap:7px;padding:12px 12px 6px;font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-mute)}
+.cmdk-group-label:first-child{padding-top:6px}
+.cmdk-group-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .cmdk-foot{display:flex;gap:16px;padding:10px 16px;border-top:1px solid var(--line);font-size:10.5px;color:var(--sub);font-weight:600}
 .cmdk-foot kbd{font-family:inherit;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:10px}
 
@@ -1738,6 +1760,14 @@ body{overscroll-behavior:none}
   animation:riseIn .45s var(--ease) .1s both;
 }
 .chart-card::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,var(--accent),transparent 60%);opacity:.5}
+/* Wraps a .section-label with an optional trailing action (e.g. the KCC
+   Overdue "Export to Excel" button) on the same line, right-aligned.
+   Without this rule .section-label's own display:flex still makes it a
+   block-level box, so a sibling button falls to a new line below it
+   instead of sitting beside it. */
+.chart-card-head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-top:22px;flex-wrap:wrap}
+.chart-card-head-row .section-label{margin:0 2px 4px 0;flex:1;min-width:200px}
+.chart-card-head-row .export-xl-btn{margin-top:1px;flex-shrink:0}
 .chart-title{font-size:14px;font-weight:800;color:var(--ink);letter-spacing:-.2px;display:flex;flex-direction:column;gap:2px;margin-bottom:16px}
 .chart-sub{font-size:11px;font-weight:600;color:var(--ink-mute);text-transform:none;letter-spacing:0}
 
@@ -1794,6 +1824,19 @@ body{overscroll-behavior:none}
 .donut-svg circle:first-child{stroke-width:12}
 .donut-svg circle:not(:first-child){filter:drop-shadow(0 0 5px rgba(0,0,0,.25))}
 .donut-svg circle:not(:first-child):hover{filter:drop-shadow(0 0 6px rgba(0,0,0,.3)) brightness(1.15)}
+/* Donut hover tooltip (wired in js/app.js, one shared #chartTooltip
+   element positioned via clientX/clientY, so position:fixed with no
+   container offset math needed). */
+.chart-tooltip{
+  position:fixed; z-index:210; pointer-events:none;
+  transform:translate(-50%,-130%);
+  background:var(--ink); color:var(--bg); font-size:11.5px; font-weight:600; line-height:1.45;
+  padding:7px 11px; border-radius:9px; white-space:nowrap;
+  box-shadow:var(--shadow-sm);
+  opacity:0; transition:opacity .1s var(--ease);
+}
+.chart-tooltip b{font-weight:800}
+.chart-tooltip.show{opacity:1}
 .donut-flex{display:flex;align-items:center;gap:24px;flex-wrap:wrap;padding-bottom:14px}
 .donut-legend{display:flex;flex-direction:column;gap:9px;flex:1;min-width:150px}
 .legend-row{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:700;color:var(--sub);padding:2px 0;flex-wrap:wrap;min-width:0}
@@ -1813,6 +1856,12 @@ body{overscroll-behavior:none}
 .dash-table tr.clickable{cursor:pointer}
 .dash-table tr.clickable:hover td{background:var(--accent-soft)}
 .dash-rank{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:7px;background:var(--accent-soft);color:var(--accent);font-size:10.5px;font-weight:800;margin-right:8px;vertical-align:middle}
+/* Shared "no rows" placeholder (emptyStateRowHtml() in js/app.js) --
+   overrides the base .dash-table td's right-align/bold/nowrap so the
+   message reads as a calm, centered, muted line rather than another
+   data cell. */
+.dash-table td.table-empty-row{text-align:center;color:var(--ink-mute);font-weight:600;white-space:normal;padding:26px 14px}
+.table-empty-ic{display:inline-flex;vertical-align:middle;margin-right:7px;opacity:.7}
 
 /* ---------- Sortable column headers ---------- */
 .dash-table th.sortable{cursor:pointer;user-select:none;transition:color .15s var(--ease)}
@@ -2171,6 +2220,16 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
 .kccov-cal-table tbody tr:nth-child(even) td{background-image:linear-gradient(var(--stripe),var(--stripe))}
 .kccov-cal-table tbody td{border-top:1px solid var(--line);color:var(--ink-mute);font-weight:700}
 .kccov-cal-table tbody td.kccov-cal-total{color:var(--accent);font-weight:800;background:var(--accent-soft)}
+/* Every other .dash-table-style list in the app highlights the row under
+   the cursor (.dash-table tr.clickable:hover, .edge-row:hover, etc.) --
+   this table never got the same treatment in either theme, so scanning a
+   wide grid of dates/branches gave no feedback on which row you're
+   reading. Token-based, so both themes pick it up from one rule; the
+   extra tbody/tr/td type-selector weight here already outranks the two
+   sticky columns' own td.kccov-cal-sol/td.kccov-cal-branch background
+   rule above, so they pick up the hover tint too without a separate
+   override. */
+.kccov-cal-table tbody tr:hover td{background-color:var(--accent-soft)}
 .kccov-cal-table tbody td .dash-rank{margin-right:7px}
 .kccov-cal-table tfoot td{position:sticky;bottom:0;background:var(--table-head);color:var(--head-ink);font-weight:800;border-top:2px solid var(--accent);font-size:12px;z-index:2}
 .kccov-cal-table tfoot td.kccov-cal-sol{left:0;z-index:4}

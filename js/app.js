@@ -104,6 +104,13 @@ function fmtCr(n){
   return '₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function esc(s){ return (s===null||s===undefined)?'':String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/* Shared "no rows to show" placeholder for every filterable table body in
+   the app (KCC Overdue/PNPA branch summaries, account-list modals, etc.) --
+   one consistent icon + message instead of each call site hand-rolling its
+   own bare, colorless text. */
+function emptyStateRowHtml(colspan, msg){
+  return `<tr><td colspan="${colspan}" class="table-empty-row"><span class="table-empty-ic" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>${esc(msg)}</td></tr>`;
+}
 
 /* Two different print jobs on this one page want two different @page
    sizes (OTS Calculator: portrait A4; Daily NPA Projection grid: landscape
@@ -1826,7 +1833,10 @@ function renderResults(matches, mode){
      same way those do, keyboard-activatable too via the shared th.sortable
      Enter/Space handler registered once, near applySort() itself. */
   el.innerHTML = `<div class="ots-results">` +
-    `<div class="results-hint">${matches.length} match${matches.length>1?'es':''} found</div>` +
+    `<div class="results-hint-row">` +
+      `<div class="results-hint">${matches.length} match${matches.length>1?'es':''} found</div>` +
+      `<button type="button" class="export-xl-btn" onclick="exportSearchResults()">${EXPORT_XL_ICON} Export to Excel</button>` +
+    `</div>` +
     `<div class="dash-table-wrap acct-list-scroll">
       <table class="dash-table">
         <thead id="resultsHead"><tr>
@@ -1839,6 +1849,21 @@ function renderResults(matches, mode){
     </div></div>`;
   updateSortIcons('resultsHead', resultListState.sort);
 }
+/* "What's on screen right now" export -- resultListState.list + its
+   current sort, the exact same array resultRowsHtml() just rendered, so
+   the file always matches what the banker is looking at. */
+function exportSearchResults(){
+  const sorted = applySort(resultListState.list, resultListState.sort);
+  if(!sorted.length) return;
+  const rows = sorted.map(c=>[c.acctNo, c.name, c.branch, c.asset, c.os]);
+  exportRowsToExcel(
+    `Search_Results_${dateToInputValue(new Date())}.xlsx`, 'Search Results',
+    ['Account No','Customer','Branch','Asset','O/S Balance'], rows,
+    [null,null,null,null,XL_INR_FMT]
+  );
+  showToast(`✓ ${sorted.length} row${sorted.length>1?'s':''} exported`);
+}
+window.exportSearchResults = exportSearchResults;
 
 /* ---------- Detail view ----------
    Typed OTS Amounts and Interest Reversal overrides are kept in this
@@ -3618,6 +3643,46 @@ function downloadCsvRows(filename, headers, dataRows){
 function downloadCsvTemplate(filename, headers, exampleRow){
   downloadCsvRows(filename, headers, [exampleRow]);
 }
+const EXPORT_XL_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 19h16"/></svg>';
+/* Lightweight "what you see on screen" export -- unlike exportOtsWorksheet/
+   exportOtsExcel above (formal, formula-driven, printable sheets), this is
+   for a quick working copy of whatever list/table is currently on screen,
+   so it stays plain: bold header row, real numbers (not pre-formatted
+   strings) via optional per-column numFmt, no borders/merges/print setup. */
+async function exportRowsToExcel(filename, sheetName, headers, rows, numFmts){
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(sheetName, { views: [{showGridLines:false, state:'frozen', ySplit:1}] });
+  ws.columns = headers.map(h => ({ header: h, width: Math.max(14, h.length+6) }));
+  ws.getRow(1).font = { bold: true };
+  rows.forEach(r => {
+    const row = ws.addRow(r);
+    if(numFmts) numFmts.forEach((fmt, i) => { if(fmt) row.getCell(i+1).numFmt = fmt; });
+  });
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+/* Shared bottom-center confirmation toast -- first use anywhere in the app
+   (nothing to reuse), so it's kept generic on purpose for whatever the next
+   fire-and-forget action needs (export, copy, etc.), not export-specific. */
+let __toastTimer = null;
+function showToast(msg){
+  let el = document.getElementById('appToast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'appToast';
+    el.className = 'app-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(__toastTimer);
+  __toastTimer = setTimeout(()=>el.classList.remove('show'), 2800);
+}
 function downloadDailyTemplate(){
   const headers = ['Sol','Region','Branch','Account No','Customer ID','Intt Rev','Scheme Code','Account Name','Balance Amount','Turnover','Interest Charge Amount','Continuous Excess Date','Review Date','KCC Disbursement Date/Stock Date','Due date','Demand Amount','Adjustment Amount','Reasons','Exempted','Account NPA Date','Cust NPA Date','SBA Acc/Balance','Remarks','Category','Prov Amt','CADU','Sanction Date','Limit','Disb Date','ROI','Mobile No','SMA Status','Sec Val','Sec OS','Unsec OS'];
   const example = ['9316','HATHRAS','MAANT','160720303013711','705760143','','AG203','EXAMPLE BORROWER NAME','38155.85','','','','','','','38155.85','','CBS NPA','','30-11-2012','30-11-2012','124610100004372 -> 0','Marked in CBS','DA3','38155.85','1009','23-11-2010','40000','23-11-2011','9','9999999999','SMA0','80000','38155.85','0'];
@@ -3947,11 +4012,31 @@ function renderCmdk(q){
   cmdkMatches=out; cmdkActive=0;
   if(!q){ cmdkResults.innerHTML='<div class="cmdk-empty">Type a name, account no., customer ID or mobile…</div>'; return; }
   if(!out.length){ cmdkResults.innerHTML='<div class="cmdk-empty">No borrower found for that.</div>'; return; }
-  cmdkResults.innerHTML=out.map((m,idx)=>cmdkItemHtml(m,idx)).join('');
+  /* out is already contiguous by source (the three loops above push npa,
+     then kccov, then pnpa matches in that order) -- grouping here only
+     inserts a label whenever the source changes, it never reorders
+     anything, so cmdkMatches/idx stays exactly aligned with what's on
+     screen and arrow-key navigation keeps working across group labels. */
+  let lastSource=null;
+  const parts=[];
+  out.forEach((m,idx)=>{
+    if(m.source!==lastSource){ parts.push(cmdkGroupLabelHtml(m.source)); lastSource=m.source; }
+    parts.push(cmdkItemHtml(m,idx));
+  });
+  cmdkResults.innerHTML=parts.join('');
   cmdkResults.querySelectorAll('.cmdk-item').forEach(it=>{
     it.addEventListener('click',()=>pickCmdk(+it.dataset.idx));
     it.addEventListener('mousemove',()=>setCmdkActive(+it.dataset.idx));
   });
+}
+function cmdkGroupLabelHtml(source){
+  const map = {
+    npa: ['NPA Accounts', 'var(--accent)'],
+    kccov: ['KCC Overdue', 'var(--accent)'],
+    pnpa: ['Daily PNPA', 'var(--amber)'],
+  };
+  const [label, dotColor] = map[source] || [source, 'var(--accent)'];
+  return `<div class="cmdk-group-label"><span class="cmdk-group-dot" style="background:${dotColor}"></span>${esc(label)}</div>`;
 }
 function setCmdkActive(idx){ cmdkActive=idx; cmdkResults.querySelectorAll('.cmdk-item').forEach(it=>it.classList.toggle('active',+it.dataset.idx===idx)); }
 /* NPA results link to the real OTS settlement detail (openDetail); KCC
@@ -4172,7 +4257,8 @@ function svgDonut(segments, size){
     const dash = `${len.toFixed(2)} ${(c-len).toFixed(2)}`;
     const rotate = (acc/total)*360 - 90;
     acc += s.value;
-    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${strokeW}" stroke-dasharray="${dash}" stroke-linecap="round" transform="rotate(${rotate} ${cx} ${cy})"></circle>`;
+    const pct = Math.round(frac*100);
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${strokeW}" stroke-dasharray="${dash}" stroke-linecap="round" transform="rotate(${rotate} ${cx} ${cy})" data-label="${esc(s.label)}" data-value-label="${esc(s.valueLabel||'')}" data-pct="${pct}%"></circle>`;
   }).join('');
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" class="donut-svg">
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--track-bg)" stroke-width="${strokeW}"></circle>
@@ -4190,11 +4276,26 @@ function donutCard(segments, size, centerValue, centerLabel){
 function donutLegend(segments){
   return segments.map(s=>`<div class="legend-row${s.onclick?' clickable':''}"${s.onclick?` onclick="${s.onclick}"`:''}><span class="legend-dot" style="background:${s.color}"></span>${esc(s.label)}<span class="legend-val">${s.valueLabel}</span></div>`).join('');
 }
+/* Donut hover tooltip -- one delegated listener for every donut on the
+   page rather than per-chart wiring, since svgDonut()'s output is inserted
+   via innerHTML (no live DOM reference to attach to at construction time).
+   The tooltip element itself is created lazily on first hover, same
+   pattern as showToast()'s #appToast. */
+document.addEventListener('mousemove', (e)=>{
+  const seg = e.target && e.target.closest && e.target.closest('.donut-svg circle[data-label]');
+  let tip = document.getElementById('chartTooltip');
+  if(!seg){ if(tip) tip.classList.remove('show'); return; }
+  if(!tip){ tip = document.createElement('div'); tip.id='chartTooltip'; tip.className='chart-tooltip'; document.body.appendChild(tip); }
+  tip.innerHTML = `<b>${esc(seg.dataset.label)}</b> · ${esc(seg.dataset.pct)}${seg.dataset.valueLabel?`<br>${esc(seg.dataset.valueLabel)}`:''}`;
+  tip.style.left = e.clientX + 'px';
+  tip.style.top = e.clientY + 'px';
+  tip.classList.add('show');
+});
 
 function acctRows(list, opts){
   opts = opts || {};
   const offset = opts.offset||0;
-  if(!list.length) return `<tr><td colspan="5" style="text-align:center;color:var(--ink-mute)">No accounts</td></tr>`;
+  if(!list.length) return emptyStateRowHtml(5, 'No accounts');
   return list.map((a,i)=>`<tr class="clickable" onclick="openDetail('${esc(a.custId)}','${esc(a.acctNo)}')">
     <td>${opts.rank?`<span class="dash-rank">${i+1+offset}</span>`:''}${esc(a.acctNo)}</td>
     <td class="tal">${esc(a.name)||'—'}</td>
@@ -4303,7 +4404,7 @@ function initAcctListScroll(list){
 }
 
 function custRows(list){
-  if(!list.length) return `<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">No customers</td></tr>`;
+  if(!list.length) return emptyStateRowHtml(4, 'No customers');
   return list.map(c=>`<tr class="clickable" onclick="openDetail('${esc(c.custId)}')">
     <td class="tal">${esc(c.name)||'—'}<br><span style="color:var(--ink-mute);font-weight:600;font-size:11px">Cust ID ${esc(c.custId)}</span></td>
     <td class="tal">${esc(c.branch)}</td>
@@ -4953,7 +5054,7 @@ function renderPnpaBranchTable(){
   wrap.innerHTML = `<div class="dash-table-wrap acct-list-scroll">
     <table class="dash-table">
       <thead><tr><th class="tal">Rank</th><th class="tal">Branch</th><th>Accounts</th><th>Total O/S</th></tr></thead>
-      <tbody>${rowsHtml || `<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">No branches match</td></tr>`}</tbody>
+      <tbody>${rowsHtml || emptyStateRowHtml(4, 'No branches match this filter')}</tbody>
     </table>
   </div>`;
 }
@@ -4968,7 +5069,7 @@ const PNPA_ACCT_LIST_HEAD = '<tr>'
   +'<th class="tal sortable" data-key="reason" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'reason\')">Reason<span class="sort-ic">▾</span></th>'
   +'</tr>';
 function pnpaAcctRows(list){
-  if(!list.length) return `<tr><td colspan="7" style="text-align:center;color:var(--ink-mute)">No accounts</td></tr>`;
+  if(!list.length) return emptyStateRowHtml(7, 'No accounts');
   return list.map(a=>`<tr class="clickable" onclick="showQuickAcctDetailByAcct('pnpa','${esc(a.acctNo)}')">
     <td>${esc(a.acctNo)}</td>
     <td class="tal">${esc(a.name)||'—'}</td>
@@ -5251,7 +5352,10 @@ function renderKccOverdueBody(){
   el.innerHTML = toolbar + heroRow + viewToggleRow +
     (kccovView==='calendar' ? `<div id="kccovInsightWrap"></div>` : '') +
     `<div class="chart-card" style="margin-top:16px">
-      <div class="section-label" id="kccovTableLabel"></div>
+      <div class="chart-card-head-row">
+        <div class="section-label" id="kccovTableLabel"></div>
+        ${kccovView==='summary' ? `<button type="button" class="export-xl-btn" onclick="exportKccOverdueSummary()">${EXPORT_XL_ICON} Export to Excel</button>` : ''}
+      </div>
       ${kccovView==='calendar' ? `<div class="kccov-cal-legend" id="kccovCalLegend"></div>` : ''}
       <div id="kccovBranchTableCard"></div>
     </div>`;
@@ -5271,6 +5375,7 @@ function renderKccOverdueBody(){
   else renderKccOverdueBranchTable(filteredRows);
 }
 
+let kccovLastExport = null;
 function renderKccOverdueBranchTable(filteredRows){
   const wrap = document.getElementById('kccovBranchTableCard');
   const labelEl = document.getElementById('kccovTableLabel');
@@ -5278,6 +5383,7 @@ function renderKccOverdueBranchTable(filteredRows){
   const activeScheme = KCC_OVERDUE_SCHEMES.find(s=>s.key===kccovSchemeTab);
   const branchAgg = kccovBranchAgg(filteredRows, kccovSchemeTab);
   const scopeLabel = kccovBranchFilter ? esc(kccovBranchFilter) : 'Regional Office (all branches)';
+  kccovLastExport = { branchAgg, schemeLabel: activeScheme.label, schemeCode: activeScheme.code, scopeLabel };
   if(labelEl) labelEl.innerHTML = `${esc(activeScheme.label)} — Branch-wise Summary, highest O/S first<span class="chart-sub">Scheme ${esc(activeScheme.code)} · ${scopeLabel} · ${branchAgg.length.toLocaleString('en-IN')} branch(es) shown · tap a branch to see the account list</span>`;
   const rowsHtml = branchAgg.map((r,i)=>`<tr class="clickable" onclick="kccovShowBranchAccounts('${kccovSchemeTab}','${esc(r.branch)}')">
     <td><span class="dash-rank">${i+1}</span></td>
@@ -5288,10 +5394,26 @@ function renderKccOverdueBranchTable(filteredRows){
   wrap.innerHTML = `<div class="dash-table-wrap acct-list-scroll">
     <table class="dash-table">
       <thead><tr><th class="tal">Rank</th><th class="tal">Branch</th><th>Accounts</th><th>Total O/S</th></tr></thead>
-      <tbody>${rowsHtml || `<tr><td colspan="4" style="text-align:center;color:var(--ink-mute)">No branches match</td></tr>`}</tbody>
+      <tbody>${rowsHtml || emptyStateRowHtml(4, 'No branches match this filter')}</tbody>
     </table>
   </div>`;
 }
+/* Exports exactly the branch-summary table currently on screen (same
+   scheme tab / branch / F.Y. / date filters), not the raw account-level
+   rows -- kept WYSIWYG so the file never surprises whoever downloads it
+   with a different granularity than what they were looking at. */
+function exportKccOverdueSummary(){
+  const x = kccovLastExport;
+  if(!x || !x.branchAgg.length) return;
+  const rows = x.branchAgg.map((r,i)=>[i+1, r.branch, r.count, r.os]);
+  exportRowsToExcel(
+    `KCC_Overdue_${x.schemeCode}_${dateToInputValue(new Date())}.xlsx`, 'KCC Overdue Summary',
+    ['Rank','Branch','Accounts','Total O/S'], rows,
+    [null,null,null,XL_INR_FMT]
+  );
+  showToast(`✓ ${x.branchAgg.length} branch row${x.branchAgg.length>1?'s':''} exported`);
+}
+window.exportKccOverdueSummary = exportKccOverdueSummary;
 
 /* Datewise NPA Slippage Calendar: Branch x Cust-NPA-Date heatmap, inspired
    by Head Office's own "Datewise Calendar of KCC PNPA" MIS sheet. Built
@@ -5393,7 +5515,7 @@ const KCCOV_ACCT_LIST_HEAD = '<tr>'
   +'<th class="tal sortable" data-key="sma" tabindex="0" role="button" aria-sort="none" onclick="sortListModalBy(\'sma\')">SMA<span class="sort-ic">▾</span></th>'
   +'</tr>';
 function kccovAcctRows(list){
-  if(!list.length) return `<tr><td colspan="9" style="text-align:center;color:var(--ink-mute)">No accounts</td></tr>`;
+  if(!list.length) return emptyStateRowHtml(9, 'No accounts');
   return list.map(a=>`<tr class="clickable" onclick="showQuickAcctDetailByAcct('kccov','${esc(a.acctNo)}')">
     <td>${esc(a.acctNo)}</td>
     <td class="tal">${esc(a.name)||'—'}</td>
