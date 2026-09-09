@@ -2324,11 +2324,22 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
   border-radius:var(--radius-xl);box-shadow:var(--shadow-lg);
 }
 
-/* ---- hero panel ---- */
+/* ---- hero panel ----
+   "Refined Ivory" pass: the header's own dotted/weave texture (--head-weave,
+   the same repeating-linear-gradient the app header and #aggBar already use)
+   is layered into the hero background, and the rule/subtitle/trust-icon pick
+   up the brass --seal tokens -- the OTS Calculator's own accent -- instead of
+   plain ink/red, so the very first screen already hints at the instrument
+   waiting behind it. --seal/--seal-l/--seal-d are theme-independent (defined
+   once, not re-pointed per theme) so the seal-d/seal-l split below follows
+   the same convention as .ots-start etc.: seal-d (deeper) reads on the light
+   ivory hero, seal-l (paler) reads on the dark-theme hero. */
 .splash-hero{
   flex:0 0 340px;position:relative;overflow:hidden;
   padding:36px 32px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
-  background:radial-gradient(circle at 82% 4%,var(--accent-soft) 0%,transparent 55%),var(--head-grad);
+  background:radial-gradient(circle at 82% 4%,var(--accent-soft) 0%,transparent 55%),
+    repeating-linear-gradient(118deg, var(--head-weave) 0 1px, transparent 1px 26px),
+    var(--head-grad);
   color:var(--head-ink);
 }
 .splash-dots{position:absolute;top:24px;right:26px;width:5px;height:5px;opacity:.4}
@@ -2339,17 +2350,22 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
 .splash-badge{width:78px;height:78px;border-radius:20px;background:#fff;display:flex;align-items:center;justify-content:center;
   padding:9px;box-shadow:0 10px 24px rgba(0,0,0,.22)}
 .splash-badge img{width:100%;height:100%;object-fit:contain;border-radius:13px}
-.splash-org{font-size:14px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--head-ink);margin-top:18px;line-height:1.4}
-.splash-title{font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--head-ink);margin-top:22px}
-.splash-subtitle{font-size:15.5px;font-weight:700;color:var(--red);margin-top:2px}
-.splash-rule{width:40px;height:3px;border-radius:2px;background:var(--head-ink);opacity:.35;margin-top:14px}
-.splash-hero-spacer{height:32px}
+.splash-org{font-size:14px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--head-ink);margin-top:14px;line-height:1.4}
+.splash-title{font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--head-ink);margin-top:16px}
+.splash-subtitle{font-size:15.5px;font-weight:700;color:var(--seal-d);margin-top:2px}
+.splash-rule{width:40px;height:3px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--seal-d) 20%,var(--seal-d) 80%,transparent);
+  opacity:1;margin-top:16px}
+.splash-hero-spacer{height:22px}
 .splash-trust{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
   border-radius:var(--radius-md);padding:12px 15px;box-shadow:var(--shadow-sm);text-align:left}
-.splash-trust-ic{width:32px;height:32px;border-radius:9px;background:var(--accent-soft);color:var(--accent);
+.splash-trust-ic{width:32px;height:32px;border-radius:9px;background:var(--seal-soft);color:var(--seal-d);
   display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .splash-trust-t1{font-size:12.5px;font-weight:800;color:var(--ink)}
 .splash-trust-t2{font-size:10.5px;color:var(--sub);margin-top:1px}
+:root:not([data-theme="light"]) .splash-subtitle{color:var(--seal-l)}
+:root:not([data-theme="light"]) .splash-rule{background:linear-gradient(90deg,transparent,var(--seal-l) 20%,var(--seal-l) 80%,transparent)}
+:root:not([data-theme="light"]) .splash-trust-ic{color:var(--seal-l)}
 
 /* ---- form panel ---- */
 .splash-formside{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:40px 40px 32px}
@@ -2369,7 +2385,13 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
 .splash-pin-error.ok{color:var(--green)}
 
 .splash-pad{width:100%;max-width:280px;display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:18px}
-.splash-key{padding:13px 0;border:1px solid var(--line);border-radius:13px;background:var(--bg);
+/* Circular keys (was a rounded square) -- reads calmer next to the round
+   PIN cells above it and the round trust-icon, instead of three different
+   corner radii competing on one screen. aspect-ratio keeps them square/round
+   at any grid width, so the max-height/max-width overrides below no longer
+   need their own padding or border-radius -- only font-size still changes. */
+.splash-key{aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:50%;background:var(--bg);
   color:var(--ink);font-family:var(--font-mono);font-size:17px;font-weight:700;cursor:pointer;
   transition:background .12s ease,border-color .12s ease,transform .12s ease;-webkit-tap-highlight-color:transparent}
 .splash-key:hover{background:var(--accent-soft);border-color:var(--accent)}
@@ -2404,7 +2426,11 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
   .splash-org{margin-top:12px}
   .splash-title{margin-top:14px}
   .splash-formside{padding-top:26px}
-  .splash-key{padding:10px 0}
+  /* Same reasoning as the phone breakpoint below: circular keys are as
+     tall as they are wide, so cap the pad's width on any short viewport,
+     not just narrow ones (a wide-but-short browser window still hits this
+     media query without hitting max-width:480px). */
+  .splash-pad{max-width:165px;gap:6px}
 }
 /* On an actual phone, the two panels stacked (hero on top of the PIN
    pad) ran well past one screen's height -- Alok had to scroll to reach
@@ -2437,8 +2463,15 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
   .splash-pin-label{font-size:9px}
   .splash-cell{aspect-ratio:1/0.8;font-size:18px;border-radius:11px}
   .splash-pin-error{font-size:10px;min-height:12px}
-  .splash-pad{margin-top:8px;gap:6px}
-  .splash-key{padding:8px 0;font-size:14px;border-radius:10px}
+  /* Circular keys are as tall as they are wide (aspect-ratio:1), unlike the
+     old text-padding row which stayed a fixed ~46px regardless of width --
+     at the pad's normal 280px cap that's ~87px per key, more than enough to
+     push the Login button below the fold again on a phone. Capping the
+     pad's own width here shrinks the circles back down to roughly their old
+     footprint, so the no-scroll-on-phone fit (see comment above) still
+     holds with round keys. */
+  .splash-pad{max-width:190px;margin-top:8px;gap:6px}
+  .splash-key{font-size:14px}
   .splash-login-btn{margin-top:10px;padding:11px 0;font-size:13px}
   .splash-foot{margin-top:8px;font-size:9px}
 }
