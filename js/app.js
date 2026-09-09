@@ -470,24 +470,12 @@ function branchMatchesQuery(name, oldId, newId, q){
     (bc && ((bc.mgr||'').toLowerCase().includes(q) || (bc.roName||'').toLowerCase().includes(q)));
 }
 function branchRowHtml([oldId,newId,name]){
-  const bc = DATA.branchContacts[String(newId)];
-  const roleLabels = branchRoleLabels(newId);
-  const contactLine = (role, cname, mobile) => cname || mobile ? `<div class="edge-row-contact-line">
-      <span class="role">${role}</span>
-      <span class="edge-row-mgr">${esc(cname)||'—'}</span>
-      ${mobile?`<a href="tel:${esc(mobile)}" onclick="event.stopPropagation()">${esc(mobile)}</a>${waIconLink(mobile)}`:''}
-    </div>` : '';
-  const contact = bc ? `<div class="edge-row-contact">
-      ${contactLine(roleLabels.mgrShort, bc.mgr, bc.mgrMobile)}
-      ${contactLine(roleLabels.roShort, bc.roName, bc.roMobile)}
-    </div>` : '';
   return `
     <div class="edge-row" onclick="showBranchCard(${newId})" role="button" tabindex="0" aria-label="View full contact card for ${esc(name)}">
       <div class="edge-row-top">
         <div class="edge-row-branch">${esc(name)}</div>
         <div class="edge-row-ids"><span class="edge-solid">Sol ID ${esc(newId)}</span><span class="edge-oldid">Old ${esc(oldId)}</span></div>
       </div>
-      ${contact}
     </div>`;
 }
 /* Grouped view of BRANCH_LIST, sorted by new Sol ID ascending (low to
@@ -608,11 +596,7 @@ function showBranchCard(newId){
     mail('Branch Email', meta.email),
     plain('Date Opened', meta.dateOpen),
     plain('Address', bc.address || masterAddress),
-    plain(roleLabels.mgrLabel, bc.mgr),
-    tel(roleLabels.mgrLabel+' Mobile', bc.mgrMobile),
     mail(roleLabels.mgrLabel+' Email', bc.mgrEmail),
-    plain(roleLabels.roLabel, bc.roName),
-    tel(roleLabels.roLabel+' Mobile', bc.roMobile),
     plain('Branch Landline', bc.landline),
     plain('Category', bc.category),
     plain('IFSC Code', bc.ifsc),
