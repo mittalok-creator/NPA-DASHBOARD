@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Special Note banner recoloured to red (2026-09-09, same day, follow-up)
+
+Shipped in brass initially, matching the OTS Calculator's own accent since a Special Note is informational rather than a warning — Alok asked for it in red instead, same reasoning as the existing "Not eligible" banner: it needs to stand out enough that it's never skipped by accident. `.special-note-banner` now uses the same `var(--red)`/`#a13d35` gradient and white text as `.eligible-banner`; everything else (shape, click-to-dismiss, the stacking logic that drops it below the eligibility banner when both apply to the same borrower) is unchanged.
+
 ### New: Special Note — Admin can tag any Account No. with a note every viewer sees (2026-09-09, same day)
 
 Alok asked for a way to manually leave a note on a specific account (e.g. a hold, an instruction, a reminder) that shows up for every user, not just Admin, when that account is opened in the OTS Calculator — "jaise not eligible ka prompt show hota hai vaise hi" (the same way the existing "Not eligible" prompt shows), and entered one account at a time rather than via any file upload.
