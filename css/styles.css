@@ -1615,16 +1615,34 @@ body{overscroll-behavior:none}
    covering it (nested z-index never escapes a parent stacking context). */
 #detailPane.open{z-index:95}
 .view{display:none}
-.view.active{display:block;animation:viewIn .34s var(--ease) both}
-@keyframes viewIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+/* No fill-mode (was "...both", removed) -- an element with a CSS animation
+   still "in effect" on the transform property establishes a containing
+   block for position:fixed descendants for as long as that animation
+   remains attached, regardless of what the keyframe's actual resolved
+   value is at any instant (even a literal transform:none endpoint doesn't
+   avoid it) -- "both" holds the animation in effect forever once it ends,
+   so #detailPane, a position:fixed;inset:0 overlay nested inside the
+   Search view's markup in index.html, had its "fixed to the viewport"
+   sizing silently re-scoped to the (still "transform-animated", per the
+   browser's bookkeeping) .view element's own box instead, collapsing it
+   to a fraction of the screen and cutting its content off. Plain
+   animation:viewIn (no fill-mode) matches this app's original, safe
+   pattern: the animation's effect ends with the animation itself, and
+   since nothing else sets opacity/transform on .view.active, the resting
+   style afterward is identical to the animation's own end state anyway --
+   no visual difference, just no more lingering containing block. */
+.view.active{display:block;animation:viewIn .34s var(--ease)}
+@keyframes viewIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 /* Brief exit fade, played on the OUTGOING view by switchView() before the
    display:none/.active swap -- .view{display:none} is instant with no
    transition of its own, so without this the previous screen used to just
    vanish outright the instant a nav item was clicked, then the new one
    popped in a beat later. Kept short (120ms) so navigation still feels
-   snappy, not sluggish. */
-.view.view-leave{animation:viewLeave .12s var(--ease) both}
-@keyframes viewLeave{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(-6px) scale(.99)}}
+   snappy, not sluggish. Also no fill-mode, same reasoning as .view.active
+   above -- switchView() removes this class itself right as the animation's
+   own duration ends anyway, so nothing relies on the style persisting. */
+.view.view-leave{animation:viewLeave .12s var(--ease)}
+@keyframes viewLeave{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-6px) scale(.99)}}
 
 /* ---------- Dashboard view ---------- */
 #viewDashboard{padding:32px clamp(18px,3.5vw,48px) 60px;max-width:1560px;margin:0 auto}
