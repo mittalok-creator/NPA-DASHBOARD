@@ -91,7 +91,18 @@
   }
 
   *{box-sizing:border-box}
-  html,body{margin:0;background:var(--bg);overscroll-behavior:none}
+  /* No overscroll-behavior:none here (unlike the main app's own html/body)
+     -- this page is embedded in an iframe whose own height is kept in
+     sync with its content (see resizeFrame() below), so it has nothing
+     of its own left to scroll; the actual scrolling happens in the
+     PARENT page's #mainCol. overscroll-behavior:none blocks scroll
+     *chaining* to an ancestor once an element can't scroll any further
+     itself -- exactly the mechanism a touch-drag over this iframe needs
+     to hand the gesture up to #mainCol. With it set, a swipe anywhere on
+     this tool did nothing at all on a real phone (Alok's report,
+     2026-09-10) even though #mainCol itself had plenty of room to
+     scroll. */
+  html,body{margin:0;background:var(--bg)}
   body{color:var(--ink);font-family:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;font-size:14px;line-height:1.5}
   .num{font-variant-numeric:tabular-nums}
   .wrap{max-width:1180px;margin:0 auto;padding:0 22px 56px}

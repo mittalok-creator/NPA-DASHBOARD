@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: mobile couldn't scroll past the loaded-file panel at all (2026-09-10, same day)
+
+Alok's screenshot showed the tool stuck on mobile right after loading his real file (7.4L accounts, 22 regions) -- the Summary panel's tabs were barely visible at the very bottom of the screen with no way to scroll further, and oddly, the sidebar's "Crafted by Alok Mittal" signature was bleeding through at that spot even though `#sideNav{display:none}` at mobile widths makes that genuinely impossible with the code currently live -- a strong sign his phone was still serving an older cached shell from before some of today's earlier fixes, worth a full close-and-reopen (or clearing site data) regardless of the fix below.
+
+Separately, found and fixed a real bug in `tools/npa-region-summary.html`: its `html,body` carried `overscroll-behavior:none`, copied over from the main app's own defensive fix for the pull-to-refresh issue fixed earlier today. That property doesn't just suppress the pull-to-refresh gesture -- it also blocks *scroll chaining*, the mechanism a touch-drag needs to hand a scroll gesture up to an ancestor once the element under the finger has nothing left of its own to scroll. Since this tool's `<iframe>` is kept sized to exactly match its own content (see the "no more dead space" fix from a few minutes earlier), it has nothing internal to scroll in the first place -- normally the drag should chain straight up to the Utility hub's `#mainCol`, which is where the actual scrolling needs to happen, but `overscroll-behavior:none` was blocking that hand-off. Removed it: this tool doesn't need its own pull-to-refresh guard (it's not a standalone PWA experiencing that gesture), and the main app's own guard on `#mainCol`/`#detailPane`/`html`/`body` (from earlier today) is unaffected and still stops the gesture going any further than that.
+
 ### Fix: real whole-bank file (7.4L accounts, 22 regions) got stuck with no scrollbar (2026-09-10, same day)
 
 The "no more dead space" fix shipped a few minutes earlier caused a real regression the moment Alok tried it against an actual whole-bank export (55 Hathras branches, not the 2-3 row test data used to verify it): the page got stuck with the branch table cut off partway down and no way to scroll further.
