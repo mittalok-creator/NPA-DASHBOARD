@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: Daily PNPA Summary drops two non-operational Sol IDs (2026-09-10, same day)
+
+Alok flagged that 9269 (R O Hathras, the Regional Office itself) and 9283 (Hathras Service Branch) aren't real lending branches and shouldn't appear at all. Both are now excluded at the row-filtering stage in `processWorkbook()` (a `NON_OPERATIONAL_SOL_IDS` list checked right alongside the Region="HATHRAS" filter, before any aggregation), not just left out of the zero-fill step, so they're dropped even if a future file happens to carry stray rows for either. Branch count is now 55 instead of 57; Grand Total is unchanged (₹320.07L / ₹100.95L) since both had zero PNPA accounts in Alok's real file anyway. Verified via Playwright against his real file.
+
 ### New: Daily PNPA Summary added to Utility (2026-09-10)
 
 Alok supplied a real whole-bank Daily PNPA export (39,031 rows) and asked for a second Utility tool, "almost like" NPA Region Summary: read it client-side, but this one is Hathras-only and SOL ID-wise rather than region-wise, always lists every Hathras Regional Office branch (even one with a clean day, showing 0 instead of just not appearing), and counts an account as KCC when its Reasons column contains "KCC-Disbrsmnt-36" -- which can arrive alone or comma-separated with other reasons on the same account (e.g. "KCC-Disbrsmnt-36,LimReview").
