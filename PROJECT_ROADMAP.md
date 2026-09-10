@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: HBR Report's Account filter now shows the account number too (2026-09-10, same day)
+
+Alok pointed out he often remembers an account's number, not its name ("kabhi kabhi name yaad nahi hota account no yaad rahta hai"), so the Account-wise Detail dropdown now labels every option as `<account number> — <description>` (e.g. "15181213 — NO LIEN (OTS)") instead of the description alone, and sorts by that number instead of alphabetically by name.
+
+The "account number" shown is the branch-neutral part of the GL code -- new-style rows are `[4-digit SOL][00 filler][5-digit GL head][3-digit scheme]`, so `canonicalAccountCode()` strips the SOL prefix and the "00" filler, leaving GL-head+scheme (`92700015181213` → `15181213`, matching the exact number Alok referenced); old-style rows are `[5-digit old SOL][scheme code]` with no GL head embedded, so only the 5-digit prefix is stripped. The dropdown's underlying `value` (used for the lookup) is unchanged -- only the visible label and sort order changed. Verified the real report's "NO LIEN (OTS)" option now reads exactly "15181213 — NO LIEN (OTS)" and still renders the correct 55-branch table when selected.
+
 ### New: HBR Report added to Utility (2026-09-10, same day)
 
 Alok uploaded a real core-banking "BM Balancing Report" PDF (GL Sub Head 15181, whole Hathras region, 09-09-2026) and asked for a new "HBR Report" utility: branch-wise view, Excel export, and an account picker where selecting one account shows its balance at every one of the 55 operational SOL IDs in rupees.
