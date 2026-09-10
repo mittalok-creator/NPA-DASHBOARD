@@ -5834,7 +5834,7 @@ window.kccovShowBranchAccounts = kccovShowBranchAccounts;
 // not their own nav-rail items -- the "Utility" nav-item stays highlighted
 // as their parent while viewing either, so the rail never shows nothing
 // active at all.
-const UTILITY_CHILD_VIEWS = ['onedrive','passsheet','regionsummary','pnpasummary'];
+const UTILITY_CHILD_VIEWS = ['onedrive','passsheet','regionsummary','pnpasummary','telephonedirectory'];
 /* Screen switches used to be an instant cut -- .view{display:none} has no
    transition of its own, so the outgoing screen just vanished the moment a
    nav item was clicked, then the incoming one popped in a beat later (its

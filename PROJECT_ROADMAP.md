@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### New: Telephone Directory added to Utility (2026-09-10, same day)
+
+Alok supplied the Hathras region staff position sheet (as on Aug 2026) and asked for it to be added to Utility as well, with search.
+
+New `tools/telephone-directory.html`, following the same PassSheet design system as its two siblings, but with one difference in shape: the source data (EC No., Name, Designation, Cadre, Branch, Contact Number) is a staff roster snapshot that doesn't change day to day, so it's baked in directly as a static `STAFF_LIST` array (302 records, extracted from the uploaded `Telephone_Directory_as_on_Aug_26.xlsx`) rather than requiring a file upload each visit -- there's no dropzone or "Load File" step on this tool at all, just a search box and the table.
+
+Search is a single live text box (`#searchInput`, no debounce needed at this row count) that matches across all six columns at once -- typing a branch name, a person's name, a designation, or a phone number all work the same way, with a "Clear" button and a result-count badge ("302 total" or "X of 302") reflecting the current filter. Same sortable-column-headers and data-only copy-column conventions as its siblings; the Contact column's cells are `tel:` links so a tap dials directly on a phone. Same iframe self-sizing pattern (fixed-px `.table-wrap{max-height:520px}`, no `overscroll-behavior:none` on its own html/body) applied proactively from the start, since both were bugs caught and fixed on the earlier two tools this same day.
+
+New `utility-card` + `data-view="telephonedirectory"` section in `index.html`, added to `UTILITY_CHILD_VIEWS` in `js/app.js`, and `#viewTelephoneDirectory`'s own `.tool-frame-wrap` auto-height override in `css/styles.css` (mirroring `#viewRegionSummary`/`#viewPnpaSummary`). Verified via Playwright, both standalone and through the Utility hub's iframe: all 302 rows render with the correct hint text, search by branch/name/phone/EC No. all return the right matches, Clear resets the list, sorting by Name works, the Name column copies as 302 data-only lines, and Back returns cleanly to Utility with its nav item still highlighted.
+
 ### Follow-up: Daily PNPA Summary drops two non-operational Sol IDs (2026-09-10, same day)
 
 Alok flagged that 9269 (R O Hathras, the Regional Office itself) and 9283 (Hathras Service Branch) aren't real lending branches and shouldn't appear at all. Both are now excluded at the row-filtering stage in `processWorkbook()` (a `NON_OPERATIONAL_SOL_IDS` list checked right alongside the Region="HATHRAS" filter, before any aggregation), not just left out of the zero-fill step, so they're dropped even if a future file happens to carry stray rows for either. Branch count is now 55 instead of 57; Grand Total is unchanged (₹320.07L / ₹100.95L) since both had zero PNPA accounts in Alok's real file anyway. Verified via Playwright against his real file.
