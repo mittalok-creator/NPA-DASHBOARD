@@ -317,6 +317,23 @@
     return null;
   }
 
+  // The branch-neutral "account number" for a scheme, e.g. Alok looks up
+  // "NO LIEN (OTS)" as "15181213" rather than by name (2026-09-10: "kabhi
+  // kabhi name yaad nahi hota account no yaad rahta hai"). New-style rows
+  // are [4-digit SOL][00 filler][5-digit GL head][3-digit scheme] -- strip
+  // the SOL and the "00" filler, leaving GL-head+scheme (e.g. "92700015181213"
+  // -> "15181213"). Old-style rows are [5-digit old SOL][scheme code] with
+  // no GL head embedded -- just strip the 5-digit prefix.
+  function canonicalAccountCode(acctNo){
+    var first2 = acctNo.slice(0,2);
+    if (first2 === '92' || first2 === '93'){
+      var rest = acctNo.slice(4);
+      return rest.indexOf('00') === 0 ? rest.slice(2) : rest;
+    }
+    if (first2 === '15' || first2 === '16') return acctNo.slice(5);
+    return acctNo;
+  }
+
   var state = { rows: null, meta: null };
 
   var dropzone = document.getElementById('dropzone');
@@ -484,6 +501,18 @@
       byDesc[r.desc][r.sol].credit += r.credit;
     });
     return byDesc;
+  }
+
+  // One representative account code per description, for the Account
+  // filter's label (same account code is shared by every branch that
+  // carries this scheme, so the first row encountered is as good as any).
+  function buildAccountCodeIndex(rows){
+    var codeByDesc = {};
+    rows.forEach(function(r){
+      if (r.sol === null || NON_OPERATIONAL_SOL_IDS.indexOf(r.sol) !== -1) return;
+      if (!codeByDesc[r.desc]) codeByDesc[r.desc] = canonicalAccountCode(r.acctNo);
+    });
+    return codeByDesc;
   }
 
   function recordsForAccount(byDesc, desc){
@@ -719,9 +748,15 @@
 
   function populateAccountSelect(rows){
     var byDesc = buildAccountIndex(rows);
-    var descs = Object.keys(byDesc).sort(function(a,b){ return a.localeCompare(b); });
+    var codeByDesc = buildAccountCodeIndex(rows);
+    var descs = Object.keys(byDesc).sort(function(a,b){
+      return String(codeByDesc[a]||'').localeCompare(String(codeByDesc[b]||''));
+    });
     accountSelect.innerHTML = '<option value="">— Select an account —</option>' +
-      descs.map(function(d){ return '<option value="'+esc(d)+'">'+esc(d)+'</option>'; }).join('');
+      descs.map(function(d){
+        var code = codeByDesc[d] || '';
+        return '<option value="'+esc(d)+'">'+esc(code)+' — '+esc(d)+'</option>';
+      }).join('');
   }
 
   async function handleFile(file){
