@@ -183,7 +183,16 @@
   tbody tr:nth-child(even){background:var(--surface-muted)}
   tfoot td{padding:8px 12px;font-weight:700;background:var(--accent-soft);border-top:2px solid var(--accent);text-align:right}
   tfoot td:nth-child(1),tfoot td:nth-child(2){text-align:left}
-  .table-wrap{max-height:65vh;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:8px}
+  /* Fixed px, not vh: this page resizes its own embedding <iframe> to
+     match its content height (see resizeFrame() below), so a height
+     relative to the iframe's own viewport would grow every time the
+     iframe grows -- a feedback loop that left a real whole-bank file's
+     55+ branch rows overflowing past the Utility hub's now-overflow:
+     hidden wrapper, stuck with no way to scroll (Alok's report,
+     2026-09-10, with a real 55-branch Hathras file). A fixed height keeps
+     this box's own scrollbar the only thing that needs to move for a
+     long table, independent of how tall the page around it gets. */
+  .table-wrap{max-height:480px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:8px}
   .hidden{display:none !important}
   .hint{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
 
@@ -880,6 +889,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
   }
   window.addEventListener('resize', resizeFrame);
+  window.addEventListener('load', resizeFrame); // catches any late-loading web font reflow
   resizeFrame();
 })();
 </script>

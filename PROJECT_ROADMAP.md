@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: real whole-bank file (7.4L accounts, 22 regions) got stuck with no scrollbar (2026-09-10, same day)
+
+The "no more dead space" fix shipped a few minutes earlier caused a real regression the moment Alok tried it against an actual whole-bank export (55 Hathras branches, not the 2-3 row test data used to verify it): the page got stuck with the branch table cut off partway down and no way to scroll further.
+
+Root cause was a feedback loop between two heights that both looked independent but weren't. `.table-wrap{max-height:65vh}` sizes the table's own internal scrollbar relative to *the iframe's own viewport height* -- fine as long as that height is fixed, which it always had been until the dead-space fix made `tools/npa-region-summary.html` resize its own `<iframe>` tag to match its content (`window.frameElement.style.height = document.documentElement.scrollHeight`). With a short test table, this settles down after one resize. With 55+ real rows, it doesn't: growing the iframe to fit a first-pass measurement makes `65vh` resolve larger too (vh is relative to whatever the viewport is *right now*, not what it was when JS last measured it), which makes the true content height grow again, but `resizeFrame()` had already run and isn't called on every possible layout change -- so the iframe settles at a height that no longer matches its actual content, and the Utility hub's `.tool-frame-wrap{overflow:hidden}` (kept from the shared PassSheet styling) clips everything past that stale height with no way to reach it.
+
+Fixed by breaking the loop at its source: `.table-wrap`'s `max-height` is now a fixed `480px` instead of `65vh` -- it no longer has any dependency on the iframe's own height, so `resizeFrame()`'s one-time measurement is stable and correct regardless of row count. The table itself still scrolls internally exactly as it always has (just at a fixed cap instead of a viewport-relative one); the outer page's total height now settles once and stays right. Also added a `resizeFrame()` call on the `load` event, catching any late web-font reflow the earlier trigger points might have measured just before. Verified against a synthetic 60-branch file (mirroring the real file's row count): the table-wrap scrolls internally (visible height 478px against 1978px of real content) and the last row is reachable, while the outer iframe settles at a single correct height (1205px) instead of the old near-full-viewport waste or this regression's stuck clip.
+
 ### Follow-up: sortable columns, data-only copy, Hathras-first defaults, no more dead space (2026-09-10, same day)
 
 Four more requests on the same tool, all same day.
