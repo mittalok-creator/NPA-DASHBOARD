@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telephone Directory</title>
+<!-- Synced with the main app's own theme toggle (2026-09-10) -- same
+     technique as tools/passsheet.html: this tool is embedded via iframe
+     on the same origin as the main app, so it can read the exact
+     localStorage key the main app's own theme toggle writes (see
+     setTheme() in js/app.js) directly, no postMessage needed. Runs before
+     the <style> block below so data-theme is set before this tool's own
+     dark-theme CSS variables ever need to apply -- no flash of the wrong
+     theme. -->
+<script>
+(function(){
+  function syncTheme(){
+    try{
+      var t = localStorage.getItem('upgb-theme');
+      if(t==='dark'||t==='light') document.documentElement.dataset.theme = t;
+      else delete document.documentElement.dataset.theme;
+    }catch(e){}
+  }
+  syncTheme();
+  window.addEventListener('storage', function(e){ if(e.key==='upgb-theme') syncTheme(); });
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Same design system as tools/passsheet.html and the two NPA/PNPA
+     summary tools -- these are this tool's own copies of the same
+     --bg/--surface/--accent/etc. tokens and the same Spectral+IBM Plex
+     Sans typefaces, an iframe can't inherit them from the parent page,
+     but the values are copied straight from there so every Utility tool
+     reads as one family. */
+  :root{
+    --bg:#F2F5F3;
+    --surface:#FFFFFF;
+    --surface-muted:#EAEFEC;
+    --ink:#16211C;
+    --ink-muted:#5C6D64;
+    --line:#D7DED9;
+    --accent:#0E6B57;
+    --accent-ink:#FFFFFF;
+    --accent-soft:#DCEEE8;
+    --debit:#A5432B;
+    --credit:#0E6B57;
+    --warn:#9A6A0A;
+    --warn-soft:#F3E7CE;
+    --shadow: 0 1px 2px rgba(20,40,32,.06), 0 6px 20px -8px rgba(20,40,32,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0F1C17;
+      --surface:#15251F;
+      --surface-muted:#1B2C25;
+      --ink:#E7F1EC;
+      --ink-muted:#93AA9F;
+      --line:#28392F;
+      --accent:#52C09B;
+      --accent-ink:#08150F;
+      --accent-soft:#1E362C;
+      --debit:#E58B72;
+      --credit:#63C79E;
+      --warn:#E2B85B;
+      --warn-soft:#3A3020;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0F1C17;
+    --surface:#15251F;
+    --surface-muted:#1B2C25;
+    --ink:#E7F1EC;
+    --ink-muted:#93AA9F;
+    --line:#28392F;
+    --accent:#52C09B;
+    --accent-ink:#08150F;
+    --accent-soft:#1E362C;
+    --debit:#E58B72;
+    --credit:#63C79E;
+    --warn:#E2B85B;
+    --warn-soft:#3A3020;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg)}
+  body{color:var(--ink);font-family:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;font-size:14px;line-height:1.5}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 22px 56px}
+
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:16px 22px; margin-bottom:8px;
+    background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand-mark{font-size:26px;line-height:1}
+  .brand-name{font-family:'Spectral', Georgia, serif;font-weight:700;font-size:21px;letter-spacing:.2px}
+  .brand-tag{font-size:12px;color:var(--ink-muted);margin-top:1px}
+
+  .btn{
+    font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;font-weight:600;
+    padding:9px 16px;border-radius:8px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);cursor:pointer;
+  }
+  .btn:hover{border-color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .btn-ghost{background:transparent}
+
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:18px 0 20px;box-shadow:var(--shadow)}
+  .search-row{display:flex;align-items:center;gap:10px;background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:11px 14px}
+  .search-row:focus-within{border-color:var(--accent)}
+  .search-row svg{flex-shrink:0;color:var(--ink-muted)}
+  .search-row input{
+    flex:1;border:none;background:none;outline:none;color:var(--ink);
+    font-family:inherit;font-size:14.5px;min-width:0;
+  }
+  .search-row input::placeholder{color:var(--ink-muted)}
+  .search-row .btn{flex-shrink:0;padding:6px 12px;font-size:12.5px}
+  .hint{font-size:12px;color:var(--ink-muted);margin-top:10px;line-height:1.5}
+
+  .section-label{font-size:11.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-muted);margin:0 0 12px;display:flex;align-items:center;gap:10px}
+  .badge{display:inline-block;background:var(--accent-soft);color:var(--credit);border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:600;text-transform:none;letter-spacing:0}
+
+  table{border-collapse:collapse;width:100%;font-size:12.5px;background:var(--surface)}
+  thead th{position:sticky;top:0;background:var(--surface-muted);color:var(--ink-muted);padding:0;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line);z-index:1}
+  .th-inner{display:flex;align-items:center;gap:6px;padding:8px 12px}
+  .th-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted)}
+  .col-copy-btn{
+    flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+    border-radius:6px;border:1px solid transparent;background:none;color:var(--ink-muted);cursor:pointer;padding:0;
+  }
+  .col-copy-btn:hover,.col-copy-btn:focus-visible{background:var(--accent-soft);color:var(--accent);outline:none}
+  .col-copy-btn.copied{background:var(--accent-soft);color:var(--credit)}
+  .col-copy-btn svg{width:12px;height:12px;pointer-events:none}
+  tbody td{padding:7px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tbody tr:nth-child(even){background:var(--surface-muted)}
+  tbody td a{color:var(--accent);text-decoration:none;font-variant-numeric:tabular-nums}
+  tbody td a:hover{text-decoration:underline}
+  .table-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+  .empty-row td{text-align:center;color:var(--ink-muted);padding:30px}
+
+  .site-foot{
+    text-align:center;padding:28px 22px 34px;margin-top:20px;border-top:1px solid var(--line);
+    font-family:'Spectral', Georgia, serif;font-size:12.5px;letter-spacing:.02em;color:var(--ink-muted);
+  }
+  .site-foot span{color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">📞</span>
+    <div>
+      <div class="brand-name">Telephone Directory</div>
+      <div class="brand-tag">UPGB Hathras Region staff — search by name, branch, designation, or number</div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="panel">
+    <div class="search-row">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search by name, EC No., branch, designation, or number…" autocomplete="off">
+      <button type="button" class="btn btn-ghost" id="clearSearchBtn" hidden>Clear</button>
+    </div>
+    <div class="hint" id="statsHint"></div>
+  </div>
+
+  <div class="section-label">Staff <span id="resultCountBadge" class="badge"></span></div>
+  <div class="table-wrap">
+    <table id="staffTable">
+      <thead><tr id="staffHeadRow"></tr></thead>
+      <tbody id="staffBody"></tbody>
+    </table>
+  </div>
+</main>
+
+<footer class="site-foot">Designed &amp; developed by <span>Alok Mittal</span></footer>
+
+<script>
+(function(){
+  "use strict";
+
+  // UPGB Hathras Region staff directory, as on Aug 2026 -- Alok's own
+  // supplied file, baked in directly rather than re-uploaded each visit:
+  // unlike the daily NPA/PNPA files, a staff roster doesn't change day to
+  // day, so a searchable snapshot is more useful here than an upload
+  // step every time someone just wants to look up a number. [EC No.,
+  // Name, Designation, Cadre, Branch, Contact Number].
+  var STAFF_LIST = [[116302,'Gulla Ram Meena','OFFICER','Scale-I','Tuksan','8385896186'],[110630,'Shanuvendra Singh','OFFICER','Scale-I','R O Hathras','9984355505'],[117418,'Amar Pratap Yadav','OFFICE ATTENDANT','Office Attendant','Sikandra Rao','9690070370'],[112226,'Sujata Tomar','OFFICER','Scale-I','Tarsi','6398125264'],[102368,'Durgesh Yawale','OFFICER','Scale-I','Chandpa','9027353195'],[112684,'CHOUTHMAL CHOUDHARY','OFFICE ASSISTANT','Office Assistant','Eihan','7014462959'],[112372,'Purushottam Mahor','OFFICE ASSISTANT','Office Assistant','Sikandra Rao','8433140779'],[100704,'Ram Saran Verma','REGIONAL MANAGER','Scale-V','R O Hathras','9451519439'],[102771,'Himanshu Sharma','Departmental Head HRM','Scale-III','R O Hathras','8172900300'],[103297,'Priyanshu Jain','OFFICER','Scale-II','R O Hathras','8941993232'],[103476,'Ankur Kumar Tomer','OFFICER','Scale-I','R O Hathras','9536191830'],[105286,'Dharmendra Kumar','OFFICER','Scale-II','R O Hathras','9761767812'],[105366,'Yateendra Mohan Gaur','OFFICER','Scale-I','R O Hathras','8193888881'],[105387,'Dharmendra Kumar Mishra','OFFICER','Scale-IV','R O Hathras','9119601685'],[105832,'Rajeev Kumar','OFFICER','Scale-I','R O Hathras','8439301908'],[106103,'Alok Mittal','OFFICER','Scale-I','R O Hathras','9119601850'],[106605,'Neeraj Upadhyay','OFFICER','Scale-I','R O Hathras','9012507033'],[106800,'Hari Kishan','OFFICER','Scale-II','R O Hathras','8172900313'],[107051,'Gaurav Gupta','OFFICER','Scale-II','R O Hathras','9997638321'],[109840,'Bharat Kotnala','OFFICER','Scale-II','R O Hathras','9045857195'],[110442,'Shatamanyu Jangid','OFFICER','Scale-III','R O Hathras','9785129968'],[111607,'Sushant Agarwal','RLF HEAD','Scale-III','R O Hathras','7983865460'],[112055,'Alok Gupta','OFFICER','Scale-II','R O Hathras','8172900301'],[112219,'Shubham Agrawal','OFFICER','Scale-I','R O Hathras','9667584777'],[112229,'Keerti Sharma','OFFICER','Scale-I','R O Hathras','9412821378'],[113165,'Himanshu Gaur','OFFICER','Scale-II','R O Hathras','8218025592'],[114252,'Meenu Chauhan','OFFICER','Scale-I','R O Hathras','9837670091'],[114326,'Hitesh Hooda','OFFICER','Scale-I','R O Hathras','9996937776'],[114988,'Utkarsh','OFFICER','Scale-I','R O Hathras','9084171576'],[116066,'Manjeet Singh Paraya','OFFICER','Scale-II','R O Hathras','9827453307'],[116316,'Manish Chaudhary','OFFICER','Scale-I','R O Hathras','8630211548'],[116347,'Amit Ponia','OFFICER','Scale-I','R O Hathras','9520938968'],[116434,'Geeta','OFFICER','Scale-I','R O Hathras','8700502242'],[113016,'Naresh Kumar','HEAD CASHIER','Office Assistant','Agsauli','9772763192'],[114684,'Harendra Kumar','BRANCH MANAGER','Scale-I','Agsauli','9870838125'],[115830,'Lokesh Meena','OFFICER','Scale-I','Agsauli','8952837960'],[116525,'Munish Kumar Upadhyay','OFFICER','Scale-I','Agsauli','9368947674'],[118288,'Vishal Gautam','OFFICE ASSISTANT','Office Assistant','Agsauli','8630380100'],[120620,'Gaurav Kumar','OFFICE ASSISTANT','Office Assistant','Agsauli','7905038560'],[102159,'Hitendra Chaudhary','BRANCH MANAGER','Scale-III','Bamnai','9758808188'],[107726,'Pradip Kumar','OFFICER','Scale-I','Bamnai','8755599276'],[108747,'Gagan Kumar','OFFICER','Scale-I','Bamnai','9917618342'],[113390,'Anurag kant','OFFICE ASSISTANT','Office Assistant','Bamnai','8171488692'],[117411,'Nepal Singh','HEAD CASHIER','Office Assistant','Bamnai','7348976486'],[101210,'Pratap Singh','OFFICE ATTENDANT','Office Attendant','Bandhnoo','8006034665'],[106131,'Ankur Saxena','BRANCH MANAGER','Scale-I','Bandhnoo','9456626924'],[106856,'Monu','OFFICE ASSISTANT','Office Assistant','Bandhnoo','8787232866'],[107815,'Vipin Kumar Gautam','OFFICER','Scale-I','Bandhnoo','8868976339'],[112111,'Yogesh Pachaury','HEAD CASHIER','Office Assistant','Bandhnoo','8126574405'],[106236,'Suman Singh Patel','BRANCH MANAGER','Scale-I','Baraus','8224018807'],[114522,'Shivam Singh','OFFICER','Scale-I','Baraus','9318464536'],[115608,'Kapil Kumar','HEAD CASHIER','Office Assistant','Baraus','8218081403'],[106663,'Arvind Kumar','BRANCH MANAGER','Scale-II','Bastoi','9639010421'],[110402,'Vishal Tiwari','OFFICER','Scale-II','Bastoi','9549993234'],[110757,'Sandeep Kumar Sharma','OFFICER','Scale-I','Bastoi','9887982410'],[110950,'Bhoopendra Saini','HEAD CASHIER','Office Assistant','Bastoi','8267901905'],[112047,'Mukesh Kumar Meena','OFFICE ASSISTANT','Office Assistant','Bastoi','9214864027'],[110556,'Umesh Garg','BRANCH MANAGER','Scale-I','Bisawar','8871257114'],[114629,'Ramniwas Bairwa','HEAD CASHIER','Office Assistant','Bisawar','9005942629'],[115058,'Ishika Aggarwal','OFFICER','Scale-I','Bisawar','7023541993'],[105851,'Niranjan Kumar','HEAD CASHIER','Office Assistant','Chandpa','9838788778'],[112198,'Sakshi Meena','OFFICER','Scale-I','Chandpa','9571828309'],[114557,'Kapil Yadav','BRANCH MANAGER','Scale-I','Chandpa','9897390040'],[115735,'Ankita Bansal','OFFICER','Scale-I','Chandpa','8791817228'],[118311,'Navin Kumar Sharma','OFFICE ASSISTANT','Office Assistant','Chandpa','8451825810'],[105254,'Anil Kumar Rana','BRANCH MANAGER','Scale-II','Chhonda Gadua','9759487665'],[107973,'Jeetendra Agrawal','OFFICER','Scale-II','Chhonda Gadua','9997997936'],[108217,'Harish Chandra','OFFICER','Scale-I','Chhonda Gadua','9258745940'],[115691,'Kuldeep Kumar','HEAD CASHIER','Office Assistant','Chhonda Gadua','8393814788'],[101291,'Guddi Devi','OFFICE ATTENDANT','Office Attendant','Devinagar','7830231766'],[106627,'Nishant Varshney','HEAD CASHIER','Office Assistant','Devinagar','8791568801'],[106999,'Lalit','BRANCH MANAGER','Scale-II','Devinagar','8318450498'],[111316,'Shivani Singh','OFFICER','Scale-I','Devinagar','9369271467'],[112409,'Sheeshpal Meena','OFFICER','Scale-I','Devinagar','9982467756'],[116426,'Deepak Kumar Lawania','OFFICE ASSISTANT','Office Assistant','Devinagar','8058572727'],[118241,'Archana Singh','OFFICER','Scale-I','Devinagar','9870770057'],[105160,'Hariom Meena','OFFICE ASSISTANT','Office Assistant','Eihan','7505510427'],[109730,'Jas Ram Saini','BRANCH MANAGER','Scale-I','Eihan','9887901945'],[109815,'Ramani Kant','OFFICER','Scale-I','Eihan','9837227551'],[118299,'Love Varshney','HEAD CASHIER','Office Assistant','Eihan','9457474398'],[119081,'Jay Narayan Meena','OFFICER','Scale-I','Eihan','9772116492'],[100745,'Krishna Kanhaiya Gupta','OFFICER','Scale-I','Hathras-Agra Road','9456668438'],[107005,'Anuradha','BRANCH MANAGER','Scale-II','Hathras Agra Road','9760533976'],[109271,'Vishnu Saraswat','HEAD CASHIER','Office Assistant','Hathras Agra Road','8979345481'],[110639,'Avesh Kumar','OFFICER','Scale-I','Hathras Agra Road','87555 41881'],[114586,'Meenakshi Sharma','OFFICE ASSISTANT','Office Assistant','Hathras Agra Road','8130200038'],[118211,'Dweep Mudgal','OFFICER','Scale-I','Agra Road','9412739428'],[102775,'Vivek Agrawal','OFFICER','Scale-I','Hathras Aligarh Road','9997152560'],[103616,'Jag Mohan Meena','BRANCH MANAGER','Scale-II','Hathras Aligarh Road','8859022230'],[107569,'Deepak Kumar','HEAD CASHIER','Office Assistant','Hathras-Aligarh Road','9917227330'],[107706,'Naresh Kumar','OFFICE ASSISTANT','Office Assistant','Hathras Aligarh Road','9412816749'],[112230,'Megha Sharma','OFFICER','Scale-I','Hathras Aligarh Road','8218393140'],[114278,'Sukh Ram','OFFICE ASSISTANT','Office Assistant','Hathras Aligarh Road','6363131175'],[114593,'Neha Meena','OFFICER','Scale-I','Hathras-Aligarh Road','8769934581'],[115371,'Chandrakant','OFFICE ATTENDANT','Office Attendant','Hathras Aligarh Road','9412426187'],[105246,'Vikas Singh Pamar','BRANCH MANAGER','Scale-II','Mursan Gate','9634006371'],[105274,'Deepak Varshney','OFFICER','Scale-II','Mursan Gate','8172900304'],[106332,'Mukesh Kumar','OFFICER','Scale-I','Mursan Gate','9897361319'],[112752,'Pallavi Vashishth','OFFICER','Scale-I','Mursan Gate','9649533824'],[114187,'Aalok Kumar','OFFICER','Scale-I','Mursan Gate','8890295863'],[117237,'Deepti Sharma','HEAD CASHIER','Office Assistant','Mursan Gate','7387818899'],[117733,'Gopesh Kumar','OFFICE ASSISTANT','Office Assistant','Mursan Gate','8233907290'],[100064,'Sanjeev Kumar Vishnawat','BRANCH MANAGER','Scale-I','Service Branch','9259021888'],[112705,'Shruti Agrawal','OFFICE ASSISTANT','Office Assistant','Hathras Service Branch','9720382502'],[114423,'Deepak Garg','OFFICE ASSISTANT','Office Assistant','Hathras-Aligarh Road','7417433775'],[106569,'Ranvir Singh','BRANCH MANAGER','Scale-II','Hatisa Bhagwantpur','8218667893'],[109790,'Neelam Kumari','OFFICER','Scale-I','Hatisa Bhagwantpur','7611016833'],[114151,'Gaurav Sharma','HEAD CASHIER','Office Assistant','Hatisa Bhagwantpur','9404643216'],[114694,'Abhishek Sharma','OFFICER','Scale-I','Hatisa Bhagwantpur','8791111980'],[115420,'Reshu Aggarwal','OFFICER','Scale-I','Hatisa Bhagwantpur','7819065961'],[116396,'Hema','OFFICER','Scale-I','Hatisa Bhagwantpur','9540783270'],[117667,'Anjali Sharma','OFFICE ASSISTANT','Office Assistant','Hatisa Bhagwantpur','9084491249'],[107222,'Sukhdev','HEAD CASHIER','Office Assistant','Jarera','8958025141'],[107691,'Niraj Kant','OFFICE ASSISTANT','Office Assistant','Jarera','8755794240'],[110663,'Madhusoodan Jindal','OFFICER','Scale-I','Jarera','7983260543'],[111062,'Kunwar Pal Singh','BRANCH MANAGER','Scale-III','Jarera','9012791272'],[115914,'Ajit Kumar Meena','OFFICER','Scale-II','Jarera','9887231217'],[118159,'Prateek Tripathi','OFFICER','Scale-I','Jarera','6397434156'],[100170,'Vinod Kumar Gupta','OFFICER','Scale-I','Komari','9719057636'],[107614,'Shyamu Singh','HEAD CASHIER','Office Assistant','Komari','9045749611'],[107616,'Pushpendra Singh','BRANCH MANAGER','Scale-II','Komari','9045161622'],[107854,'Devendra Kumar','OFFICE ASSISTANT','Office Assistant','Komari','9761337096'],[112018,'Abhishek Kumar','OFFICER','Scale-II','Komari','6203433179'],[113062,'Sandeep Kumar','OFFICER','Scale-I','Komari','9660790819'],[115116,'Anjul Kumar Yadav','BRANCH MANAGER','Scale-I','Kota','9917986664'],[117617,'Vanshaj Sagar','HEAD CASHIER','Office Assistant','Kota','7055155494'],[118163,'Jatin Kumar','OFFICER','Scale-I','Kota','8279768981'],[107670,'Hari Om','HEAD CASHIER','Office Assistant','Ladpur','8954087881'],[109798,'Seema Kumari','BRANCH MANAGER','Scale-II','Ladpur','8445535741'],[116322,'Eakansh Bhardwaj','OFFICER','Scale-I','Ladpur','8742826696'],[117181,'Surabhi Upadhyay','OFFICER','Scale-I','Ladpur','7579623296'],[117493,'Vivek Ajmeria','OFFICE ASSISTANT','Office Assistant','Ladpur','8387803523'],[101026,'Dalvir Singh','OFFICER','Scale-I','Mahow','9897615507'],[101222,'Kumar Pal Singh','HEAD CASHIER','Office Assistant','Mahow','9675941342'],[106174,'Bhuvnesh Mathur','OFFICER','Scale-I','Mahow','9461001006'],[111993,'Sairun','OFFICE ASSISTANT','Office Assistant','Mahow','890149420'],[114938,'Manvendra Singh','BRANCH MANAGER','Scale-I','Mahow','9625101097'],[106435,'Mohit Sharma','HEAD CASHIER','Office Assistant','Meetai','8979144178'],[107181,'Abhishek Bhana','OFFICER','Scale-I','Meetai','8953418434'],[109078,'Virendra  Singh','BRANCH MANAGER','Scale-III','Meetai','7253811099'],[116211,'Aishwarya Mittal','OFFICER','Scale-I','Meetai','9001915340'],[106083,'Hansraj Meena','BRANCH MANAGER','Scale-II','Mendu','9536739993'],[107720,'Ashok Kumar','OFFICER','Scale-I','Mendu','9548557840'],[115056,'Sankalp Sharma','HEAD CASHIER','Office Assistant','Mendu','7060489615'],[116226,'Beena Meena','OFFICER','Scale-I','Mendu','9414991060'],[118112,'Meena','OFFICE ASSISTANT','Office Assistant','Mendu','9897712894'],[107591,'Megh Singh','HEAD CASHIER','Office Assistant','Mughal Garhi','7906677453'],[109101,'Neraj Sharma','OFFICER','Scale-I','Mughal Garhi','8547660753'],[109136,'Prashant Kumar','BRANCH MANAGER','Scale-II','Mughal Garhi','8882899789'],[114579,'Mohit Kumar Sharma','OFFICER','Scale-I','Mughal Garhi','7037076069'],[100919,'Rajesh Maheshwari','OFFICER','Scale-II','Mursan','8058460151'],[103633,'Lalit Kumar','OFFICER','Scale-I','Mursan','8433002358'],[107354,'Govind','HEAD CASHIER','Office Assistant','Mursan','9458406769'],[107454,'Rajesh Kumar Nirala','BRANCH MANAGER','Scale-II','Mursan','7500079040'],[115235,'Dinesh Sharma','OFFICER','Scale-I','Mursan','9548532387'],[118537,'Shambhu Dayal Gautam','OFFICE ASSISTANT','Office Assistant','Mursan','9679536699'],[107630,'Amit Gourav','HEAD CASHIER','Office Assistant','Parsara','7055181677'],[111779,'Ankit Singh','BRANCH MANAGER','Scale-I','Parsara','8923151534'],[115188,'Rohit Khandelwal','OFFICER','Scale-I','Parsara','8696448281'],[106306,'Satish Kumar Meena','OFFICER','Scale-II','Pora','7976009498'],[106869,'Rankit Mathur','HEAD CASHIER','Office Assistant','Pora','7084940144'],[110167,'Mahendra Kumar Meena','OFFICER','Scale-I','Pora','9785484143'],[110747,'Saurabh Kumar','OFFICER','Scale-I','Pora','7417626531'],[111105,'Rajan Singh','BRANCH MANAGER','Scale-III','Pora','9411911970'],[114136,'Anil Kumar','OFFICE ASSISTANT','Office Assistant','Pora','9019745538'],[111842,'Lokendra Rawat','BRANCH MANAGER','Scale-I','Purdil Nagar','7220857800'],[112217,'Vishal Meena','OFFICER','Scale-I','Purdil Nagar','9166555957'],[117454,'Nikhil Jhajharia','HEAD CASHIER','Office Assistant','Purdil Nagar','7891027201'],[118057,'Raja Jain','OFFICER','Scale-I','Purdil Nagar','8077331599'],[106695,'Jitendar Kumar','BRANCH MANAGER','Scale-I','Ratibhanpur','8392831975'],[107204,'Anil Kumar','HEAD CASHIER','Office Assistant','Ratibhanpur','8858828890'],[111134,'Anurag Upadhayay','OFFICER','Scale-I','Ratibhanpur','9800404408'],[112937,'Jitender Kumar','OFFICER','Scale-I','Ratibhanpur','9711904822'],[117593,'Himanshu Porwal','OFFICE ASSISTANT','Office Assistant','Ratibhanpur','7011517807'],[101802,'Shambhu Dayal Meena','BRANCH MANAGER','Scale-III','Ruheri','9453925145'],[105554,'Bhawna Varshney','OFFICER','Scale-I','Ruheri','9997857930'],[110325,'Anwita Saxena','OFFICER','Scale-I','Ruheri','8192068619'],[112543,'Anshika Sharma','HEAD CASHIER','Office Assistant','Ruheri','7905351166'],[112907,'Jitendra Kumar','OFFICER','Scale-I','Ruheri','7503760202'],[117467,'Mohit','OFFICE ASSISTANT','Office Assistant','Ruheri','9870638954'],[107573,'Ram Pratap Singh','HEAD CASHIER','Office Assistant','Sadabad','8923679604'],[107871,'Priyanka Bharti','OFFICER','Scale-I','Sadabad','7004583403'],[110569,'Babita Singh','BRANCH MANAGER','Scale-I','Sadabad','8937849707'],[115154,'Shyam Bihari','OFFICER','Scale-I','Sadabad','8057473742'],[118188,'Kshama','OFFICE ASSISTANT','Office Assistant','Sadabad','8630580746'],[112232,'Rahul Goyal','BRANCH MANAGER','Scale-I','Sahpau','9950814846'],[113540,'Vijay Kumar Saini','HEAD CASHIER','Office Assistant','Sahpau','7417280556'],[114816,'Shashank Sharma','OFFICER','Scale-I','Sahpau','9971964904'],[107011,'Shantanu Dwivedi','HEAD CASHIER','Office Assistant','Salempur','8273446288'],[110541,'Lala Ram Meena','BRANCH MANAGER','Scale-I','Salempur','6397560901'],[112461,'Lekhraj Meena','OFFICER','Scale-I','Salempur','9785579340'],[116498,'Shubham Rai','OFFICER','Scale-I','Salempur','8619226947'],[117550,'Deepak Singh','OFFICE ASSISTANT','Office Assistant','Salempur','8077021784'],[108632,'Jyotsna .','OFFICER','Scale-I','Sasni','7983023990'],[109090,'Karishma Gupta','OFFICER','Scale-II','Sasni','6395941992'],[110594,'Shikha','OFFICER','Scale-I','Sasni','6398987707'],[111059,'Vivek Pratap Singh','BRANCH MANAGER','Scale-III','Sasni','9166346693'],[112070,'Neeraj Kumar Kausahik','OFFICER','Scale-II','Sasni','7675972894'],[112524,'Sumer Singh','OFFICER','Scale-III','Sasni','8410731486'],[115596,'Meenu Singh','HEAD CASHIER','Office Assistant','Sasni','8791410639'],[117953,'Ravi Kumar','OFFICE ASSISTANT','Office Assistant','Sasni','8532043433'],[101843,'Rajesh Kumar','OFFICER','Scale-II','Sikandra Rao','8619482085'],[103741,'Sandeep Kumar','OFFICER','Scale-I','Sikandra Rao','8859963148'],[103779,'Lakhan Singh','BRANCH MANAGER','Scale-II','Sikandra Rao','8923250779'],[105553,'Prayag Nath Singh Pushkar','OFFICER','Scale-I','Sikandra Rao','9720645396'],[108210,'Parvej Khan','HEAD CASHIER','Office Assistant','Sikandra Rao','8909903095'],[111839,'Neha Yadav','OFFICER','Scale-I','Sikandra Rao','8417918260'],[113552,'Jairaj Jakhar','OFFICE ASSISTANT','Office Assistant','Sikandra Rao','9887958283'],[107172,'Ramesh Kumar','BRANCH MANAGER','Scale-II','Tuksan','9012093567'],[107572,'Ravi Kumar','HEAD CASHIER','Office Assistant','Tuksan','8433460036'],[116264,'Shubham Agrawal','OFFICE ASSISTANT','Office Assistant','Tuksan','8791085527'],[116464,'Shivam Pratap','OFFICER','Scale-I','Tuksan','8923447777'],[106595,'Mohit Kumar','BRANCH MANAGER','Scale-I','Wazidpur','9720222267'],[106622,'Ankush Chauhan','OFFICER','Scale-I','Wazidpur','8279643536'],[107564,'Bhupendra Singh','HEAD CASHIER','Office Assistant','Wazidpur','9719771212'],[107847,'Dipesh Kumar','OFFICE ASSISTANT','Office Assistant','Wazidpur','7906824169'],[115722,'Mohit Gautam','OFFICER','Scale-I','Wazidpur','8077068511'],[105375,'Akash Gosaeen','HEAD CASHIER','Office Assistant','Adarshnagar','9610041904'],[112390,'Kumar Pal Singh','OFFICE ASSISTANT','Office Assistant','Adarshnagar','8445913162'],[114840,'Pramod Kumar','OFFICER','Scale-I','Adarshnagar','7534033920'],[115022,'Khushboo Agrawal','BRANCH MANAGER','Scale-I','Adarshnagar','8265941115'],[106140,'Arvind Kumar','HEAD CASHIER','Office Assistant','Hasayan','8630596488'],[107636,'Ajay Varun','OFFICER','Scale-I','Hasayan','8285355972'],[107681,'Gaurav Pratap Singh','BRANCH MANAGER','Scale-I','Hasayan','9027438060'],[100674,'Raj Kumar Gupta','BRANCH MANAGER','Scale-III','Jaleser Road','9119603319'],[103265,'Sunil Kumar','HEAD CASHIER','Office Assistant','Jaleser Road','9005792195'],[108104,'Satendra Kumar','OFFICER','Scale-I','Jaleser Road','9140728012'],[106526,'Vijay Meena','BRANCH MANAGER','Scale-I','Naugaon','8081264620'],[109986,'Naveen Soni','HEAD CASHIER','Office Assistant','Naugaon','8630731436'],[108602,'Mukesh Kumar Meena','BRANCH MANAGER','Scale-III','Bajna','9057218208'],[112297,'Prathvi Singh','OFFICER','Scale-I','Bajna','9058531328'],[114894,'Pooja Kuntal','OFFICER','Scale-I','Bajna','8979757285'],[117464,'Ankit Kumar','HEAD CASHIER','Office Assistant','Bajna','9711278299'],[101830,'Anshul Agrawal','BRANCH MANAGER','Scale-II','Baldev','6393895232'],[101831,'Preeti Gupta','OFFICER','Scale-I','Baldev','9027853017'],[107033,'Devendra Kumar Bhantu','HEAD CASHIER','Office Assistant','Baldev','9837217574'],[114135,'Satendr Kumar','OFFICE ASSISTANT','Office Assistant','Baldev','9604855289'],[116105,'Sunil Kumar','OFFICER','Scale-I','Baldev','9457939355'],[114467,'Prashant','BRANCH MANAGER','Scale-I','Bati','8949437807'],[114626,'Dipu','HEAD CASHIER','Office Assistant','Bati','9760494282'],[114785,'Rinku Meena','OFFICER','Scale-I','Bati','9887928676'],[118023,'Ankit Kumar Gautam','OFFICE ASSISTANT','Office Assistant','Bati','9461905910'],[112255,'Deeksha Agrawal','BRANCH MANAGER','Scale-I','Damodarpura','7017056428'],[114372,'Manish Agrawal','OFFICER','Scale-I','Damodarpura','9468766252'],[114526,'Farheen Qureshi','HEAD CASHIER','Office Assistant','Damodarpura','8077393186'],[116475,'Akansha Chaturvedi','OFFICER','Scale-I','Damodarpura','6398273755'],[105315,'Tanmay Sharma','HEAD CASHIER','Office Assistant','Farah','9458681952'],[114394,'Rajat Chaudhary','BRANCH MANAGER','Scale-I','Farah','9808337348'],[115175,'Siddharth Rawat','OFFICER','Scale-I','Farah','7060642894'],[116266,'Nidhi Gurjar','OFFICER','Scale-I','Farah','9582062045'],[102670,'Neha Gautam','OFFICER','Scale-I','Goverdhan','8630140346'],[108845,'Sushma .','OFFICER','Scale-II','Goverdhan','9634129365'],[113272,'Shivangi Aggarwal','HEAD CASHIER','Office Assistant','Goverdhan','9761264525'],[115682,'Gajendra Rawal','OFFICE ASSISTANT','Office Assistant','Goverdhan','9950416536'],[116446,'Abhishek Chaudhary','BRANCH MANAGER','Scale-I','Goverdhan','8273051205'],[101848,'Banee Singh Meena','BRANCH MANAGER','Scale-III','Maant','9453925145'],[103917,'Rajbir Singh','OFFICER','Scale-II','Maant','9997320663'],[114498,'Neeraj Yadav','OFFICER','Scale-I','Maant','7838901794'],[114689,'Palika','OFFICER','Scale-I','Maant','8368440444'],[117614,'Madhuri Chaudhary','HEAD CASHIER','Office Assistant','Maant','9389423610'],[110309,'Abhishek Mishra','OFFICER','Scale-I','Mathura City','8393960302'],[110741,'Srashti Saxena','OFFICER','Scale-I','Mathura City','7983139124'],[113175,'Ashish Kumar Upadhyay','BRANCH MANAGER','Scale-III','Mathura City','9911767392'],[113203,'Arpan Sharma','HEAD CASHIER','Office Assistant','Mathura City','8791724300'],[115672,'Dhanlaxmi Agrawal','OFFICER','Scale-I','Mathura City','8810559723'],[115718,'Deepa Kumari','OFFICER','Scale-I','Mathura City','7004019249'],[115909,'Hari Krashn','OFFICER','Scale-I','Mathura City','8533817368'],[117545,'Sakshi Sharma','OFFICE ASSISTANT','Office Assistant','Mathura City','8865826992'],[102169,'Mudit Tiwari','BRANCH MANAGER','Scale-II','Laxmi Nagar','7417911923'],[114261,'Charanjeet Kaur','OFFICE ASSISTANT','Office Assistant','Laxmi Nagar','9720000807'],[114299,'Heena Rinwa','OFFICER','Scale-I','Laxmi Nagar','8171564616'],[114933,'Bhavana Lawaniya','HEAD CASHIER','Office Assistant','Laxmi Nagar','8439631967'],[107728,'Sushil Sharma','OFFICER','Scale-I','Pali Kheda','9368041920'],[109746,'Neha Meena','OFFICER','Scale-I','Pali Kheda','8171742413'],[110644,'Ramras Meena','BRANCH MANAGER','Scale-I','Pali Kheda','7568523871'],[116423,'Dinesh Kumar','HEAD CASHIER','Office Assistant','Pali Kheda','8432895501'],[107712,'Dhanvir Singh','OFFICER','Scale-I','Raya','8958003812'],[107756,'Chandra Shekhar','BRANCH MANAGER','Scale-II','Raya','7253970850'],[108748,'Nalini Kushwaha','OFFICER','Scale-II','Raya','9559434943'],[110269,'Mahendra Singh','HEAD CASHIER','Office Assistant','Raya','8279366112'],[115155,'Rashmi Agrawal','OFFICER','Scale-I','Raya','9997054988'],[115789,'Nagesh Bansal','OFFICE ASSISTANT','Office Assistant','Raya','8532086807'],[115884,'Amit Kumar','OFFICER','Scale-I','Raya','7217518214'],[106781,'Shashi Singh','HEAD CASHIER','Office Assistant','Ronchi Bangar','9759255149'],[109722,'Yatendra Singh','BRANCH MANAGER','Scale-II','Ronchi Bangar','6398357722'],[114638,'Mehak Goyal','OFFICER','Scale-I','Ronchi Bangar','7011825348'],[114768,'Akash Parmar','OFFICER','Scale-I','Ronchi Bangar','8938073003'],[115745,'Yashica Aggarwal','OFFICE ASSISTANT','Office Assistant','Ronchi Bangar','7982564540'],[107059,'Sanjeev Manchanda','OFFICER','Scale-I','Sonai','7976059275'],[112287,'Shashank Agrawal','BRANCH MANAGER','Scale-I','Sonai','8265961156'],[117396,'Inderjit Singh','HEAD CASHIER','Office Assistant','Sonai','8899757400'],[106625,'Rakesh Kumar Sharma','HEAD CASHIER','Office Assistant','Tarsi','8864866448'],[108785,'Chitra','OFFICE ASSISTANT','Office Assistant','Tarsi','9720720740'],[112205,'Yatendra Awasthi','BRANCH MANAGER','Scale-I','Tarsi','8209347450'],[116127,'Indu','OFFICER','Scale-I','Tarsi','6377924535'],[103468,'Sonam Gupta','OFFICER','Scale-II','Vrindavan','8410153776'],[110357,'Gunjan Lawaniya','HEAD CASHIER','Office Assistant','Vrindavan','8650259705'],[112126,'Priya Saraswat','OFFICER','Scale-I','Vrindavan','9997736444'],[115164,'Anjali','OFFICE ASSISTANT','Office Assistant','Vrindavan','7027636230'],[115759,'Suraj Kumar Meena','BRANCH MANAGER','Scale-I','Vrindavan','7300228406'],[114191,'Mausim','HEAD CASHIER','Office Assistant','Jajan Patti','9149151955'],[115645,'Tanmay Dixit','BRANCH MANAGER','Scale-I','Jajan Patti','7503735376']];
+
+  var COLUMNS = [
+    { key:'ec',          label:'EC No.' },
+    { key:'name',        label:'Name' },
+    { key:'designation', label:'Designation' },
+    { key:'cadre',        label:'Cadre' },
+    { key:'branch',       label:'Branch' },
+    { key:'contact',      label:'Contact' }
+  ];
+
+  var searchInput = document.getElementById('searchInput');
+  var clearSearchBtn = document.getElementById('clearSearchBtn');
+  var resultCountBadge = document.getElementById('resultCountBadge');
+  var statsHint = document.getElementById('statsHint');
+  var staffHeadRow = document.getElementById('staffHeadRow');
+  var staffBody = document.getElementById('staffBody');
+
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+  }
+
+  var ALL_RECORDS = STAFF_LIST.map(function(r){
+    return { ec:r[0], name:r[1], designation:r[2], cadre:r[3], branch:r[4], contact:r[5] };
+  });
+  var BRANCH_COUNT = (function(){
+    var seen = {};
+    ALL_RECORDS.forEach(function(r){ seen[r.branch] = true; });
+    return Object.keys(seen).length;
+  })();
+  statsHint.textContent = ALL_RECORDS.length + ' staff across ' + BRANCH_COUNT + ' Hathras region branches, as on Aug 2026. Tap the copy icon next to any column’s name to copy that whole column.';
+
+  // Column sorting -- same convention as the NPA/PNPA summary tools:
+  // click a column's name to sort by it, click again to flip direction.
+  var sortState = null;
+  function compareByKey(a, b, key){
+    if (key === 'ec') return (a.ec||0) - (b.ec||0);
+    return String(a[key]||'').localeCompare(String(b[key]||''));
+  }
+  function applySort(records, sort){
+    if (!sort) return records;
+    var sorted = records.slice().sort(function(a,b){ return compareByKey(a,b,sort.key); });
+    if (sort.dir === 'desc') sorted.reverse();
+    return sorted;
+  }
+  function sortArrow(sort, key){
+    if (!sort || sort.key !== key) return '';
+    return sort.dir === 'asc' ? ' ▲' : ' ▼';
+  }
+
+  // Copy-a-whole-column -- same convention as the NPA/PNPA summary
+  // tools: only the data rows, not the column's own name, so it pastes
+  // cleanly into another sheet.
+  var COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  function columnHeaderHtml(c){
+    return '<th data-key="'+esc(c.key)+'"><div class="th-inner"><span class="th-label sortable" data-key="'+esc(c.key)+'" title="Click to sort">'+esc(c.label)+sortArrow(sortState, c.key)+'</span>'+
+      '<button type="button" class="col-copy-btn" title="Copy this column" aria-label="Copy '+esc(c.label)+' column">'+COPY_ICON+'</button>'+
+      '</div></th>';
+  }
+  function columnCellTexts(table, colIndex){
+    var lines = [];
+    table.querySelectorAll('tbody tr').forEach(function(tr){
+      var td = tr.children[colIndex];
+      if (td) lines.push(td.textContent.trim());
+    });
+    return lines;
+  }
+  function fallbackCopy(text){
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    document.body.removeChild(ta);
+  }
+  function copyColumn(btn){
+    var th = btn.closest('th');
+    var table = btn.closest('table');
+    if (!th || !table) return;
+    var colIndex = Array.prototype.indexOf.call(th.parentNode.children, th);
+    var text = columnCellTexts(table, colIndex).join('\n');
+    var showCopied = function(){
+      btn.classList.add('copied');
+      setTimeout(function(){ btn.classList.remove('copied'); }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(showCopied).catch(function(){ fallbackCopy(text); showCopied(); });
+    } else {
+      fallbackCopy(text);
+      showCopied();
+    }
+  }
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest ? e.target.closest('.col-copy-btn') : null;
+    if (!btn) return;
+    e.stopPropagation();
+    copyColumn(btn);
+  });
+  document.addEventListener('click', function(e){
+    var label = e.target.closest ? e.target.closest('.th-label.sortable') : null;
+    if (!label) return;
+    var key = label.getAttribute('data-key');
+    if (!key) return;
+    sortState = (sortState && sortState.key === key) ? { key: key, dir: sortState.dir === 'asc' ? 'desc' : 'asc' } : { key: key, dir: 'asc' };
+    render();
+  });
+
+  function matchesSearch(rec, q){
+    if (!q) return true;
+    return String(rec.ec).indexOf(q) !== -1 ||
+      rec.name.toLowerCase().indexOf(q) !== -1 ||
+      rec.designation.toLowerCase().indexOf(q) !== -1 ||
+      rec.cadre.toLowerCase().indexOf(q) !== -1 ||
+      rec.branch.toLowerCase().indexOf(q) !== -1 ||
+      rec.contact.indexOf(q) !== -1;
+  }
+
+  function renderCell(c, rec){
+    if (c.key === 'contact') return '<td><a href="tel:'+esc(rec.contact)+'">'+esc(rec.contact)+'</a></td>';
+    return '<td>'+esc(rec[c.key])+'</td>';
+  }
+
+  function render(){
+    var q = searchInput.value.trim().toLowerCase();
+    var filtered = applySort(ALL_RECORDS.filter(function(rec){ return matchesSearch(rec, q); }), sortState);
+
+    staffHeadRow.innerHTML = COLUMNS.map(columnHeaderHtml).join('');
+    staffBody.innerHTML = filtered.length
+      ? filtered.map(function(rec){ return '<tr>'+COLUMNS.map(function(c){ return renderCell(c, rec); }).join('')+'</tr>'; }).join('')
+      : '<tr class="empty-row"><td colspan="'+COLUMNS.length+'">No matching staff found.</td></tr>';
+
+    resultCountBadge.textContent = q ? (filtered.length + ' of ' + ALL_RECORDS.length) : (ALL_RECORDS.length + ' total');
+    clearSearchBtn.hidden = !q;
+    resizeFrame();
+  }
+
+  searchInput.addEventListener('input', render);
+  clearSearchBtn.addEventListener('click', function(){
+    searchInput.value = '';
+    render();
+    searchInput.focus();
+  });
+
+  // Same iframe self-sizing as the NPA/PNPA summary tools (same-origin
+  // window.frameElement) -- no overscroll-behavior:none on html/body,
+  // since that blocks the scroll *chaining* a touch-drag needs to hand a
+  // gesture up to the parent page's #mainCol once this iframe has
+  // nothing left of its own to scroll (see the mobile bug fixed on those
+  // two tools, 2026-09-10).
+  function resizeFrame(){
+    if (!window.frameElement) return;
+    requestAnimationFrame(function(){
+      window.frameElement.style.height = document.documentElement.scrollHeight + 'px';
+    });
+  }
+  window.addEventListener('resize', resizeFrame);
+  window.addEventListener('load', resizeFrame);
+
+  render();
+})();
+</script>
+</body>
+</html>
