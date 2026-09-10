@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### New: NPA Region Summary added to Utility (2026-09-10)
+
+Alok supplied a standalone tool he already had -- upload the whole-bank NPA export, get an instant Region-wise and Branch-wise summary (KCC/CC004, Slippage, Total Balance, all in ₹ Lakhs) -- and asked for it folded into the app, restyled to match, with a way to copy any single summary column in one tap for pasting elsewhere.
+
+Folded into Utility the same way PassSheet is: a new `tools/npa-region-summary.html`, embedded via iframe (not merged into this page's own CSS/JS, so its class names can't collide with the app's own) from a new `utility-card` + `data-view="regionsummary"` section, added to `UTILITY_CHILD_VIEWS` so the Utility nav item stays highlighted while looking at it. Unlike PassSheet (kept exactly as supplied, per Alok's original instruction for that tool), this one's head/style/markup were rebuilt from scratch on the app's real light/dark tokens and Manrope/Inter typefaces (loaded from Google Fonts inside the iframe, since it can't inherit the main stylesheet's self-hosted `@font-face`), plus the same `upgb-theme` localStorage-sync script `tools/passsheet.html` already uses, so it tracks the app's theme toggle live. The file's actual logic -- reading the .xlsb/.xlsx/.xls file client-side, finding the SOL/Region/Branch/Scheme/Balance/Reasons columns, aggregating KCC and Slippage per SOL ID and per region -- is untouched.
+
+**Copy-a-column**, the other half of the ask: every column header in both the Region-wise and Branch-wise tables now carries a small copy icon. Tapping it copies that entire column -- its header label, every row's value, and the Grand Total row -- as newline-separated plain text via `navigator.clipboard.writeText()` (falling back to a hidden-textarea `execCommand('copy')` where the Clipboard API isn't available), ready to paste into WhatsApp, Excel, or anywhere else, without hand-selecting a column of table cells. Reads straight from the rendered DOM rather than recomputing from the parsed data, so what gets copied always exactly matches what's on screen and the feature never has to duplicate (or risk drifting from) the existing render/export logic. One shared click-delegated handler covers both tables' columns, keyed off the clicked button's position in its own `<tr>` rather than a hardcoded column list, so it needed no per-column wiring.
+
+Verified via Playwright with a synthetic test workbook: region and branch aggregates match hand-computed totals, every copy button places the exact expected text (header + rows + grand total) on the clipboard, the tool renders correctly in both themes, and the Utility hub / back-button navigation works the same as the existing OneDrive/PassSheet cards.
+
 ### Follow-up: Special Note banner no longer dismisses on a stray tap; extra pull-to-refresh guard (2026-09-09, same day)
 
 Alok reported the mobile reload was still happening, and separately asked for the Special Note banner to stop disappearing the moment it's tapped anywhere — a note is important enough that an accidental touch shouldn't hide it for the rest of the visit.
