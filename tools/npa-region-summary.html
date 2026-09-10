@@ -459,14 +459,26 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return Object.keys(regions).sort(function(a,b){ return a.localeCompare(b); });
   }
 
+  // Alok's own bank region -- default the Branch-wise selector to it (and
+  // pin its row to the top of Region-wise Summary, see hathrasFirst()
+  // below) whenever the uploaded whole-bank file actually has a "Hathras"
+  // region, since that's the one he actually works with daily; falls back
+  // to the select's own first option (unchanged behaviour) for any file
+  // that doesn't.
+  function findRegionNameCI(names, wanted){
+    return names.find(function(n){ return String(n).trim().toLowerCase() === wanted; });
+  }
   function buildRegionOptions(){
     regionSelect.innerHTML = '';
-    getSortedRegionNames(state.regions).forEach(function(name){
+    var names = getSortedRegionNames(state.regions);
+    names.forEach(function(name){
       var opt = document.createElement('option');
       opt.value = name;
       opt.textContent = name;
       regionSelect.appendChild(opt);
     });
+    var hathras = findRegionNameCI(names, 'hathras');
+    if (hathras) regionSelect.value = hathras;
   }
 
   function getRecordsForRegion(regionName){
@@ -497,33 +509,69 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return '<td></td>';
   }
 
+  // Column sorting (Alok's request, 2026-09-10): click any column's name
+  // to sort the table by it, click again to flip direction. Two
+  // independent sort states, one per table -- switching Branch-wise's
+  // selected region keeps whatever sort was set, same as PassSheet-style
+  // tools generally don't reset a view's ordering just because its data
+  // changed underneath it. null means "no explicit sort yet": Branch-wise
+  // falls back to its original SOL-ascending order, Region-wise falls
+  // back to hathrasFirst() below rather than plain alphabetical.
+  var regionSort = null;
+  var branchSort = null;
+  function compareByKey(a, b, key){
+    if (key === 'sol') return solSortKey(a.sol) - solSortKey(b.sol);
+    if (key === 'branch' || key === 'region') return String(a[key]||'').localeCompare(String(b[key]||''));
+    return (a[key]||0) - (b[key]||0); // kcc / total / slip
+  }
+  function applySort(records, sortState){
+    if (!sortState) return records;
+    var sorted = records.slice().sort(function(a,b){ return compareByKey(a,b,sortState.key); });
+    if (sortState.dir === 'desc') sorted.reverse();
+    return sorted;
+  }
+  // Region-wise Summary's own default (no explicit sort clicked yet):
+  // Hathras -- the region Alok actually works with day to day -- pinned
+  // to the top of what can otherwise be a long whole-bank region list,
+  // rest left in their existing alphabetical order.
+  function hathrasFirst(records){
+    var idx = records.findIndex(function(r){ return String(r.region||'').trim().toLowerCase() === 'hathras'; });
+    if (idx <= 0) return records;
+    var copy = records.slice();
+    copy.unshift(copy.splice(idx, 1)[0]);
+    return copy;
+  }
+  function sortArrow(sortState, key){
+    if (!sortState || sortState.key !== key) return '';
+    return sortState.dir === 'asc' ? ' ▲' : ' ▼';
+  }
+
   // Copy-a-whole-column (Alok's request, 2026-09-10): a small copy icon
   // next to every column's name in both tables, so any single column --
   // SOL ID, Branch Name, KCC/Total/Slippage balance, whatever's on
   // screen -- can be grabbed in one tap and pasted elsewhere (a WhatsApp
   // message, another sheet) without hand-selecting a column of cells.
-  // Reads straight from the rendered DOM (header label + every body row +
-  // the Grand Total row) rather than recomputing from `state.regions`, so
-  // what gets copied is always exactly what's on screen -- no risk of it
-  // drifting from the existing render/export logic above, which this
-  // feature doesn't touch at all.
+  // Reads straight from the rendered DOM (every body row, in whatever
+  // order the current sort put them in) rather than recomputing from
+  // `state.regions`, so what gets copied is always exactly what's on
+  // screen -- no risk of it drifting from the existing render/export
+  // logic above, which this feature doesn't touch at all. Only the data
+  // rows themselves -- not the column's own name, not the Grand Total
+  // row -- per Alok's follow-up request: he pastes this straight into
+  // another sheet/column, where a heading or a total mixed into the data
+  // would need to be deleted by hand every time.
   var COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-  function columnHeaderHtml(c){
-    return '<th><div class="th-inner"><span class="th-label">'+esc(c.label)+'</span>'+
+  function columnHeaderHtml(c, sortState){
+    return '<th data-key="'+esc(c.key)+'"><div class="th-inner"><span class="th-label sortable" data-key="'+esc(c.key)+'" title="Click to sort">'+esc(c.label)+sortArrow(sortState, c.key)+'</span>'+
       '<button type="button" class="col-copy-btn" title="Copy this column" aria-label="Copy '+esc(c.label)+' column">'+COPY_ICON+'</button>'+
       '</div></th>';
   }
   function columnCellTexts(table, colIndex){
     var lines = [];
-    var headLabel = table.querySelectorAll('thead .th-label')[colIndex];
-    if (headLabel) lines.push(headLabel.textContent.trim());
     table.querySelectorAll('tbody tr').forEach(function(tr){
       var td = tr.children[colIndex];
       if (td) lines.push(td.textContent.trim());
     });
-    var footRow = table.querySelector('tfoot tr');
-    var footCell = footRow ? footRow.children[colIndex] : null;
-    if (footCell) lines.push(footCell.textContent.trim());
     return lines;
   }
   function fallbackCopy(text){
@@ -559,13 +607,27 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     e.stopPropagation();
     copyColumn(btn);
   });
+  document.addEventListener('click', function(e){
+    var label = e.target.closest ? e.target.closest('.th-label.sortable') : null;
+    if (!label) return;
+    var table = label.closest('table');
+    var key = label.getAttribute('data-key');
+    if (!table || !key) return;
+    if (table.id === 'regionTable'){
+      regionSort = (regionSort && regionSort.key === key) ? { key: key, dir: regionSort.dir === 'asc' ? 'desc' : 'asc' } : { key: key, dir: 'asc' };
+      renderRegionSummary();
+    } else if (table.id === 'dataTable'){
+      branchSort = (branchSort && branchSort.key === key) ? { key: key, dir: branchSort.dir === 'asc' ? 'desc' : 'asc' } : { key: key, dir: 'asc' };
+      renderTable();
+    }
+  });
 
   function renderTable(){
     var regionName = regionSelect.value;
     var cols = BRANCH_COLUMNS;
-    var records = getRecordsForRegion(regionName);
+    var records = applySort(getRecordsForRegion(regionName), branchSort);
 
-    tableHeadRow.innerHTML = cols.map(columnHeaderHtml).join('');
+    tableHeadRow.innerHTML = cols.map(function(c){ return columnHeaderHtml(c, branchSort); }).join('');
 
     var bodyHtml = '';
     var totKcc=0, totTotal=0, totSlip=0;
@@ -590,9 +652,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function renderRegionSummary(){
     var cols = REGION_COLUMNS;
-    var records = getRegionSummaryRecords();
+    var records = regionSort ? applySort(getRegionSummaryRecords(), regionSort) : hathrasFirst(getRegionSummaryRecords());
 
-    regionHeadRow.innerHTML = cols.map(columnHeaderHtml).join('');
+    regionHeadRow.innerHTML = cols.map(function(c){ return columnHeaderHtml(c, regionSort); }).join('');
 
     var bodyHtml = '';
     var totKcc=0, totTotal=0, totSlip=0;
@@ -680,7 +742,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function exportBranchExcel(){
     var regionName = regionSelect.value;
-    var records = getRecordsForRegion(regionName);
+    var records = applySort(getRecordsForRegion(regionName), branchSort);
     var ws = buildSheetFromRecords(BRANCH_COLUMNS, records, 'NPA Branch-wise Summary - ' + regionName, 'sol');
 
     var outWb = XLSX.utils.book_new();
@@ -691,7 +753,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   function exportRegionExcel(){
-    var records = getRegionSummaryRecords();
+    var records = regionSort ? applySort(getRegionSummaryRecords(), regionSort) : hathrasFirst(getRegionSummaryRecords());
     var ws = buildSheetFromRecords(REGION_COLUMNS, records, 'NPA Region-wise Summary - All Regions', 'region');
 
     var outWb = XLSX.utils.book_new();
@@ -729,6 +791,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           var wb = XLSX.read(data, { type:'array', dense:true });
           var result = processWorkbook(wb);
           state.regions = result.regions;
+          regionSort = null;
+          branchSort = null;
 
           buildRegionOptions();
           renderRegionSummary();
@@ -742,6 +806,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           statsBox.classList.remove('hidden');
           viewPanel.classList.remove('hidden');
           setStatus('File loaded successfully.', 'ok');
+          resizeFrame();
         } catch (err){
           console.error(err);
           setStatus('Error: ' + err.message, 'err');
@@ -778,21 +843,44 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function handleClear(){
     state.regions = null;
+    regionSort = null;
+    branchSort = null;
     fileInput.value = '';
     updateDropzoneTitle();
     viewPanel.classList.add('hidden');
     statsBox.classList.add('hidden');
     statusEmpty.classList.remove('hidden');
     setStatus('');
+    resizeFrame();
   }
 
   loadBtn.addEventListener('click', handleLoad);
   clearBtn.addEventListener('click', handleClear);
-  regionSelect.addEventListener('change', renderTable);
+  regionSelect.addEventListener('change', function(){ renderTable(); resizeFrame(); });
   exportBtn.addEventListener('click', exportBranchExcel);
   exportRegionBtn.addEventListener('click', exportRegionExcel);
-  tabRegionBtn.addEventListener('click', function(){ switchTab('region'); });
-  tabBranchBtn.addEventListener('click', function(){ switchTab('branch'); });
+  tabRegionBtn.addEventListener('click', function(){ switchTab('region'); resizeFrame(); });
+  tabBranchBtn.addEventListener('click', function(){ switchTab('branch'); resizeFrame(); });
+
+  // This tool's content length varies wildly -- a handful of regions vs.
+  // a whole bank's worth of branches -- unlike PassSheet's always-tall
+  // transaction list, so a fixed iframe height (the shared
+  // .tool-frame-wrap the main app embeds this in) either wastes a lot of
+  // space below a short table or clips a long one. Same-origin means this
+  // tool's own <iframe> tag in the parent document (window.frameElement)
+  // is directly reachable, so it resizes itself to its own real content
+  // height whenever that content changes, rather than the parent page
+  // needing to poll or the two pages needing postMessage plumbing.
+  // Standalone (opened outside the app, not in an iframe) is unaffected:
+  // window.frameElement is null there, so this is a no-op.
+  function resizeFrame(){
+    if (!window.frameElement) return;
+    requestAnimationFrame(function(){
+      window.frameElement.style.height = document.documentElement.scrollHeight + 'px';
+    });
+  }
+  window.addEventListener('resize', resizeFrame);
+  resizeFrame();
 })();
 </script>
 </body>

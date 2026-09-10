@@ -2719,6 +2719,17 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
 .tool-frame-wrap{height:calc(100vh - 210px);min-height:480px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg,16px);overflow:hidden}
 .tool-frame{width:100%;height:100%;border:none;display:block;background:#fff}
 @media (max-width:760px){.tool-frame-wrap{height:calc(100vh - 260px);min-height:420px}}
+/* NPA Region Summary's own content height varies wildly (a handful of
+   regions vs. a whole bank's worth of branches), unlike PassSheet's
+   always-tall scrolling transaction list -- the shared fixed
+   near-full-viewport height above left a lot of dead space below its
+   usually-short tables (Alok's report, 2026-09-10). tools/npa-region-
+   summary.html sets its own <iframe> tag's inline height directly (via
+   window.frameElement, safe same-origin) to match its real content
+   height whenever that content changes, so this wrapper just needs to
+   get out of the way and let the iframe's own height show through. */
+#viewRegionSummary .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
+#viewRegionSummary .tool-frame{height:520px;min-height:0}
 .onedrive-page-head{display:flex;flex-direction:column;gap:4px}
 .onedrive-page-title{display:flex;align-items:center;gap:10px;color:var(--ink)}
 .onedrive-page-title svg{color:var(--accent);flex-shrink:0}
