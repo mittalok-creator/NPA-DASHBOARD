@@ -1,6 +1,16 @@
 /* Login screen — split access panel (branded hero + PIN entry). */
 (function () {
   const CORRECT_PIN = '9269';
+  // Temporary PIN for 3-4 days' guest access (Alok's request, 2026-09-10):
+  // works only up to and including 13-09-2026 (local time), then silently
+  // stops validating -- no code change or redeploy needed to revoke it.
+  const TEMP_PIN = '0000';
+  const TEMP_PIN_EXPIRES = new Date('2026-09-14T00:00:00');
+  function isValidPin(v) {
+    if (v === CORRECT_PIN) return true;
+    if (v === TEMP_PIN && new Date() < TEMP_PIN_EXPIRES) return true;
+    return false;
+  }
   const screen = document.getElementById('splashScreen');
   if (!screen || screen.classList.contains('skip')) return;
 
@@ -51,7 +61,7 @@
   }
   function submit() {
     if (locked || value.length !== 4) { shakeIncomplete(); return; }
-    if (value === CORRECT_PIN) unlock(); else reject();
+    if (isValidPin(value)) unlock(); else reject();
   }
   function push(d) {
     if (locked || value.length >= 4) return;
