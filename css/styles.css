@@ -197,6 +197,17 @@
   /* primary/secondary accent pair: royal blue + electric cyan — distinct
      from every status color */
   --accent:#3A7BFF; --accent-2:#36D7FF; --accent-soft:rgba(58,123,255,.14);
+  --accent-2-soft:rgba(54,215,255,.16);
+
+  /* Utility Hub icon-badge colors (2026-09-10) -- three decorative hues
+     added alongside the accent pair so each tool card reads as its own
+     color at a glance. Deliberately NOT the --green/--amber/--red status
+     ramp: those already mean asset-quality state elsewhere in this app,
+     and reusing them here would make a tool card look like a status pill. */
+  --tool-violet:#8B7CF0; --tool-violet-soft:rgba(139,124,240,.16);
+  --tool-teal:#1FC9B7; --tool-teal-soft:rgba(31,201,183,.16);
+  --tool-terracotta:#E68A66; --tool-terracotta-soft:rgba(230,138,102,.16);
+  --emboss-rim:rgba(255,255,255,.05);
   --gold:#3A7BFF; --gold-l:#7FB0FF; --gold-d:#245BFF; --gold-soft:rgba(58,123,255,.12);
 
   /* freeze/confirm "seal" moment — ceremonial brass, unchanged in meaning */
@@ -1635,15 +1646,40 @@ html,body{overscroll-behavior:none}
   background:none;border:none;padding:2px 0 4px;margin:0;font-size:12px;font-weight:700;
   color:var(--sub);cursor:pointer;transition:color .12s var(--ease)}
 .page-back-link:hover{color:var(--accent-2)}
-.utility-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
-.utility-card{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;
-  padding:20px 18px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg,16px);
-  cursor:pointer;transition:border-color .15s var(--ease),box-shadow .15s var(--ease),transform .12s var(--ease)}
-.utility-card:hover{border-color:var(--accent-2);box-shadow:0 10px 26px -12px rgba(0,0,0,.28);transform:translateY(-1px)}
-.utility-card-icon{display:flex;align-items:center;justify-content:center;width:44px;height:44px;
-  border-radius:12px;background:var(--accent-soft);color:var(--accent-2)}
+/* Embossed/3D card treatment (Alok's request, 2026-09-10: "utility hub ko
+   visually enhance karo... 3D look embossed type") -- approved from a
+   mockup at https://claude.ai/code/artifact/90f5037d-17e1-4e8d-a10d-0b5c0d5978d2.
+   Deliberately reuses this app's own --shadow/--shadow-lg elevation tokens
+   and a subtle inset top rim (--emboss-rim, defined per theme below) rather
+   than a from-scratch neumorphic same-color card, since every other card in
+   this app already lifts off the page via var(--card) against var(--bg) --
+   matching that convention keeps the Utility grid feeling like part of the
+   same app instead of a one-off style pasted in. Each tool gets its own
+   icon-badge color (five --tool-* tokens below, two of them reusing the
+   app's existing --accent/--accent-2 pair) so cards are scannable at a
+   glance instead of all sharing one identical icon tint. */
+.utility-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}
+.utility-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:10px;text-align:left;
+  padding:22px 20px 20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-xl,24px);
+  cursor:pointer;box-shadow:var(--shadow-sm), inset 0 1px 0 var(--emboss-rim);
+  transition:border-color .15s var(--ease),box-shadow .18s var(--ease),transform .15s var(--ease)}
+.utility-card:hover{border-color:var(--accent-2);box-shadow:var(--shadow), inset 0 1px 0 var(--emboss-rim);transform:translateY(-3px)}
+.utility-card:active{transform:translateY(-1px);box-shadow:var(--shadow-sm), inset 0 1px 0 var(--emboss-rim)}
+.utility-card-icon{position:relative;display:flex;align-items:center;justify-content:center;width:50px;height:50px;
+  border-radius:16px;background:var(--tool-soft, var(--accent-soft));color:var(--tool-color, var(--accent-2));
+  box-shadow:inset 0 1px 2px var(--emboss-rim), inset 0 -2px 4px rgba(0,0,0,.14)}
+.utility-card-icon.tool-blue{--tool-color:var(--accent);--tool-soft:var(--accent-soft)}
+.utility-card-icon.tool-violet{--tool-color:var(--tool-violet);--tool-soft:var(--tool-violet-soft)}
+.utility-card-icon.tool-teal{--tool-color:var(--tool-teal);--tool-soft:var(--tool-teal-soft)}
+.utility-card-icon.tool-cyan{--tool-color:var(--accent-2);--tool-soft:var(--accent-2-soft)}
+.utility-card-icon.tool-terracotta{--tool-color:var(--tool-terracotta);--tool-soft:var(--tool-terracotta-soft)}
 .utility-card-title{font-size:14.5px;font-weight:800;color:var(--ink)}
 .utility-card-desc{font-size:12px;color:var(--sub);line-height:1.5}
+.utility-card-arrow{position:absolute;top:18px;right:18px;width:24px;height:24px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;color:var(--sub);background:var(--card);
+  box-shadow:var(--shadow-sm);opacity:0;transform:translate(-4px,4px);
+  transition:opacity .15s var(--ease),transform .15s var(--ease)}
+.utility-card:hover .utility-card-arrow{opacity:1;transform:translate(0,0)}
 
 .nav-foot{padding:0 14px;font-size:10.5px;color:var(--chrome-mute);letter-spacing:.2px;
   max-height:0;opacity:0;overflow:hidden;pointer-events:none;transition:opacity .12s var(--ease)}
@@ -2134,6 +2170,14 @@ header.app-head::before,.detail-head::before{
      accent/accent-2 so they read as rich rather than pastel against a pale
      page. */
   --accent:#1B4FE0; --accent-2:#0EA5C4; --accent-soft:rgba(27,79,224,.10);
+  --accent-2-soft:rgba(14,165,196,.10);
+  /* Utility Hub icon-badge colors -- deepened a shade for AA contrast on
+     the warm ivory page, same reasoning as --accent's own light-theme
+     deepening above. */
+  --tool-violet:#5B3FD1; --tool-violet-soft:rgba(91,63,209,.10);
+  --tool-teal:#0E8F7E; --tool-teal-soft:rgba(14,143,126,.10);
+  --tool-terracotta:#B35A38; --tool-terracotta-soft:rgba(179,90,56,.10);
+  --emboss-rim:rgba(255,255,255,.75);
   --gold:#1B4FE0; --gold-l:#3A7BFF; --gold-d:#123A9E; --gold-soft:rgba(27,79,224,.08);
   --stripe:rgba(62,50,30,.024); --stripe-label:rgba(62,50,30,.035);
   /* Table headers sit on the same warm paper as everything else -- a faint
