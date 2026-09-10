@@ -123,6 +123,18 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### New: HBR Report added to Utility (2026-09-10, same day)
+
+Alok uploaded a real core-banking "BM Balancing Report" PDF (GL Sub Head 15181, whole Hathras region, 09-09-2026) and asked for a new "HBR Report" utility: branch-wise view, Excel export, and an account picker where selecting one account shows its balance at every one of the 55 operational SOL IDs in rupees.
+
+This report's own format is a legacy fixed-width text export (not a spreadsheet), so `tools/hbr-report.html` reads the PDF entirely client-side via pdf.js -- the same text-reconstruction technique already proven in `tools/passsheet.html` (group text fragments by Y-position, sort by X, rebuild each printed line). Each detail line looks like `<account no> <description> <debit amt> <credit amt>` with no separator between the account number and the description, so rows are recognised by shape: the first token is a purely alphanumeric string of 10+ characters containing a digit (excludes scheme-subtotal lines like `15181 CRPNT 1 0 45,020.00`, the `Total:` lines, page banners, and footer URLs, all of which are either shorter or contain punctuation), and the line's last two whitespace-separated tokens must both look like amounts.
+
+The trickiest part: this single report mixes **two different SOL ID eras** for the same 57 branches. Older GL heads (interest accrual, subsidy, cash adjustment) are prefixed with the 5-digit **old** Sol ID (15010-16160, matching `BRANCH_LIST`'s first column); newer customer-facing GL heads (DD, OTS, AEPS, GST) are prefixed with the 4-digit **new** Sol ID (9269-9325, the second column) -- both prefixes appear side by side in the same file. `resolveSol()` tries a 5-digit old-Sol-ID match when a line starts with "15"/"16", or a 4-digit new-Sol-ID match when it starts with "92"/"93", and reports everything back in the new/canonical Sol ID. A handful of "70xxx"-prefixed Head-Office-level parking/suspense accounts don't belong to any branch at all -- these, plus R O Hathras (9269) and Hathras Service Branch (9283) (excluded from the branch list for the same "not operational" reason as the Daily PNPA Summary tool), are rolled into one "Head Office / Unassigned" row so every rupee in the report still lands somewhere and the Grand Total always reconciles.
+
+Two tabs: **Branch-wise Summary** lists every operational branch (zero-filled from the same `BRANCH_LIST` copy used elsewhere) with Debit, Credit, and Net Balance (Credit − Debit) columns, sortable/copyable like its siblings, plus Export to Excel. **Account-wise Detail** has a dropdown of every distinct account description found in the file (e.g. "NO LIEN (OTS)", "AEPS - OFFUS PAYABLE") -- selecting one shows that single account's Debit/Credit/Net at all 55 branches, zero-filled, with its own Export to Excel.
+
+Verified against Alok's real file down to the paisa: the parser extracted exactly 708 entries, matching the report's own printed "708" account count, and the summed Debit (₹4,51,878.31) and Credit (₹3,42,64,047.47) totals matched the report's own Grand Total line exactly. New `utility-card` + `data-view="hbrreport"` section, added to `UTILITY_CHILD_VIEWS`, and `#viewHbrReport`'s own `.tool-frame-wrap` auto-height override, following the same pattern as every other Utility tool. Full Utility-hub integration (card → iframe → upload → back navigation) verified via Playwright.
+
 ### Follow-up: Telephone Directory gets SOL ID, WhatsApp link, Branch Manager filter, names in caps (2026-09-10, same day)
 
 Four more requests on the same tool, all same day.
