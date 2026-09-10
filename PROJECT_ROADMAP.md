@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Rename: "Utility" is now "Utility Hub"; PassSheet gets a "(HMSTRP)" tag (2026-09-10, same day)
+
+Two small requests. The "Utility" nav item, its section label, the Utility page's own `<h1>`, and every child tool's "Back to Utility" link are now "Utility Hub" throughout `index.html` (sidebar nav, bottom tab nav, page header, and all six back-links) -- purely a label change, `data-view="utility"` and `UTILITY_CHILD_VIEWS` are untouched so nothing else needed updating. Separately, "PassSheet" now carries a small "(HMSTRP)" tag next to its name in three places: the Utility Hub card, the PassSheet page's own `<h1>`, and the standalone tool's own topbar brand name (`tools/passsheet.html`) -- a `<small>` element (browsers render it at ~80% size already) with reduced opacity, so it reads as a subordinate tag rather than part of the name itself.
+
 ### Follow-up: HBR Report's Account filter now shows the account number too (2026-09-10, same day)
 
 Alok pointed out he often remembers an account's number, not its name ("kabhi kabhi name yaad nahi hota account no yaad rahta hai"), so the Account-wise Detail dropdown now labels every option as `<account number> — <description>` (e.g. "15181213 — NO LIEN (OTS)") instead of the description alone, and sorts by that number instead of alphabetically by name.
