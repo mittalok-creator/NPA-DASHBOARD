@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HBR Report</title>
+<!-- Synced with the main app's own theme toggle (2026-09-10) -- same
+     technique as tools/passsheet.html: this tool is embedded via iframe
+     on the same origin as the main app, so it can read the exact
+     localStorage key the main app's own theme toggle writes (see
+     setTheme() in js/app.js) directly, no postMessage needed. -->
+<script>
+(function(){
+  function syncTheme(){
+    try{
+      var t = localStorage.getItem('upgb-theme');
+      if(t==='dark'||t==='light') document.documentElement.dataset.theme = t;
+      else delete document.documentElement.dataset.theme;
+    }catch(e){}
+  }
+  syncTheme();
+  window.addEventListener('storage', function(e){ if(e.key==='upgb-theme') syncTheme(); });
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Same design system as the other Utility tools. */
+  :root{
+    --bg:#F2F5F3;
+    --surface:#FFFFFF;
+    --surface-muted:#EAEFEC;
+    --ink:#16211C;
+    --ink-muted:#5C6D64;
+    --line:#D7DED9;
+    --accent:#0E6B57;
+    --accent-ink:#FFFFFF;
+    --accent-soft:#DCEEE8;
+    --debit:#A5432B;
+    --credit:#0E6B57;
+    --warn:#9A6A0A;
+    --warn-soft:#F3E7CE;
+    --shadow: 0 1px 2px rgba(20,40,32,.06), 0 6px 20px -8px rgba(20,40,32,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0F1C17;
+      --surface:#15251F;
+      --surface-muted:#1B2C25;
+      --ink:#E7F1EC;
+      --ink-muted:#93AA9F;
+      --line:#28392F;
+      --accent:#52C09B;
+      --accent-ink:#08150F;
+      --accent-soft:#1E362C;
+      --debit:#E58B72;
+      --credit:#63C79E;
+      --warn:#E2B85B;
+      --warn-soft:#3A3020;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0F1C17;
+    --surface:#15251F;
+    --surface-muted:#1B2C25;
+    --ink:#E7F1EC;
+    --ink-muted:#93AA9F;
+    --line:#28392F;
+    --accent:#52C09B;
+    --accent-ink:#08150F;
+    --accent-soft:#1E362C;
+    --debit:#E58B72;
+    --credit:#63C79E;
+    --warn:#E2B85B;
+    --warn-soft:#3A3020;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box}
+  /* No overscroll-behavior:none here -- see the mobile-scroll-chaining
+     lesson from the NPA Region/PNPA Summary tools (2026-09-10): it blocks
+     the hand-off a touch-drag needs to reach the parent page's #mainCol
+     once this self-sizing iframe has nothing left of its own to scroll. */
+  html,body{margin:0;background:var(--bg)}
+  body{color:var(--ink);font-family:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;font-size:14px;line-height:1.5}
+  .num{font-variant-numeric:tabular-nums}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px 56px}
+
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:16px 22px; margin-bottom:8px;
+    background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand-mark{font-size:26px;line-height:1}
+  .brand-name{font-family:'Spectral', Georgia, serif;font-weight:700;font-size:21px;letter-spacing:.2px}
+  .brand-tag{font-size:12px;color:var(--ink-muted);margin-top:1px}
+
+  .btn{
+    font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;font-weight:600;
+    padding:9px 16px;border-radius:8px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);cursor:pointer;
+  }
+  .btn:hover{border-color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .btn-primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .btn-primary:hover{filter:brightness(1.06)}
+  .btn-primary:disabled{opacity:.45;cursor:not-allowed;filter:none}
+  .btn-ghost{background:transparent}
+
+  .hero{display:grid;grid-template-columns:1fr 1.35fr;gap:18px;margin:18px 0 30px}
+  @media (max-width:760px){.hero{grid-template-columns:1fr}}
+  .dropzone{
+    background:var(--surface);border:1.5px dashed var(--line);border-radius:14px;
+    padding:30px 22px;text-align:center;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    transition:border-color .15s,background .15s;box-shadow:var(--shadow);
+    min-height:190px;
+  }
+  .dropzone.drag{border-color:var(--accent);background:var(--accent-soft)}
+  .dropzone-icon{font-size:30px;margin-bottom:8px}
+  .dropzone-title{font-weight:600;font-size:15px;word-break:break-all}
+  .dropzone-sub{color:var(--ink-muted);font-size:12.5px;margin-top:6px;max-width:32ch}
+
+  .status-panel{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);padding:24px;display:flex;flex-direction:column;
+    justify-content:center;gap:16px;
+  }
+  .status-empty{color:var(--ink-muted);font-size:13.5px;line-height:1.5;max-width:36ch}
+  .status-stats{display:flex;gap:32px;flex-wrap:wrap}
+  .status-stat{display:flex;flex-direction:column}
+  .status-num{
+    font-family:'Spectral', Georgia, serif;font-weight:700;font-size:30px;
+    color:var(--accent);line-height:1;font-variant-numeric:tabular-nums;
+  }
+  .status-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-top:6px}
+  .status-actions{display:flex;gap:10px;margin-top:auto}
+  .status-actions .btn{flex:1}
+  #status{font-size:12.5px;color:var(--ink-muted);min-height:18px;font-weight:600}
+  #status.err{color:var(--debit)}
+  #status.ok{color:var(--credit)}
+
+  .section-label{font-size:11.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-muted);margin:0 0 12px}
+
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .row{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  label{font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-muted)}
+  select{padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;font-family:inherit;min-width:280px;background:var(--bg);color:var(--ink)}
+  select:focus{outline:none;border-color:var(--accent)}
+
+  .pill{font-size:12px;color:var(--ink-muted);padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);white-space:nowrap}
+  .badge{display:inline-block;background:var(--accent-soft);color:var(--credit);border-radius:999px;padding:5px 11px;font-size:11.5px;font-weight:600}
+
+  table{border-collapse:collapse;width:100%;font-size:12.5px;background:var(--surface)}
+  thead th{position:sticky;top:0;background:var(--surface-muted);color:var(--ink-muted);padding:0;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line);z-index:1}
+  thead th:nth-child(1),thead th:nth-child(2){text-align:left}
+  .th-inner{display:flex;align-items:center;gap:6px;padding:8px 12px;justify-content:flex-end}
+  thead th:nth-child(1) .th-inner,thead th:nth-child(2) .th-inner{justify-content:flex-start}
+  .th-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted)}
+  .col-copy-btn{
+    flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+    border-radius:6px;border:1px solid transparent;background:none;color:var(--ink-muted);cursor:pointer;padding:0;
+  }
+  .col-copy-btn:hover,.col-copy-btn:focus-visible{background:var(--accent-soft);color:var(--accent);outline:none}
+  .col-copy-btn.copied{background:var(--accent-soft);color:var(--credit)}
+  .col-copy-btn svg{width:12px;height:12px;pointer-events:none}
+  tbody td{padding:6px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;vertical-align:top}
+  tbody td:nth-child(1),tbody td:nth-child(2){text-align:left}
+  tbody tr:nth-child(even){background:var(--surface-muted)}
+  tbody tr.unassigned-row{background:var(--warn-soft)}
+  tfoot td{padding:8px 12px;font-weight:700;background:var(--accent-soft);border-top:2px solid var(--accent);text-align:right}
+  tfoot td:nth-child(1),tfoot td:nth-child(2){text-align:left}
+  /* Fixed px, not vh -- see the feedback-loop lesson from NPA Region
+     Summary (2026-09-10): a height relative to this self-resizing
+     iframe's own viewport grows every time the iframe grows. */
+  .table-wrap{max-height:480px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:8px}
+  .hidden{display:none !important}
+  .hint{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
+
+  .tabs{display:flex;gap:18px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+  .tab-btn{background:none;color:var(--ink-muted);border:none;border-bottom:3px solid transparent;border-radius:0;padding:8px 2px;font-family:inherit;font-weight:600;font-size:13.5px;cursor:pointer}
+  .tab-btn:hover{color:var(--accent)}
+  .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+  .site-foot{
+    text-align:center;padding:28px 22px 34px;margin-top:20px;border-top:1px solid var(--line);
+    font-family:'Spectral', Georgia, serif;font-size:12.5px;letter-spacing:.02em;color:var(--ink-muted);
+  }
+  .site-foot span{color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">📑</span>
+    <div>
+      <div class="brand-name">HBR Report</div>
+      <div class="brand-tag" id="brandTag">GL Balancing Report → branch-wise &amp; account-wise summary</div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload HBR Balancing Report PDF">
+      <input type="file" id="fileInput" accept=".pdf" hidden>
+      <div class="dropzone-icon">📑</div>
+      <div class="dropzone-title" id="dropzoneTitle">Drop the HBR Balancing Report PDF here</div>
+      <div class="dropzone-sub">or click to browse — read entirely in your browser, nothing uploaded anywhere</div>
+    </div>
+    <div class="status-panel">
+      <div class="status-empty" id="statusEmpty">Select the Balancing Report PDF (e.g. from the core banking BM Balancing Report screen) to build a branch-wise and account-wise summary.</div>
+      <div id="statsBox" class="status-stats hidden">
+        <div class="status-stat"><span class="status-num" id="statEntries">0</span><span class="status-lbl">Entries Read</span></div>
+        <div class="status-stat"><span class="status-num" id="statBranches">0</span><span class="status-lbl">Branches</span></div>
+        <div class="status-stat"><span class="status-num" id="statAccounts">0</span><span class="status-lbl">Account Types</span></div>
+      </div>
+      <div id="status"></div>
+      <div class="status-actions">
+        <button type="button" class="btn btn-ghost" id="clearBtn">Clear</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="hidden" id="viewPanel">
+    <div class="tabs">
+      <button type="button" class="tab-btn active" id="tabBranchBtn">Branch-wise Summary</button>
+      <button type="button" class="tab-btn" id="tabAccountBtn">Account-wise Detail</button>
+    </div>
+
+    <div class="panel" id="branchSummarySection">
+      <div class="section-label">Branch-wise Summary</div>
+      <div class="row">
+        <button type="button" id="exportBranchBtn" class="btn btn-ghost">Export to Excel</button>
+        <span id="branchRowCountBadge" class="badge"></span>
+      </div>
+      <div class="hint" id="branchHint"></div>
+      <div class="table-wrap">
+        <table id="branchTable">
+          <thead><tr id="branchHeadRow"></tr></thead>
+          <tbody id="branchBody"></tbody>
+          <tfoot><tr id="branchFootRow"></tr></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="accountDetailSection">
+      <div class="section-label">Account-wise Detail</div>
+      <div class="row">
+        <div>
+          <label for="accountSelect">Account</label><br>
+          <select id="accountSelect"></select>
+        </div>
+        <button type="button" id="exportAccountBtn" class="btn btn-ghost">Export to Excel</button>
+        <span id="accountRowCountBadge" class="badge"></span>
+      </div>
+      <div class="hint">Pick an account to see its balance at every branch (SOL ID) for the day. Tap the <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> icon next to any column's name to copy that whole column.</div>
+      <div class="table-wrap">
+        <table id="accountTable">
+          <thead><tr id="accountHeadRow"></tr></thead>
+          <tbody id="accountBody"></tbody>
+          <tfoot><tr id="accountFootRow"></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-foot">Designed &amp; developed by <span>Alok Mittal</span></footer>
+
+<script src="../js/vendor/pdf.min.js"></script>
+<script src="../js/vendor/xlsx.full.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '../js/vendor/pdf.worker.min.js';
+
+  // Same [oldSolId, newSolId, branchName] master list as js/app.js's own
+  // BRANCH_LIST (an iframe can't reach that closure-scoped constant, so
+  // copied here like the PNPA/Telephone Directory tools do). This report
+  // mixes TWO different account-numbering eras for the same 57 branches:
+  // older GL heads (e.g. interest/subsidy accrual accounts) are prefixed
+  // with the 5-digit OLD Sol ID (15010-16160), while newer customer-
+  // facing GL heads (DD/OTS/AEPS/GST) are prefixed with the 4-digit NEW
+  // Sol ID (9269-9325) -- both ranges appear side by side in the same
+  // report. R O Hathras (9269) and Hathras Service Branch (9283) are
+  // excluded from the branch-wise table, same as the Daily PNPA Summary
+  // tool ("9269 and 9283 is not operational" -- Alok's request,
+  // 2026-09-10) -- their entries (and any account number this report's
+  // numbering doesn't attribute to any branch at all, e.g. Head-Office-
+  // level parking/suspense accounts starting "70") are rolled into one
+  // "Head Office / Unassigned" row so every rupee in the report is still
+  // accounted for somewhere.
+  var BRANCH_LIST = [[15990,9269,"R O Hathras"],[15010,9270,"Agsauli"],[15020,9271,"Bamnai"],[15030,9272,"Bandhnoo"],[15040,9273,"Baraus"],[15050,9274,"Bastoi"],[15060,9275,"Bisawar"],[15070,9276,"Chandpa"],[15080,9277,"Chhonda Gadua"],[15090,9278,"Devinagar"],[15100,9279,"Eihan"],[15110,9280,"Hathras Agra Road"],[15120,9281,"Hathras Aligarh Road"],[15130,9282,"Mursan Gate"],[15140,9283,"Hathras Service Branch"],[15150,9284,"Hatisa Bhagwantpur"],[15160,9285,"Jarera"],[15170,9286,"Komari"],[15180,9287,"Kota"],[15190,9288,"Ladpur"],[15200,9289,"Mahow"],[15210,9290,"Meetai"],[15220,9291,"Mendu"],[15230,9292,"Mughal Garhi"],[15240,9293,"Mursan"],[15250,9294,"Parsara"],[15260,9295,"Pora"],[15270,9296,"Purdil Nagar"],[15280,9297,"Ratibhanpur"],[15290,9298,"Ruheri"],[15300,9299,"Sadabad"],[15310,9300,"Sahpau"],[15320,9301,"Salempur"],[15330,9302,"Sasni"],[15340,9303,"Sikandra Rao"],[15350,9304,"Tuksan"],[15360,9305,"Wazidpur"],[15370,9306,"Adarshnagar"],[15380,9307,"Hasayan"],[15390,9308,"Jaleser Road"],[15400,9309,"Naugaon"],[16010,9310,"Bajna"],[16020,9311,"Baldev"],[16030,9312,"Bati"],[16040,9313,"Damodarpura"],[16050,9314,"Farah"],[16060,9315,"Goverdhan"],[16070,9316,"Maant"],[16080,9317,"Mathura City"],[16090,9318,"Laxmi Nagar"],[16100,9319,"Pali Kheda"],[16110,9320,"Raya"],[16120,9321,"Ronchi Bangar"],[16130,9322,"Sonai"],[16140,9323,"Tarsi"],[16150,9324,"Vrindavan"],[16160,9325,"Jajan Patti"]];
+  var NON_OPERATIONAL_SOL_IDS = [9269, 9283];
+  var OLD_TO_NEW = {};
+  var BRANCH_NAME_BY_NEW = {};
+  BRANCH_LIST.forEach(function(e){ OLD_TO_NEW[e[0]] = e[1]; BRANCH_NAME_BY_NEW[e[1]] = e[2]; });
+  var UNASSIGNED_LABEL = 'Head Office / Unassigned';
+
+  function resolveSol(acctNo){
+    var first2 = acctNo.slice(0,2);
+    if (first2 === '15' || first2 === '16'){
+      var p5 = parseInt(acctNo.slice(0,5), 10);
+      if (OLD_TO_NEW[p5] !== undefined) return OLD_TO_NEW[p5];
+    }
+    if (first2 === '92' || first2 === '93'){
+      var p4 = parseInt(acctNo.slice(0,4), 10);
+      if (BRANCH_NAME_BY_NEW[p4] !== undefined) return p4;
+    }
+    return null;
+  }
+
+  var state = { rows: null, meta: null };
+
+  var dropzone = document.getElementById('dropzone');
+  var fileInput = document.getElementById('fileInput');
+  var dropzoneTitle = document.getElementById('dropzoneTitle');
+  var statusEmpty = document.getElementById('statusEmpty');
+  var statsBox = document.getElementById('statsBox');
+  var statEntries = document.getElementById('statEntries');
+  var statBranches = document.getElementById('statBranches');
+  var statAccounts = document.getElementById('statAccounts');
+  var statusEl = document.getElementById('status');
+  var clearBtn = document.getElementById('clearBtn');
+  var viewPanel = document.getElementById('viewPanel');
+  var brandTag = document.getElementById('brandTag');
+
+  var tabBranchBtn = document.getElementById('tabBranchBtn');
+  var tabAccountBtn = document.getElementById('tabAccountBtn');
+  var branchSummarySection = document.getElementById('branchSummarySection');
+  var accountDetailSection = document.getElementById('accountDetailSection');
+  var branchHeadRow = document.getElementById('branchHeadRow');
+  var branchBody = document.getElementById('branchBody');
+  var branchFootRow = document.getElementById('branchFootRow');
+  var branchRowCountBadge = document.getElementById('branchRowCountBadge');
+  var branchHint = document.getElementById('branchHint');
+  var exportBranchBtn = document.getElementById('exportBranchBtn');
+  var accountSelect = document.getElementById('accountSelect');
+  var accountHeadRow = document.getElementById('accountHeadRow');
+  var accountBody = document.getElementById('accountBody');
+  var accountFootRow = document.getElementById('accountFootRow');
+  var accountRowCountBadge = document.getElementById('accountRowCountBadge');
+  var exportAccountBtn = document.getElementById('exportAccountBtn');
+
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+  }
+  function setStatus(msg, cls){
+    statusEl.textContent = msg || '';
+    statusEl.className = cls || '';
+  }
+  function parseAmt(tok){
+    var n = parseFloat(String(tok).replace(/,/g,''));
+    return isNaN(n) ? 0 : n;
+  }
+  function fmtRupee(n){
+    return (n||0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function updateDropzoneTitle(){
+    var f = fileInput.files && fileInput.files[0];
+    dropzoneTitle.textContent = f ? f.name : 'Drop the HBR Balancing Report PDF here';
+  }
+
+  // Same text-reconstruction technique as tools/passsheet.html: pdf.js
+  // gives positioned text fragments, not lines, so fragments are grouped
+  // by Y-coordinate (within 2pt, to absorb tiny baseline jitter) and
+  // sorted by X to rebuild each printed line in reading order.
+  async function extractFullText(arrayBuffer){
+    var loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    var pdf = await loadingTask.promise;
+    var lines = [];
+    for (var p=1; p<=pdf.numPages; p++){
+      var page = await pdf.getPage(p);
+      var content = await page.getTextContent();
+      var rowGroups = [];
+      for (var i=0;i<content.items.length;i++){
+        var item = content.items[i];
+        var str = item.str;
+        if (!str || !str.trim()) continue;
+        var y = item.transform[5];
+        var x = item.transform[4];
+        var row = null;
+        for (var j=0;j<rowGroups.length;j++){
+          if (Math.abs(rowGroups[j].y - y) <= 2){ row = rowGroups[j]; break; }
+        }
+        if (!row){ row = { y:y, items:[] }; rowGroups.push(row); }
+        row.items.push({ x:x, str:str });
+      }
+      rowGroups.sort(function(a,b){ return b.y - a.y; });
+      for (var k=0;k<rowGroups.length;k++){
+        var r = rowGroups[k];
+        r.items.sort(function(a,b){ return a.x - b.x; });
+        var text = r.items.map(function(it){ return it.str; }).join(' ').replace(/[ \t]+/g,' ').trim();
+        if (text) lines.push(text);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  // Every real detail row in this report starts with an account number
+  // that is purely alphanumeric and at least 10 characters long, and ends
+  // with two whitespace-separated numeric tokens (Acct Debit Amt, Acct
+  // Credit Amt) -- everything in between is the free-text description.
+  // This reliably distinguishes detail rows from headers, scheme
+  // subtotals ("15181 CRPNT 1 0 45,020.00" -- first token "15181" is only
+  // 5 characters), grand totals ("Total: 15181 ..." -- contains a colon),
+  // page banners, and footer URLs. Verified against a real report: 708
+  // rows parsed, matching the report's own "708" account count, and the
+  // summed Debit/Credit totals matched the report's own printed grand
+  // total to the paisa.
+  function parseReportRows(fullText){
+    var lines = fullText.split('\n');
+    var rows = [];
+    for (var i=0;i<lines.length;i++){
+      var line = lines[i].trim();
+      if (!line) continue;
+      var tokens = line.split(/\s+/);
+      var first = tokens[0];
+      if (!/^[A-Za-z0-9]{10,}$/.test(first)) continue;
+      if (!/\d/.test(first)) continue;
+      if (tokens.length < 3) continue;
+      var last = tokens[tokens.length-1];
+      var secondLast = tokens[tokens.length-2];
+      if (!/^[\d,]+\.?\d*$/.test(last) || !/^[\d,]+\.?\d*$/.test(secondLast)) continue;
+      var debit = parseAmt(secondLast);
+      var credit = parseAmt(last);
+      var desc = tokens.slice(1, tokens.length-2).join(' ');
+      rows.push({ acctNo:first, desc:desc, debit:debit, credit:credit, sol:resolveSol(first) });
+    }
+    return rows;
+  }
+
+  function extractMeta(fullText){
+    var glLow = fullText.match(/GL Sub head Code Low\s*:\s*(\S+)/i);
+    var glHigh = fullText.match(/GL Sub head Code High\s*:\s*(\S+)/i);
+    var reportDate = fullText.match(/Report Date\s*:\s*(\S+)/i);
+    return {
+      glLow: glLow ? glLow[1] : null,
+      glHigh: glHigh ? glHigh[1] : null,
+      reportDate: reportDate ? reportDate[1] : null
+    };
+  }
+
+  function buildBranchSummary(rows){
+    var byBranch = {}; // newSolId -> {sol, branch, debit, credit}
+    var unassigned = { sol:'', branch:UNASSIGNED_LABEL, debit:0, credit:0 };
+    rows.forEach(function(r){
+      if (r.sol === null || NON_OPERATIONAL_SOL_IDS.indexOf(r.sol) !== -1){
+        unassigned.debit += r.debit; unassigned.credit += r.credit;
+        return;
+      }
+      if (!byBranch[r.sol]) byBranch[r.sol] = { sol:r.sol, branch:BRANCH_NAME_BY_NEW[r.sol], debit:0, credit:0 };
+      byBranch[r.sol].debit += r.debit;
+      byBranch[r.sol].credit += r.credit;
+    });
+    // Zero-fill every operational branch this report had nothing for.
+    BRANCH_LIST.forEach(function(entry){
+      var newId = entry[1];
+      if (NON_OPERATIONAL_SOL_IDS.indexOf(newId) !== -1) return;
+      if (!byBranch[newId]) byBranch[newId] = { sol:newId, branch:entry[2], debit:0, credit:0 };
+    });
+    var records = Object.keys(byBranch).map(function(k){ return byBranch[k]; })
+      .sort(function(a,b){ return a.sol - b.sol; });
+    if (unassigned.debit || unassigned.credit) records.push(unassigned);
+    return records;
+  }
+
+  function buildAccountIndex(rows){
+    var byDesc = {}; // description -> { newSolId -> {debit, credit} }
+    rows.forEach(function(r){
+      if (r.sol === null || NON_OPERATIONAL_SOL_IDS.indexOf(r.sol) !== -1) return;
+      if (!byDesc[r.desc]) byDesc[r.desc] = {};
+      if (!byDesc[r.desc][r.sol]) byDesc[r.desc][r.sol] = { debit:0, credit:0 };
+      byDesc[r.desc][r.sol].debit += r.debit;
+      byDesc[r.desc][r.sol].credit += r.credit;
+    });
+    return byDesc;
+  }
+
+  function recordsForAccount(byDesc, desc){
+    var bySol = byDesc[desc] || {};
+    var records = [];
+    BRANCH_LIST.forEach(function(entry){
+      var newId = entry[1];
+      if (NON_OPERATIONAL_SOL_IDS.indexOf(newId) !== -1) return;
+      var v = bySol[newId] || { debit:0, credit:0 };
+      records.push({ sol:newId, branch:entry[2], debit:v.debit, credit:v.credit });
+    });
+    return records;
+  }
+
+  // -------- Sorting, copy-column -- same convention as sibling tools --------
+  var branchSort = null;
+  var accountSort = null;
+  function compareByKey(a, b, key){
+    if (key === 'sol') return (a.sol||0) - (b.sol||0);
+    if (key === 'branch') return String(a.branch||'').localeCompare(String(b.branch||''));
+    return (a[key]||0) - (b[key]||0); // debit / credit / net
+  }
+  function applySort(records, sort){
+    if (!sort) return records;
+    var sorted = records.slice().sort(function(a,b){ return compareByKey(a,b,sort.key); });
+    if (sort.dir === 'desc') sorted.reverse();
+    return sorted;
+  }
+  function sortArrow(sort, key){
+    if (!sort || sort.key !== key) return '';
+    return sort.dir === 'asc' ? ' ▲' : ' ▼';
+  }
+
+  var COLUMNS = [
+    { key:'sol', label:'SOL ID' },
+    { key:'branch', label:'Branch Name' },
+    { key:'debit', label:'Debit (₹)' },
+    { key:'credit', label:'Credit (₹)' },
+    { key:'net', label:'Net Balance (₹)' }
+  ];
+
+  var COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  function columnHeaderHtml(c, sort){
+    return '<th data-key="'+esc(c.key)+'"><div class="th-inner"><span class="th-label sortable" data-key="'+esc(c.key)+'" title="Click to sort">'+esc(c.label)+sortArrow(sort, c.key)+'</span>'+
+      '<button type="button" class="col-copy-btn" title="Copy this column" aria-label="Copy '+esc(c.label)+' column">'+COPY_ICON+'</button>'+
+      '</div></th>';
+  }
+  function columnCellTexts(table, colIndex){
+    var lines = [];
+    table.querySelectorAll('tbody tr').forEach(function(tr){
+      var td = tr.children[colIndex];
+      if (td) lines.push(td.textContent.trim());
+    });
+    return lines;
+  }
+  function fallbackCopy(text){
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    document.body.removeChild(ta);
+  }
+  function copyColumn(btn){
+    var th = btn.closest('th');
+    var table = btn.closest('table');
+    if (!th || !table) return;
+    var colIndex = Array.prototype.indexOf.call(th.parentNode.children, th);
+    var text = columnCellTexts(table, colIndex).join('\n');
+    var showCopied = function(){
+      btn.classList.add('copied');
+      setTimeout(function(){ btn.classList.remove('copied'); }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(showCopied).catch(function(){ fallbackCopy(text); showCopied(); });
+    } else {
+      fallbackCopy(text);
+      showCopied();
+    }
+  }
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest ? e.target.closest('.col-copy-btn') : null;
+    if (!btn) return;
+    e.stopPropagation();
+    copyColumn(btn);
+  });
+  document.addEventListener('click', function(e){
+    var label = e.target.closest ? e.target.closest('.th-label.sortable') : null;
+    if (!label) return;
+    var key = label.getAttribute('data-key');
+    if (!key) return;
+    var table = label.closest('table');
+    if (table && table.id === 'accountTable'){
+      accountSort = (accountSort && accountSort.key === key) ? { key:key, dir: accountSort.dir==='asc'?'desc':'asc' } : { key:key, dir:'asc' };
+      renderAccount();
+    } else {
+      branchSort = (branchSort && branchSort.key === key) ? { key:key, dir: branchSort.dir==='asc'?'desc':'asc' } : { key:key, dir:'asc' };
+      renderBranch();
+    }
+  });
+
+  function renderCell(c, rec){
+    if (c.key === 'sol') return '<td>'+(rec.sol || '')+'</td>';
+    if (c.key === 'branch') return '<td>'+esc(rec.branch)+'</td>';
+    if (c.key === 'debit') return '<td>'+fmtRupee(rec.debit)+'</td>';
+    if (c.key === 'credit') return '<td>'+fmtRupee(rec.credit)+'</td>';
+    if (c.key === 'net') return '<td>'+fmtRupee(rec.credit - rec.debit)+'</td>';
+    return '<td></td>';
+  }
+
+  function renderBranch(){
+    if (!state.rows) return;
+    var records = buildBranchSummary(state.rows);
+    records = applySort(records, branchSort);
+
+    branchHeadRow.innerHTML = COLUMNS.map(function(c){ return columnHeaderHtml(c, branchSort); }).join('');
+    var totDebit=0, totCredit=0, bodyHtml='';
+    records.forEach(function(rec){
+      totDebit += rec.debit; totCredit += rec.credit;
+      var cls = rec.branch === UNASSIGNED_LABEL ? ' class="unassigned-row"' : '';
+      bodyHtml += '<tr'+cls+'>'+COLUMNS.map(function(c){ return renderCell(c, rec); }).join('')+'</tr>';
+    });
+    branchBody.innerHTML = bodyHtml || '<tr><td colspan="'+COLUMNS.length+'" style="text-align:center;color:var(--ink-muted);">No data found.</td></tr>';
+
+    branchFootRow.innerHTML = COLUMNS.map(function(c){
+      if (c.key === 'sol') return '<td>Grand Total</td>';
+      if (c.key === 'branch') return '<td>'+records.length+' row(s)</td>';
+      if (c.key === 'debit') return '<td>'+fmtRupee(totDebit)+'</td>';
+      if (c.key === 'credit') return '<td>'+fmtRupee(totCredit)+'</td>';
+      if (c.key === 'net') return '<td>'+fmtRupee(totCredit-totDebit)+'</td>';
+      return '<td></td>';
+    }).join('');
+
+    branchRowCountBadge.textContent = records.length + ' row(s)';
+    resizeFrame();
+  }
+
+  function renderAccount(){
+    if (!state.rows) return;
+    var desc = accountSelect.value;
+    var byDesc = buildAccountIndex(state.rows);
+    var records = desc ? applySort(recordsForAccount(byDesc, desc), accountSort) : [];
+
+    accountHeadRow.innerHTML = COLUMNS.map(function(c){ return columnHeaderHtml(c, accountSort); }).join('');
+    var totDebit=0, totCredit=0, nonZero=0, bodyHtml='';
+    records.forEach(function(rec){
+      totDebit += rec.debit; totCredit += rec.credit;
+      if (rec.debit || rec.credit) nonZero++;
+      bodyHtml += '<tr>'+COLUMNS.map(function(c){ return renderCell(c, rec); }).join('')+'</tr>';
+    });
+    accountBody.innerHTML = bodyHtml || '<tr><td colspan="'+COLUMNS.length+'" style="text-align:center;color:var(--ink-muted);">Select an account above to see its branch-wise balance.</td></tr>';
+
+    accountFootRow.innerHTML = records.length ? COLUMNS.map(function(c){
+      if (c.key === 'sol') return '<td>Grand Total</td>';
+      if (c.key === 'branch') return '<td>'+nonZero+' of '+records.length+' branches</td>';
+      if (c.key === 'debit') return '<td>'+fmtRupee(totDebit)+'</td>';
+      if (c.key === 'credit') return '<td>'+fmtRupee(totCredit)+'</td>';
+      if (c.key === 'net') return '<td>'+fmtRupee(totCredit-totDebit)+'</td>';
+      return '<td></td>';
+    }).join('') : '';
+
+    accountRowCountBadge.textContent = desc ? (nonZero + ' of ' + records.length + ' branches') : '';
+    resizeFrame();
+  }
+
+  function switchTab(tab){
+    var isBranch = tab === 'branch';
+    tabBranchBtn.classList.toggle('active', isBranch);
+    tabAccountBtn.classList.toggle('active', !isBranch);
+    branchSummarySection.classList.toggle('hidden', !isBranch);
+    accountDetailSection.classList.toggle('hidden', isBranch);
+    resizeFrame();
+  }
+  tabBranchBtn.addEventListener('click', function(){ switchTab('branch'); });
+  tabAccountBtn.addEventListener('click', function(){ switchTab('account'); });
+
+  function round2(n){ return Math.round(n*100)/100; }
+  function dateStamp(){
+    var d = new Date();
+    function p(n){ return n<10 ? '0'+n : ''+n; }
+    return d.getFullYear()+''+p(d.getMonth()+1)+p(d.getDate());
+  }
+
+  function buildSheetFromRecords(records, titleLine){
+    var aoa = [];
+    aoa.push([titleLine]);
+    aoa.push(['Generated on: ' + new Date().toLocaleString('en-IN')]);
+    aoa.push([]);
+    aoa.push(COLUMNS.map(function(c){ return c.label; }));
+
+    var totDebit=0, totCredit=0;
+    records.forEach(function(rec){
+      totDebit += rec.debit; totCredit += rec.credit;
+      aoa.push([ rec.sol || '', rec.branch, round2(rec.debit), round2(rec.credit), round2(rec.credit-rec.debit) ]);
+    });
+    aoa.push([ 'Grand Total', records.length + ' row(s)', round2(totDebit), round2(totCredit), round2(totCredit-totDebit) ]);
+
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    var numFmt = '#,##0.00';
+    for (var r = 4; r < aoa.length; r++){
+      [2,3,4].forEach(function(ci){
+        var addr = XLSX.utils.encode_cell({ r:r, c:ci });
+        if (ws[addr]) ws[addr].z = numFmt;
+      });
+    }
+    ws['!cols'] = [ {wch:10}, {wch:26}, {wch:16}, {wch:16}, {wch:16} ];
+    return ws;
+  }
+
+  function exportBranchExcel(){
+    var records = applySort(buildBranchSummary(state.rows), branchSort);
+    var ws = buildSheetFromRecords(records, 'HBR Report - Branch-wise Summary (GL ' + (state.meta.glLow||'') + ', ' + (state.meta.reportDate||'') + ')');
+    var outWb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(outWb, ws, 'Branch-wise Summary');
+    XLSX.writeFile(outWb, 'HBR_Branch_Summary_' + dateStamp() + '.xlsx');
+  }
+
+  function exportAccountExcel(){
+    var desc = accountSelect.value;
+    if (!desc) return;
+    var byDesc = buildAccountIndex(state.rows);
+    var records = applySort(recordsForAccount(byDesc, desc), accountSort);
+    var ws = buildSheetFromRecords(records, 'HBR Report - ' + desc + ' (GL ' + (state.meta.glLow||'') + ', ' + (state.meta.reportDate||'') + ')');
+    var outWb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(outWb, ws, desc.substring(0,28));
+    XLSX.writeFile(outWb, 'HBR_' + desc.replace(/[^a-zA-Z0-9]+/g,'_').substring(0,40) + '_' + dateStamp() + '.xlsx');
+  }
+  exportBranchBtn.addEventListener('click', exportBranchExcel);
+  exportAccountBtn.addEventListener('click', exportAccountExcel);
+  accountSelect.addEventListener('change', function(){ accountSort = null; renderAccount(); });
+
+  function populateAccountSelect(rows){
+    var byDesc = buildAccountIndex(rows);
+    var descs = Object.keys(byDesc).sort(function(a,b){ return a.localeCompare(b); });
+    accountSelect.innerHTML = '<option value="">— Select an account —</option>' +
+      descs.map(function(d){ return '<option value="'+esc(d)+'">'+esc(d)+'</option>'; }).join('');
+  }
+
+  async function handleFile(file){
+    statusEmpty.classList.add('hidden');
+    statsBox.classList.add('hidden');
+    viewPanel.classList.add('hidden');
+    setStatus('Reading PDF...');
+    try {
+      var buf = await file.arrayBuffer();
+      var fullText = await extractFullText(buf);
+      var meta = extractMeta(fullText);
+      var rows = parseReportRows(fullText);
+      if (!rows.length) throw new Error('No account entries could be found in this PDF. Please check this is a BM Balancing Report export.');
+
+      state.rows = rows;
+      state.meta = meta;
+      branchSort = null; accountSort = null;
+      populateAccountSelect(rows);
+
+      var branchCount = buildBranchSummary(rows).filter(function(r){ return r.branch !== UNASSIGNED_LABEL; }).length;
+      var accountCount = Object.keys(buildAccountIndex(rows)).length;
+      statEntries.textContent = rows.length.toLocaleString('en-IN');
+      statBranches.textContent = branchCount;
+      statAccounts.textContent = accountCount;
+      statsBox.classList.remove('hidden');
+
+      brandTag.textContent = 'GL Sub Head ' + (meta.glLow || '?') + (meta.glHigh && meta.glHigh !== meta.glLow ? '–'+meta.glHigh : '') + ' · Report Date ' + (meta.reportDate || '?');
+      branchHint.innerHTML = 'Every operational Hathras region branch is listed, even one with nothing in this report (shows 0). R O Hathras and Hathras Service Branch, plus any Head-Office-level account this report’s numbering doesn’t attribute to a branch, are rolled into one "'+esc(UNASSIGNED_LABEL)+'" row so every rupee stays accounted for. Net Balance = Credit − Debit. Tap the <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> icon next to any column’s name to copy that whole column.';
+
+      viewPanel.classList.remove('hidden');
+      switchTab('branch');
+      renderBranch();
+      renderAccount();
+      setStatus('Loaded ' + rows.length.toLocaleString('en-IN') + ' entries.', 'ok');
+    } catch (err) {
+      statusEmpty.classList.remove('hidden');
+      setStatus(err.message || 'Could not read this PDF.', 'err');
+    }
+    resizeFrame();
+  }
+
+  async function handleFiles(fileList){
+    var files = Array.prototype.slice.call(fileList).filter(function(f){ return /pdf$/i.test(f.name) || f.type === 'application/pdf'; });
+    if (!files.length){ setStatus('Please choose a PDF file.', 'err'); return; }
+    updateDropzoneTitle();
+    await handleFile(files[0]);
+  }
+
+  fileInput.addEventListener('change', function(e){ handleFiles(e.target.files); });
+  dropzone.addEventListener('click', function(){ fileInput.click(); });
+  dropzone.addEventListener('keydown', function(e){ if (e.key==='Enter' || e.key===' '){ e.preventDefault(); fileInput.click(); } });
+  dropzone.addEventListener('dragover', function(e){ e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', function(){ dropzone.classList.remove('drag'); });
+  dropzone.addEventListener('drop', function(e){
+    e.preventDefault();
+    dropzone.classList.remove('drag');
+    if (e.dataTransfer.files && e.dataTransfer.files.length){
+      fileInput.files = e.dataTransfer.files;
+      handleFiles(e.dataTransfer.files);
+    }
+  });
+
+  function handleClear(){
+    state.rows = null;
+    state.meta = null;
+    branchSort = null; accountSort = null;
+    fileInput.value = '';
+    dropzoneTitle.textContent = 'Drop the HBR Balancing Report PDF here';
+    viewPanel.classList.add('hidden');
+    statsBox.classList.add('hidden');
+    statusEmpty.classList.remove('hidden');
+    brandTag.textContent = 'GL Balancing Report → branch-wise & account-wise summary';
+    setStatus('');
+    resizeFrame();
+  }
+  clearBtn.addEventListener('click', handleClear);
+
+  // Same iframe self-sizing as the other Utility tools (same-origin
+  // window.frameElement) -- no overscroll-behavior:none on html/body.
+  function resizeFrame(){
+    if (!window.frameElement) return;
+    requestAnimationFrame(function(){
+      window.frameElement.style.height = document.documentElement.scrollHeight + 'px';
+    });
+  }
+  window.addEventListener('resize', resizeFrame);
+  window.addEventListener('load', resizeFrame);
+  resizeFrame();
+})();
+</script>
+</body>
+</html>

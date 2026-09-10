@@ -2738,6 +2738,10 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
    directory.html's own resizeFrame()) -- same override, same reasoning. */
 #viewTelephoneDirectory .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
 #viewTelephoneDirectory .tool-frame{height:520px;min-height:0}
+/* HBR Report self-sizes the same way (see tools/hbr-report.html's own
+   resizeFrame()) -- same override, same reasoning. */
+#viewHbrReport .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
+#viewHbrReport .tool-frame{height:520px;min-height:0}
 .onedrive-page-head{display:flex;flex-direction:column;gap:4px}
 .onedrive-page-title{display:flex;align-items:center;gap:10px;color:var(--ink)}
 .onedrive-page-title svg{color:var(--accent);flex-shrink:0}
