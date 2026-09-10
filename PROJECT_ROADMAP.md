@@ -123,6 +123,17 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: Telephone Directory gets SOL ID, WhatsApp link, Branch Manager filter, names in caps (2026-09-10, same day)
+
+Four more requests on the same tool, all same day.
+
+1. **SOL ID column**, added first. The staff sheet only carries branch *names*, not SOL IDs, so each record's SOL ID is resolved at load time against the same `[newSolId, branchName]` pairs as `js/app.js`'s own `BRANCH_LIST` (copied in as `SOL_BRANCH_LIST`, same reasoning as the PNPA Summary tool -- a standalone iframe can't reach that closure-scoped constant). The two sheets don't always spell a branch the same way (`Hathras-Agra Road` vs `Hathras Agra Road`, or a bare `Service Branch` for `Hathras Service Branch`), so branch names are matched through a normalizer (uppercase, hyphens to spaces, collapsed whitespace) with two explicit short-form aliases for the branches that drop the "Hathras" prefix entirely. Verified all 302 staff rows resolve to a real SOL ID with none left blank.
+2. **WhatsApp link next to every phone number.** A small green WhatsApp icon opens `https://wa.me/91<number>` in a new tab, right beside the existing `tel:` link. A bare 10-digit number gets `91` prepended for the deep link; the couple of source rows with a stray space or a missing digit are passed through as-is rather than guessed at.
+3. **Branch Managers only filter.** A toggle button above the table narrows the list to just Designation = "Branch Manager" (56 of 302), combinable with the search box at the same time (e.g. "Branch Managers only" + "vrindavan" narrows to exactly that branch's manager).
+4. **Names in CAPS.** All 302 names are uppercased once when the data loads, so both the on-screen table and anything copied via the column-copy feature stay consistent -- no separate display-only formatting that could drift from what gets copied.
+
+Search now also matches on SOL ID. Verified via Playwright: SOL ID column shows the right value for every branch (e.g. Tuksan's 5 staff all show 9304), WhatsApp link generates the correct `wa.me` URL, the Branch Manager filter correctly narrows to 56 rows (all Branch Manager) and combines correctly with search, every displayed name is fully uppercase, and copying the SOL ID column still gives exactly 302 data-only lines.
+
 ### New: Telephone Directory added to Utility (2026-09-10, same day)
 
 Alok supplied the Hathras region staff position sheet (as on Aug 2026) and asked for it to be added to Utility as well, with search.
