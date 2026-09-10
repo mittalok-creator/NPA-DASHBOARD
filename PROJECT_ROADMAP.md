@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: NPA Region Summary restyled to match PassSheet's UI (2026-09-10, same day)
+
+Alok asked for this tool's UI -- buttons and all -- to look "almost the same" as PassSheet's, so the two Utility tools read as one family rather than two different-looking things bolted onto the same hub. Rebuilt `tools/npa-region-summary.html`'s design system as a direct copy of `tools/passsheet.html`'s own tokens/typefaces/components rather than the app's own ivory/navy shipped a few hours earlier: same `--bg/--surface/--accent/--debit/--credit`-etc. variable set and values (light + dark), same Spectral (display) + IBM Plex Sans (body) pairing, same `.btn`/`.btn-primary`/`.btn-ghost` button classes, `.pill`/`.badge`, and a `.site-foot` "Designed & developed by Alok Mittal" footer PassSheet already had and this tool didn't.
+
+Structurally adopted PassSheet's actual layout too, not just its colors: a sticky `.topbar` with a brand mark/name/tagline (replacing the old page `<h1>` + description paragraph), and PassSheet's hero pattern -- a real drag-and-drop `.dropzone` (click-to-browse or drop a file, filename shown in place of the old native file-input chrome) alongside a `.status-panel` showing big serif `.status-num` stat figures (Total Accounts / Regions), matching PassSheet's own Accounts/Transactions stat display exactly. Kept one deliberate difference: unlike PassSheet's auto-parse-on-drop, this tool still needs an explicit "Load File" tap to start reading -- a whole-bank NPA file can take 30-90 seconds, worth a deliberate action rather than starting the moment a file lands on the dropzone. Also added a "Clear" button (PassSheet has one, this tool didn't) that resets the tool back to its empty state without a page reload.
+
+None of this touched the file-reading, column-detection, or Region/Branch/KCC/Slippage aggregation logic, nor the copy-a-column feature shipped a few hours earlier -- only the element IDs' surrounding markup/CSS and the small bit of JS that renders the stat numbers and wires the new dropzone/Clear button. Re-verified via Playwright: region/branch aggregates and every copy-column button still produce the exact same output as before the restyle, drag-and-drop and Clear both work, and the tool renders correctly in both themes.
+
 ### New: NPA Region Summary added to Utility (2026-09-10)
 
 Alok supplied a standalone tool he already had -- upload the whole-bank NPA export, get an instant Region-wise and Branch-wise summary (KCC/CC004, Slippage, Total Balance, all in ₹ Lakhs) -- and asked for it folded into the app, restyled to match, with a way to copy any single summary column in one tap for pasting elsewhere.
