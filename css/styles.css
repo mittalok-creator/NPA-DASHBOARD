@@ -2730,6 +2730,10 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
    get out of the way and let the iframe's own height show through. */
 #viewRegionSummary .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
 #viewRegionSummary .tool-frame{height:520px;min-height:0}
+/* Daily PNPA Summary self-sizes the same way (see tools/npa-daily-pnpa-
+   summary.html's own resizeFrame()) -- same override, same reasoning. */
+#viewPnpaSummary .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
+#viewPnpaSummary .tool-frame{height:520px;min-height:0}
 .onedrive-page-head{display:flex;flex-direction:column;gap:4px}
 .onedrive-page-title{display:flex;align-items:center;gap:10px;color:var(--ink)}
 .onedrive-page-title svg{color:var(--accent);flex-shrink:0}
