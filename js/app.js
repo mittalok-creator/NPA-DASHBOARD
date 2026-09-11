@@ -60,22 +60,17 @@ DATA.branchContacts = DATA.branchContacts || {};
    Loan Detail screen -- see drawDetailBody. */
 DATA.specialNotes = DATA.specialNotes || {};
 
-/* TEMPORARY -- Lok Adalat 12-09-2026 (Alok's request, 2026-09-11): a
-   proposed-OTS list where token money has already been collected from the
-   borrower, ahead of the Lok Adalat itself. Whenever one of these Account
-   Nos. is opened in Loan Detail, a banner shows the OTS Amount (if fixed)
-   and Token Amount already received, so staff at the Lok Adalat counter
-   don't accidentally collect the token a second time. Alok said this is
-   throwaway and he'll delete it himself after 12-09-2026 -- unlike
-   specialNotes above, this is NOT admin-editable UI, NOT part of the
-   publish pipeline, just a flat [acctNo, otsAmount, tokenAmount] list
-   baked in directly from his own Lok_Adalat_12092026.xlsx (otsAmount 0
-   means not yet fixed). To remove: delete this array, LOK_ADALAT_MAP,
-   and the "Lok Adalat" banner block in drawDetailBody() below, plus
-   #lokAdalatBanner in index.html and its CSS in styles.css. */
-const LOK_ADALAT_TOKEN_RECEIVED = [["150281010000028",0,20000],["150273210000242",0,85000],["150273210000063",0,11000],["151035110000195",50000,25000],["151273210000030",0,6000],["151230410000213",0,5500],["152035110002366",163000,163000],["152635110001986",0,80000],["152635110000508",0,25000],["160535110000169",0,40000],["160835110001322",920000,980000],["151720303001913",3000,3000],["151735101009451",62000,62000],["151035110002536",28000,28000],["152835110002247",300000,300000],["152835110001829",60000,60000],["150273210000223",86000,86000],["151582104242309",0,1500],["152435110000746",35000,35000],["152435110000744",40000,40000],["152435110000745",100000,100000],["150135110002415",526000,521000],["160235110000084",100000,100000],["152930301000946",3000,3000],["154035110000109",258000,258000],["154035110000125",50000,50000],["154080710000002",195000,195000],["152635110001976",76000,76000],["152676410000225",15000,15000],["152935110002123",75000,75000],["153673210000015",103000,3000],["150235110000647",74000,74000],["160135110001337",248000,245000],["161535110000473",320000,225000],["150535110002120",80000,80000],["152835110001609",110000,75000],["152935110000108",232050,232050],["152984410000003",39950,39950],["152977010000018",212000,212000],["151735110001091",48000,45000],["161435110000478",0,105000],["161335110000597",45000,1500],["150535110001875",91000,91000],["150530800010218",48000,48000],["152435110002511",0,27000],["152430910000002",0,30000],["152435110000811",0,500],["152430410000004",0,500],["150475610000010",0,64700],["150673210000179",0,35000],["150935110001861",80000,80000],["150967310000043",5000,5000],["151230110000314",0,15000],["151835110000901",0,10000],["161673210000023",0,40000],["151635110002763",169000,169000],["152635110001813",180000,180000],["151035110002111",0,75000],["151082110000055",0,2500],["153435101009503",30000,30000],["153635101012604",16000,16000],["150273210000226",115000,115000],["151035101006357",0,6000],["151230410000057",0,4500],["152730410000025",0,2000],["160235110000659",250000,250000],["153435100102726",0,6000],["153435110001016",0,6000],["153435110001541",0,12500],["160973210000702",0,110000],["161073310000057",0,200],["161030301000672",0,3000],["161181808053609",0,3300],["161135101005774",0,5000],["161367610000012",0,4000],["151530410000083",0,9000],["152480710000004",0,1000],["152480710000005",0,2500],["152435110000149",0,1000],["153835110000471",75000,75000],["160367610000026",10000,10000],["160335110000608",70000,70000],["160773210000236",0,1000],["161173210000058",0,5000],["150735110001388",443000,443000],["150435110000580",70000,70000],["150535110002493",127500,127500],["151082210000062",27000,27000],["150535110002193",261000,261000],["152932110000005",12000,12000],["160473210000142",57000,57000],["161135101006490",55000,55000],["161182104097511",0,3200],["160235110000129",200000,190000],["151035110001551",0,92000],["151082210000010",0,19000],["152835110002533",756000,756000],["152835210000056",126000,126000],["151275610000285",0,2000],["151566102295610",4500,4500],["152835100102688",0,1700],["153235110001744",60000,48000],["160673310000001",1400,1400],["161335110001008",550000,180000],["161335110000057",55000,55000],["150235110001535",42000,42000],["150275210000108",13000,13000],["150275610000041",30000,30000],["152735110000089",20000,20000],["150173210000077",0,52000],["150173210000113",0,43000],["152435110000226",0,900],["152935110002296",0,35000],["152977010000014",0,35000],["152984410000004",0,30000],["160335101000292",0,30000],["151335110000006",260000,260000],["153535110001147",48000,48000],["152573210000198",125000,121500],["151735110001864",45000,40000],["153235110001405",46550,46550],["153135110000235",45000,45000],["153635110002022",561000,50000],["150135110000012",0,125000],["150135110001233",180000,50000],["150135110000130",73000,10000],["150535110002291",53000,53000],["150535101005437",0,20000],["150835110001689",0,2000],["151130401000326",0,2900],["151573210000136",0,30000],["151535110001858",0,205000],["151581900187907",0,6000],["151635110001982",0,30000],["152173210000268",0,11000],["152235110001740",0,20000],["152373210000020",0,33000],["152681900005213",0,15000],["152735110000675",0,10000],["152773210000036",0,8000],["153473210000082",0,2800],["153475510000009",0,4200],["154030110000012",0,59000],["160173210000163",0,100000],["160135110000769",0,70000],["160135110001451",0,100000],["160173210000080",0,5000],["160335110000946",0,45000],["160335110000769",0,60000],["160335101000399",0,102000],["160535110000384",250000,250000],["161135100100508",0,4000],["161135100100614",0,12000],["161135100101056",0,10000],["161435110000251",0,11000],["161430410000124",0,5000],["151735110002772",148000,148000],["151535110003007",0,80000],["151581010000047",0,80000],["151835110000951",0,163700]];
-const LOK_ADALAT_MAP = {};
-LOK_ADALAT_TOKEN_RECEIVED.forEach(function(r){ LOK_ADALAT_MAP[r[0]] = { ots: r[1], token: r[2] }; });
+/* Lok Adalat -- proposed-OTS accounts where token money has already been
+   collected ahead of a Lok Adalat (Alok's request, 2026-09-11, following
+   up on an earlier throwaway version of this same idea). Keyed by Account
+   No. (string): { date, ots, token, remark }. Uploaded via Settings ->
+   Update Data -> "Lok Adalat" (see handleLokAdalatUpload), one full
+   replace per upload -- "jo last database upload hoga wahi accounts show
+   hon", so this is never merged with a previous upload, only the latest
+   one's accounts are ever shown. Same "own slow-moving schedule, not
+   reset on a daily NPA update" treatment as branchAdvances/branchContacts/
+   specialNotes above, and part of the publish payload like they are. */
+DATA.lokAdalat = DATA.lokAdalat || {};
 
 /* ---------- Date helpers (NPA dates are raw Excel serials) ---------- */
 const XL_EPOCH = new Date(1899,11,30);
@@ -2192,18 +2187,28 @@ function drawDetailBody(custRow, slots, prevOts){
       noteBanner.classList.remove('show');
     }
   }
-  // TEMPORARY -- Lok Adalat 12-09-2026 (see LOK_ADALAT_MAP above). Same
-  // "collect across every linked account" treatment as the Special Note
-  // banner just above.
+  // Lok Adalat (see DATA.lokAdalat above). Same "collect across every
+  // linked account" treatment as the Special Note banner just above --
+  // but the Account No. itself is left out of the message (Alok's
+  // request, 2026-09-11: "account no hata dena... wahi ac to open hai"),
+  // since whichever account this is is already the one on screen. In the
+  // rare case two DIFFERENT linked accounts on the same borrower both
+  // match, their lines still show side by side without a label telling
+  // them apart -- an accepted tradeoff for the common one-account case.
   const lokAdalatSlots = slots
-    .map(s => ({acctNo: s.acctNo, hit: LOK_ADALAT_MAP[String(s.acctNo)]}))
+    .map(s => ({acctNo: s.acctNo, hit: (DATA.lokAdalat||{})[String(s.acctNo)]}))
     .filter(x => x.hit);
   const lokAdalatBanner = document.getElementById('lokAdalatBanner');
   if(lokAdalatBanner){
     if(lokAdalatSlots.length){
-      const oneLine = x => x.hit.ots
-        ? `A/c ${x.acctNo}: OTS ${fmtINR(x.hit.ots)} already received (Token ${fmtINR(x.hit.token)})`
-        : `A/c ${x.acctNo}: Token ${fmtINR(x.hit.token)} already received`;
+      const oneLine = x => {
+        const base = x.hit.ots
+          ? `OTS ${fmtINR(x.hit.ots)} already received (Token ${fmtINR(x.hit.token)})`
+          : `Token ${fmtINR(x.hit.token)} already received`;
+        const dateBit = x.hit.date ? ` on ${x.hit.date}` : '';
+        const remarkBit = x.hit.remark ? ` — ${x.hit.remark}` : '';
+        return base + dateBit + remarkBit;
+      };
       document.getElementById('lokAdalatBannerText').textContent = lokAdalatSlots.map(oneLine).join('  ·  ');
       lokAdalatBanner.classList.add('show');
     } else {
@@ -3407,6 +3412,51 @@ function buildBranchContactsMap(allRows, hIdx){
   if(!count) throw new Error('No rows with a Sol ID and at least one contact field found.');
   return map;
 }
+/* Lok Adalat proposed-OTS list -- matched by Account No. (not Sol ID),
+   since this tracks specific borrower accounts already in the NPA book,
+   not branch-level figures. OTS Amount is optional (blank until fixed);
+   a row with neither OTS Amount nor Token Amount is skipped, since
+   there's nothing to show. Multiple rows for the same account (part-
+   payments of the token on different dates) are combined: Token Amount
+   sums across all of them, while OTS Amount/Remark/Date each take
+   whichever row's value comes last in the file (OTS only gets fixed
+   once; a later remark or date supersedes an earlier one). Date is
+   stored already formatted DD-MM-YYYY (CLAUDE.md's date-format rule),
+   not a raw serial/Date object, since this map round-trips through the
+   publish JSON. */
+function buildLokAdalatMap(allRows, hIdx){
+  const header = (allRows[hIdx]||[]).map(normHeader);
+  const idx = (...names) => { for(const n of names){ const i = header.indexOf(normHeader(n)); if(i>=0) return i; } return -1; };
+  const iAcct = idx('accountno','acno','acctno','account');
+  if(iAcct<0) throw new Error('Could not find an "Account No." column.');
+  const iDate = idx('date');
+  const iOts = idx('otsamount','ots');
+  const iToken = idx('tokenamount','token');
+  const iRemark = idx('remark','remarks');
+  const toRupees = (v) => {
+    if(v===''||v==null) return null;
+    const n = parseFloat(String(v).replace(/[^0-9.\-]/g,''));
+    return isNaN(n) ? null : n;
+  };
+  const map = {};
+  for(const row of allRows.slice(hIdx+1)){
+    let acctRaw = cellStr(row, iAcct);
+    if(!acctRaw) continue;
+    if(looksScientific(acctRaw)) acctRaw = expandSci(acctRaw);
+    const ots = iOts>=0 ? toRupees(row[iOts]) : null;
+    const token = iToken>=0 ? toRupees(row[iToken]) : null;
+    if(ots===null && token===null) continue;
+    const remark = iRemark>=0 ? cellStr(row, iRemark) : '';
+    const dateObj = iDate>=0 ? toDate(row[iDate]) : null;
+    if(!map[acctRaw]) map[acctRaw] = { date: '', ots: 0, token: 0, remark: '' };
+    const rec = map[acctRaw];
+    if(token!==null) rec.token += token;
+    if(ots!==null) rec.ots = ots;
+    if(remark) rec.remark = remark;
+    if(dateObj) rec.date = fmtDate(dateObj);
+  }
+  return map;
+}
 function handleBranchContactsUpload(evt){
   const file = evt.target.files[0];
   if(!file) return;
@@ -3440,6 +3490,45 @@ function handleBranchContactsUpload(evt){
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
       if(document.getElementById('branchEdgePanel')?.classList.contains('open')) filterBranchList();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+function handleLokAdalatUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const labelEl = document.getElementById('lokAdalatUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('lokAdalatUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Lok Adalat file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      const headerHints = ['accountno','acno','acctno','account'];
+      let allRows, hIdx;
+      if(isCsv){
+        allRows = parseCSV(String(e.target.result));
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      }
+      const map = buildLokAdalatMap(allRows, hIdx);
+      const count = Object.keys(map).length;
+      if(!count) throw new Error('No rows with an Account No. and at least one of OTS Amount/Token Amount found.');
+      DATA.lokAdalat = map;
+      const label = document.getElementById('lokAdalatStatusLabel');
+      if(label) label.textContent = `${count.toLocaleString('en-IN')} account(s) loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} Lok Adalat account(s) parsed. Opening one of these accounts now shows the "already received" banner.</div>`;
+      clearStalePublishStatus();
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
     } catch(err){
       statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
     }
@@ -3997,6 +4086,11 @@ function downloadBranchContactsTemplate(){
   });
   downloadCsvRows('UPGB_Branch_Contacts_Template.csv', headers, rows);
 }
+function downloadLokAdalatTemplate(){
+  const headers = ['Date','Account No.','OTS Amount','Token Amount','Remark'];
+  const example = ['01-09-2026','150281010000028','','20000','Token received in cash'];
+  downloadCsvTemplate('UPGB_Lok_Adalat_Template.csv', headers, example);
+}
 
 function downloadUpdatedApp(){
   const json = JSON.stringify({ npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null });
@@ -4118,6 +4212,10 @@ function openPublishReview(){
   if(specialNoteCount){
     items.push(publishReviewItemRow({ icon: ICON_NOTE, title: 'Special Notes', maybe: true, sub: `${specialNoteCount.toLocaleString('en-IN')} account(s) with a note` }));
   }
+  const lokAdalatCount = Object.keys(DATA.lokAdalat||{}).length;
+  if(lokAdalatCount){
+    items.push(publishReviewItemRow({ icon: ICON_NOTE, title: 'Lok Adalat (Token Received)', maybe: true, sub: `${lokAdalatCount.toLocaleString('en-IN')} account(s)` }));
+  }
   document.getElementById('publishReviewSummary').innerHTML = `
     ${addedLine}
     ${staleLine}
@@ -4126,7 +4224,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -6037,6 +6135,9 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('branchContactsUploadDrop','click',()=>document.getElementById('branchContactsFileInput').click());
   on('branchContactsFileInput','change',(e)=>handleBranchContactsUpload(e));
   on('downloadBranchContactsTemplateBtn','click',()=>downloadBranchContactsTemplate());
+  on('lokAdalatUploadDrop','click',()=>document.getElementById('lokAdalatFileInput').click());
+  on('lokAdalatFileInput','change',(e)=>handleLokAdalatUpload(e));
+  on('downloadLokAdalatTemplateBtn','click',()=>downloadLokAdalatTemplate());
   on('pnpaUploadDrop','click',()=>document.getElementById('pnpaFileInput').click());
   on('pnpaFileInput','change',(e)=>handlePnpaUpload(e));
   on('kccOverdueUploadDrop','click',()=>document.getElementById('kccOverdueFileInput').click());
