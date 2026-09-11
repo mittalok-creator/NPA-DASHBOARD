@@ -1040,19 +1040,27 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
    this one in red too (2026-09-09), same reasoning: it needs to stand out
    enough that it's never skipped by accident, same as the eligibility
    warning. top is left unset here (falls back to 18px, same as
-   .eligible-banner) and only overridden inline by
-   positionSpecialNoteBanner() in js/app.js when the eligible banner is
-   also showing for the same borrower, so the two stack instead of
-   overlapping. */
+   .eligible-banner) and only overridden inline by positionBanners() in
+   js/app.js when the eligible banner is also showing for the same
+   borrower, so the two stack instead of overlapping. */
 .special-note-banner{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-12px);z-index:110;background:linear-gradient(135deg,var(--red),#a13d35);color:#fff;padding:14px 18px;border-radius:14px;box-shadow:0 22px 48px rgba(0,0,0,.34);max-width:min(90vw,520px);display:none;align-items:center;gap:12px;font-weight:700;font-size:13px;opacity:0;transition:opacity .2s var(--ease),transform .2s var(--ease),top .2s var(--ease)}
 .special-note-banner.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0)}
 /* A real <button>, not a decorative span like .eligible-banner-close --
    this is the ONLY way to dismiss .special-note-banner (see the markup
    comment in index.html), so it needs to be its own focusable, labeled
-   control rather than relying on the whole banner being clickable. */
+   control rather than relying on the whole banner being clickable. Shared
+   by .lok-adalat-banner below too. */
 .special-note-banner-close{margin-left:auto;flex-shrink:0;font-size:15px;opacity:.85;cursor:pointer;background:none;border:none;color:inherit;font-family:inherit;padding:4px}
 .special-note-banner-close:hover,.special-note-banner-close:focus-visible{opacity:1}
 .special-note-banner-close:focus-visible{outline:2px solid #fff;outline-offset:1px;border-radius:4px}
+/* TEMPORARY -- Lok Adalat 12-09-2026 (see the removal note on
+   LOK_ADALAT_MAP in js/app.js). Same shape as .special-note-banner but
+   blue (var(--accent)) rather than red/brass: this banner is good news
+   (token already collected), not a warning or an admin-authored hold, so
+   it shouldn't read as one. Stacks below whichever of
+   #eligibleBanner/#specialNoteBanner is showing via positionBanners(). */
+.lok-adalat-banner{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-12px);z-index:110;background:linear-gradient(135deg,var(--accent),var(--gold-d,#123A9E));color:#fff;padding:14px 18px;border-radius:14px;box-shadow:0 22px 48px rgba(0,0,0,.34);max-width:min(90vw,520px);display:none;align-items:center;gap:12px;font-weight:700;font-size:13px;opacity:0;transition:opacity .2s var(--ease),transform .2s var(--ease),top .2s var(--ease)}
+.lok-adalat-banner.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* ---------- Settings -> Update Data -> Special Note (Admin) ---------- */
 .special-note-lookup-row{padding:9px 12px;border-radius:10px;font-size:12px;font-weight:700;margin:8px 0}

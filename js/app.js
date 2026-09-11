@@ -60,6 +60,23 @@ DATA.branchContacts = DATA.branchContacts || {};
    Loan Detail screen -- see drawDetailBody. */
 DATA.specialNotes = DATA.specialNotes || {};
 
+/* TEMPORARY -- Lok Adalat 12-09-2026 (Alok's request, 2026-09-11): a
+   proposed-OTS list where token money has already been collected from the
+   borrower, ahead of the Lok Adalat itself. Whenever one of these Account
+   Nos. is opened in Loan Detail, a banner shows the OTS Amount (if fixed)
+   and Token Amount already received, so staff at the Lok Adalat counter
+   don't accidentally collect the token a second time. Alok said this is
+   throwaway and he'll delete it himself after 12-09-2026 -- unlike
+   specialNotes above, this is NOT admin-editable UI, NOT part of the
+   publish pipeline, just a flat [acctNo, otsAmount, tokenAmount] list
+   baked in directly from his own Lok_Adalat_12092026.xlsx (otsAmount 0
+   means not yet fixed). To remove: delete this array, LOK_ADALAT_MAP,
+   and the "Lok Adalat" banner block in drawDetailBody() below, plus
+   #lokAdalatBanner in index.html and its CSS in styles.css. */
+const LOK_ADALAT_TOKEN_RECEIVED = [["150281010000028",0,20000],["150273210000242",0,85000],["150273210000063",0,11000],["151035110000195",50000,25000],["151273210000030",0,6000],["151230410000213",0,5500],["152035110002366",163000,163000],["152635110001986",0,80000],["152635110000508",0,25000],["160535110000169",0,40000],["160835110001322",920000,980000],["151720303001913",3000,3000],["151735101009451",62000,62000],["151035110002536",28000,28000],["152835110002247",300000,300000],["152835110001829",60000,60000],["150273210000223",86000,86000],["151582104242309",0,1500],["152435110000746",35000,35000],["152435110000744",40000,40000],["152435110000745",100000,100000],["150135110002415",526000,521000],["160235110000084",100000,100000],["152930301000946",3000,3000],["154035110000109",258000,258000],["154035110000125",50000,50000],["154080710000002",195000,195000],["152635110001976",76000,76000],["152676410000225",15000,15000],["152935110002123",75000,75000],["153673210000015",103000,3000],["150235110000647",74000,74000],["160135110001337",248000,245000],["161535110000473",320000,225000],["150535110002120",80000,80000],["152835110001609",110000,75000],["152935110000108",232050,232050],["152984410000003",39950,39950],["152977010000018",212000,212000],["151735110001091",48000,45000],["161435110000478",0,105000],["161335110000597",45000,1500],["150535110001875",91000,91000],["150530800010218",48000,48000],["152435110002511",0,27000],["152430910000002",0,30000],["152435110000811",0,500],["152430410000004",0,500],["150475610000010",0,64700],["150673210000179",0,35000],["150935110001861",80000,80000],["150967310000043",5000,5000],["151230110000314",0,15000],["151835110000901",0,10000],["161673210000023",0,40000],["151635110002763",169000,169000],["152635110001813",180000,180000],["151035110002111",0,75000],["151082110000055",0,2500],["153435101009503",30000,30000],["153635101012604",16000,16000],["150273210000226",115000,115000],["151035101006357",0,6000],["151230410000057",0,4500],["152730410000025",0,2000],["160235110000659",250000,250000],["153435100102726",0,6000],["153435110001016",0,6000],["153435110001541",0,12500],["160973210000702",0,110000],["161073310000057",0,200],["161030301000672",0,3000],["161181808053609",0,3300],["161135101005774",0,5000],["161367610000012",0,4000],["151530410000083",0,9000],["152480710000004",0,1000],["152480710000005",0,2500],["152435110000149",0,1000],["153835110000471",75000,75000],["160367610000026",10000,10000],["160335110000608",70000,70000],["160773210000236",0,1000],["161173210000058",0,5000],["150735110001388",443000,443000],["150435110000580",70000,70000],["150535110002493",127500,127500],["151082210000062",27000,27000],["150535110002193",261000,261000],["152932110000005",12000,12000],["160473210000142",57000,57000],["161135101006490",55000,55000],["161182104097511",0,3200],["160235110000129",200000,190000],["151035110001551",0,92000],["151082210000010",0,19000],["152835110002533",756000,756000],["152835210000056",126000,126000],["151275610000285",0,2000],["151566102295610",4500,4500],["152835100102688",0,1700],["153235110001744",60000,48000],["160673310000001",1400,1400],["161335110001008",550000,180000],["161335110000057",55000,55000],["150235110001535",42000,42000],["150275210000108",13000,13000],["150275610000041",30000,30000],["152735110000089",20000,20000],["150173210000077",0,52000],["150173210000113",0,43000],["152435110000226",0,900],["152935110002296",0,35000],["152977010000014",0,35000],["152984410000004",0,30000],["160335101000292",0,30000],["151335110000006",260000,260000],["153535110001147",48000,48000],["152573210000198",125000,121500],["151735110001864",45000,40000],["153235110001405",46550,46550],["153135110000235",45000,45000],["153635110002022",561000,50000],["150135110000012",0,125000],["150135110001233",180000,50000],["150135110000130",73000,10000],["150535110002291",53000,53000],["150535101005437",0,20000],["150835110001689",0,2000],["151130401000326",0,2900],["151573210000136",0,30000],["151535110001858",0,205000],["151581900187907",0,6000],["151635110001982",0,30000],["152173210000268",0,11000],["152235110001740",0,20000],["152373210000020",0,33000],["152681900005213",0,15000],["152735110000675",0,10000],["152773210000036",0,8000],["153473210000082",0,2800],["153475510000009",0,4200],["154030110000012",0,59000],["160173210000163",0,100000],["160135110000769",0,70000],["160135110001451",0,100000],["160173210000080",0,5000],["160335110000946",0,45000],["160335110000769",0,60000],["160335101000399",0,102000],["160535110000384",250000,250000],["161135100100508",0,4000],["161135100100614",0,12000],["161135100101056",0,10000],["161435110000251",0,11000],["161430410000124",0,5000],["151735110002772",148000,148000],["151535110003007",0,80000],["151581010000047",0,80000],["151835110000951",0,163700]];
+const LOK_ADALAT_MAP = {};
+LOK_ADALAT_TOKEN_RECEIVED.forEach(function(r){ LOK_ADALAT_MAP[r[0]] = { ots: r[1], token: r[2] }; });
+
 /* ---------- Date helpers (NPA dates are raw Excel serials) ---------- */
 const XL_EPOCH = new Date(1899,11,30);
 function excelSerialToDate(n){ return new Date(XL_EPOCH.getTime() + n*86400000); }
@@ -2175,21 +2192,53 @@ function drawDetailBody(custRow, slots, prevOts){
       noteBanner.classList.remove('show');
     }
   }
-  positionSpecialNoteBanner();
+  // TEMPORARY -- Lok Adalat 12-09-2026 (see LOK_ADALAT_MAP above). Same
+  // "collect across every linked account" treatment as the Special Note
+  // banner just above.
+  const lokAdalatSlots = slots
+    .map(s => ({acctNo: s.acctNo, hit: LOK_ADALAT_MAP[String(s.acctNo)]}))
+    .filter(x => x.hit);
+  const lokAdalatBanner = document.getElementById('lokAdalatBanner');
+  if(lokAdalatBanner){
+    if(lokAdalatSlots.length){
+      const oneLine = x => x.hit.ots
+        ? `A/c ${x.acctNo}: OTS ${fmtINR(x.hit.ots)} already received (Token ${fmtINR(x.hit.token)})`
+        : `A/c ${x.acctNo}: Token ${fmtINR(x.hit.token)} already received`;
+      document.getElementById('lokAdalatBannerText').textContent = lokAdalatSlots.map(oneLine).join('  ·  ');
+      lokAdalatBanner.classList.add('show');
+    } else {
+      lokAdalatBanner.classList.remove('show');
+    }
+  }
+  positionBanners();
 }
-/* The "Not eligible" and "Special Note" banners share the same fixed
-   top-center spot (see .eligible-banner/.special-note-banner in
-   styles.css) so a single banner always lands dead center -- but the two
-   are independent conditions and can both be true for the same borrower
-   at once. Rather than hard-coding a second banner permanently lower
-   (leaving an odd gap whenever the first one is hidden), measure the
-   first banner's actual rendered height, since its text (and therefore
-   height) varies with how many not-eligible accounts are listed. */
-function positionSpecialNoteBanner(){
-  const eb = document.getElementById('eligibleBanner');
-  const nb = document.getElementById('specialNoteBanner');
-  if(!nb) return;
-  nb.style.top = (eb && eb.classList.contains('show')) ? (eb.getBoundingClientRect().bottom + 10) + 'px' : '';
+/* The "Not eligible", "Special Note", and "Lok Adalat" banners share the
+   same fixed top-center spot (see .eligible-banner/.special-note-banner/
+   .lok-adalat-banner in styles.css) so a single banner always lands dead
+   center -- but each is an independent condition and more than one can be
+   true for the same borrower at once. Rather than hard-coding fixed
+   offsets (leaving an odd gap whenever an earlier one is hidden), measure
+   each shown banner's actual rendered bottom edge, since its text (and
+   therefore height) varies -- then stack the next one directly below it. */
+function positionBanners(){
+  // offsetHeight, not a sibling's getBoundingClientRect() after moving it --
+  // .special-note-banner/.lok-adalat-banner animate `top` (transition:
+  // top .2s), so reading a just-repositioned banner's rect immediately
+  // after setting its top returns its stale pre-transition position, which
+  // would throw off whichever banner stacks below it. Height alone isn't
+  // animated, so accumulating a running offset from each banner's own
+  // offsetHeight sidesteps the timing issue entirely.
+  let top = 18; // matches the banners' own base CSS top:18px
+  ['eligibleBanner','specialNoteBanner','lokAdalatBanner'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(el.classList.contains('show')){
+      el.style.top = top + 'px';
+      top += el.offsetHeight + 10;
+    } else {
+      el.style.top = '';
+    }
+  });
 }
 
 // Small stroke-icon library for the loan table's row/section labels --
@@ -6002,11 +6051,12 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('publishBtn','click',()=>openPublishReview());
   on('publishCancelBtn','click',()=>closePublishReview());
   on('publishConfirmBtn','click',()=>confirmPublish());
-  on('eligibleBanner','click',()=>{ document.getElementById('eligibleBanner').classList.remove('show'); positionSpecialNoteBanner(); });
+  on('eligibleBanner','click',()=>{ document.getElementById('eligibleBanner').classList.remove('show'); positionBanners(); });
   // Unlike #eligibleBanner (click anywhere to dismiss), only the explicit
   // close button dismisses #specialNoteBanner -- a note is important
   // enough that a stray tap on the banner itself shouldn't hide it.
-  on('specialNoteBannerCloseBtn','click',()=>document.getElementById('specialNoteBanner').classList.remove('show'));
+  on('specialNoteBannerCloseBtn','click',()=>{ document.getElementById('specialNoteBanner').classList.remove('show'); positionBanners(); });
+  on('lokAdalatBannerCloseBtn','click',()=>{ document.getElementById('lokAdalatBanner').classList.remove('show'); positionBanners(); });
   on('specialNoteAcctInput','input',()=>onSpecialNoteAcctInput());
   on('specialNoteText','input',()=>onSpecialNoteTextInput());
   on('specialNoteSaveBtn','click',()=>saveSpecialNote());
