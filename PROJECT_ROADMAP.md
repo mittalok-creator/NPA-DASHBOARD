@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: Lok Adalat becomes a proper admin-uploadable dataset (2026-09-11, same day)
+
+The throwaway version below was hardcoded straight into `js/app.js`. Alok asked for it to become a real Settings feature instead -- "database update karne k liye", i.e. so he can re-upload a fresh file himself whenever the list changes, rather than asking for a code change each time.
+
+New "Lok Adalat — Token Already Received" section in Settings -> Update Data, right after Special Note, matching the same upload pattern as Branch Advance/Branch Contacts: a file drop (`#lokAdalatUploadDrop`/`#lokAdalatFileInput`, .xlsx/.csv), a blank-template download (Date, Account No., OTS Amount, Token Amount, Remark), and a status line. `buildLokAdalatMap()` matches accounts by Account No. (not Sol ID, since this tracks specific borrowers already in the NPA book) and combines multiple rows for the same account -- Token Amount sums across them (part-payments on different dates), while OTS Amount/Remark/Date each take whichever row comes last in the file. Every upload fully replaces `DATA.lokAdalat` outright ("jo last database upload hoga wahi accounts show hon" -- Alok's own framing), same as Branch Advance/Branch Contacts already do, and now genuinely lives in `DATA` and the publish payload like `specialNotes` does, instead of being baked into the JS bundle -- gone the moment Alok stops re-uploading it, no code change needed either way.
+
+The banner message itself also changed: Account No. is dropped from the text ("account no hata dena chaho to because wahi ac to open hai" -- the account is already the one on screen), and Date + Remark are now included alongside OTS/Token Amount, e.g. "Token ₹35,000 already received on 10-09-2026 — Second tranche". Verified end-to-end: uploading a test file with two rows for the same account (different dates, different remarks) correctly summed the Token Amount and kept the later row's date/remark, and the banner rendered exactly that combined line with no account number, through the real search -> open-detail flow against this environment's live dataset.
+
 ### TEMPORARY: Lok Adalat (12-09-2026) token-already-received banner (2026-09-11)
 
 Alok uploaded `Lok_Adalat_12092026.xlsx` -- a day-by-day log of proposed-OTS accounts where token money has already been collected ahead of the 12-09-2026 Lok Adalat -- and asked for a banner on Loan Detail: whenever one of these Account Nos. is opened, show that token (and OTS Amount, if fixed) has already been received, so counter staff don't collect it twice. Framed explicitly as throwaway ("baad main main ye sab hata dunga").
