@@ -798,29 +798,34 @@ main{padding:20px 16px 40px}
    UCI row's label, which embeds two dates and runs ~38 characters -- and
    that dragged the whole column wide enough to push the real per-account
    figures mostly off-screen on a phone.
-   Several capped-column approaches were tried here (ellipsis, wrapping,
-   a horizontal-scroll strip nested inside the label itself) and none of
-   them gave Alok what he actually wanted: for a long label to reveal
-   itself with the exact same one-swipe gesture that already reveals a
-   2nd/3rd account's data columns -- not a separate scroll region, not a
-   tap-for-a-toast. The nested-scroll attempt in particular just froze in
-   practice: it sat inside .loan-table-wrap, which already owns
-   horizontal touch-scroll for the whole table, so a drag starting on the
-   tiny label strip was captured by that outer scroller instead and the
-   inner one never moved -- a generic hazard of nesting two
-   same-axis scroll regions on touch, not something worth fighting.
-   Un-sticking the label column on mobile sidesteps all of it: the label
-   is no longer pinned to the left edge while the table scrolls under it,
-   so it becomes an ordinary part of the same swipeable row as the
-   account columns, sized to its natural (untruncated) width. Swiping
-   left moves the label out of view together with bringing account data
-   into view, exactly like account 2/3 already appear -- same gesture,
-   same scroll, no special-casing. Desktop/tablet (min-width:860px) keeps
-   the label pinned, where the column has room to show it in full anyway
-   without ever needing to scroll it out of view. */
+   Settled shape, after several tries (ellipsis, wrapping, un-sticking the
+   whole column): the column is pinned again at a fixed width, set to
+   Alok's own reference point -- fit "Interest Reversal" in full -- so
+   the column stays a constant, predictable size instead of auto-sizing
+   to whatever the longest label happens to be. A handful of longer
+   labels (Total Contractual Dues, Settlement (OTS) Amount, OTS Amt as
+   per Lok Adalat, and especially the UCI row, whose label embeds a live
+   date range) still run past that width; each becomes its own tiny
+   drag-to-reveal strip, handled in JS (see wireLabelDrag() in js/app.js)
+   rather than the browser's native nested overflow-scroll -- a native
+   overflow-x:auto here was tried first and froze in practice, because
+   the strip sits inside .loan-table-wrap, which already owns native
+   horizontal touch-scroll for the whole table, and a touch-drag starting
+   on the tiny nested strip was simply being captured by that outer
+   scroller instead of the inner one. Driving it from JS with pointer
+   events (and touch-action:pan-y below, so the browser still scrolls the
+   page vertically as normal and only leaves horizontal drags to this)
+   sidesteps that nested-same-axis-scroll ambiguity entirely.
+   Desktop/tablet (min-width:860px) is untouched -- the column there has
+   room to show every label, including UCI's, in full with nothing to
+   drag. */
 @media (max-width:859px){
-  .loan-table .lt-label{position:static;max-width:none;padding:10px 12px}
-  .loan-table .lt-label-text{white-space:nowrap;overflow:visible;text-overflow:clip}
+  .loan-table .lt-label{max-width:170px;padding:9px 10px}
+  /* touch-action:pan-y (not none) -- a finger-down on a label cell must
+     still be able to scroll the page vertically as normal; only
+     horizontal panning is left for wireLabelDrag() to handle itself. */
+  .loan-table .lt-label-text{white-space:nowrap;overflow:hidden;text-overflow:clip;touch-action:pan-y}
+  .loan-table .lt-label-inner{display:inline-block;white-space:nowrap;will-change:transform}
 }
 
 /* ---------- Cards ---------- */

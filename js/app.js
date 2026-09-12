@@ -2296,10 +2296,10 @@ function loanTableHTML(slots){
   // (LOAN TERMS / DUES & PROVISIONING / SETTLEMENT & IMPACT) scrolled off
   // to the left as soon as the table was scrolled horizontally, while
   // every other row's label correctly stayed pinned in view.
-  const group = (label, icon) => `<tr class="lt-group"><th scope="row" class="lt-label">${ltIcon(icon)}<span class="lt-label-text">${label}</span></th>${slots.map(()=>'<td></td>').join('')}</tr>`;
-  const row = (label, icon, fn, cls='') => `<tr class="${cls}"><th scope="row" class="lt-label">${ltIconBadge(icon)}<span class="lt-label-text">${label}</span></th>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`;
-  const statRow = (label, icon, idPrefix, iconId) => `<tr><th scope="row" class="lt-label">${ltIconBadge(icon,iconId)}<span class="lt-label-text">${label}</span></th>${slots.map((s,i)=>`<td id="${idPrefix}-${i}">—</td>`).join('')}</tr>`;
-  const otsRow = () => `<tr class="lt-ots-row"><th scope="row" class="lt-label">${ltIconBadge('coin')}<span class="lt-label-text">Settlement (OTS) Amount</span></th>${slots.map((s,i)=>`
+  const group = (label, icon) => `<tr class="lt-group"><th scope="row" class="lt-label">${ltIcon(icon)}<span class="lt-label-text"><span class="lt-label-inner">${label}</span></span></th>${slots.map(()=>'<td></td>').join('')}</tr>`;
+  const row = (label, icon, fn, cls='') => `<tr class="${cls}"><th scope="row" class="lt-label">${ltIconBadge(icon)}<span class="lt-label-text"><span class="lt-label-inner">${label}</span></span></th>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`;
+  const statRow = (label, icon, idPrefix, iconId) => `<tr><th scope="row" class="lt-label">${ltIconBadge(icon,iconId)}<span class="lt-label-text"><span class="lt-label-inner">${label}</span></span></th>${slots.map((s,i)=>`<td id="${idPrefix}-${i}">—</td>`).join('')}</tr>`;
+  const otsRow = () => `<tr class="lt-ots-row"><th scope="row" class="lt-label">${ltIconBadge('coin')}<span class="lt-label-text"><span class="lt-label-inner">Settlement (OTS) Amount</span></span></th>${slots.map((s,i)=>`
       <td><div class="lt-ots-cell">
         <span class="lt-cur">₹</span>
         <input type="number" class="lt-ots-input" id="otsInput-${i}" placeholder="0" value="${otsAmounts[s.acctNo]||''}"
@@ -2307,19 +2307,19 @@ function loanTableHTML(slots){
           oninput="onOtsInput(${i},'${esc(String(s.acctNo))}')">
         <span class="pct-tag" id="pctNetOs-${i}"></span>
       </div></td>`).join('')}</tr>`;
-  const uriRow = () => `<tr><th scope="row" class="lt-label">${ltIconBadge('rotate')}<span class="lt-label-text">Interest Reversal</span></th>${slots.map((s,i)=>`
+  const uriRow = () => `<tr><th scope="row" class="lt-label">${ltIconBadge('rotate')}<span class="lt-label-text"><span class="lt-label-inner">Interest Reversal</span></span></th>${slots.map((s,i)=>`
       <td><div class="lt-ots-cell">
         <span class="lt-cur">₹</span>
         <input type="number" class="lt-ots-input" id="uriInput-${i}" placeholder="0" value="${uriFor(s)||''}"
           aria-label="Interest reversal for account ${esc(String(s.acctNo))}"
           oninput="onUriInput(${i},'${esc(String(s.acctNo))}')">
       </div></td>`).join('')}</tr>`;
-  const totalDuesRow = () => `<tr class="lt-strong"><th scope="row" class="lt-label">${ltIconBadge('layers')}<span class="lt-label-text">Total Dues</span></th>${slots.map((s,i)=>`<td id="totalDues-${i}">—</td>`).join('')}</tr>`;
-  const totalContractualDuesRow = () => `<tr class="lt-strong lt-divider"><th scope="row" class="lt-label">${ltIconBadge('layers')}<span class="lt-label-text">Total Contractual Dues</span></th>${slots.map((s,i)=>`<td id="totalContractualDues-${i}">—</td>`).join('')}</tr>`;
+  const totalDuesRow = () => `<tr class="lt-strong"><th scope="row" class="lt-label">${ltIconBadge('layers')}<span class="lt-label-text"><span class="lt-label-inner">Total Dues</span></span></th>${slots.map((s,i)=>`<td id="totalDues-${i}">—</td>`).join('')}</tr>`;
+  const totalContractualDuesRow = () => `<tr class="lt-strong lt-divider"><th scope="row" class="lt-label">${ltIconBadge('layers')}<span class="lt-label-text"><span class="lt-label-inner">Total Contractual Dues</span></span></th>${slots.map((s,i)=>`<td id="totalContractualDues-${i}">—</td>`).join('')}</tr>`;
   // Settlement Progress: OTS Amount as a share of Total Dues, drawn as a
   // thin fill bar plus a printed percentage -- lets four accounts be
   // compared by eye instead of reading six-figure numbers column by column.
-  const settleRow = () => `<tr><th scope="row" class="lt-label">${ltIconBadge('gauge')}<span class="lt-label-text">Settlement Progress</span></th>${slots.map((s,i)=>`<td id="settleCell-${i}"><span class="dash">—</span></td>`).join('')}</tr>`;
+  const settleRow = () => `<tr><th scope="row" class="lt-label">${ltIconBadge('gauge')}<span class="lt-label-text"><span class="lt-label-inner">Settlement Progress</span></span></th>${slots.map((s,i)=>`<td id="settleCell-${i}"><span class="dash">—</span></td>`).join('')}</tr>`;
   const eligRow = slots.some(s=>s.notEligible) ? `<tr><th scope="row" class="lt-label"></th>${slots.map(s=>`<td>${s.notEligible?'<span class="eligibility-warn">⚠ Not aged 6mo</span>':''}</td>`).join('')}</tr>` : '';
   // Shown right above the actual OTS input -- the mandated floor, seen
   // before typing a proposed figure, not after. Substandard accounts
@@ -2327,7 +2327,7 @@ function loanTableHTML(slots){
   // doesn't apply to them (Alok's own instruction) -- distinct from an
   // account whose Asset Code isn't in the circular at all, which
   // shouldn't come up in practice but falls back to "—" defensively.
-  const lokAdalatRow = () => `<tr class="lt-ots-row lt-lokadalat-row"><th scope="row" class="lt-label">${ltIconBadge('scale')}<span class="lt-label-text">OTS Amt as per Lok Adalat</span></th>${slots.map(s=>{
+  const lokAdalatRow = () => `<tr class="lt-ots-row lt-lokadalat-row"><th scope="row" class="lt-label">${ltIconBadge('scale')}<span class="lt-label-text"><span class="lt-label-inner">OTS Amt as per Lok Adalat</span></span></th>${slots.map(s=>{
     const la = lokAdalatMin(s);
     if(!la) return '<td>—</td>';
     if(!la.eligible) return '<td><span class="lt-lokadalat-na">Not Eligible</span></td>';
@@ -2337,7 +2337,7 @@ function loanTableHTML(slots){
   return `
   <div class="loan-table-wrap">
   <table class="loan-table">
-    <thead><tr><th scope="col" class="lt-label">${ltIcon('list')}<span class="lt-label-text">Particulars</span></th>${cols}</tr></thead>
+    <thead><tr><th scope="col" class="lt-label">${ltIcon('list')}<span class="lt-label-text"><span class="lt-label-inner">Particulars</span></span></th>${cols}</tr></thead>
     <tbody>
       ${eligRow}
       ${group('Loan Terms', 'loanTerms')}
@@ -6095,6 +6095,45 @@ document.addEventListener('click', (e)=>{
 });
 document.getElementById('settingsMenu')?.addEventListener('click', ()=>closeSettingsMenu());
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMenu(); });
+
+// Loan table's label column is a fixed width on mobile (sized to fit
+// "Interest Reversal" -- see .lt-label in styles.css), so the one label
+// that genuinely runs longer (the UCI row, which embeds a live date
+// range) needs its own way to be read in full. A native overflow-x:auto
+// on the label was tried first and never actually moved -- it's nested
+// inside .loan-table-wrap, which already owns native horizontal
+// touch-scroll for the whole table, and a drag starting on the tiny
+// label strip was simply captured by that outer scroller instead of the
+// inner one. Driving it manually with pointer events (and
+// touch-action:pan-y on .lt-label-text, so the browser leaves horizontal
+// drags alone for this to handle while still scrolling the page normally
+// on a vertical one) sidesteps that nested-same-axis-scroll ambiguity
+// entirely -- delegated on document,
+// like the settings-menu listener above, since the table is rebuilt via
+// innerHTML on every drawDetailBody() render.
+(function wireLabelDrag(){
+  let outer=null, inner=null, startX=0, startTx=0, maxTx=0;
+  document.addEventListener('pointerdown', (e)=>{
+    const hit = e.target.closest('.loan-table .lt-label-text');
+    if(!hit) return;
+    const innerEl = hit.querySelector('.lt-label-inner');
+    if(!innerEl) return;
+    const overflow = innerEl.scrollWidth - hit.clientWidth;
+    if(overflow <= 0) return;
+    outer = hit; inner = innerEl; startX = e.clientX; maxTx = overflow;
+    const current = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(inner.style.transform);
+    startTx = current ? parseFloat(current[1]) : 0;
+  });
+  document.addEventListener('pointermove', (e)=>{
+    if(!inner) return;
+    let tx = startTx + (e.clientX - startX);
+    tx = Math.max(-maxTx, Math.min(0, tx));
+    inner.style.transform = `translateX(${tx}px)`;
+  });
+  const endDrag = () => { outer=null; inner=null; };
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+})();
 
 /* ---------- Wire static chrome (nav, header icons, modals) ---------- */
 (function wireChrome(){
