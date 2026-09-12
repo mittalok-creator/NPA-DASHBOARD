@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: the swipe-to-scroll label froze in practice, replaced with tap-to-reveal (2026-09-12, same day)
+
+Alok tried swiping the UCI label to read its embedded date range and it didn't move at all. Root cause: the label's own `overflow-x:auto` strip sits nested inside `.loan-table-wrap`, which already owns horizontal touch-scroll for the whole table -- a touch-drag starting on the tiny label strip was being captured by that outer scroller instead, so the inner one never got the gesture. Nested horizontal scrollers on touch are unreliable in general, not just here.
+
+Reverted to one-line ellipsis truncation (row/column size unchanged, same as the "portion size" fix), paired with tap-to-reveal: tapping any truncated label now shows its full text as a toast (a delegated click listener on `document` checks `scrollWidth > clientWidth` on the tapped label, so untruncated labels do nothing). A tap is a far more reliable gesture on a small target than a nested swipe.
+
 ### Follow-up: wrapping grew the row height Alok wanted left alone; label now swipes instead (2026-09-12, same day)
 
 Wrapping (previous fix) kept every word intact but grew rows to 2-3 lines wherever a label was long -- Alok wanted the row/column "portion size" left exactly as it was, not taller. Switched the label text to its own tiny horizontal-scroll strip instead: one line, same row height as before, and swiping the heading sideways reveals whatever doesn't fit -- the same swipe-to-see-more behaviour the data columns to its right already have via the table wrapper's own horizontal scroll.
