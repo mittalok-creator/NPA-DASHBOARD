@@ -800,16 +800,18 @@ main{padding:20px 16px 40px}
    figures mostly off-screen on a phone. Capped here (mobile only; desktop
    has the width to spare and keeps the full label). */
 @media (max-width:859px){
-  /* Follow-up: wrapping (previous fix) kept every word intact but grew
-     rows to 2-3 lines, which Alok didn't want -- portion size (row
-     height/column width) should stay exactly as it was. Instead the
-     label itself becomes its own tiny horizontal-scroll strip, the same
-     swipe-to-see-more behaviour the data columns already have via
-     .loan-table-wrap -- one line, nothing cut off with an ellipsis,
-     just swipe the heading sideways to read the rest of it. */
-  .loan-table .lt-label{max-width:148px;padding:9px 6px;align-items:center}
-  .loan-table .lt-label-text{white-space:nowrap;overflow-x:auto;overflow-y:hidden;text-overflow:clip;-webkit-overflow-scrolling:touch;scrollbar-width:none;min-width:0;flex:1}
-  .loan-table .lt-label-text::-webkit-scrollbar{display:none}
+  /* Follow-up: wrapping grew row height (not wanted); a horizontal-scroll
+     strip inside the label (tried next) turned out to freeze in practice
+     -- it sits nested inside .loan-table-wrap, which already owns
+     horizontal touch-scroll for the whole table, and a touch-drag
+     starting on the tiny label strip was simply being captured by that
+     outer scroller instead, so the inner one never moved. Back to a
+     one-line ellipsis truncation (row/column size unchanged), paired
+     with a tap-to-reveal: tapping a truncated label shows the full text
+     as a toast (see the delegated .lt-label click handler in js/app.js) --
+     a tap is reliable on a small target in a way a nested swipe isn't. */
+  .loan-table .lt-label{max-width:148px;padding:9px 6px;align-items:center;cursor:pointer}
+  .loan-table .lt-label-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
 }
 
 /* ---------- Cards ---------- */
