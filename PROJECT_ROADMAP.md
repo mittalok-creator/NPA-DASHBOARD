@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: ellipsis truncation made the label column unreadable, switched to wrap (2026-09-12, same day)
+
+The 112px ellipsis cap from the fix below solved the wide-column problem but overcorrected -- Alok's next screenshot showed ordinary short labels ("O/S Balan...", "DUES & P...", "Total Con...") chopped off mid-word, which defeats the point of a label column. Switched from truncating to wrapping: `.lt-label` widened slightly (112px → 148px) and `.lt-label-text` now wraps normally (2-3 lines) instead of clipping with an ellipsis. Every label reads in full now; only the UCI row's date-embedding label (the original offender) actually needs all 3 lines.
+
 ### Follow-up: loan table's sticky "Particulars" column was still forcing itself wide on mobile (2026-09-12, same day)
 
 Alok's own screenshot after the header/waterfall fix above showed the real problem was mostly this, not the header: the sticky first column of the loan comparison table (`.lt-label`) had no width cap anywhere, so it auto-sized to fit its single widest cell -- specifically the UCI row's label, which embeds two live dates ("UCI @ 8.5% (24-09-2023 to 12-09-2026)", ~38 characters) -- and that dragged the *entire* column that wide on every row, pushing the actual per-account figures mostly off-screen and needing horizontal scroll just to see them.
