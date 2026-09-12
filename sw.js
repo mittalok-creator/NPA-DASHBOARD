@@ -1,4 +1,4 @@
-const CACHE_NAME = 'upgb-ots-shell-v210';
+const CACHE_NAME = 'upgb-ots-shell-v211';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
@@ -17,13 +17,13 @@ const CACHE_NAME = 'upgb-ots-shell-v210';
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './css/styles.css?v=20260911b',
-  './js/app.js?v=20260911b',
-  './js/auth.js?v=20260911b',
-  './js/publish.js?v=20260911b',
-  './js/splash.js?v=20260911b',
-  './js/vendor/xlsx.full.min.js?v=20260911b',
-  './js/vendor/exceljs.min.js?v=20260911b',
+  './css/styles.css?v=20260912a',
+  './js/app.js?v=20260912a',
+  './js/auth.js?v=20260912a',
+  './js/publish.js?v=20260912a',
+  './js/splash.js?v=20260912a',
+  './js/vendor/xlsx.full.min.js?v=20260912a',
+  './js/vendor/exceljs.min.js?v=20260912a',
   './manifest.webmanifest',
 ];
 
@@ -34,10 +34,20 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
+// Holds the last successfully-fetched data/latest.json, separately from
+// CACHE_NAME (Alok's request, 2026-09-12: work offline once data has been
+// loaded once, work online normally otherwise). Deliberately its own
+// never-versioned cache, not part of CACHE_NAME: activate() below wipes
+// every cache except CACHE_NAME on each app update, and CACHE_NAME changes
+// on every deploy in this project -- if the saved data lived there too, a
+// user who updated the app while offline would lose their only offline
+// copy at the exact moment the new service worker took over.
+const DATA_CACHE_NAME = 'upgb-ots-data';
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((names) =>
-      Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))
+      Promise.all(names.filter((n) => n !== CACHE_NAME && n !== DATA_CACHE_NAME).map((n) => caches.delete(n)))
     )
   );
   self.clients.claim();
@@ -60,11 +70,32 @@ self.addEventListener('activate', (event) => {
 // The list and its fetch branch stay because they are the guard rail that
 // stops the next polled endpoint from reintroducing that bug.
 const POLLED_ENDPOINTS = [];
+// data/latest.json is fetched with a `?t=<timestamp>` cache-buster that's a
+// different URL on every single load (see loadNpaData() in js/app.js) --
+// exactly the "polled endpoint" shape the comment above warns about, so it
+// needs the same care POLLED_ENDPOINTS gets, but the opposite handling:
+// this one DOES need a cached fallback for offline use, just keyed on the
+// path alone (ignoring the ever-changing query) so every fetch overwrites
+// one entry instead of piling up a new one per load.
+const DATA_URL_PATTERN = /\/data\/latest\.json$/;
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (POLLED_ENDPOINTS.some((p) => url.pathname.endsWith(p))) {
     event.respondWith(fetch(event.request));
+    return;
+  }
+  if (DATA_URL_PATTERN.test(url.pathname)) {
+    const cacheKey = url.pathname;
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(DATA_CACHE_NAME).then((cache) => cache.put(cacheKey, copy)).catch(() => {});
+          return response;
+        })
+        .catch(() => caches.open(DATA_CACHE_NAME).then((cache) => cache.match(cacheKey)))
+    );
     return;
   }
   event.respondWith(
