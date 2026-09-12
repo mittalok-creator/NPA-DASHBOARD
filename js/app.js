@@ -6187,6 +6187,55 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   };
   on('refreshCurrentBtnMobile','click',refreshCurrentView);
   on('refreshCurrentBtnNav','click',refreshCurrentView);
+  // "Download for Offline" (Alok's request, 2026-09-12): re-fetches
+  // data/latest.json right now, same URL Refresh/the initial load already
+  // use -- the service worker's fetch handler (sw.js) is the one actually
+  // doing the saving, into its own DATA_CACHE_NAME, keyed on the path
+  // alone so this always overwrites the same single entry rather than
+  // piling up a new one. This button doesn't reload the page; it's purely
+  // "make sure the copy I'll fall back to offline is fresh right now",
+  // e.g. right before heading out somewhere with no signal. When the
+  // network is genuinely unreachable, this fetch fails with nothing
+  // (yet) to overwrite -- the previous offline copy, if any, is untouched.
+  const downloadForOfflineNow = () => {
+    // Checked up front, not left to the fetch to fail: sw.js's own fetch
+    // handler falls back to the cached copy when the network request
+    // fails, so a fetch made while offline still resolves successfully
+    // (just served from the existing cache) -- fetchJson() alone can't
+    // tell the difference, and reporting that as a fresh save would be
+    // dishonest about what actually just happened (nothing did).
+    if(!navigator.onLine){
+      showToast('Could not save for offline use — check your internet connection and try again.');
+      return;
+    }
+    showToast('Saving data for offline use…');
+    fetchJson('data/latest.json?t=' + Date.now())
+      .then(data => {
+        const rowCount = (data.npa && data.npa.rows) ? data.npa.rows.length : 0;
+        // DATA.asOnDate is stored as a plain YYYY-MM-DD string (not a
+        // format toDate() parses -- that helper is for NPA-row dates,
+        // which come in as DD-MM-YYYY or a raw Excel serial), same
+        // split-and-reverse fmtAsOnDisplay() already uses for this field.
+        const dateParts = data.asOnDate ? String(data.asOnDate).split('-') : [];
+        const asOn = dateParts.length===3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : '';
+        const bits = [];
+        if(asOn) bits.push('data as on ' + asOn);
+        if(rowCount) bits.push(rowCount.toLocaleString('en-IN') + ' accounts');
+        showToast('✔ Saved for offline use' + (bits.length ? ' — ' + bits.join(', ') : '') + '.');
+      })
+      .catch(() => {
+        showToast('Could not save for offline use — check your internet connection and try again.');
+      });
+  };
+  on('downloadOfflineBtnNav','click',downloadForOfflineNow);
+  on('downloadOfflineBtnMobile','click',downloadForOfflineNow);
+  // Lets a viewer see at a glance whether they're looking at live data or
+  // their last saved offline copy -- important since the service worker's
+  // offline fallback (see sw.js) is otherwise silent to this page: a fetch
+  // served from cache resolves exactly like a normal successful one.
+  window.addEventListener('offline', () => showToast('You are offline — showing your last saved data.'));
+  window.addEventListener('online', () => showToast('Back online.'));
+  if(!navigator.onLine) showToast('You are offline — showing your last saved data.');
   document.querySelectorAll('.nav-item[data-view]').forEach(b=>{
     b.addEventListener('click',()=>switchView(b.dataset.view));
   });
