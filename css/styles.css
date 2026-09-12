@@ -800,7 +800,14 @@ main{padding:20px 16px 40px}
    figures mostly off-screen on a phone. Capped here (mobile only; desktop
    has the width to spare and keeps the full label). */
 @media (max-width:859px){
-  .loan-table .lt-label{max-width:112px;padding:10px 8px}
+  /* Follow-up: capping the column with an ellipsis (previous fix) made
+     even ordinary short labels ("O/S Balance", "Total Contractual Dues")
+     chop off mid-word, which is worse than the wide-column problem it
+     fixed -- readability of the label itself is the point of this
+     column. Wrap to 2-3 lines instead of truncating; only the longest
+     label (UCI's date-embedding one) actually needs the extra lines. */
+  .loan-table .lt-label{max-width:148px;padding:9px 6px;align-items:flex-start}
+  .loan-table .lt-label-text{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.25;padding-top:1px}
 }
 
 /* ---------- Cards ---------- */
