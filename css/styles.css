@@ -793,6 +793,15 @@ main{padding:20px 16px 40px}
   .detail-headtext h2{font-size:13.5px}
   .detail-headtext p{font-size:10.5px;margin-top:1px}
 }
+/* Follow-up, same complaint: the sticky "Particulars" label column had no
+   width cap anywhere, so it auto-sized to its single widest cell -- the
+   UCI row's label, which embeds two dates and runs ~38 characters -- and
+   that dragged the whole column wide enough to push the real per-account
+   figures mostly off-screen on a phone. Capped here (mobile only; desktop
+   has the width to spare and keeps the full label). */
+@media (max-width:859px){
+  .loan-table .lt-label{max-width:112px;padding:10px 8px}
+}
 
 /* ---------- Cards ---------- */
 .card{background:var(--card);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);margin-bottom:16px;border:1px solid var(--line);animation:riseIn .35s var(--ease)}
@@ -856,6 +865,12 @@ main{padding:20px 16px 40px}
 .loan-table .lt-acc{color:var(--gold-l);font-weight:800;font-size:12.5px;text-transform:none;letter-spacing:0}
 .loan-table .lt-scheme{color:#c9cbdc;font-size:10.5px;font-weight:500;text-transform:none;margin:2px 0 6px}
 .loan-table .lt-label{text-align:left;font-weight:700;color:var(--sub);background:var(--card);position:sticky;left:0;z-index:1;white-space:nowrap;display:flex;align-items:center;gap:7px}
+/* Lets a long label (e.g. the UCI row's "UCI @ 8.5% (24-09-2023 to
+   12-09-2026)", which embeds two live dates) truncate with an ellipsis
+   instead of forcing the whole sticky column wide -- min-width:0 overrides
+   a flex item's default auto min-width, which otherwise refuses to shrink
+   below the text's full intrinsic width no matter what the parent does. */
+.loan-table .lt-label-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
 .loan-table thead .lt-label{position:sticky;left:0;top:0;z-index:3}
 .loan-table tbody tr:hover td:not(.lt-label){background:var(--accent-soft)}
 .loan-table tbody tr:hover td.lt-label{background:var(--accent-soft)}
