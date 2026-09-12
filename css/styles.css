@@ -780,6 +780,19 @@ main{padding:20px 16px 40px}
 .detail-headtext{flex:1;min-width:0}
 .detail-headtext h2{margin:0;font-size:14.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.2px}
 .detail-headtext p{margin:2px 0 0;font-size:11.5px;color:var(--gold-l)}
+/* Mobile: Alok's complaint -- the header was eating too much of the small
+   screen, leaving too little room for the loan table below it. Trims
+   padding and the icon-button size (36px -> 30px) so the same back-btn
+   + name/branch + 3 share-btn row sits in a visibly shorter strip.
+   Desktop/tablet (min-width:860px) keeps the roomier padding above via
+   its own override further down the stylesheet. */
+@media (max-width:859px){
+  .detail-head{padding:10px 14px 12px}
+  .detail-headrow{gap:8px}
+  .back-btn,.share-btn{width:30px;height:30px;border-radius:9px}
+  .detail-headtext h2{font-size:13.5px}
+  .detail-headtext p{font-size:10.5px;margin-top:1px}
+}
 
 /* ---------- Cards ---------- */
 .card{background:var(--card);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);margin-bottom:16px;border:1px solid var(--line);animation:riseIn .35s var(--ease)}
@@ -1431,6 +1444,12 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
   #aggBar .agg-mini{padding:7px 9px;text-align:center}
   #aggBar .agg-mini .k{font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #aggBar .agg-mini .v{font-size:11.5px}
+  /* Alok's follow-up, same day: drop "Where The Dues Go" from the mobile
+     dock entirely rather than just collapsing it -- even collapsed, its
+     header row was still spending space in the fixed bottom bar he wanted
+     freed up for the table. Desktop/tablet sidebar (min-width:860px) is
+     unaffected -- that's a normal scrolling column, not a fixed dock. */
+  #aggBar .agg-wf{display:none}
 }
 /* tablet/desktop: left column inside the detail -- widened from the old
    190-210px so the hero's headline number has room to breathe. Widened

@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Mobile Loan Detail: shorter header, "Where The Dues Go" dropped from the phone dock (2026-09-12, same day)
+
+Two follow-up complaints on the Loan Detail screen, from screenshots of a real account (VIJAY KUMAR S/O SARNAM..., WAZIDPUR, Cust ID 710243262) on a phone: the sticky top header (back button, borrower name/branch/Cust ID, 3 share icons) was eating too much vertical space, leaving too little room for the actual loan table below it; separately, on the fixed bottom aggregate dock, "Where The Dues Go" (already collapsed-by-default on mobile since 2026-08-14) was asked to be dropped from mobile entirely rather than just collapsed.
+
+Fixed both with mobile-only (`max-width:859px`) CSS, leaving desktop/tablet untouched: `.detail-head` padding trimmed (`18px 18px 22px` → `10px 14px 12px`), the back/share icon buttons shrunk (36px → 30px), and the name/branch text sized down slightly -- the header row is visibly shorter, so the loan table starts higher on screen. `#aggBar .agg-wf` (the "Where The Dues Go" waterfall block, header included) is now `display:none` on mobile instead of merely collapsed.
+
 ### New: real offline support -- "Download for Offline", works with no signal (2026-09-12)
 
 Alok asked for a way to save the whole database locally so the app keeps working with no internet, and goes back to normal online behaviour whenever a connection is back. The app already had a service worker (`sw.js`) doing network-first-with-cache-fallback for every request, but that mechanism was silently broken for the one request that actually matters: `data/latest.json` is always fetched with a `?t=<timestamp>` cache-buster that's a different URL on every single load (see `loadNpaData()`), so the existing `caches.match(event.request)` fallback could never find a match offline -- the very first fetch attempt of a brand new session always has a `?t=` value that was never cached before, cache miss guaranteed, every time.
