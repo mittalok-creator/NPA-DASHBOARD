@@ -6096,19 +6096,6 @@ document.addEventListener('click', (e)=>{
 document.getElementById('settingsMenu')?.addEventListener('click', ()=>closeSettingsMenu());
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMenu(); });
 
-// Loan table's sticky label column truncates with an ellipsis on mobile
-// (see .lt-label in styles.css). Delegated on document rather than wired
-// per-row -- the table is rebuilt via innerHTML on every drawDetailBody()
-// render, so a listener attached to an individual cell would be gone
-// after the very next render, while one on document survives it.
-document.addEventListener('click', (e)=>{
-  const cell = e.target.closest('.loan-table .lt-label');
-  if(!cell) return;
-  const span = cell.querySelector('.lt-label-text');
-  if(!span || span.scrollWidth <= span.clientWidth + 1) return;
-  showToast(span.textContent);
-});
-
 /* ---------- Wire static chrome (nav, header icons, modals) ---------- */
 (function wireChrome(){
   const on = (id, evt, fn) => { const e=document.getElementById(id); if(e) e.addEventListener(evt, fn); };

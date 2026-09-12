@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: label column un-stuck on mobile so it shares the same swipe as the data columns (2026-09-12, same day)
+
+The tap-to-toast fix worked but wasn't what Alok was actually asking for: he wants the label column to reveal itself with the *exact same gesture* that already reveals a 2nd/3rd account's data -- one swipe, no separate mechanism, no toast. That single-scroll-container behaviour is already how the account columns work (`.loan-table-wrap` owns one horizontal scroll for the whole table); the label column couldn't join it because `position:sticky` pins it to the left edge specifically so it *doesn't* scroll with the rest of the table.
+
+Un-stuck the label column on mobile (`position:static`, width cap removed) so it's now an ordinary part of the same swipeable row as the account columns, at its natural (untruncated) width. Swiping left moves the label out of view together with bringing account data into view -- literally the same gesture, same scroll, no toast, no separate scroll region to fight with the table wrapper's own. This also directly fixes the original complaint in a way none of the truncation attempts fully did: since the label no longer permanently occupies screen width (sticky did, no matter how far you scrolled), a viewer can now swipe it fully out of the way and see the account data at the table's complete width, the same way switching to see a 2nd or 3rd account already worked. Desktop/tablet (min-width:860px) is untouched -- the label stays pinned there, where there's room to show it in full without ever needing to hide it.
+
 ### Follow-up: the swipe-to-scroll label froze in practice, replaced with tap-to-reveal (2026-09-12, same day)
 
 Alok tried swiping the UCI label to read its embedded date range and it didn't move at all. Root cause: the label's own `overflow-x:auto` strip sits nested inside `.loan-table-wrap`, which already owns horizontal touch-scroll for the whole table -- a touch-drag starting on the tiny label strip was being captured by that outer scroller instead, so the inner one never got the gesture. Nested horizontal scrollers on touch are unreliable in general, not just here.
