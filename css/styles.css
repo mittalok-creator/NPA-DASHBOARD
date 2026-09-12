@@ -805,17 +805,18 @@ main{padding:20px 16px 40px}
    to whatever the longest label happens to be. A handful of longer
    labels (Total Contractual Dues, Settlement (OTS) Amount, OTS Amt as
    per Lok Adalat, and especially the UCI row, whose label embeds a live
-   date range) still run past that width; each becomes its own tiny
-   drag-to-reveal strip, handled in JS (see wireLabelDrag() in js/app.js)
-   rather than the browser's native nested overflow-scroll -- a native
-   overflow-x:auto here was tried first and froze in practice, because
-   the strip sits inside .loan-table-wrap, which already owns native
+   date range) still run past that width. Alok's own framing: the column
+   is one pane, so every row's label slides together in sync when
+   dragged, not each row scrolling independently -- handled in JS (see
+   wireLabelDrag() in js/app.js), which applies one shared offset to
+   every label in the table at once, rather than the browser's native
+   nested overflow-scroll: a native overflow-x:auto here was tried first
+   (both per-row and as a single shared strip) and froze in practice,
+   because it sits inside .loan-table-wrap, which already owns native
    horizontal touch-scroll for the whole table, and a touch-drag starting
-   on the tiny nested strip was simply being captured by that outer
-   scroller instead of the inner one. Driving it from JS with pointer
-   events (and touch-action:pan-y below, so the browser still scrolls the
-   page vertically as normal and only leaves horizontal drags to this)
-   sidesteps that nested-same-axis-scroll ambiguity entirely.
+   on the label was simply being captured by that outer scroller instead.
+   touch-action:pan-y below leaves the browser free to still scroll the
+   page vertically as normal -- only horizontal drags are taken over.
    Desktop/tablet (min-width:860px) is untouched -- the column there has
    room to show every label, including UCI's, in full with nothing to
    drag. */

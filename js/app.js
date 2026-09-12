@@ -6097,40 +6097,52 @@ document.getElementById('settingsMenu')?.addEventListener('click', ()=>closeSett
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMenu(); });
 
 // Loan table's label column is a fixed width on mobile (sized to fit
-// "Interest Reversal" -- see .lt-label in styles.css), so the one label
-// that genuinely runs longer (the UCI row, which embeds a live date
-// range) needs its own way to be read in full. A native overflow-x:auto
-// on the label was tried first and never actually moved -- it's nested
-// inside .loan-table-wrap, which already owns native horizontal
-// touch-scroll for the whole table, and a drag starting on the tiny
-// label strip was simply captured by that outer scroller instead of the
-// inner one. Driving it manually with pointer events (and
-// touch-action:pan-y on .lt-label-text, so the browser leaves horizontal
-// drags alone for this to handle while still scrolling the page normally
-// on a vertical one) sidesteps that nested-same-axis-scroll ambiguity
-// entirely -- delegated on document,
+// "Interest Reversal" -- see .lt-label in styles.css), so the handful of
+// labels that genuinely run longer (Total Contractual Dues, Settlement
+// (OTS) Amount, OTS Amt as per Lok Adalat, the UCI row's date-embedding
+// one) need a way to be read in full. Alok's own framing: the column is
+// one pane -- every row's label should slide together, in sync, as if
+// dragging that one pane, not each row scrolling independently of the
+// others. So this tracks a single shared offset and applies it to every
+// .lt-label-inner in the table at once, however many rows there are and
+// regardless of which row the drag actually started on.
+// A native overflow-x:auto per cell was tried first and never actually
+// moved -- it's nested inside .loan-table-wrap, which already owns
+// native horizontal touch-scroll for the whole table, and a drag
+// starting on the tiny label strip was simply captured by that outer
+// scroller instead of the inner one. Driving it manually with pointer
+// events (and touch-action:pan-y on .lt-label-text, so the browser
+// leaves horizontal drags alone for this to handle while still
+// scrolling the page normally on a vertical one) sidesteps that
+// nested-same-axis-scroll ambiguity entirely -- delegated on document,
 // like the settings-menu listener above, since the table is rebuilt via
-// innerHTML on every drawDetailBody() render.
+// innerHTML on every drawDetailBody() render (which is also why the
+// current offset is read back off the DOM at drag start rather than
+// kept in a variable across renders -- a freshly rebuilt table's cells
+// always start at their default, untransformed position).
 (function wireLabelDrag(){
-  let outer=null, inner=null, startX=0, startTx=0, maxTx=0;
+  let dragging=false, startX=0, startOffset=0, maxOffset=0;
+  const cells = () => Array.from(document.querySelectorAll('.loan-table .lt-label-inner'));
   document.addEventListener('pointerdown', (e)=>{
-    const hit = e.target.closest('.loan-table .lt-label-text');
-    if(!hit) return;
-    const innerEl = hit.querySelector('.lt-label-inner');
-    if(!innerEl) return;
-    const overflow = innerEl.scrollWidth - hit.clientWidth;
-    if(overflow <= 0) return;
-    outer = hit; inner = innerEl; startX = e.clientX; maxTx = overflow;
-    const current = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(inner.style.transform);
-    startTx = current ? parseFloat(current[1]) : 0;
+    if(!e.target.closest('.loan-table .lt-label-text')) return;
+    const all = cells();
+    if(!all.length) return;
+    maxOffset = all.reduce((max, el) => {
+      const outer = el.closest('.lt-label-text');
+      return Math.max(max, el.scrollWidth - outer.clientWidth);
+    }, 0);
+    if(maxOffset <= 0) return;
+    const current = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(all[0].style.transform);
+    startOffset = current ? -parseFloat(current[1]) : 0;
+    dragging = true; startX = e.clientX;
   });
   document.addEventListener('pointermove', (e)=>{
-    if(!inner) return;
-    let tx = startTx + (e.clientX - startX);
-    tx = Math.max(-maxTx, Math.min(0, tx));
-    inner.style.transform = `translateX(${tx}px)`;
+    if(!dragging) return;
+    let offset = startOffset + (startX - e.clientX);
+    offset = Math.max(0, Math.min(maxOffset, offset));
+    cells().forEach(el => { el.style.transform = `translateX(${-offset}px)`; });
   });
-  const endDrag = () => { outer=null; inner=null; };
+  const endDrag = () => { dragging=false; };
   document.addEventListener('pointerup', endDrag);
   document.addEventListener('pointercancel', endDrag);
 })();
