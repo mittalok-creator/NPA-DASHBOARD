@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: wrapping grew the row height Alok wanted left alone; label now swipes instead (2026-09-12, same day)
+
+Wrapping (previous fix) kept every word intact but grew rows to 2-3 lines wherever a label was long -- Alok wanted the row/column "portion size" left exactly as it was, not taller. Switched the label text to its own tiny horizontal-scroll strip instead: one line, same row height as before, and swiping the heading sideways reveals whatever doesn't fit -- the same swipe-to-see-more behaviour the data columns to its right already have via the table wrapper's own horizontal scroll.
+
 ### Follow-up: ellipsis truncation made the label column unreadable, switched to wrap (2026-09-12, same day)
 
 The 112px ellipsis cap from the fix below solved the wide-column problem but overcorrected -- Alok's next screenshot showed ordinary short labels ("O/S Balan...", "DUES & P...", "Total Con...") chopped off mid-word, which defeats the point of a label column. Switched from truncating to wrapping: `.lt-label` widened slightly (112px → 148px) and `.lt-label-text` now wraps normally (2-3 lines) instead of clipping with an ellipsis. Every label reads in full now; only the UCI row's date-embedding label (the original offender) actually needs all 3 lines.
