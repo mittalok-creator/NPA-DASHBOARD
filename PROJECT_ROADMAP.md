@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: label column pinned to a fixed "Interest Reversal" width, overflow drags in place (2026-09-12, same day)
+
+Alok clarified what he actually wanted after seeing the un-stuck version: keep the column pinned (fixed, predictable width) rather than sharing the whole table's swipe, sized to comfortably fit "Interest Reversal" -- and only whichever label text runs longer than that should itself slide/swipe, in place, without moving the rest of the row.
+
+`.lt-label` is pinned again (sticky, back to how it always was) at a fixed `max-width:170px` on mobile. The label text is now double-wrapped (`.lt-label-text` clips; the new inner `.lt-label-inner` holds the actual text) so a handful of longer labels -- Total Contractual Dues, Settlement (OTS) Amount, OTS Amt as per Lok Adalat, and especially the UCI row's date-embedding one -- can slide within their own cell. A native `overflow-x:auto` was tried again first and froze exactly like before, for the same reason: it's nested inside `.loan-table-wrap`, which already owns native horizontal touch-scroll for the whole table, and a drag starting on the tiny label strip kept getting captured by that outer scroller. Replaced with a manual drag implementation (`wireLabelDrag()` in `js/app.js`, delegated on `document` so it survives the table being rebuilt on every render): pointer events translate the inner span directly, clamped to its actual overflow amount, with `touch-action:pan-y` on the label so a finger-down there still scrolls the page normally if the drag turns out to be vertical -- only horizontal drags are taken over.
+
 ### Follow-up: label column un-stuck on mobile so it shares the same swipe as the data columns (2026-09-12, same day)
 
 The tap-to-toast fix worked but wasn't what Alok was actually asking for: he wants the label column to reveal itself with the *exact same gesture* that already reveals a 2nd/3rd account's data -- one swipe, no separate mechanism, no toast. That single-scroll-container behaviour is already how the account columns work (`.loan-table-wrap` owns one horizontal scroll for the whole table); the label column couldn't join it because `position:sticky` pins it to the left edge specifically so it *doesn't* scroll with the rest of the table.
