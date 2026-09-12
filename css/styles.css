@@ -807,19 +807,24 @@ main{padding:20px 16px 40px}
    per Lok Adalat, and especially the UCI row, whose label embeds a live
    date range) still run past that width. Alok's own framing: the column
    is one pane, so every row's label slides together in sync when
-   dragged, not each row scrolling independently -- handled in JS (see
-   wireLabelDrag() in js/app.js), which applies one shared offset to
-   every label in the table at once, rather than the browser's native
-   nested overflow-scroll: a native overflow-x:auto here was tried first
-   (both per-row and as a single shared strip) and froze in practice,
-   because it sits inside .loan-table-wrap, which already owns native
-   horizontal touch-scroll for the whole table, and a touch-drag starting
-   on the label was simply being captured by that outer scroller instead.
-   touch-action:pan-y below leaves the browser free to still scroll the
-   page vertically as normal -- only horizontal drags are taken over.
-   Desktop/tablet (min-width:860px) is untouched -- the column there has
-   room to show every label, including UCI's, in full with nothing to
-   drag. */
+   dragged -- but an ordinary label that already fits (O/S Balance,
+   Sanction Date, etc.) must stay completely put, not get dragged off
+   its own cell just because some other row needed a bigger reveal (a
+   real bug in the first version of this, where one shared offset was
+   applied uncapped to every row). Handled in JS (see wireLabelDrag() in
+   js/app.js): one shared drag amount, but each row clamps it to its OWN
+   overflow, which is zero -- meaning never moves -- for anything that
+   already fits. This is driven manually with pointer events rather than
+   the browser's native nested overflow-scroll: a native overflow-x:auto
+   here was tried first (both per-row and as a single shared strip) and
+   froze in practice, because it sits inside .loan-table-wrap, which
+   already owns native horizontal touch-scroll for the whole table, and
+   a touch-drag starting on the label was simply being captured by that
+   outer scroller instead. touch-action:pan-y below leaves the browser
+   free to still scroll the page vertically as normal -- only horizontal
+   drags are taken over. Desktop/tablet (min-width:860px) is untouched --
+   the column there has room to show every label, including UCI's, in
+   full with nothing to drag. */
 @media (max-width:859px){
   .loan-table .lt-label{max-width:170px;padding:9px 10px}
   /* touch-action:pan-y (not none) -- a finger-down on a label cell must

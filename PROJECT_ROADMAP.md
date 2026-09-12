@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Bug fix: short labels were getting dragged off-screen by the synchronized pane (2026-09-12, same day)
+
+Alok's screenshot after the synchronized-pane fix below showed a real bug: applying one shared drag offset to every row meant a short label like "O/S Balance" -- which has nothing to reveal, it already fits -- got dragged the same distance as the much-longer UCI label, shoving it clean out of its own cell (screenshot showed several rows reduced to a bare icon or a stray fragment like "ues"/"NG"/"ACT", the tail end of a label pushed almost entirely off-screen).
+
+Fixed by clamping each row to its OWN overflow before applying the shared drag amount: a label that already fits has zero overflow, so it's clamped to zero and simply never moves regardless of how far the pane is dragged, while a genuinely long label still slides, capped at exactly how far IT needs to go. Also switched to snap-back-on-release (press-and-drag to peek, let go and it returns to closed) instead of persisting position between drags -- the table is rebuilt via innerHTML on every render, so there's no single "current offset" that stays valid across a rebuild anyway, and every row can legitimately have a different amount left to reveal.
+
 ### Follow-up: the whole label column now drags as one synchronized pane, not row by row (2026-09-12, same day)
 
 Alok's next round of feedback: the per-row drag from the fix below worked but wasn't the mental model he wanted -- he thinks of the "Particulars" column as one pane, so dragging any part of it should slide every row's label together in sync, not have each row scroll independently of the others.
