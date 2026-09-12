@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: loan table's sticky "Particulars" column was still forcing itself wide on mobile (2026-09-12, same day)
+
+Alok's own screenshot after the header/waterfall fix above showed the real problem was mostly this, not the header: the sticky first column of the loan comparison table (`.lt-label`) had no width cap anywhere, so it auto-sized to fit its single widest cell -- specifically the UCI row's label, which embeds two live dates ("UCI @ 8.5% (24-09-2023 to 12-09-2026)", ~38 characters) -- and that dragged the *entire* column that wide on every row, pushing the actual per-account figures mostly off-screen and needing horizontal scroll just to see them.
+
+Fixed mobile-only: each label cell's raw text is now wrapped in its own `<span class="lt-label-text">` (it was a bare text node next to the row icon before, which CSS can't target for truncation), and `.loan-table .lt-label` gets a `max-width:112px` cap under `max-width:859px` -- the icon badge stays fixed-size (`flex-shrink:0`, unchanged), only the label text truncates with an ellipsis when it doesn't fit. Desktop/tablet is untouched, where the extra column width was never actually a problem.
+
 ### Mobile Loan Detail: shorter header, "Where The Dues Go" dropped from the phone dock (2026-09-12, same day)
 
 Two follow-up complaints on the Loan Detail screen, from screenshots of a real account (VIJAY KUMAR S/O SARNAM..., WAZIDPUR, Cust ID 710243262) on a phone: the sticky top header (back button, borrower name/branch/Cust ID, 3 share icons) was eating too much vertical space, leaving too little room for the actual loan table below it; separately, on the fixed bottom aggregate dock, "Where The Dues Go" (already collapsed-by-default on mobile since 2026-08-14) was asked to be dropped from mobile entirely rather than just collapsed.
