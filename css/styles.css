@@ -797,21 +797,30 @@ main{padding:20px 16px 40px}
    width cap anywhere, so it auto-sized to its single widest cell -- the
    UCI row's label, which embeds two dates and runs ~38 characters -- and
    that dragged the whole column wide enough to push the real per-account
-   figures mostly off-screen on a phone. Capped here (mobile only; desktop
-   has the width to spare and keeps the full label). */
+   figures mostly off-screen on a phone.
+   Several capped-column approaches were tried here (ellipsis, wrapping,
+   a horizontal-scroll strip nested inside the label itself) and none of
+   them gave Alok what he actually wanted: for a long label to reveal
+   itself with the exact same one-swipe gesture that already reveals a
+   2nd/3rd account's data columns -- not a separate scroll region, not a
+   tap-for-a-toast. The nested-scroll attempt in particular just froze in
+   practice: it sat inside .loan-table-wrap, which already owns
+   horizontal touch-scroll for the whole table, so a drag starting on the
+   tiny label strip was captured by that outer scroller instead and the
+   inner one never moved -- a generic hazard of nesting two
+   same-axis scroll regions on touch, not something worth fighting.
+   Un-sticking the label column on mobile sidesteps all of it: the label
+   is no longer pinned to the left edge while the table scrolls under it,
+   so it becomes an ordinary part of the same swipeable row as the
+   account columns, sized to its natural (untruncated) width. Swiping
+   left moves the label out of view together with bringing account data
+   into view, exactly like account 2/3 already appear -- same gesture,
+   same scroll, no special-casing. Desktop/tablet (min-width:860px) keeps
+   the label pinned, where the column has room to show it in full anyway
+   without ever needing to scroll it out of view. */
 @media (max-width:859px){
-  /* Follow-up: wrapping grew row height (not wanted); a horizontal-scroll
-     strip inside the label (tried next) turned out to freeze in practice
-     -- it sits nested inside .loan-table-wrap, which already owns
-     horizontal touch-scroll for the whole table, and a touch-drag
-     starting on the tiny label strip was simply being captured by that
-     outer scroller instead, so the inner one never moved. Back to a
-     one-line ellipsis truncation (row/column size unchanged), paired
-     with a tap-to-reveal: tapping a truncated label shows the full text
-     as a toast (see the delegated .lt-label click handler in js/app.js) --
-     a tap is reliable on a small target in a way a nested swipe isn't. */
-  .loan-table .lt-label{max-width:148px;padding:9px 6px;align-items:center;cursor:pointer}
-  .loan-table .lt-label-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .loan-table .lt-label{position:static;max-width:none;padding:10px 12px}
+  .loan-table .lt-label-text{white-space:nowrap;overflow:visible;text-overflow:clip}
 }
 
 /* ---------- Cards ---------- */
