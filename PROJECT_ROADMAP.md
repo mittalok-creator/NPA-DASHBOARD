@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: the whole label column now drags as one synchronized pane, not row by row (2026-09-12, same day)
+
+Alok's next round of feedback: the per-row drag from the fix below worked but wasn't the mental model he wanted -- he thinks of the "Particulars" column as one pane, so dragging any part of it should slide every row's label together in sync, not have each row scroll independently of the others.
+
+`wireLabelDrag()` in `js/app.js` now tracks a single shared offset instead of one per row: a pointerdown anywhere in the label column computes the maximum overflow across *every* label currently in the table, and pointermove applies that one offset to every `.lt-label-inner` at once. A row with a shorter label that doesn't need the full drag range just runs out of text sooner (trailing blank space) while longer ones keep revealing more -- but everything moves together as a single strip. Column width and the fixed-pane concept from the previous fix (sized to fit "Interest Reversal") are unchanged.
+
 ### Follow-up: label column pinned to a fixed "Interest Reversal" width, overflow drags in place (2026-09-12, same day)
 
 Alok clarified what he actually wanted after seeing the un-stuck version: keep the column pinned (fixed, predictable width) rather than sharing the whole table's swipe, sized to comfortably fit "Interest Reversal" -- and only whichever label text runs longer than that should itself slide/swipe, in place, without moving the rest of the row.
