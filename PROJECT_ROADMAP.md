@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### New: splash screen credit writes itself in, with Alok's own signature (2026-09-13)
+
+Alok asked for the splash screen (the bank-logo screen shown before the PIN pad) to credit him with a handwritten-style animation -- "designed and developed by" writing itself out letter by letter, finishing with his own signature (photographed, background removed) rather than typed text for his name. Mocked up first as a standalone Artifact and iterated through several rounds before implementation: a real letter-by-letter fade read as generic rather than handwritten; the phrase needed splitting into shorter segments to fit a phone's width; the logo's circular mask was cropping the real logo's corners (now a rounded square); and the credit line originally repeated his name twice (once as typed text, once via the signature) before being trimmed to say only "Designed and developed by" so the signature is the one and only place his name appears.
+
+Implementation replaces the old static `.splash-foot` line ("Designed & Developed by ALOK MITTAL") with an animated version in the exact same slot, at the bottom of the login panel -- not a second block competing with it, a straight upgrade of the one that was already there. The mechanic (`.splash-wipe`, `js/splash.js`'s `playCredit()`): a clip-path mask wipes left-to-right over the text and then the signature image, with a small dot riding the reveal edge, so it reads as being written rather than fading into place; duration scales with how much each segment holds (a longer line takes proportionally longer than a short one) rather than a fixed time regardless of length. Plays once per genuine splash appearance (not on a session already unlocked and skipping the screen), and collapses to an instant reveal under `prefers-reduced-motion`.
+
+The signature itself is Alok's own photograph, background-removed and its ink recolored via CSS `filter:invert(1)` rather than baked into the image -- black ink on the light-theme login panel, inverted to white for dark theme, following the file's existing two-block `:root`/`:root[data-theme="light"]` convention. The handwriting face is Caveat, already self-hosted via `@font-face` in this file for an earlier, unused `.credit-signature` rule -- no new font request added.
+
 ### Bug fix: short labels were getting dragged off-screen by the synchronized pane (2026-09-12, same day)
 
 Alok's screenshot after the synchronized-pane fix below showed a real bug: applying one shared drag offset to every row meant a short label like "O/S Balance" -- which has nothing to reveal, it already fits -- got dragged the same distance as the much-longer UCI label, shoving it clean out of its own cell (screenshot showed several rows reduced to a bare icon or a stray fragment like "ues"/"NG"/"ACT", the tail end of a label pushed almost entirely off-screen).
