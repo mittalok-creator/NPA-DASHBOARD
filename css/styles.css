@@ -2578,16 +2578,26 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
   transition:transform .12s ease,box-shadow .12s ease}
 .splash-login-btn:active{transform:scale(.98)}
 
-/* ---- credit: "Designed and developed by" + Alok's own signature, drawn
-   in on first appearance -- replaces the old plain-text .splash-foot.
-   One mechanic (.splash-wipe) reused for both the handwritten line and
-   the signature image: a mask wipes left-to-right revealing real content
-   as it passes, with a small dot riding the leading edge, so the credit
-   looks like it's actually being written rather than fading into place.
-   Caveat is already self-hosted via @font-face above (used nowhere else
-   currently), so this needs no new font request. */
+/* ---- Splash write-in: the whole hero column (org/title/subtitle) plus
+   the credit line and Alok's own signature all reveal in one continuous
+   sequence on first appearance, top to bottom, each wiping in left-to-
+   right with a small dot riding the leading edge -- reads as the whole
+   splash being written, not just the credit at the bottom. One shared
+   mechanic (.splash-wipe/.splash-linewrap/.splash-pen-tip) drives every
+   segment; js/splash.js's playCredit() walks every .splash-wipe on the
+   page in DOM order (hero first, then the credit block after it) and
+   times each one by how much text it actually holds.
+   .splash-linewrap is `display:inline-block` specifically so its box
+   hugs the text's own rendered width -- without that, clip-path's 0-100%
+   range would run edge-to-edge of the wrapping block (mostly empty
+   space around centered text) instead of matching the visible glyphs,
+   and the pen-tip has to live outside the clipped element so it isn't
+   itself cut off by the same mask riding along its own leading edge.
+   Caveat (the credit line's font) is already self-hosted via @font-face
+   above (used nowhere else previously), so this needs no new font
+   request. */
+.splash-linewrap,.splash-credit-sigwrap{position:relative;display:inline-block}
 .splash-credit{margin-top:20px;display:flex;flex-direction:column;align-items:center;gap:6px}
-.splash-credit-linewrap,.splash-credit-sigwrap{position:relative;display:inline-block}
 .splash-credit-line{font-family:'Caveat',cursive;font-weight:600;font-size:15px;color:var(--sub);letter-spacing:.2px;white-space:nowrap}
 .splash-credit-sigwrap{width:112px;height:46px}
 .splash-credit-sigwrap .splash-wipe{position:absolute;inset:0}
@@ -2597,6 +2607,11 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
 .splash-wipe.play{animation-name:splashWipeIn;animation-timing-function:cubic-bezier(.45,0,.2,1);animation-fill-mode:forwards}
 @keyframes splashWipeIn{to{clip-path:inset(0 0% 0 0)}}
 .splash-pen-tip{position:absolute;top:50%;width:5px;height:5px;border-radius:50%;background:var(--sub);opacity:0;transform:translate(-2.5px,-2.5px)}
+/* Hero text sits on the fixed dark chrome background (--head-* tokens,
+   not the light/dark app theme), so its pen-tip needs the chrome's own
+   ink color rather than --sub, which is tuned for the card-colored
+   credit block below it. */
+.splash-hero .splash-pen-tip{background:var(--head-ink)}
 .splash-pen-tip.play{animation-name:splashPenMove;animation-timing-function:cubic-bezier(.45,0,.2,1);animation-fill-mode:forwards}
 @keyframes splashPenMove{0%{opacity:.7;left:0%}94%{opacity:.7}100%{opacity:0;left:100%}}
 @media (prefers-reduced-motion:reduce){

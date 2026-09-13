@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: the write-in extended to the whole hero column, not just the credit (2026-09-13, same day)
+
+Alok liked the credit animation enough to ask for the same treatment on the org name/title/subtitle above it too ("NPA Dashboard", "OTS Calculator", etc.) -- the whole splash writing itself in, not just the signature line at the bottom.
+
+The `.splash-wipe`/`.splash-pen-tip` mechanic built for the credit line needed no new design, just wider reach: `.splash-org`, `.splash-title` and `.splash-subtitle` each got wrapped in a `.splash-linewrap` (the same `display:inline-block;position:relative` wrapper the credit line already used, renamed from `.splash-credit-linewrap` to the generic name now that it's shared) so their clip-path reveal tracks the text's own rendered width rather than the wrapping block's, and so their pen-tip lives outside the clipped box instead of being cut off by its own leading edge. `js/splash.js`'s `playCredit()` now walks every `.splash-wipe` on the page (`document.querySelectorAll('.splash-wipe')`) instead of scoping to just the credit block, which -- since it already reads them in DOM order -- automatically sequences hero first, then the credit block after it, with no extra wiring. The hero's pen-tip needed its own color (`--head-ink`, the fixed dark-chrome ink) rather than the credit block's `--sub`, since the hero sits on chrome that doesn't follow the light/dark app theme the way the login panel does.
+
 ### New: splash screen credit writes itself in, with Alok's own signature (2026-09-13)
 
 Alok asked for the splash screen (the bank-logo screen shown before the PIN pad) to credit him with a handwritten-style animation -- "designed and developed by" writing itself out letter by letter, finishing with his own signature (photographed, background removed) rather than typed text for his name. Mocked up first as a standalone Artifact and iterated through several rounds before implementation: a real letter-by-letter fade read as generic rather than handwritten; the phrase needed splitting into shorter segments to fit a phone's width; the logo's circular mask was cropping the real logo's corners (now a rounded square); and the credit line originally repeated his name twice (once as typed text, once via the signature) before being trimmed to say only "Designed and developed by" so the signature is the one and only place his name appears.

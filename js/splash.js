@@ -102,16 +102,18 @@
   paint();
   setError('');
 
-  // "Designed and developed by" + Alok's own signature write themselves
-  // in once, the first time the splash actually shows (the early return
-  // above already skips all of this on a session that's unlocked and
-  // hiding the screen entirely). Each .splash-wipe segment's clip-path
-  // is animated left-to-right, its duration scaled to how much it
-  // actually holds (a longer line takes proportionally longer to
+  // The whole splash writes itself in once, the first time it actually
+  // shows (the early return above already skips all of this on a
+  // session that's unlocked and hiding the screen entirely): org name,
+  // title and subtitle in the hero, then "Designed and developed by" and
+  // Alok's own signature below the login button -- one continuous
+  // sequence, top to bottom, in DOM order. Each .splash-wipe segment's
+  // clip-path is animated left-to-right, its duration scaled to how much
+  // it actually holds (a longer line takes proportionally longer to
   // "write" than a short one), with a small dot riding the reveal edge.
   (function playCredit() {
-    const segs = Array.from(document.querySelectorAll('#splashCredit .splash-wipe')).map(wipeEl => {
-      const box = wipeEl.closest('.splash-credit-linewrap, .splash-credit-sigwrap');
+    const segs = Array.from(document.querySelectorAll('.splash-wipe')).map(wipeEl => {
+      const box = wipeEl.closest('.splash-linewrap, .splash-credit-sigwrap');
       const tipEl = box ? box.querySelector('.splash-pen-tip') : null;
       const chars = wipeEl.textContent ? wipeEl.textContent.length : 22; // the signature has no text of its own
       const duration = Math.max(600, chars * 32);
