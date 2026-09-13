@@ -101,4 +101,35 @@
 
   paint();
   setError('');
+
+  // "Designed and developed by" + Alok's own signature write themselves
+  // in once, the first time the splash actually shows (the early return
+  // above already skips all of this on a session that's unlocked and
+  // hiding the screen entirely). Each .splash-wipe segment's clip-path
+  // is animated left-to-right, its duration scaled to how much it
+  // actually holds (a longer line takes proportionally longer to
+  // "write" than a short one), with a small dot riding the reveal edge.
+  (function playCredit() {
+    const segs = Array.from(document.querySelectorAll('#splashCredit .splash-wipe')).map(wipeEl => {
+      const box = wipeEl.closest('.splash-credit-linewrap, .splash-credit-sigwrap');
+      const tipEl = box ? box.querySelector('.splash-pen-tip') : null;
+      const chars = wipeEl.textContent ? wipeEl.textContent.length : 22; // the signature has no text of its own
+      const duration = Math.max(600, chars * 32);
+      return { wipeEl, tipEl, duration };
+    });
+    if (reduceMotion) {
+      segs.forEach(seg => seg.wipeEl.classList.add('play'));
+      return;
+    }
+    let t = 260; // small delay so it starts just after the splash itself has appeared
+    segs.forEach(seg => {
+      seg.wipeEl.style.animationDuration = seg.duration + 'ms';
+      if (seg.tipEl) seg.tipEl.style.animationDuration = seg.duration + 'ms';
+      setTimeout(() => {
+        seg.wipeEl.classList.add('play');
+        if (seg.tipEl) seg.tipEl.classList.add('play');
+      }, t);
+      t += seg.duration + 160;
+    });
+  })();
 })();
