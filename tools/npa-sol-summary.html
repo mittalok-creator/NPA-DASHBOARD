@@ -165,10 +165,17 @@
   tbody tr.unassigned-row{background:var(--warn-soft)}
   tfoot td{padding:8px 12px;font-weight:700;background:var(--accent-soft);border-top:2px solid var(--accent);text-align:right}
   tfoot td:nth-child(1),tfoot td:nth-child(2){text-align:left}
-  /* Fixed px, not vh -- same lesson as the NPA Region/PNPA Summary tools:
-     a height relative to this self-resizing iframe's own viewport grows
-     every time the iframe grows. */
-  .table-wrap{max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:8px}
+  /* No max-height/internal scroll here on purpose -- a fixed-height
+     inner scroll region nested inside this self-resizing iframe (itself
+     embedded in the main app's own scrolling page) hit the same nested-
+     same-axis-scroll problem the loan table's label column did on
+     mobile: a touch-drag over the table got captured by the outer page
+     instead of scrolling the 55-row table's own region, so it looked
+     frozen. Letting the table flow to its full height and scroll as
+     part of the one page (resizeFrame() already sizes the iframe to the
+     full content) sidesteps that ambiguity entirely -- there's only ever
+     one scrollable region to drag. */
+  .table-wrap{border:1px solid var(--line);border-radius:10px;margin-top:8px;overflow-x:auto}
   .hidden{display:none !important}
   .hint{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
 
@@ -185,7 +192,7 @@
     <span class="brand-mark">🧾</span>
     <div>
       <div class="brand-name">NPA SOL Summary</div>
-      <div class="brand-tag" id="brandTag">NPA Accounts report → SOL ID-wise Debit/Credit/Net summary</div>
+      <div class="brand-tag" id="brandTag">NPA Accounts report → SOL ID-wise Debit Balance summary</div>
     </div>
   </div>
 </header>
@@ -199,7 +206,7 @@
       <div class="dropzone-sub">or click to browse — the plain-text "REPORT FOR NPA ACCOUNTS" export, read entirely in your browser</div>
     </div>
     <div class="status-panel">
-      <div class="status-empty" id="statusEmpty">Select the core banking's "REPORT FOR NPA ACCOUNTS" text export to build a SOL ID-wise Debit Balance, Credit Balance and Net Balance summary.</div>
+      <div class="status-empty" id="statusEmpty">Select the core banking's "REPORT FOR NPA ACCOUNTS" text export to build a SOL ID-wise Debit Balance summary.</div>
       <div id="statsBox" class="status-stats hidden">
         <div class="status-stat"><span class="status-num" id="statEntries">0</span><span class="status-lbl">Accounts Read</span></div>
         <div class="status-stat"><span class="status-num" id="statBranches">0</span><span class="status-lbl">Branches</span></div>
@@ -291,8 +298,12 @@
     var n = parseFloat(t.replace(/,/g,''));
     return isNaN(n) ? 0 : n;
   }
-  function fmtRupee(n){
-    return (n||0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+  // Displayed in Lakhs (Alok's request) -- a raw rupee figure for a whole
+  // branch runs 7-9 digits and is hard to scan at a glance; dividing by
+  // 1,00,000 keeps the sign (a loan's outstanding Debit Balance stays
+  // negative) while cutting it down to a number a banker reads instantly.
+  function fmtLakh(n){
+    return ((n||0)/100000).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
   }
   function updateDropzoneTitle(){
     var f = fileInput.files && fileInput.files[0];
@@ -323,9 +334,7 @@
         sol: parseInt(solTok, 10),
         acctNo: acctNo,
         scheme: f[3].trim(),
-        cr: parseAmt(f[5]),
-        dr: parseAmt(f[6]),
-        bal: parseAmt(f[7])
+        dr: parseAmt(f[6])
       });
     }
     return rows;
@@ -337,7 +346,7 @@
   // parser blindly.
   function extractMeta(fullText){
     var asOnMatch = fullText.match(/As\s+On\s*:\s*([\d-]+)/i);
-    var meta = { asOn: asOnMatch ? asOnMatch[1] : null, reportedAccounts:null, reportedCr:null, reportedDr:null, reportedBalance:null };
+    var meta = { asOn: asOnMatch ? asOnMatch[1] : null, reportedAccounts:null, reportedDr:null };
     var lines = fullText.split(/\r?\n/);
     for (var i=0;i<lines.length;i++){
       if (lines[i].indexOf('|') === -1) continue;
@@ -348,33 +357,29 @@
         var n = parseInt(f[2].trim(), 10);
         meta.reportedAccounts = isNaN(n) ? null : n;
       } else if (label === 'SUM OF BALANCES'){
-        meta.reportedCr = parseAmt(f[5]);
         meta.reportedDr = parseAmt(f[6]);
-        meta.reportedBalance = parseAmt(f[7]);
       }
     }
     return meta;
   }
 
   function buildSolSummary(rows){
-    var bySol = {}; // sol -> {sol, branch, count, dr, cr, bal}
-    var unassigned = { sol:'', branch:UNASSIGNED_LABEL, count:0, dr:0, cr:0, bal:0 };
+    var bySol = {}; // sol -> {sol, branch, count, dr}
+    var unassigned = { sol:'', branch:UNASSIGNED_LABEL, count:0, dr:0 };
     rows.forEach(function(r){
       if (NON_OPERATIONAL_SOL_IDS.indexOf(r.sol) !== -1 || BRANCH_NAME_BY_SOL[r.sol] === undefined){
-        unassigned.count++; unassigned.dr += r.dr; unassigned.cr += r.cr; unassigned.bal += r.bal;
+        unassigned.count++; unassigned.dr += r.dr;
         return;
       }
-      if (!bySol[r.sol]) bySol[r.sol] = { sol:r.sol, branch:BRANCH_NAME_BY_SOL[r.sol], count:0, dr:0, cr:0, bal:0 };
+      if (!bySol[r.sol]) bySol[r.sol] = { sol:r.sol, branch:BRANCH_NAME_BY_SOL[r.sol], count:0, dr:0 };
       bySol[r.sol].count++;
       bySol[r.sol].dr += r.dr;
-      bySol[r.sol].cr += r.cr;
-      bySol[r.sol].bal += r.bal;
     });
     // Zero-fill every operational branch this report had nothing for.
     BRANCH_LIST.forEach(function(entry){
       var sol = entry[1];
       if (NON_OPERATIONAL_SOL_IDS.indexOf(sol) !== -1) return;
-      if (!bySol[sol]) bySol[sol] = { sol:sol, branch:entry[2], count:0, dr:0, cr:0, bal:0 };
+      if (!bySol[sol]) bySol[sol] = { sol:sol, branch:entry[2], count:0, dr:0 };
     });
     var records = Object.keys(bySol).map(function(k){ return bySol[k]; })
       .sort(function(a,b){ return a.sol - b.sol; });
@@ -404,9 +409,7 @@
     { key:'sol', label:'SOL ID' },
     { key:'branch', label:'Branch Name' },
     { key:'count', label:'No. of A/Cs' },
-    { key:'dr', label:'Debit Balance (₹)' },
-    { key:'cr', label:'Credit Balance (₹)' },
-    { key:'bal', label:'Net Balance (₹)' }
+    { key:'dr', label:'Debit Balance (₹ Lakh)' }
   ];
 
   var COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
@@ -469,9 +472,7 @@
     if (c.key === 'sol') return '<td>'+(rec.sol || '')+'</td>';
     if (c.key === 'branch') return '<td>'+esc(rec.branch)+'</td>';
     if (c.key === 'count') return '<td>'+(rec.count||0).toLocaleString('en-IN')+'</td>';
-    if (c.key === 'dr') return '<td>'+fmtRupee(rec.dr)+'</td>';
-    if (c.key === 'cr') return '<td>'+fmtRupee(rec.cr)+'</td>';
-    if (c.key === 'bal') return '<td>'+fmtRupee(rec.bal)+'</td>';
+    if (c.key === 'dr') return '<td>'+fmtLakh(rec.dr)+'</td>';
     return '<td></td>';
   }
 
@@ -481,9 +482,9 @@
     records = applySort(records, sortState);
 
     summaryHeadRow.innerHTML = COLUMNS.map(function(c){ return columnHeaderHtml(c, sortState); }).join('');
-    var totCount=0, totDr=0, totCr=0, totBal=0, bodyHtml='';
+    var totCount=0, totDr=0, bodyHtml='';
     records.forEach(function(rec){
-      totCount += rec.count; totDr += rec.dr; totCr += rec.cr; totBal += rec.bal;
+      totCount += rec.count; totDr += rec.dr;
       var cls = rec.branch === UNASSIGNED_LABEL ? ' class="unassigned-row"' : '';
       bodyHtml += '<tr'+cls+'>'+COLUMNS.map(function(c){ return renderCell(c, rec); }).join('')+'</tr>';
     });
@@ -493,9 +494,7 @@
       if (c.key === 'sol') return '<td>Grand Total</td>';
       if (c.key === 'branch') return '<td>'+records.length+' row(s)</td>';
       if (c.key === 'count') return '<td>'+totCount.toLocaleString('en-IN')+'</td>';
-      if (c.key === 'dr') return '<td>'+fmtRupee(totDr)+'</td>';
-      if (c.key === 'cr') return '<td>'+fmtRupee(totCr)+'</td>';
-      if (c.key === 'bal') return '<td>'+fmtRupee(totBal)+'</td>';
+      if (c.key === 'dr') return '<td>'+fmtLakh(totDr)+'</td>';
       return '<td></td>';
     }).join('');
 
@@ -518,22 +517,20 @@
     aoa.push([]);
     aoa.push(COLUMNS.map(function(c){ return c.label; }));
 
-    var totCount=0, totDr=0, totCr=0, totBal=0;
+    var totCount=0, totDr=0;
     records.forEach(function(rec){
-      totCount += rec.count; totDr += rec.dr; totCr += rec.cr; totBal += rec.bal;
-      aoa.push([ rec.sol || '', rec.branch, rec.count, round2(rec.dr), round2(rec.cr), round2(rec.bal) ]);
+      totCount += rec.count; totDr += rec.dr;
+      aoa.push([ rec.sol || '', rec.branch, rec.count, round2(rec.dr/100000) ]);
     });
-    aoa.push([ 'Grand Total', records.length + ' row(s)', totCount, round2(totDr), round2(totCr), round2(totBal) ]);
+    aoa.push([ 'Grand Total', records.length + ' row(s)', totCount, round2(totDr/100000) ]);
 
     var ws = XLSX.utils.aoa_to_sheet(aoa);
     var numFmt = '#,##0.00';
     for (var r = 4; r < aoa.length; r++){
-      [3,4,5].forEach(function(ci){
-        var addr = XLSX.utils.encode_cell({ r:r, c:ci });
-        if (ws[addr]) ws[addr].z = numFmt;
-      });
+      var addr = XLSX.utils.encode_cell({ r:r, c:3 });
+      if (ws[addr]) ws[addr].z = numFmt;
     }
-    ws['!cols'] = [ {wch:10}, {wch:24}, {wch:12}, {wch:16}, {wch:16}, {wch:16} ];
+    ws['!cols'] = [ {wch:10}, {wch:24}, {wch:12}, {wch:18} ];
     var outWb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(outWb, ws, 'SOL Summary');
     XLSX.writeFile(outWb, 'NPA_SOL_Summary_' + dateStamp() + '.xlsx');
@@ -561,16 +558,22 @@
       statBranches.textContent = branchCount;
       statsBox.classList.remove('hidden');
 
-      brandTag.textContent = 'NPA Accounts report' + (meta.asOn ? ' · As On ' + meta.asOn : '') + ' → SOL ID-wise Debit/Credit/Net summary';
+      brandTag.textContent = 'NPA Accounts report' + (meta.asOn ? ' · As On ' + meta.asOn : '') + ' → SOL ID-wise Debit Balance summary';
 
+      var totDr = records.reduce(function(s,r){ return s + r.dr; }, 0);
       var checkBits = [];
       if (meta.reportedAccounts != null){
         checkBits.push(rows.length === meta.reportedAccounts
           ? rows.length.toLocaleString('en-IN') + ' accounts — matches the report’s own printed total ✓'
           : rows.length.toLocaleString('en-IN') + ' accounts read, but the report’s own footer says ' + meta.reportedAccounts.toLocaleString('en-IN') + ' — please double-check the file.');
       }
-      summaryHint.innerHTML = 'Every operational Hathras region branch is listed, even one with nothing in this report (shows 0). R O Hathras and Hathras Service Branch, plus any account this report’s SOL doesn’t attribute to an operational branch, are rolled into one "'+esc(UNASSIGNED_LABEL)+'" row so every account stays accounted for. Debit/Credit Balance are summed exactly as printed in the report (a loan’s outstanding Debit Balance prints as a negative number); Net Balance = Credit + Debit.'
-        + (checkBits.length ? ' <b>' + esc(checkBits[0]) + '</b>' : '')
+      if (meta.reportedDr != null){
+        checkBits.push(Math.abs(totDr - meta.reportedDr) < 0.01
+          ? 'Debit Balance total matches the report’s own printed total ✓'
+          : 'Debit Balance total doesn’t match the report’s own footer — please double-check the file.');
+      }
+      summaryHint.innerHTML = 'Every operational Hathras region branch is listed, even one with nothing in this report (shows 0). R O Hathras and Hathras Service Branch, plus any account this report’s SOL doesn’t attribute to an operational branch, are rolled into one "'+esc(UNASSIGNED_LABEL)+'" row so every account stays accounted for. Debit Balance is in ₹ Lakh, summed from the report’s own signed figures (a loan’s outstanding Debit Balance prints as negative).'
+        + (checkBits.length ? ' <b>' + esc(checkBits.join(' · ')) + '</b>' : '')
         + ' Tap the <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> icon next to any column’s name to copy that whole column.';
 
       viewPanel.classList.remove('hidden');
@@ -613,7 +616,7 @@
     viewPanel.classList.add('hidden');
     statsBox.classList.add('hidden');
     statusEmpty.classList.remove('hidden');
-    brandTag.textContent = 'NPA Accounts report → SOL ID-wise Debit/Credit/Net summary';
+    brandTag.textContent = 'NPA Accounts report → SOL ID-wise Debit Balance summary';
     setStatus('');
     resizeFrame();
   }

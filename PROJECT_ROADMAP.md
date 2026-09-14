@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: Lakh display, Debit-only, and a real mobile scroll bug (2026-09-14, same day)
+
+Three fixes on the just-shipped tool. First, Alok wanted the figures in ₹ Lakh, not raw rupees -- a whole branch's Debit Balance runs 7-9 digits and is hard to scan; `fmtLakh()` divides by 1,00,000 (sign preserved) and the column header/export both say "(₹ Lakh)" so the unit is never ambiguous. Second, "keval Debit Balance chahiye" -- Credit Balance and Net Balance are dropped from the table, the export, and the underlying per-row aggregation entirely (not just hidden), since nothing consumed them anymore; the integrity check gained a second line instead, comparing the tool's own summed Debit Balance against the report's own printed grand total (not just the account count as before), so the one figure that matters now is the one actually being cross-checked.
+
+Third, and the real bug: "scroll nahi ho raha hai". `.table-wrap` had a fixed `max-height:560px;overflow:auto` -- a 55-row table's own nested scroll region, sized to roughly a full phone screen, embedded inside this already-scrolling iframe, itself embedded in the main app's own scrolling page. That's the identical nested-same-axis-scroll shape the loan table's label column hit earlier this session: a touch-drag over the table got captured by an outer scroller instead of the inner region, so it looked frozen rather than actually not working. Removed the cap entirely -- the table now flows to its full height as part of the one page, and the iframe's existing self-sizing (`resizeFrame()`, unchanged) already accounts for that -- so there is only ever one scrollable region to drag, the same fix that worked for the loan table.
+
 ### New Utility Hub tool: NPA SOL Summary (2026-09-14)
 
 Alok uploaded a real core-banking export -- `REPORT FOR NPA ACCOUNTS`, a plain-text dump (34,617 lines) of every NPA account across the whole region, sectioned under a single "SOL ID / SET ID : ROHATH" header with the header/column block repeating every ~2,000 lines (pagination) -- and asked for a sixth Utility Hub tool built to the same pattern as the existing ones (HBR Report, Daily PNPA Summary, NPA Region Summary): drop the file, read entirely in the browser, sortable columns, copy-a-column, Export to Excel.
