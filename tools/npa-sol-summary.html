@@ -165,17 +165,23 @@
   tbody tr.unassigned-row{background:var(--warn-soft)}
   tfoot td{padding:8px 12px;font-weight:700;background:var(--accent-soft);border-top:2px solid var(--accent);text-align:right}
   tfoot td:nth-child(1),tfoot td:nth-child(2){text-align:left}
-  /* No max-height/internal scroll here on purpose -- a fixed-height
-     inner scroll region nested inside this self-resizing iframe (itself
-     embedded in the main app's own scrolling page) hit the same nested-
-     same-axis-scroll problem the loan table's label column did on
-     mobile: a touch-drag over the table got captured by the outer page
-     instead of scrolling the 55-row table's own region, so it looked
-     frozen. Letting the table flow to its full height and scroll as
-     part of the one page (resizeFrame() already sizes the iframe to the
-     full content) sidesteps that ambiguity entirely -- there's only ever
-     one scrollable region to drag. */
-  .table-wrap{border:1px solid var(--line);border-radius:10px;margin-top:8px;overflow-x:auto}
+  /* Restored to match HBR Report / NPA Region Summary / Daily PNPA
+     Summary's own .table-wrap exactly (max-height:480px;overflow:auto) --
+     it was dropped for a round thinking a nested-scroll conflict was the
+     "scroll nahi ho raha" bug, but that was a wrong diagnosis: the real
+     bug was the missing #viewNpaSolSummary .tool-frame-wrap override
+     (see styles.css), which clipped everything with overflow:hidden and
+     no scrollbar at all -- confirmed on a desktop screenshot, where
+     touch-capture isn't even a factor. Dropping this max-height as a fix
+     for that was a red herring, and cost the sticky header: position:
+     sticky only sticks relative to a scrolling ancestor in the *same*
+     document, and once nothing inside this iframe's own document
+     scrolled (it's sized to fit all its content), "SOL ID / Branch Name
+     / ..." just scrolled away with the rows instead of staying pinned,
+     exactly what Alok's screenshot showed. With the real bug fixed
+     independently, this can go back to the working pattern every
+     sibling tool already uses. */
+  .table-wrap{max-height:480px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:8px}
   .hidden{display:none !important}
   .hint{font-size:12px;color:var(--ink-muted);margin-top:8px;line-height:1.5}
 
