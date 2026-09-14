@@ -2903,6 +2903,16 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
    resizeFrame()) -- same override, same reasoning. */
 #viewHbrReport .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
 #viewHbrReport .tool-frame{height:520px;min-height:0}
+/* NPA SOL Summary self-sizes the same way (see tools/npa-sol-summary.html's
+   own resizeFrame()) -- same override, same reasoning. Missing this on
+   first ship was the actual "scroll nahi ho raha hai" bug: without it,
+   the default .tool-frame-wrap rule above (a viewport-relative fixed
+   height with overflow:hidden) clipped the table at a fixed height with
+   no scrollbar at all, on desktop as well as mobile -- not a nested-
+   scroll conflict this time, just this override never having been added
+   for the new view. */
+#viewNpaSolSummary .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
+#viewNpaSolSummary .tool-frame{height:520px;min-height:0}
 .onedrive-page-head{display:flex;flex-direction:column;gap:4px}
 .onedrive-page-title{display:flex;align-items:center;gap:10px;color:var(--ink)}
 .onedrive-page-title svg{color:var(--accent);flex-shrink:0}
