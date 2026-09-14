@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### New Utility Hub tool: NPA SOL Summary (2026-09-14)
+
+Alok uploaded a real core-banking export -- `REPORT FOR NPA ACCOUNTS`, a plain-text dump (34,617 lines) of every NPA account across the whole region, sectioned under a single "SOL ID / SET ID : ROHATH" header with the header/column block repeating every ~2,000 lines (pagination) -- and asked for a sixth Utility Hub tool built to the same pattern as the existing ones (HBR Report, Daily PNPA Summary, NPA Region Summary): drop the file, read entirely in the browser, sortable columns, copy-a-column, Export to Excel.
+
+Unlike those three (which all parse Excel or PDF), this report is fixed-width plain text, pipe-delimited: `SOL|Customer ID|Account Number|Scheme|GL-CODE|CR-BALANCE|DR-BALANCE|BALANCE|NPA Cat Date|NPA catg.|NPA Sub catg.|NPADM date`. `tools/npa-sol-summary.html`'s parser doesn't try to skip the repeated header/divider/footer lines explicitly -- it just requires the first field to be a bare 3-5 digit number, which only a real data row's SOL ID ever is, so pagination boundaries and the report's own footer rows (`NO OF ACCOUNTS`, `SUM OF BALANCES`) are naturally excluded without needing to know where they fall. The tool also reads that footer back as a built-in integrity check: it reports whether its own account count matches the number the report prints at the bottom, so a parsing bug would surface immediately rather than silently producing a plausible-looking but wrong total. Verified against the real file: 34,477 accounts parsed, matching the report's own printed count exactly, and the summed Debit/Credit/Net totals matching the report's own grand total to the paisa.
+
+Groups by each row's own SOL ID (the same 55-operational-branch list already shared by HBR Report and Daily PNPA Summary, R O Hathras/Hathras Service Branch excluded per Alok's earlier instruction) into Debit Balance / Credit Balance / Net Balance + account count per branch, zero-filling any branch the file had nothing for. Debit Balance is summed exactly as the source report prints it (negative, since that's how core banking represents an outstanding NPA debit) rather than flipped to a positive "outstanding amount" figure -- so a banker can cross-check this tool's numbers against the raw report's own without a sign-convention mismatch. Added as the Utility Hub's sixth card, needing a sixth accent color (`--tool-rose`) since the five existing tool-icon colors were all already spoken for.
+
 ### Follow-up: the write-in extended to the whole hero column, not just the credit (2026-09-13, same day)
 
 Alok liked the credit animation enough to ask for the same treatment on the org name/title/subtitle above it too ("NPA Dashboard", "OTS Calculator", etc.) -- the whole splash writing itself in, not just the signature line at the bottom.
