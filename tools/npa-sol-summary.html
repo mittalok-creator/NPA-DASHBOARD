@@ -210,6 +210,7 @@
       <div id="statsBox" class="status-stats hidden">
         <div class="status-stat"><span class="status-num" id="statEntries">0</span><span class="status-lbl">Accounts Read</span></div>
         <div class="status-stat"><span class="status-num" id="statBranches">0</span><span class="status-lbl">Branches</span></div>
+        <div class="status-stat"><span class="status-num" id="statDebitCr">0</span><span class="status-lbl">Total Debit Balance (₹ Cr)</span></div>
       </div>
       <div id="status"></div>
       <div class="status-actions">
@@ -272,6 +273,7 @@
   var statsBox = document.getElementById('statsBox');
   var statEntries = document.getElementById('statEntries');
   var statBranches = document.getElementById('statBranches');
+  var statDebitCr = document.getElementById('statDebitCr');
   var statusEl = document.getElementById('status');
   var clearBtn = document.getElementById('clearBtn');
   var viewPanel = document.getElementById('viewPanel');
@@ -300,10 +302,19 @@
   }
   // Displayed in Lakhs (Alok's request) -- a raw rupee figure for a whole
   // branch runs 7-9 digits and is hard to scan at a glance; dividing by
-  // 1,00,000 keeps the sign (a loan's outstanding Debit Balance stays
-  // negative) while cutting it down to a number a banker reads instantly.
+  // 1,00,000 cuts it down to a number a banker reads instantly. Shown as
+  // a plain magnitude, not signed -- the source report prints a loan's
+  // outstanding Debit Balance as negative (an internal ledger
+  // convention), but on a Debit Balance summary the minus sign is just
+  // noise every row would carry; the column header already says what it
+  // is, so nothing is lost by dropping it. The underlying rec.dr value
+  // used for sorting and the report's-own-total integrity check stays
+  // signed exactly as parsed -- only the two display helpers here strip it.
   function fmtLakh(n){
-    return ((n||0)/100000).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+    return (Math.abs(n||0)/100000).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function fmtCrore(n){
+    return (Math.abs(n||0)/10000000).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
   }
   function updateDropzoneTitle(){
     var f = fileInput.files && fileInput.files[0];
@@ -520,9 +531,9 @@
     var totCount=0, totDr=0;
     records.forEach(function(rec){
       totCount += rec.count; totDr += rec.dr;
-      aoa.push([ rec.sol || '', rec.branch, rec.count, round2(rec.dr/100000) ]);
+      aoa.push([ rec.sol || '', rec.branch, rec.count, round2(Math.abs(rec.dr)/100000) ]);
     });
-    aoa.push([ 'Grand Total', records.length + ' row(s)', totCount, round2(totDr/100000) ]);
+    aoa.push([ 'Grand Total', records.length + ' row(s)', totCount, round2(Math.abs(totDr)/100000) ]);
 
     var ws = XLSX.utils.aoa_to_sheet(aoa);
     var numFmt = '#,##0.00';
@@ -554,13 +565,14 @@
 
       var records = buildSolSummary(rows);
       var branchCount = records.filter(function(r){ return r.branch !== UNASSIGNED_LABEL; }).length;
+      var totDr = records.reduce(function(s,r){ return s + r.dr; }, 0);
       statEntries.textContent = rows.length.toLocaleString('en-IN');
       statBranches.textContent = branchCount;
+      statDebitCr.textContent = fmtCrore(totDr);
       statsBox.classList.remove('hidden');
 
       brandTag.textContent = 'NPA Accounts report' + (meta.asOn ? ' · As On ' + meta.asOn : '') + ' → SOL ID-wise Debit Balance summary';
 
-      var totDr = records.reduce(function(s,r){ return s + r.dr; }, 0);
       var checkBits = [];
       if (meta.reportedAccounts != null){
         checkBits.push(rows.length === meta.reportedAccounts
@@ -572,7 +584,7 @@
           ? 'Debit Balance total matches the report’s own printed total ✓'
           : 'Debit Balance total doesn’t match the report’s own footer — please double-check the file.');
       }
-      summaryHint.innerHTML = 'Every operational Hathras region branch is listed, even one with nothing in this report (shows 0). R O Hathras and Hathras Service Branch, plus any account this report’s SOL doesn’t attribute to an operational branch, are rolled into one "'+esc(UNASSIGNED_LABEL)+'" row so every account stays accounted for. Debit Balance is in ₹ Lakh, summed from the report’s own signed figures (a loan’s outstanding Debit Balance prints as negative).'
+      summaryHint.innerHTML = 'Every operational Hathras region branch is listed, even one with nothing in this report (shows 0). R O Hathras and Hathras Service Branch, plus any account this report’s SOL doesn’t attribute to an operational branch, are rolled into one "'+esc(UNASSIGNED_LABEL)+'" row so every account stays accounted for. Debit Balance is the outstanding amount owed, shown in ₹ Lakh.'
         + (checkBits.length ? ' <b>' + esc(checkBits.join(' · ')) + '</b>' : '')
         + ' Tap the <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> icon next to any column’s name to copy that whole column.';
 
