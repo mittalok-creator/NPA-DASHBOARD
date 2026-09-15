@@ -166,6 +166,33 @@
   #detailCard .dc-gmaps{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:9px;padding:8px 10px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font-size:12.5px;font-weight:700;text-decoration:none}
   #detailCard .dc-gmaps:hover{filter:brightness(1.06)}
   #detailCard .dc-gmaps svg{width:14px;height:14px;flex-shrink:0}
+  #detailCard .dc-route-btn{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:7px;padding:7px 10px;border-radius:9px;background:var(--surface);border:1.5px solid var(--line);color:var(--ink);font-size:12px;font-weight:700;cursor:pointer;width:100%}
+  #detailCard .dc-route-btn:hover{border-color:var(--accent);color:var(--accent)}
+  #detailCard .dc-route-btn svg{width:13px;height:13px;flex-shrink:0}
+
+  /* ---- Route planner (by-road distance between any two branches) ---- */
+  .route-panel{display:none;flex-direction:column;gap:8px;background:var(--surface-muted);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .route-panel.show{display:flex}
+  .route-title{font-family:'Spectral',serif;font-weight:700;font-size:13.5px;display:flex;align-items:center;justify-content:space-between}
+  .route-title .dc-close{font-size:11px;color:var(--ink-muted);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline}
+  .route-field{display:flex;flex-direction:column;gap:3px}
+  .route-field label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);font-weight:700}
+  .route-field select{font:inherit;font-size:12.5px;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+  .route-swap{align-self:center;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;margin:-4px auto}
+  .route-swap:hover{border-color:var(--accent);color:var(--accent)}
+  .route-swap svg{width:13px;height:13px}
+  .route-actions{display:flex;gap:8px}
+  .route-go{flex:1;padding:8px 10px;border-radius:9px;background:var(--accent);color:var(--accent-ink);border:none;font-size:12.5px;font-weight:700;cursor:pointer}
+  .route-go:hover{filter:brightness(1.06)}
+  .route-go:disabled{opacity:.5;cursor:default;filter:none}
+  .route-clear{padding:8px 12px;border-radius:9px;background:var(--surface);border:1px solid var(--line);color:var(--ink-muted);font-size:12.5px;font-weight:600;cursor:pointer}
+  .route-clear:hover{border-color:var(--accent);color:var(--accent)}
+  .route-result{display:none;flex-direction:column;gap:2px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:9px;padding:10px 12px}
+  .route-result.show{display:flex}
+  .route-result .rr-dist{font-family:'Spectral',serif;font-weight:700;font-size:20px;color:var(--accent)}
+  .route-result .rr-meta{font-size:11px;color:var(--ink-muted)}
+  .route-result.error .rr-dist{color:var(--warn);font-size:13px;font-family:inherit}
+  .route-result.error{background:var(--warn-soft);border-color:var(--warn)}
 
   .branch-list{flex:1 1 auto;min-height:130px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin:0 -6px;padding:0 6px}
   .branch-row{display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
@@ -212,6 +239,10 @@
       <div class="map-toolbar">
         <div class="chip-row" id="districtChips"></div>
         <div style="display:flex;gap:8px">
+          <button type="button" class="locate-btn" id="routeToggleBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.3 17.7 15 8.5"/><path d="M17 7c0 5-6 4-8 8"/></svg>
+            Route between 2 branches
+          </button>
           <a class="locate-btn" href="UPGB_Branch_Directory.pdf" download="UPGB Branch Directory.pdf">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
             Download PDF
@@ -234,6 +265,29 @@
         <input type="text" id="searchInput" placeholder="Search branch, SOL ID, PIN, area..." aria-label="Search branches">
       </div>
 
+      <div class="route-panel" id="routePanel">
+        <div class="route-title">
+          Route between 2 branches
+          <button type="button" class="dc-close" id="routeCloseBtn">Close</button>
+        </div>
+        <div class="route-field">
+          <label for="routeFrom">From</label>
+          <select id="routeFrom"><option value="">Select branch…</option></select>
+        </div>
+        <button type="button" class="route-swap" id="routeSwapBtn" title="Swap From/To" aria-label="Swap From and To">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M17 3v12M17 3l4 4M17 3l-4 4"/><path d="M7 21V9M7 21l-4-4M7 21l4-4"/></svg>
+        </button>
+        <div class="route-field">
+          <label for="routeTo">To</label>
+          <select id="routeTo"><option value="">Select branch…</option></select>
+        </div>
+        <div class="route-actions">
+          <button type="button" class="route-go" id="routeGoBtn" disabled>Show route</button>
+          <button type="button" class="route-clear" id="routeClearBtn">Clear</button>
+        </div>
+        <div class="route-result" id="routeResult"></div>
+      </div>
+
       <div id="detailCard">
         <button type="button" class="dc-close" id="detailCloseBtn">Close</button>
         <div class="dc-name" id="dcName"></div>
@@ -247,6 +301,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s-7-6.1-7-11.2A7 7 0 0 1 12 3a7 7 0 0 1 7 6.8C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.4"/></svg>
           Open in Google Maps
         </a>
+        <button type="button" class="dc-route-btn" id="dcRouteBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.3 17.7 15 8.5"/><path d="M17 7c0 5-6 4-8 8"/></svg>
+          Route from here to…
+        </button>
       </div>
 
       <div class="branch-list" id="branchList"></div>
@@ -262,7 +320,7 @@
 
   <footer class="site-foot">
     Designed &amp; developed by <span>Alok Mittal</span>
-    <span class="note">55 branch positions are the exact GPS reading from that branch's own on-site geo-tagged photo; R O Hathras and Maant (dashed ring) use their registered address / PIN centre pending a photo. Base map &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color:inherit">OpenStreetMap</a> contributors. Use &ldquo;Open in Google Maps&rdquo; on a selected branch for turn-by-turn directions.</span>
+    <span class="note">55 branch positions are the exact GPS reading from that branch's own on-site geo-tagged photo; R O Hathras and Maant (dashed ring) use their registered address / PIN centre pending a photo. Base map &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color:inherit">OpenStreetMap</a> contributors, by-road routing via <a href="http://project-osrm.org/" target="_blank" rel="noopener" style="color:inherit">OSRM</a>. Use &ldquo;Open in Google Maps&rdquo; on a selected branch for turn-by-turn directions.</span>
   </footer>
 </div>
 
@@ -446,6 +504,111 @@
     selectedSol = null;
     Object.keys(rowEls).forEach(function(s){ rowEls[s].classList.remove('selected'); });
     updateLabelVisibility();
+  });
+
+  // ---- Route between any 2 branches: real by-road distance, not a straight
+  // line, via OSRM's free public routing API (no key needed, but it's a
+  // shared demo server with no uptime guarantee -- if it's ever down or
+  // rate-limited, the panel just says so rather than pretending an outage
+  // is a real "no road found" result). ----
+  var routeFromSel = document.getElementById('routeFrom');
+  var routeToSel = document.getElementById('routeTo');
+  var routeGoBtn = document.getElementById('routeGoBtn');
+  var routeResultEl = document.getElementById('routeResult');
+  var routePanelEl = document.getElementById('routePanel');
+  var routeLine = null;
+  var routeEndMarkers = [];
+
+  sorted.forEach(function(b){
+    var label = b.name + ' (' + b.sol + ')';
+    routeFromSel.appendChild(new Option(label, b.sol));
+    routeToSel.appendChild(new Option(label, b.sol));
+  });
+
+  function updateRouteGoState(){
+    var a = routeFromSel.value, c = routeToSel.value;
+    routeGoBtn.disabled = !a || !c || a === c;
+  }
+  routeFromSel.addEventListener('change', updateRouteGoState);
+  routeToSel.addEventListener('change', updateRouteGoState);
+
+  function openRoutePanel(){
+    routePanelEl.classList.add('show');
+    routePanelEl.scrollIntoView({block:'nearest'});
+  }
+  document.getElementById('routeToggleBtn').addEventListener('click', function(){
+    routePanelEl.classList.toggle('show');
+  });
+  document.getElementById('routeCloseBtn').addEventListener('click', function(){
+    routePanelEl.classList.remove('show');
+  });
+  document.getElementById('dcRouteBtn').addEventListener('click', function(){
+    if(selectedSol){ routeFromSel.value = selectedSol; updateRouteGoState(); }
+    openRoutePanel();
+  });
+  document.getElementById('routeSwapBtn').addEventListener('click', function(){
+    var a = routeFromSel.value; routeFromSel.value = routeToSel.value; routeToSel.value = a;
+    updateRouteGoState();
+  });
+
+  function clearRoute(){
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    routeEndMarkers.forEach(function(m){ map.removeLayer(m); });
+    routeEndMarkers = [];
+    routeResultEl.classList.remove('show', 'error');
+    routeResultEl.innerHTML = '';
+  }
+  document.getElementById('routeClearBtn').addEventListener('click', function(){
+    routeFromSel.value = ''; routeToSel.value = '';
+    updateRouteGoState();
+    clearRoute();
+  });
+
+  function haversineKm(a, b){
+    var R = 6371, toRad = Math.PI / 180;
+    var dLat = (b.lat - a.lat) * toRad, dLon = (b.lon - a.lon) * toRad;
+    var s = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+  }
+  function fmtDuration(totalSeconds){
+    var mins = Math.round(totalSeconds / 60);
+    if(mins < 60) return mins + ' min';
+    var h = Math.floor(mins/60), m = mins % 60;
+    return h + 'h ' + (m ? m + 'm' : '');
+  }
+
+  routeGoBtn.addEventListener('click', function(){
+    var a = branchBySol[+routeFromSel.value], b = branchBySol[+routeToSel.value];
+    if(!a || !b) return;
+    clearRoute();
+    routeGoBtn.disabled = true;
+    routeGoBtn.textContent = 'Finding route…';
+    var url = 'https://router.project-osrm.org/route/v1/driving/' + a.lon + ',' + a.lat + ';' + b.lon + ',' + b.lat + '?overview=full&geometries=geojson';
+    fetch(url).then(function(r){ return r.json(); }).then(function(data){
+      if(data.code !== 'Ok' || !data.routes || !data.routes[0]) throw new Error('no-route');
+      var route = data.routes[0];
+      var latlngs = route.geometry.coordinates.map(function(c){ return [c[1], c[0]]; });
+      routeLine = L.polyline(latlngs, { color: '#1257C4', weight: 5, opacity: .85 }).addTo(map);
+      [a, b].forEach(function(br){
+        routeEndMarkers.push(L.circleMarker([br.lat, br.lon], { radius: 10, color: '#fff', weight: 2.5, fillColor: '#1257C4', fillOpacity: 1 }).addTo(map));
+      });
+      map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
+      var km = (route.distance / 1000).toFixed(1);
+      routeResultEl.innerHTML =
+        '<span class="rr-dist">' + km + ' km <span style="font-size:12px;font-weight:600;color:var(--ink-muted)">by road</span></span>' +
+        '<span class="rr-meta">' + a.name + ' → ' + b.name + '  ·  approx. ' + fmtDuration(route.duration) + ' drive</span>' +
+        '<span class="rr-meta">Straight-line distance: ' + haversineKm(a, b).toFixed(1) + ' km</span>';
+      routeResultEl.classList.remove('error');
+      routeResultEl.classList.add('show');
+    }).catch(function(){
+      routeResultEl.innerHTML = '<span class="rr-dist">Route lookup failed</span>' +
+        '<span class="rr-meta">The public routing service didn’t respond — straight-line distance is ' + haversineKm(a, b).toFixed(1) + ' km. Try again in a moment.</span>';
+      routeResultEl.classList.add('show', 'error');
+    }).finally(function(){
+      routeGoBtn.disabled = false;
+      routeGoBtn.textContent = 'Show route';
+      updateRouteGoState();
+    });
   });
 
   // ---- District filter chips ----
