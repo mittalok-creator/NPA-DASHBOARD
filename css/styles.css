@@ -208,6 +208,7 @@
   --tool-teal:#1FC9B7; --tool-teal-soft:rgba(31,201,183,.16);
   --tool-terracotta:#E68A66; --tool-terracotta-soft:rgba(230,138,102,.16);
   --tool-rose:#E8618C; --tool-rose-soft:rgba(232,97,140,.16);
+  --tool-indigo:#6F82F5; --tool-indigo-soft:rgba(111,130,245,.16);
   --emboss-rim:rgba(255,255,255,.05);
   --gold:#3A7BFF; --gold-l:#7FB0FF; --gold-d:#245BFF; --gold-soft:rgba(58,123,255,.12);
 
@@ -1748,6 +1749,7 @@ html,body{overscroll-behavior:none}
 .utility-card-icon.tool-cyan{--tool-color:var(--accent-2);--tool-soft:var(--accent-2-soft)}
 .utility-card-icon.tool-terracotta{--tool-color:var(--tool-terracotta);--tool-soft:var(--tool-terracotta-soft)}
 .utility-card-icon.tool-rose{--tool-color:var(--tool-rose);--tool-soft:var(--tool-rose-soft)}
+.utility-card-icon.tool-indigo{--tool-color:var(--tool-indigo);--tool-soft:var(--tool-indigo-soft)}
 .utility-card-title{font-size:14.5px;font-weight:800;color:var(--ink)}
 .utility-card-desc{font-size:12px;color:var(--sub);line-height:1.5}
 .utility-card-arrow{position:absolute;top:18px;right:18px;width:24px;height:24px;border-radius:8px;
@@ -2253,6 +2255,7 @@ header.app-head::before,.detail-head::before{
   --tool-teal:#0E8F7E; --tool-teal-soft:rgba(14,143,126,.10);
   --tool-terracotta:#B35A38; --tool-terracotta-soft:rgba(179,90,56,.10);
   --tool-rose:#C43D74; --tool-rose-soft:rgba(196,61,116,.10);
+  --tool-indigo:#4152C9; --tool-indigo-soft:rgba(65,82,201,.10);
   --emboss-rim:rgba(255,255,255,.75);
   --gold:#1B4FE0; --gold-l:#3A7BFF; --gold-d:#123A9E; --gold-soft:rgba(27,79,224,.08);
   --stripe:rgba(62,50,30,.024); --stripe-label:rgba(62,50,30,.035);
