@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Cleanup: source geo-tagged branch photos removed from the repo (2026-09-15, same day)
+
+The 57 on-site photos in `branch-photos/` (~15 MB) were only ever raw source material for the Branch Map's GPS extraction -- the coordinates they yielded have been embedded in `tools/branch-map.html`'s own branch data since that feature shipped, and nothing in the live app reads from `branch-photos/` at runtime (confirmed via a repo-wide search -- the only reference left was an explanatory comment in `index.html`, updated to say the photos have been removed rather than pointing at a directory that no longer exists). Removed via `git rm` once Alok confirmed the map/PDF work built from them was done; the photos remain recoverable from this commit's git history if ever needed again, this just stops them adding weight to every future clone of the repo.
+
 ### Follow-up: PDF poster's text and lines made bold/dark enough to survive an actual print (2026-09-15, same day)
 
 Alok's next round: "map k text ko bold and aur visible banao and iska print bahut hi light aa raha hai" -- the vector rebuild fixed the missing-names and pixelation problems, but the actual printed output was coming out faint. Root cause: the poster page is a genuine 72in x 48in canvas (6ft x 4ft, printed at 100%), and the previous branch labels, roads, boundaries and sidebar text were all sized/colored as if for a normal small page -- a 15pt label is a fifth of an inch tall, and a pale grey like `#B9BFB8` for minor roads or `#5C6D64` for muted text reads as a soft secondary tone on a screen but all but disappears once actually printed at wall-poster scale and viewed from any distance.
