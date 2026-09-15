@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: Branch Map gets a downloadable PDF directory (2026-09-15, same day)
+
+Alok asked for a PDF version of the branch map/directory -- all 57 branches, names shown, each one a hyperlink to its Google Maps location -- then asked for it added into the app itself "for future use" rather than a one-off file. Built with `reportlab` (a static map image composited from real OpenStreetMap tiles via PIL, plus two SOL-ID-sorted district tables, every branch name a real clickable `/URI` link annotation to `google.com/maps/search/?api=1&query=<lat>,<lon>`) and committed as `tools/UPGB_Branch_Directory.pdf`, with a "Download PDF" button added to the Branch Map tool's own toolbar (a plain `<a download>` link -- no server, no regeneration on the fly, just the pre-built file).
+
+The map image itself needed one structural fix along the way: 6 of the 57 branches sit within 2km of each other in Hathras town and would collide as labels on any single-zoom overview, so they get a dedicated zoomed inset panel instead. The first version pasted that inset directly on top of the overview image in what looked like an empty corner by eye -- which silently erased several real Mathura-district branch labels (Bati, Vrindavan, Mathura City, Raya, Tarsi, Laxmi Nagar) that happened to fall in that same screen region, since `Image.paste()` overwrites whatever was drawn there first. Fixed by giving the inset its own side panel next to the overview instead of layering it on top, which makes that class of occlusion impossible rather than just less likely.
+
+Two follow-up tweaks after Alok's review: the district tables now sort by SOL ID (ascending) instead of alphabetically -- R O Hathras still lands first since 9269 is the lowest SOL ID in the range, no special-casing needed -- and the opening cover page (title + big stat tiles) was dropped per "no need of this"; the PDF now opens directly on the Map View page, with a single compact title/legend line sitting right above the map instead of its own page.
+
 ### New Utility Hub tool: Branch Map (2026-09-15)
 
 Alok asked for a visual map built from the addresses already embedded in `BRANCH_META` (js/app.js), then -- once it was live as a standalone reference map -- asked for it "proper Google Map ki tarah, with road assistance and name them on map and link with Google Map also." Uploaded 56 geo-tagged site photos (`branch-photos/`, one per branch, app-watermarked with GPS/Plus Code) to supply real coordinates instead of address-based geocoding.
