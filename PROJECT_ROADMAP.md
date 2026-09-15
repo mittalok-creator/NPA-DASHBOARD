@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: route view now hides the other 55 branches, shows just the 2 selected (2026-09-15, same day)
+
+Alok's feedback on the just-shipped route feature: "by actual road dikhana hai, sari branches ko include nahi karna, bas wahi 2 branches jo select ki hai" -- the route line was drawing correctly, but all 57 branch pins and names stayed on screen around it, when he wanted a clean A-to-B view. Added a route focus mode: on a successful route, every branch except the two endpoints has its marker and name tooltip hidden (`setStyle({opacity:0, fillOpacity:0})` plus `closeTooltip()`) so only the selected pair and the blue route line remain, each endpoint getting its own permanent name label. Picking a different single branch (map, list, or search) or hitting Clear restores every other branch to normal. District boundaries, roads, and the nearby-city context labels stay visible throughout, since those are map context rather than "other branches" -- only the 55 uninvolved branch pins/names hide.
+
 ### New on the Branch Map: by-road route + distance between any two branches (2026-09-15, same day)
 
 Alok asked whether the app could show the real by-road route and distance between any two branches, not just each one's own location. Added a "Route between 2 branches" panel to `tools/branch-map.html`'s sidebar (toggled from the map toolbar, or via a new "Route from here to…" button on a selected branch's detail card, which pre-fills the From side): pick two branches from the From/To dropdowns (or swap them), and the map draws the real driving route as a line and reports the by-road distance and an approximate drive time, alongside the straight-line distance for comparison.
