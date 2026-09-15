@@ -447,6 +447,7 @@
   });
 
   function updateLabelVisibility(){
+    if(routeFocusActive) return; // only the 2 route endpoints show while a route is displayed
     var zoom = map.getZoom();
     branches.forEach(function(b){
       var isRO = b.type === 'Regional Office';
@@ -477,6 +478,7 @@
   });
 
   function selectBranch(sol){
+    clearRoute(); // picking a single branch cancels the 2-branch route view
     var prevSol = selectedSol;
     selectedSol = sol;
     var b = branchBySol[sol];
@@ -551,12 +553,35 @@
     updateRouteGoState();
   });
 
+  // Route focus mode: while a route is shown, every branch that isn't one
+  // of the 2 endpoints hides completely -- Alok specifically didn't want
+  // the other 55 pins/names cluttering what should read as just A to B.
+  var routeFocusActive = false;
+  function enterRouteFocus(sol1, sol2){
+    routeFocusActive = true;
+    branches.forEach(function(b){
+      if(b.sol === sol1 || b.sol === sol2) return;
+      var marker = markerBySol[b.sol];
+      marker.closeTooltip();
+      marker.setStyle({ opacity: 0, fillOpacity: 0 });
+    });
+  }
+  function exitRouteFocus(){
+    if(!routeFocusActive) return;
+    routeFocusActive = false;
+    branches.forEach(function(b){
+      markerBySol[b.sol].setStyle({ opacity: 1, fillOpacity: 1 });
+    });
+    updateLabelVisibility();
+  }
+
   function clearRoute(){
     if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
     routeEndMarkers.forEach(function(m){ map.removeLayer(m); });
     routeEndMarkers = [];
     routeResultEl.classList.remove('show', 'error');
     routeResultEl.innerHTML = '';
+    exitRouteFocus();
   }
   document.getElementById('routeClearBtn').addEventListener('click', function(){
     routeFromSel.value = ''; routeToSel.value = '';
@@ -590,8 +615,11 @@
       var latlngs = route.geometry.coordinates.map(function(c){ return [c[1], c[0]]; });
       routeLine = L.polyline(latlngs, { color: '#1257C4', weight: 5, opacity: .85 }).addTo(map);
       [a, b].forEach(function(br){
-        routeEndMarkers.push(L.circleMarker([br.lat, br.lon], { radius: 10, color: '#fff', weight: 2.5, fillColor: '#1257C4', fillOpacity: 1 }).addTo(map));
+        var m = L.circleMarker([br.lat, br.lon], { radius: 10, color: '#fff', weight: 2.5, fillColor: '#1257C4', fillOpacity: 1 }).addTo(map);
+        m.bindTooltip(br.name, { permanent: true, direction: 'top', offset: [0, -10], className: 'branch-label' }).openTooltip();
+        routeEndMarkers.push(m);
       });
+      enterRouteFocus(a.sol, b.sol);
       map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
       var km = (route.distance / 1000).toFixed(1);
       routeResultEl.innerHTML =
