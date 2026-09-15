@@ -118,7 +118,7 @@
   .chip.active{color:var(--ink);border-color:currentColor}
   .chip[data-dist="Hathras"].active{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
   .chip[data-dist="Mathura"].active{border-color:var(--dist2);color:var(--dist2);background:var(--dist2-soft)}
-  .locate-btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:6px 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-muted);cursor:pointer}
+  .locate-btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:6px 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-muted);cursor:pointer;text-decoration:none}
   .locate-btn:hover{border-color:var(--accent);color:var(--accent)}
   .locate-btn svg{width:13px;height:13px}
 
@@ -211,10 +211,16 @@
     <div class="panel map-panel">
       <div class="map-toolbar">
         <div class="chip-row" id="districtChips"></div>
-        <button type="button" class="locate-btn" id="resetViewBtn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-          Reset view
-        </button>
+        <div style="display:flex;gap:8px">
+          <a class="locate-btn" href="UPGB_Branch_Directory.pdf" download="UPGB Branch Directory.pdf">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+            Download PDF
+          </a>
+          <button type="button" class="locate-btn" id="resetViewBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+            Reset view
+          </button>
+        </div>
       </div>
       <div class="map-stage" id="mapStage">
         <div id="leafletMap"></div>
