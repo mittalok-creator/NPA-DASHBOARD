@@ -123,6 +123,12 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: nearby cities/towns added back to the vector poster (2026-09-15, same day)
+
+The vector rebuild solved the "missing branch names" problem but lost something the raster-tile version had for free: real map tiles bake in their own place-name labels (Aligarh, Agra, Bharatpur, Etah...), and a custom-drawn vector map starts with none of that. Alok noticed the surrounding-area context was gone. Fixed by querying Overpass for `place=city|town` nodes in a widened bounding box around the two districts, filtering out anything that just duplicates a branch's own name (Sadabad, Sikandra Rao, Vrindavan, Bisawar, and the Maant/Mant, Goverdhan/Govardhan spelling variants all show up as real OSM place nodes too, since they're real towns the bank happens to also have a branch in), and keeping only the more significant ones (population ≥ 5,000 or `place=city`) so it reads as context, not clutter.
+
+These render as plain italic grey text -- no pin, no hyperlink, lower placement priority than the 57 real branches so they simply get skipped if a spot is too crowded (unlike a branch's name, which always finds a spot at least via a leader line). The map's own view padding was widened too (from 4% to 14% beyond the branches' bounding box) so cities that sit just outside the two districts -- Aligarh to the north, Etah/Kasganj to the east, Agra/Bharatpur to the south -- have room to actually appear near the edge rather than being cropped out entirely.
+
 ### Follow-up: the PDF's map page rebuilt as pure vector art, not a raster tile mosaic (2026-09-15, same day)
 
 Alok's next round of feedback on the PDF: some branch names weren't showing on the map, and he wanted it "high definition... agar iska bada print nikale to clear print aaye, bada matlab like 6x4 feet type kuch" -- a wall-poster-scale print with every branch legible. A higher-resolution raster tile mosaic (the previous approach) was the wrong tool for that: getting genuinely crisp detail at 6x4 feet needs on the order of 10,000+ pixels across, which means fetching thousands of individual OpenStreetMap tiles (heavy on both this build and OSM's tile server) for an image that still, fundamentally, is made of pixels that blur under a large enough print.
