@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: Route panel's From/To dropdowns sorted by SOL ID, not name (2026-09-15, same day)
+
+Small follow-up from Alok: the two dropdowns were built off the sidebar list's own sort order (district, then Regional Office first, then alphabetical), which he didn't want here -- SOL ID order instead, matching the PDF directory tables' own convention. Re-sorted `branches` by `sol` ascending just for these two `<select>`s (the sidebar list itself is unchanged), and swapped each option's label to lead with the SOL ID ("9269 — R O Hathras") so the sort order reads naturally in the list.
+
 ### Follow-up: route view now hides the other 55 branches, shows just the 2 selected (2026-09-15, same day)
 
 Alok's feedback on the just-shipped route feature: "by actual road dikhana hai, sari branches ko include nahi karna, bas wahi 2 branches jo select ki hai" -- the route line was drawing correctly, but all 57 branch pins and names stayed on screen around it, when he wanted a clean A-to-B view. Added a route focus mode: on a successful route, every branch except the two endpoints has its marker and name tooltip hidden (`setStyle({opacity:0, fillOpacity:0})` plus `closeTooltip()`) so only the selected pair and the blue route line remain, each endpoint getting its own permanent name label. Picking a different single branch (map, list, or search) or hitting Clear restores every other branch to normal. District boundaries, roads, and the nearby-city context labels stay visible throughout, since those are map context rather than "other branches" -- only the 55 uninvolved branch pins/names hide.
