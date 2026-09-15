@@ -170,17 +170,22 @@
   #detailCard .dc-route-btn:hover{border-color:var(--accent);color:var(--accent)}
   #detailCard .dc-route-btn svg{width:13px;height:13px;flex-shrink:0}
 
-  /* ---- Route planner (by-road distance between any two branches) ---- */
+  /* ---- Route planner (by-road distance across any 2+ branches, in the
+     order picked -- Alok's "aaj 3 branch visit ki" use case) ---- */
   .route-panel{display:none;flex-direction:column;gap:8px;background:var(--surface-muted);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
   .route-panel.show{display:flex}
   .route-title{font-family:'Spectral',serif;font-weight:700;font-size:13.5px;display:flex;align-items:center;justify-content:space-between}
   .route-title .dc-close{font-size:11px;color:var(--ink-muted);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline}
-  .route-field{display:flex;flex-direction:column;gap:3px}
-  .route-field label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted);font-weight:700}
-  .route-field select{font:inherit;font-size:12.5px;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
-  .route-swap{align-self:center;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;margin:-4px auto}
-  .route-swap:hover{border-color:var(--accent);color:var(--accent)}
-  .route-swap svg{width:13px;height:13px}
+  .route-stops{display:flex;flex-direction:column;gap:6px}
+  .route-stop{display:flex;align-items:center;gap:7px}
+  .route-stop-num{flex-shrink:0;width:19px;height:19px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .route-stop select{flex:1;min-width:0;font:inherit;font-size:12.5px;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+  .route-stop-remove{flex-shrink:0;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink-muted);cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center}
+  .route-stop-remove:hover{border-color:var(--warn);color:var(--warn)}
+  .route-stop-remove:disabled{opacity:.35;cursor:default}
+  .route-add-stop{align-self:flex-start;font-size:11.5px;font-weight:700;color:var(--accent);background:none;border:none;cursor:pointer;padding:2px 0 2px 26px}
+  .route-add-stop:hover{text-decoration:underline}
+  .route-add-stop:disabled{opacity:.4;cursor:default;text-decoration:none}
   .route-actions{display:flex;gap:8px}
   .route-go{flex:1;padding:8px 10px;border-radius:9px;background:var(--accent);color:var(--accent-ink);border:none;font-size:12.5px;font-weight:700;cursor:pointer}
   .route-go:hover{filter:brightness(1.06)}
@@ -241,7 +246,7 @@
         <div style="display:flex;gap:8px">
           <button type="button" class="locate-btn" id="routeToggleBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.3 17.7 15 8.5"/><path d="M17 7c0 5-6 4-8 8"/></svg>
-            Route between 2 branches
+            Plan a route
           </button>
           <a class="locate-btn" href="UPGB_Branch_Directory.pdf" download="UPGB Branch Directory.pdf">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
@@ -267,20 +272,11 @@
 
       <div class="route-panel" id="routePanel">
         <div class="route-title">
-          Route between 2 branches
+          Plan a route
           <button type="button" class="dc-close" id="routeCloseBtn">Close</button>
         </div>
-        <div class="route-field">
-          <label for="routeFrom">From</label>
-          <select id="routeFrom"><option value="">Select branch…</option></select>
-        </div>
-        <button type="button" class="route-swap" id="routeSwapBtn" title="Swap From/To" aria-label="Swap From and To">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M17 3v12M17 3l4 4M17 3l-4 4"/><path d="M7 21V9M7 21l-4-4M7 21l4-4"/></svg>
-        </button>
-        <div class="route-field">
-          <label for="routeTo">To</label>
-          <select id="routeTo"><option value="">Select branch…</option></select>
-        </div>
+        <div class="route-stops" id="routeStops"></div>
+        <button type="button" class="route-add-stop" id="routeAddStopBtn">+ Add another branch</button>
         <div class="route-actions">
           <button type="button" class="route-go" id="routeGoBtn" disabled>Show route</button>
           <button type="button" class="route-clear" id="routeClearBtn">Clear</button>
@@ -508,31 +504,67 @@
     updateLabelVisibility();
   });
 
-  // ---- Route between any 2 branches: real by-road distance, not a straight
+  // ---- Route across 2+ branches, in the order picked (Alok's "aaj 3
+  // branch visit ki" use case): real by-road distance, not a straight
   // line, via OSRM's free public routing API (no key needed, but it's a
   // shared demo server with no uptime guarantee -- if it's ever down or
   // rate-limited, the panel just says so rather than pretending an outage
-  // is a real "no road found" result). ----
-  var routeFromSel = document.getElementById('routeFrom');
-  var routeToSel = document.getElementById('routeTo');
+  // is a real "no road found" result). One request with N waypoints
+  // returns one stitched route plus a per-leg breakdown for free. ----
+  var ROUTE_MIN_STOPS = 2, ROUTE_MAX_STOPS = 8;
+  var routeStopsEl = document.getElementById('routeStops');
+  var routeAddStopBtn = document.getElementById('routeAddStopBtn');
   var routeGoBtn = document.getElementById('routeGoBtn');
   var routeResultEl = document.getElementById('routeResult');
   var routePanelEl = document.getElementById('routePanel');
   var routeLine = null;
-  var routeEndMarkers = [];
+  var routeStopMarkers = [];
+  var routeStops = [{ sol: '' }, { sol: '' }];
 
-  branches.slice().sort(function(a, b){ return a.sol - b.sol; }).forEach(function(b){
-    var label = b.sol + ' — ' + b.name;
-    routeFromSel.appendChild(new Option(label, b.sol));
-    routeToSel.appendChild(new Option(label, b.sol));
+  var routeOptionsHtml = '<option value="">Select branch…</option>' +
+    branches.slice().sort(function(a, b){ return a.sol - b.sol; }).map(function(b){
+      return '<option value="' + b.sol + '">' + b.sol + ' — ' + b.name + '</option>';
+    }).join('');
+
+  function renderRouteStops(){
+    routeStopsEl.innerHTML = '';
+    routeStops.forEach(function(stop, idx){
+      var row = document.createElement('div');
+      row.className = 'route-stop';
+      row.innerHTML = '<span class="route-stop-num">' + (idx + 1) + '</span>' +
+        '<select data-idx="' + idx + '">' + routeOptionsHtml + '</select>' +
+        '<button type="button" class="route-stop-remove" data-idx="' + idx + '" title="Remove this stop" aria-label="Remove this stop">×</button>';
+      var sel = row.querySelector('select');
+      sel.value = stop.sol;
+      sel.addEventListener('change', function(){
+        routeStops[idx].sol = sel.value;
+        updateRouteGoState();
+      });
+      var rmBtn = row.querySelector('.route-stop-remove');
+      rmBtn.disabled = routeStops.length <= ROUTE_MIN_STOPS;
+      rmBtn.addEventListener('click', function(){
+        if(routeStops.length <= ROUTE_MIN_STOPS) return;
+        routeStops.splice(idx, 1);
+        renderRouteStops();
+        updateRouteGoState();
+      });
+      routeStopsEl.appendChild(row);
+    });
+    routeAddStopBtn.disabled = routeStops.length >= ROUTE_MAX_STOPS;
+  }
+  renderRouteStops();
+
+  routeAddStopBtn.addEventListener('click', function(){
+    if(routeStops.length >= ROUTE_MAX_STOPS) return;
+    routeStops.push({ sol: '' });
+    renderRouteStops();
+    updateRouteGoState();
   });
 
   function updateRouteGoState(){
-    var a = routeFromSel.value, c = routeToSel.value;
-    routeGoBtn.disabled = !a || !c || a === c;
+    var filled = routeStops.filter(function(s){ return s.sol; });
+    routeGoBtn.disabled = filled.length < ROUTE_MIN_STOPS;
   }
-  routeFromSel.addEventListener('change', updateRouteGoState);
-  routeToSel.addEventListener('change', updateRouteGoState);
 
   function openRoutePanel(){
     routePanelEl.classList.add('show');
@@ -545,22 +577,19 @@
     routePanelEl.classList.remove('show');
   });
   document.getElementById('dcRouteBtn').addEventListener('click', function(){
-    if(selectedSol){ routeFromSel.value = selectedSol; updateRouteGoState(); }
+    if(selectedSol){ routeStops[0].sol = String(selectedSol); renderRouteStops(); updateRouteGoState(); }
     openRoutePanel();
-  });
-  document.getElementById('routeSwapBtn').addEventListener('click', function(){
-    var a = routeFromSel.value; routeFromSel.value = routeToSel.value; routeToSel.value = a;
-    updateRouteGoState();
   });
 
   // Route focus mode: while a route is shown, every branch that isn't one
-  // of the 2 endpoints hides completely -- Alok specifically didn't want
-  // the other 55 pins/names cluttering what should read as just A to B.
+  // of the stops hides completely -- Alok specifically didn't want the
+  // other, uninvolved pins/names cluttering what should read as just the
+  // branches actually on this route.
   var routeFocusActive = false;
-  function enterRouteFocus(sol1, sol2){
+  function enterRouteFocus(solList){
     routeFocusActive = true;
     branches.forEach(function(b){
-      if(b.sol === sol1 || b.sol === sol2) return;
+      if(solList.indexOf(b.sol) !== -1) return;
       var marker = markerBySol[b.sol];
       marker.closeTooltip();
       marker.setStyle({ opacity: 0, fillOpacity: 0 });
@@ -577,14 +606,15 @@
 
   function clearRoute(){
     if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
-    routeEndMarkers.forEach(function(m){ map.removeLayer(m); });
-    routeEndMarkers = [];
+    routeStopMarkers.forEach(function(m){ map.removeLayer(m); });
+    routeStopMarkers = [];
     routeResultEl.classList.remove('show', 'error');
     routeResultEl.innerHTML = '';
     exitRouteFocus();
   }
   document.getElementById('routeClearBtn').addEventListener('click', function(){
-    routeFromSel.value = ''; routeToSel.value = '';
+    routeStops = [{ sol: '' }, { sol: '' }];
+    renderRouteStops();
     updateRouteGoState();
     clearRoute();
   });
@@ -603,34 +633,46 @@
   }
 
   routeGoBtn.addEventListener('click', function(){
-    var a = branchBySol[+routeFromSel.value], b = branchBySol[+routeToSel.value];
-    if(!a || !b) return;
+    var stops = routeStops.filter(function(s){ return s.sol; }).map(function(s){ return branchBySol[+s.sol]; });
+    if(stops.length < ROUTE_MIN_STOPS) return;
     clearRoute();
     routeGoBtn.disabled = true;
     routeGoBtn.textContent = 'Finding route…';
-    var url = 'https://router.project-osrm.org/route/v1/driving/' + a.lon + ',' + a.lat + ';' + b.lon + ',' + b.lat + '?overview=full&geometries=geojson';
+    var coordStr = stops.map(function(br){ return br.lon + ',' + br.lat; }).join(';');
+    var url = 'https://router.project-osrm.org/route/v1/driving/' + coordStr + '?overview=full&geometries=geojson';
     fetch(url).then(function(r){ return r.json(); }).then(function(data){
       if(data.code !== 'Ok' || !data.routes || !data.routes[0]) throw new Error('no-route');
       var route = data.routes[0];
       var latlngs = route.geometry.coordinates.map(function(c){ return [c[1], c[0]]; });
       routeLine = L.polyline(latlngs, { color: '#1257C4', weight: 5, opacity: .85 }).addTo(map);
-      [a, b].forEach(function(br){
+      stops.forEach(function(br, i){
         var m = L.circleMarker([br.lat, br.lon], { radius: 10, color: '#fff', weight: 2.5, fillColor: '#1257C4', fillOpacity: 1 }).addTo(map);
-        m.bindTooltip(br.name, { permanent: true, direction: 'top', offset: [0, -10], className: 'branch-label' }).openTooltip();
-        routeEndMarkers.push(m);
+        m.bindTooltip((i + 1) + '. ' + br.name, { permanent: true, direction: 'top', offset: [0, -10], className: 'branch-label' }).openTooltip();
+        routeStopMarkers.push(m);
       });
-      enterRouteFocus(a.sol, b.sol);
+      enterRouteFocus(stops.map(function(br){ return br.sol; }));
       map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
-      var km = (route.distance / 1000).toFixed(1);
+      var totalKm = (route.distance / 1000).toFixed(1);
+      var legLines = '';
+      var totalStraight = 0;
+      for(var i = 0; i < stops.length - 1; i++){
+        var legKm = route.legs[i] ? (route.legs[i].distance / 1000).toFixed(1) : '?';
+        legLines += '<span class="rr-meta">' + stops[i].name + ' → ' + stops[i + 1].name + ': ' + legKm + ' km</span>';
+        totalStraight += haversineKm(stops[i], stops[i + 1]);
+      }
+      var stopsNote = stops.length > 2 ? (stops.length + ' stops, ' + (stops.length - 1) + ' legs · ') : '';
       routeResultEl.innerHTML =
-        '<span class="rr-dist">' + km + ' km <span style="font-size:12px;font-weight:600;color:var(--ink-muted)">by road</span></span>' +
-        '<span class="rr-meta">' + a.name + ' → ' + b.name + '  ·  approx. ' + fmtDuration(route.duration) + ' drive</span>' +
-        '<span class="rr-meta">Straight-line distance: ' + haversineKm(a, b).toFixed(1) + ' km</span>';
+        '<span class="rr-dist">' + totalKm + ' km <span style="font-size:12px;font-weight:600;color:var(--ink-muted)">by road</span></span>' +
+        '<span class="rr-meta">' + stopsNote + 'approx. ' + fmtDuration(route.duration) + ' total drive</span>' +
+        legLines +
+        '<span class="rr-meta">Straight-line total: ' + totalStraight.toFixed(1) + ' km</span>';
       routeResultEl.classList.remove('error');
       routeResultEl.classList.add('show');
     }).catch(function(){
+      var totalStraight = 0;
+      for(var i = 0; i < stops.length - 1; i++) totalStraight += haversineKm(stops[i], stops[i + 1]);
       routeResultEl.innerHTML = '<span class="rr-dist">Route lookup failed</span>' +
-        '<span class="rr-meta">The public routing service didn’t respond — straight-line distance is ' + haversineKm(a, b).toFixed(1) + ' km. Try again in a moment.</span>';
+        '<span class="rr-meta">The public routing service didn’t respond — straight-line total is ' + totalStraight.toFixed(1) + ' km. Try again in a moment.</span>';
       routeResultEl.classList.add('show', 'error');
     }).finally(function(){
       routeGoBtn.disabled = false;
