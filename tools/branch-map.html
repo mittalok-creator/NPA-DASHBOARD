@@ -521,8 +521,8 @@
   var routeLine = null;
   var routeEndMarkers = [];
 
-  sorted.forEach(function(b){
-    var label = b.name + ' (' + b.sol + ')';
+  branches.slice().sort(function(a, b){ return a.sol - b.sol; }).forEach(function(b){
+    var label = b.sol + ' — ' + b.name;
     routeFromSel.appendChild(new Option(label, b.sol));
     routeToSel.appendChild(new Option(label, b.sol));
   });
