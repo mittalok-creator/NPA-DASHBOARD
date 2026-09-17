@@ -40,7 +40,21 @@
   function unlock() {
     locked = true;
     setError('Verified', true);
-    try { sessionStorage.setItem('upgb-splash-unlocked', '1'); } catch (e) {}
+    try {
+      sessionStorage.setItem('upgb-splash-unlocked', '1');
+      // Always the real PIN, even when unlock happened via TEMP_PIN --
+      // data/latest.json etc. (see js/app.js) are encrypted against
+      // CORRECT_PIN only, so a temporary/guest PIN must still hand back a
+      // key that actually decrypts, not the guest PIN itself.
+      sessionStorage.setItem('upgb-splash-pin', CORRECT_PIN);
+    } catch (e) {}
+    // app.js's data fetch needs the PIN to decrypt data/latest.json, but
+    // app.js finishes executing (and would otherwise kick off that fetch)
+    // well before a human finishes typing 4 digits here -- this event is
+    // how app.js knows to wait for an actual unlock instead of racing it
+    // (see its own listener, registered only when no PIN is in
+    // sessionStorage yet at startup).
+    try { window.dispatchEvent(new CustomEvent('upgb-pin-unlocked')); } catch (e) {}
     setTimeout(() => {
       screen.classList.add('unlocked');
       setTimeout(() => { screen.style.display = 'none'; }, 700);
