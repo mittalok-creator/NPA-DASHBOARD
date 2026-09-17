@@ -106,6 +106,31 @@
     return !!(obj && typeof obj === 'object' && obj.enc === 1
       && typeof obj.data === 'string' && typeof obj.iv === 'string' && typeof obj.salt === 'string');
   }
+  /* Encrypted bytes are high-entropy and don't gzip -- the first shipped
+     version of this (2026-09-17) skipped compression and it cost dearly:
+     data/latest.json's transfer size over the wire went from ~1.0MB (the
+     plain JSON gzips to about a quarter of its size) to ~4.15MB (the
+     encrypted+base64 blob barely compresses at all), a 4x regression that
+     undid the same day's separate "slow/blank to open" fix. Fixed by
+     compressing the plaintext BEFORE encrypting (deflate-raw via
+     CompressionStream) -- the envelope's `comp` field records whether
+     this happened, so a missing CompressionStream (old/locked-down
+     browser) falls back to uncompressed rather than failing to publish
+     at all, and decrypt always knows whether to decompress. */
+  const hasCompressionStream = typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined';
+  async function pumpStream(stream, bytes) {
+    const writer = stream.writable.getWriter();
+    writer.write(bytes); writer.close();
+    const chunks = [];
+    const reader = stream.readable.getReader();
+    while (true) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); }
+    const total = chunks.reduce((n, c) => n + c.length, 0);
+    const out = new Uint8Array(total);
+    let off = 0; for (const c of chunks) { out.set(c, off); off += c.length; }
+    return out;
+  }
+  function compressBytes(bytes) { return pumpStream(new CompressionStream('deflate-raw'), bytes); }
+  function decompressBytes(bytes) { return pumpStream(new DecompressionStream('deflate-raw'), bytes); }
   async function decryptEnvelope(envelope) {
     const pin = getStoredPin();
     if (!pin) {
@@ -117,7 +142,9 @@
       const key = await deriveAesKey(pin, base64ToBytes(envelope.salt), envelope.iter || DEFAULT_PBKDF2_ITER, 'decrypt');
       const plainBuf = await crypto.subtle.decrypt(
         { name: 'AES-GCM', iv: base64ToBytes(envelope.iv) }, key, base64ToBytes(envelope.data));
-      return JSON.parse(new TextDecoder('utf-8').decode(plainBuf));
+      let bytes = new Uint8Array(plainBuf);
+      if (envelope.comp === 'deflate-raw') bytes = await decompressBytes(bytes);
+      return JSON.parse(new TextDecoder('utf-8').decode(bytes));
     } catch (err) {
       const e = new Error('Could not unlock data -- it may be corrupted or the PIN session is invalid.');
       e.isDecryptError = true;
@@ -128,12 +155,13 @@
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
-  /* plainHash (SHA-256 of the plaintext, stored unencrypted in the
-     envelope -- not a secret, git already publicly exposes this same
-     content's blob shas today) exists so publishData()'s npaChanged check
-     can tell "content genuinely changed" apart from "ciphertext changed
-     because every encryption uses a fresh random salt/iv" -- without it,
-     every single publish would look like a real NPA-book change. */
+  /* plainHash (SHA-256 of the ORIGINAL, pre-compression plaintext, stored
+     unencrypted in the envelope -- not a secret, git already publicly
+     exposes this same content's blob shas today) exists so publishData()'s
+     npaChanged check can tell "content genuinely changed" apart from
+     "ciphertext changed because every encryption uses a fresh random
+     salt/iv" -- without it, every single publish would look like a real
+     NPA-book change. */
   async function encryptToEnvelope(plainJsonString, pin) {
     if (!pin) throw new Error('Cannot encrypt: no PIN available.');
     const saltBytes = crypto.getRandomValues(new Uint8Array(16));
@@ -142,10 +170,12 @@
       deriveAesKey(pin, saltBytes, DEFAULT_PBKDF2_ITER, 'encrypt'),
       sha256Hex(plainJsonString),
     ]);
-    const cipherBuf = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: ivBytes }, key, new TextEncoder().encode(plainJsonString));
+    let bodyBytes = new TextEncoder().encode(plainJsonString);
+    let comp = null;
+    if (hasCompressionStream) { bodyBytes = await compressBytes(bodyBytes); comp = 'deflate-raw'; }
+    const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: ivBytes }, key, bodyBytes);
     return {
-      enc: 1, kdf: 'PBKDF2-SHA256', iter: DEFAULT_PBKDF2_ITER,
+      enc: 1, kdf: 'PBKDF2-SHA256', iter: DEFAULT_PBKDF2_ITER, comp,
       salt: bytesToBase64(saltBytes), iv: bytesToBase64(ivBytes),
       plainHash, data: bytesToBase64(new Uint8Array(cipherBuf)),
     };

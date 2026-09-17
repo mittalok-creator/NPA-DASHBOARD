@@ -6461,6 +6461,32 @@ function isEncryptedEnvelope(obj){
   return !!(obj && typeof obj==='object' && obj.enc===1
     && typeof obj.data==='string' && typeof obj.iv==='string' && typeof obj.salt==='string');
 }
+/* Encrypted bytes are high-entropy and don't gzip -- the first shipped
+   version of this (2026-09-17) skipped compression and it cost dearly:
+   data/latest.json's transfer size over the wire went from ~1.0MB (the
+   plain JSON gzips to about a quarter of its size, being mostly repeated
+   keys/structure) to ~4.15MB (the encrypted+base64 blob barely compresses
+   at all) -- a 4x regression that undid the same day's separate "slow/
+   blank to open" fix and very plausibly caused new load failures on the
+   exact weak branch-office connections that fix targeted. Fixed by
+   compressing the plaintext BEFORE encrypting (deflate-raw via
+   CompressionStream, ~75-80% smaller for this data), so the ciphertext
+   itself is small and gzip-over-HTTP on top no longer matters much either
+   way. Falls back to uncompressed if CompressionStream isn't available
+   (old/locked-down browsers) -- the envelope's own `comp` field records
+   which happened, so decrypt always knows whether to decompress. */
+async function decompressBytes(bytes){
+  const ds = new DecompressionStream('deflate-raw');
+  const writer = ds.writable.getWriter();
+  writer.write(bytes); writer.close();
+  const chunks = [];
+  const reader = ds.readable.getReader();
+  while(true){ const {done, value} = await reader.read(); if(done) break; chunks.push(value); }
+  const total = chunks.reduce((n,c)=>n+c.length,0);
+  const out = new Uint8Array(total);
+  let off = 0; for(const c of chunks){ out.set(c, off); off += c.length; }
+  return out;
+}
 /* Rejects with .isDecryptError=true on a missing PIN or a failed decrypt
    (wrong PIN or corrupted ciphertext -- AES-GCM's auth tag can't tell
    those apart, so one message covers both correctly) -- loadNpaData()
@@ -6477,7 +6503,9 @@ async function decryptEnvelope(envelope){
     const key = await deriveAesKey(pin, base64ToBytes(envelope.salt), envelope.iter || DEFAULT_PBKDF2_ITER);
     const plainBuf = await crypto.subtle.decrypt(
       { name:'AES-GCM', iv: base64ToBytes(envelope.iv) }, key, base64ToBytes(envelope.data));
-    return JSON.parse(new TextDecoder('utf-8').decode(plainBuf));
+    let bytes = new Uint8Array(plainBuf);
+    if(envelope.comp === 'deflate-raw') bytes = await decompressBytes(bytes);
+    return JSON.parse(new TextDecoder('utf-8').decode(bytes));
   } catch(err){
     const e = new Error('Could not unlock data -- it may be corrupted or the PIN session is invalid.');
     e.isDecryptError = true;

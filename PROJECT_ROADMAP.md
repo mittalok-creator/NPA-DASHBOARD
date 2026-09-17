@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Urgent follow-up: encrypted data was transferring 4x bigger over the wire, fixed with compress-then-encrypt (2026-09-17, same day)
+
+Within minutes of shipping the encryption fix above, Alok reported the app failing to load ("Could not load NPA data. Check your internet connection.") -- checked immediately and found the real cause: encrypted, base64-encoded ciphertext is high-entropy and barely compresses. `data/latest.json`'s actual transfer size over the wire had gone from ~1.0MB (the plain JSON gzips to about a quarter of its size, being mostly repeated keys/structure) to **~4.15MB gzipped** (confirmed by measuring both directly) -- a 4x regression that directly undid the same day's earlier "slow/blank to open" fix, and very plausibly explains the load failure itself on a real branch connection.
+
+Fixed by compressing the plaintext *before* encrypting (`CompressionStream('deflate-raw')`/`DecompressionStream`, both in `js/app.js` for decrypt and `js/publish.js` for encrypt+decrypt/rollback) instead of after -- encrypted bytes never compress well regardless of when gzip happens, so the fix has to happen before the data becomes ciphertext. The envelope gained a `comp` field (`"deflate-raw"` or `null`) recording whether compression was actually used, so a browser without `CompressionStream` (old/locked-down) still encrypts successfully, just larger, rather than failing to publish -- and decrypt always knows whether to decompress first.
+
+Re-encrypted all 3 live files with the fix: `data/latest.json` 5.51MB → 1.36MB (25% of the broken version's size), `data/kcc-overdue.json` 1.51MB → 260KB, `data/pnpa.json` 11.5KB → 3.3KB -- all substantially smaller than even the original *unencrypted* files were, since compression now happens either way. Verified: decrypted each back and confirmed byte-for-byte match with the pre-fix plaintext before writing; re-ran the full local PIN-entry-to-render test and confirmed the actual transferred `data/latest.json` size (measured via a network listener, not estimated) is 1.30MB; re-ran the mocked-`publishData()` test to confirm the `plainHash`-based `npaChanged` dedup logic is unaffected by the added compression step.
+
 ### Security: NPA data encrypted behind the PIN screen (2026-09-17, same day)
 
 Closes the #1 critical gap from the earlier security review: `data/latest.json`, `data/pnpa.json` and `data/kcc-overdue.json` (real customer names, addresses, Aadhaar-shaped numbers, loan amounts, staff phone numbers, internal recovery notes) sat as plain, fully-readable JSON on the public site with zero real access control. The PIN-entry splash screen (`js/splash.js`, PIN "9269") looked like a login but never actually gated the data -- it's a client-side-only overlay, and `loadNpaData()` fetched the data unconditionally regardless of PIN state.
