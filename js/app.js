@@ -3068,7 +3068,7 @@ window.exportOtsExcel = exportOtsExcel;
 function toggleUpdateModal(show){
   document.getElementById('updateModalOverlay').classList.toggle('show', show);
   closePublishReview();
-  if(show){ loadVersionHistory(); renderSpecialNoteList(); }
+  if(show){ loadVersionHistory(); renderSpecialNoteList(); updateLokAdalatClearBtn(); }
   if(!show){
     document.getElementById('uploadStatus').innerHTML='';
     document.getElementById('uploadSummary').innerHTML='';
@@ -3529,11 +3529,37 @@ function handleLokAdalatUpload(evt){
       clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
+      updateLokAdalatClearBtn();
     } catch(err){
       statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
     }
   };
   if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+function updateLokAdalatClearBtn(){
+  const btn = document.getElementById('lokAdalatClearBtn');
+  if(btn) btn.disabled = !Object.keys(DATA.lokAdalat||{}).length;
+}
+/* Bulk "Clear List" -- the only way to empty this list used to be uploading
+   a fresh file with zero matching rows, which was clumsy for the common
+   case of "this Lok Adalat is over, wipe it." Mirrors the tail end of a
+   successful handleLokAdalatUpload() above, just with an empty map instead
+   of a parsed one. */
+function clearLokAdalat(){
+  if(!Object.keys(DATA.lokAdalat||{}).length) return;
+  DATA.lokAdalat = {};
+  const label = document.getElementById('lokAdalatStatusLabel');
+  if(label) label.textContent = 'not loaded yet';
+  const dropLabel = document.getElementById('lokAdalatUploadDropLabel');
+  if(dropLabel) dropLabel.textContent = 'Tap to choose the Lok Adalat file';
+  const fileInput = document.getElementById('lokAdalatFileInput');
+  if(fileInput) fileInput.value = '';
+  const statusEl = document.getElementById('lokAdalatUploadStatus');
+  if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Lok Adalat list cleared.</div>`;
+  clearStalePublishStatus();
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+  updateLokAdalatClearBtn();
 }
 
 /* Special Note -- Admin types an Account No. one at a time (no file
@@ -6196,6 +6222,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('downloadBranchContactsTemplateBtn','click',()=>downloadBranchContactsTemplate());
   on('lokAdalatUploadDrop','click',()=>document.getElementById('lokAdalatFileInput').click());
   on('lokAdalatFileInput','change',(e)=>handleLokAdalatUpload(e));
+  on('lokAdalatClearBtn','click',()=>clearLokAdalat());
   on('downloadLokAdalatTemplateBtn','click',()=>downloadLokAdalatTemplate());
   on('pnpaUploadDrop','click',()=>document.getElementById('pnpaFileInput').click());
   on('pnpaFileInput','change',(e)=>handlePnpaUpload(e));
