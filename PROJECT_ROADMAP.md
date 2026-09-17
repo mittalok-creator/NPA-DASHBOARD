@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### General Compromise added alongside Lok Adalat in the minimum-settlement table (2026-09-17, same day)
+
+Alok looked at the existing "Lok Adalat Minimum Settlement" reference panel (the floating edge tab) and asked for a second scheme, "General Compromise," with its own minimum settlement % of outstanding balance -- Substandard 90%, DA1 80%, DA2 70%, DA3 0%, Loss 0% -- shown in the same table rather than a separate panel.
+
+Confirmed two things with him before touching it: the "0%" for DA3/Loss under General Compromise is literal (no minimum floor for those categories under this scheme, not a "Not Eligible" marker like Substandard gets under Lok Adalat), and this is a **display-only** addition to the static reference table -- it does not extend `lokAdalatMin()` or touch the 3 places it's actually calculated (the account's own Loan Table row, Settlement Statement row, WhatsApp share card), all of which keep working exactly as before, Lok Adalat only.
+
+The table (`index.html`, `#lokAdalatEdgePanel`) is hand-written static markup, no JS rendering involved, so this was a pure content edit: added a "General Compromise" column next to "Lok Adalat," renamed the panel heading from "Lok Adalat Minimum Settlement" to "Minimum Settlement Rates," and rewrote the note paragraph to explain both columns and make clear only the Lok Adalat one feeds into any live calculation. Substandard's Lok Adalat cell still reads "Not Eligible" (now styled as a single muted cell instead of an entire dimmed row, since its General Compromise cell right next to it is a real 90% value). No `js/app.js` changes.
+
 ### Lok Adalat list cleared, "Clear List" button added (2026-09-17)
 
 Alok's first ask ("clear all the special note or remarks") sounded like the Special Note (per Account No.) feature, but he clarified: leave those 2 special notes alone -- the actual target was the separate **"Lok Adalat — Token Already Received"** list, which had grown to 160 real accounts (all carrying the remark "Token Amount Received", uploaded across 01-Sep to 10-Sep). Cleared `lokAdalat` to `{}` in `data/latest.json`, and in the one history snapshot that also carried it (`data/history/2026-09-09-1789122783143.json`, 160 entries) per his explicit confirmation -- every other key in both files, `specialNotes` included, is untouched (spot-checked before and after).
