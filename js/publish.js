@@ -63,6 +63,94 @@
     return new TextDecoder('utf-8').decode(bytes);
   }
 
+  /* ---------- Encrypted-data helpers (2026-09-17) ----------
+     Mirror of the equivalent block in js/app.js (which only needs
+     decrypt) -- keep both in sync. data/latest.json, data/pnpa.json and
+     data/kcc-overdue.json are now committed encrypted (AES-256-GCM, key
+     derived via PBKDF2 from the splash screen's PIN) instead of plain
+     JSON -- see js/app.js's own copy of this comment for the full "why".
+     Distinct on purpose from utf8ToBase64/base64ToUtf8 above (those
+     convert UTF-8 *text* <-> base64 for git blob bodies; these convert
+     raw *binary* bytes <-> base64 for salt/iv/ciphertext) -- don't merge. */
+  const PIN_STORAGE_KEY = 'upgb-splash-pin';
+  const DEFAULT_PBKDF2_ITER = 200000;
+  function getStoredPin() {
+    try { return sessionStorage.getItem(PIN_STORAGE_KEY) || null; } catch (e) { return null; }
+  }
+  function bytesToBase64(bytes) {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  }
+  function base64ToBytes(b64) {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+  async function deriveAesKey(pin, saltBytes, iterations, usage) {
+    const pinBytes = new TextEncoder().encode(pin);
+    const baseKey = await crypto.subtle.importKey('raw', pinBytes, { name: 'PBKDF2' }, false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: saltBytes, iterations, hash: 'SHA-256' },
+      baseKey,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      [usage]
+    );
+  }
+  function isEncryptedEnvelope(obj) {
+    return !!(obj && typeof obj === 'object' && obj.enc === 1
+      && typeof obj.data === 'string' && typeof obj.iv === 'string' && typeof obj.salt === 'string');
+  }
+  async function decryptEnvelope(envelope) {
+    const pin = getStoredPin();
+    if (!pin) {
+      const e = new Error('Could not unlock data -- PIN session missing.');
+      e.isDecryptError = true;
+      throw e;
+    }
+    try {
+      const key = await deriveAesKey(pin, base64ToBytes(envelope.salt), envelope.iter || DEFAULT_PBKDF2_ITER, 'decrypt');
+      const plainBuf = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: base64ToBytes(envelope.iv) }, key, base64ToBytes(envelope.data));
+      return JSON.parse(new TextDecoder('utf-8').decode(plainBuf));
+    } catch (err) {
+      const e = new Error('Could not unlock data -- it may be corrupted or the PIN session is invalid.');
+      e.isDecryptError = true;
+      throw e;
+    }
+  }
+  async function sha256Hex(str) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  /* plainHash (SHA-256 of the plaintext, stored unencrypted in the
+     envelope -- not a secret, git already publicly exposes this same
+     content's blob shas today) exists so publishData()'s npaChanged check
+     can tell "content genuinely changed" apart from "ciphertext changed
+     because every encryption uses a fresh random salt/iv" -- without it,
+     every single publish would look like a real NPA-book change. */
+  async function encryptToEnvelope(plainJsonString, pin) {
+    if (!pin) throw new Error('Cannot encrypt: no PIN available.');
+    const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+    const ivBytes = crypto.getRandomValues(new Uint8Array(12));
+    const [key, plainHash] = await Promise.all([
+      deriveAesKey(pin, saltBytes, DEFAULT_PBKDF2_ITER, 'encrypt'),
+      sha256Hex(plainJsonString),
+    ]);
+    const cipherBuf = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: ivBytes }, key, new TextEncoder().encode(plainJsonString));
+    return {
+      enc: 1, kdf: 'PBKDF2-SHA256', iter: DEFAULT_PBKDF2_ITER,
+      salt: bytesToBase64(saltBytes), iv: bytesToBase64(ivBytes),
+      plainHash, data: bytesToBase64(new Uint8Array(cipherBuf)),
+    };
+  }
+
   async function getHistoryIndex() {
     try {
       const res = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/contents/data/history/index.json?ref=${REPO_BRANCH}`);
@@ -101,6 +189,8 @@
   async function publishData(dataObj, meta, onProgress, extraFiles) {
     meta = meta || {};
     const progress = (msg) => { if (onProgress) onProgress(msg); };
+    const pin = getStoredPin();
+    if (!pin) throw new Error('Cannot publish: PIN session missing or expired. Reload the page, re-enter the PIN, then try again.');
     const dataJsonString = JSON.stringify(dataObj);
 
     progress('Reading current live version…');
@@ -109,16 +199,32 @@
     const baseCommit = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/commits/${baseCommitSha}`);
     const baseTreeSha = baseCommit.tree.sha;
 
+    progress('Encrypting data…');
+    const dataEnvelope = await encryptToEnvelope(dataJsonString, pin);
+    const dataEnvelopeString = JSON.stringify(dataEnvelope);
+
     progress('Uploading data…');
     const dataBlob = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
       method: 'POST',
-      body: { content: utf8ToBase64(dataJsonString), encoding: 'base64' },
+      body: { content: utf8ToBase64(dataEnvelopeString), encoding: 'base64' },
     });
 
+    // Ciphertext (and therefore the blob sha) differs on every single
+    // publish -- a fresh random salt/iv every time, by design -- even when
+    // dataObj itself is byte-identical to what's already live. Comparing
+    // blob shas here would therefore always say "changed," spamming a new
+    // history snapshot and the "NPA data" commit label on every publish.
+    // Compare the plaintext fingerprint instead once the live file is
+    // already the new encrypted format; only fall back to the old sha
+    // comparison for a still-plaintext live file (pre-migration/local
+    // testing).
     let npaChanged = true;
     try {
       const currentFile = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/contents/data/latest.json?ref=${REPO_BRANCH}`);
-      npaChanged = currentFile.sha !== dataBlob.sha;
+      const currentParsed = JSON.parse(base64ToUtf8(currentFile.content));
+      npaChanged = (isEncryptedEnvelope(currentParsed) && currentParsed.plainHash)
+        ? currentParsed.plainHash !== dataEnvelope.plainHash
+        : currentFile.sha !== dataBlob.sha;
     } catch (e) { npaChanged = true; } // couldn't tell -- default to treating it as a real change, never silently drop a version
 
     const treeEntries = [
@@ -158,7 +264,12 @@
     if (extraFiles && extraFiles.length) {
       progress('Uploading additional data…');
       for (const f of extraFiles) {
-        const content = typeof f.content === 'string' ? f.content : JSON.stringify(f.content);
+        // Currently always data/pnpa.json or data/kcc-overdue.json -- both
+        // carry borrower-identifying data same as data/latest.json, so both
+        // get the same encryption treatment, unconditionally.
+        const plainString = typeof f.content === 'string' ? f.content : JSON.stringify(f.content);
+        const envelope = await encryptToEnvelope(plainString, pin);
+        const content = JSON.stringify(envelope);
         const blob = await ghApi(`/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
           method: 'POST',
           body: { content: utf8ToBase64(content), encoding: 'base64' },
@@ -202,7 +313,16 @@
     const progress = (msg) => { if (onProgress) onProgress(msg); };
     progress('Reading that version…');
     const content = await getHistoryFileContent(fileName);
-    const parsed = JSON.parse(content);
+    let parsed = JSON.parse(content);
+    // Old history snapshots (pre-2026-09-17) are still plain JSON and are
+    // not being rewritten -- every new one goes out encrypted, so this has
+    // to handle both. Rolling back an old plaintext version naturally
+    // upgrades it to encrypted on the way back out, since publishData()
+    // above always encrypts on write.
+    if (isEncryptedEnvelope(parsed)) {
+      progress('Unlocking that version…');
+      parsed = await decryptEnvelope(parsed);
+    }
     const rowCount = parsed.npa && parsed.npa.rows ? parsed.npa.rows.length : 0;
     return publishData(parsed, {
       asOnDate: parsed.asOnDate || null,

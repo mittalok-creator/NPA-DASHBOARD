@@ -6418,6 +6418,73 @@ window.closeDetail = closeDetail;
 window.onOtsInput = onOtsInput;
 }
 
+/* ---------- Encrypted-data decrypt helpers (2026-09-17) ----------
+   data/latest.json, data/pnpa.json and data/kcc-overdue.json used to be
+   plain, fully-readable JSON on a public GitHub Pages URL -- real customer
+   names, addresses, Aadhaar-shaped numbers, loan amounts, staff phone
+   numbers, no access control at all. The PIN screen (js/splash.js) looked
+   like it gated access but never actually did -- it's a client-side-only
+   overlay, and this file's own loadNpaData() fetched the data regardless
+   of PIN state. Fixed by encrypting these 3 files (AES-256-GCM, key
+   derived via PBKDF2 from the same PIN the splash screen already asks
+   for) so the raw files are useless without it, while every viewer's
+   experience stays identical -- same PIN screen, same 4 digits. A wrong
+   or missing PIN can no longer even see the JSON shape, only ciphertext.
+
+   Mirror of the equivalent block in js/publish.js (which also needs
+   encrypt, for Publish/rollback) -- keep both in sync. js/splash.js and
+   this file are separate script-tag IIFEs with no shared JS scope, so the
+   PIN is handed off via sessionStorage (see js/splash.js's unlock()). */
+const PIN_STORAGE_KEY = 'upgb-splash-pin';
+const DEFAULT_PBKDF2_ITER = 200000;
+function getStoredPin(){
+  try { return sessionStorage.getItem(PIN_STORAGE_KEY) || null; } catch(e){ return null; }
+}
+function base64ToBytes(b64){
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+async function deriveAesKey(pin, saltBytes, iterations){
+  const pinBytes = new TextEncoder().encode(pin);
+  const baseKey = await crypto.subtle.importKey('raw', pinBytes, {name:'PBKDF2'}, false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt: saltBytes, iterations, hash:'SHA-256' },
+    baseKey,
+    { name:'AES-GCM', length:256 },
+    false,
+    ['decrypt']
+  );
+}
+function isEncryptedEnvelope(obj){
+  return !!(obj && typeof obj==='object' && obj.enc===1
+    && typeof obj.data==='string' && typeof obj.iv==='string' && typeof obj.salt==='string');
+}
+/* Rejects with .isDecryptError=true on a missing PIN or a failed decrypt
+   (wrong PIN or corrupted ciphertext -- AES-GCM's auth tag can't tell
+   those apart, so one message covers both correctly) -- loadNpaData()
+   below checks that flag to show "reload and re-enter PIN" instead of
+   its normal network-error retry. */
+async function decryptEnvelope(envelope){
+  const pin = getStoredPin();
+  if(!pin){
+    const e = new Error('Could not unlock data -- PIN session missing.');
+    e.isDecryptError = true;
+    throw e;
+  }
+  try{
+    const key = await deriveAesKey(pin, base64ToBytes(envelope.salt), envelope.iter || DEFAULT_PBKDF2_ITER);
+    const plainBuf = await crypto.subtle.decrypt(
+      { name:'AES-GCM', iv: base64ToBytes(envelope.iv) }, key, base64ToBytes(envelope.data));
+    return JSON.parse(new TextDecoder('utf-8').decode(plainBuf));
+  } catch(err){
+    const e = new Error('Could not unlock data -- it may be corrupted or the PIN session is invalid.');
+    e.isDecryptError = true;
+    throw e;
+  }
+}
+
 /* Data lives in data/latest.json, committed straight to this repo by
    js/publish.js -- no separate backend/database. The timestamp query param
    bypasses HTTP/CDN caching -- this is live banking data and must never be
@@ -6438,6 +6505,7 @@ function fetchJson(url, timeoutMs){
   const timer = setTimeout(() => controller.abort(), timeoutMs || 30000);
   return fetch(url, { signal: controller.signal })
     .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(parsed => isEncryptedEnvelope(parsed) ? decryptEnvelope(parsed) : parsed)
     .finally(() => clearTimeout(timer));
 }
 function loadNpaData(isRetry){
@@ -6448,10 +6516,32 @@ function loadNpaData(isRetry){
       initApp(data);
     })
     .catch(err => {
+      const overlay = document.getElementById('dataLoadingOverlay');
+      // A wrong/missing PIN or corrupted ciphertext can't be fixed by
+      // retrying the same fetch -- skip the auto-retry-once below (that's
+      // for network blips only) and point at the one thing that actually
+      // helps: going back through the splash screen to re-enter the PIN.
+      if(err && err.isDecryptError){
+        if(overlay){
+          overlay.classList.remove('hidden');
+          overlay.innerHTML = '<div class="data-loading-text err">Could not unlock NPA data. Please reload this page and re-enter the 4-digit PIN.</div>'
+            + '<button type="button" class="data-loading-retry-btn" id="dataLoadingRetryBtn">Reload Page</button>';
+          const btn = document.getElementById('dataLoadingRetryBtn');
+          if(btn) btn.onclick = () => {
+            // Reload alone isn't enough -- index.html skips the splash
+            // screen whenever 'upgb-splash-unlocked' is still set, which
+            // would just loop back into this same error with no way to
+            // re-enter the PIN. Clearing both keys forces splash to show.
+            try{ sessionStorage.removeItem('upgb-splash-unlocked'); sessionStorage.removeItem(PIN_STORAGE_KEY); }catch(e){}
+            location.reload();
+          };
+        }
+        console.error('Failed to decrypt NPA data', err);
+        return;
+      }
       // A single blip (phone switching towers/wifi) shouldn't scare a non-technical
       // user with an error screen -- retry once automatically before giving up.
       if(!isRetry){ setTimeout(() => loadNpaData(true), 2000); return; }
-      const overlay = document.getElementById('dataLoadingOverlay');
       if(overlay){
         overlay.classList.remove('hidden');
         overlay.innerHTML = '<div class="data-loading-text err">Could not load NPA data. Check your internet connection.</div>'
@@ -6465,4 +6555,17 @@ function loadNpaData(isRetry){
       console.error('Failed to load NPA data', err);
     });
 }
-loadNpaData(false);
+// data/latest.json is now encrypted against the splash screen's PIN, but
+// this script finishes executing well before a human finishes typing 4
+// digits into that screen -- calling loadNpaData() unconditionally here
+// would race straight past an unlock that hasn't happened yet and always
+// lose, hitting the decrypt-failure branch above on every fresh session.
+// If a PIN is already in sessionStorage (returning visit within the same
+// tab session -- index.html's own skip-check hides the splash screen
+// entirely in that case, so no unlock event is coming), load right away;
+// otherwise wait for splash.js's unlock() to say the PIN is ready.
+if(getStoredPin()){
+  loadNpaData(false);
+} else {
+  window.addEventListener('upgb-pin-unlocked', () => loadNpaData(false), { once: true });
+}
