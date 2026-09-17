@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Lok Adalat list cleared, "Clear List" button added (2026-09-17)
+
+Alok's first ask ("clear all the special note or remarks") sounded like the Special Note (per Account No.) feature, but he clarified: leave those 2 special notes alone -- the actual target was the separate **"Lok Adalat — Token Already Received"** list, which had grown to 160 real accounts (all carrying the remark "Token Amount Received", uploaded across 01-Sep to 10-Sep). Cleared `lokAdalat` to `{}` in `data/latest.json`, and in the one history snapshot that also carried it (`data/history/2026-09-09-1789122783143.json`, 160 entries) per his explicit confirmation -- every other key in both files, `specialNotes` included, is untouched (spot-checked before and after).
+
+**This one shipped as a direct repo commit, not through the app's own Admin/Publish flow** -- worth being explicit about, since every other data change on this dashboard normally goes through an Admin's GitHub-OAuth session in the browser (which records `updatedBy`/creates its own history snapshot). Since Alok gave this instruction directly and there's no way for this session to hold that OAuth session, the data was edited in the repo files themselves and pushed like a code change. The net effect on the live site is identical either way.
+
+Also added what didn't exist before: a **"Clear List"** button right on the Lok Adalat upload panel in Settings, since the only way to empty this list previously was uploading a fresh file with nothing matching in it. `clearLokAdalat()` mirrors the tail end of a successful upload (resets the status label back to "not loaded yet", the drop-zone label, enables Publish) with an empty map instead of a parsed one; the button itself disables automatically whenever the list is already empty (checked on panel-open and after every upload/clear). Verified locally: simulated a real 2-account CSV upload through the actual upload code path, confirmed the button enables and the count label updates, clicked Clear, confirmed everything resets and Publish unlocks -- all without touching `specialNotes`.
+
 ### Security: vendor library versions reviewed, xlsx + jsPDF upgraded (2026-09-15, same day)
 
 Alok asked whether the app needed more security. A quick audit turned up one real critical gap (the NPA data itself is publicly readable with no login -- tracked separately, not yet fixed) and one minor one he asked to be handled first: several bundled third-party libraries in `js/vendor/` were behind current releases.

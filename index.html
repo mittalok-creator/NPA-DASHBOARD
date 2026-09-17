@@ -861,7 +861,10 @@
       <input type="file" id="lokAdalatFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
       <button type="button" class="template-download-link" id="downloadLokAdalatTemplateBtn">⬇ Download blank template (Date, Account No, OTS Amount, Token Amount, Remark)</button>
       <div id="lokAdalatUploadStatus"></div>
-      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Proposed-OTS accounts where token money has already been collected ahead of a Lok Adalat, so a viewer opening that account's Loan Detail sees a banner and doesn't collect the token a second time. OTS Amount can be left blank until it's fixed — the banner then shows Token Amount only. Matched by Account No., not Sol ID. Each upload fully replaces the previous list — only the accounts in your latest file are shown. Goes live the next time you hit Publish.</p>
+      <div class="modal-btn-row">
+        <button type="button" class="btn-ghost" id="lokAdalatClearBtn" disabled aria-label="Clear the Lok Adalat list">Clear List</button>
+      </div>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Proposed-OTS accounts where token money has already been collected ahead of a Lok Adalat, so a viewer opening that account's Loan Detail sees a banner and doesn't collect the token a second time. OTS Amount can be left blank until it's fixed — the banner then shows Token Amount only. Matched by Account No., not Sol ID. Each upload fully replaces the previous list — only the accounts in your latest file are shown. "Clear List" empties it without needing a fresh file. Goes live the next time you hit Publish.</p>
     </details>
 
     <div id="validationReport"></div>
@@ -1145,7 +1148,7 @@
 <script src="js/publish.js?v=20260912a"></script>
 <script src="js/splash.js?v=20260913b"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260915a"></script>
+<script src="js/app.js?v=20260917a"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
