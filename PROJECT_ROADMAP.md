@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: floating tab renamed from "Lok Adalat" to "Settlement %" (2026-09-17, same day)
+
+Small follow-up to the General Compromise addition above: the floating edge tab that opens the panel still said "Lok Adalat" even though the panel itself now covers two schemes. Renamed the tab's visible label to "Settlement %" (its `title`/`aria-label` already mentioned both schemes from the earlier change, just the short vertical-rail label itself hadn't caught up). No functional change -- same button id, same `toggleLokAdalatPanel()` handler, same panel.
+
 ### General Compromise added alongside Lok Adalat in the minimum-settlement table (2026-09-17, same day)
 
 Alok looked at the existing "Lok Adalat Minimum Settlement" reference panel (the floating edge tab) and asked for a second scheme, "General Compromise," with its own minimum settlement % of outstanding balance -- Substandard 90%, DA1 80%, DA2 70%, DA3 0%, Loss 0% -- shown in the same table rather than a separate panel.
