@@ -1,29 +1,25 @@
-const CACHE_NAME = 'upgb-ots-shell-v237';
+const CACHE_NAME = 'upgb-ots-shell-v238';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
 // dead weight, never actually served, since the browser always requests
 // the current versioned URL instead. Keep these in sync with index.html
-// on every future version bump. pdf.min.js / pdf.worker.min.js were
-// dropped entirely (2026-08-24) along with the Bank Dashboard tab that
-// was their only consumer, then re-added (2026-09-08) self-hosted for the
-// PassSheet tool -- neither is loaded by index.html itself, only by
-// tools/passsheet.html. html2canvas.min.js / jspdf.umd.min.js (added
-// 2026-08-29, for the WhatsApp share button), msal-browser.min.js (added
-// 2026-09-07, for the OneDrive tab), and pdf.min.js/pdf.worker.min.js
-// above are all deliberately NOT precached either, same reasoning --
-// most sessions never tap Share, OneDrive, or PassSheet, so the runtime
-// fetch handler below still caches them normally the first time someone does.
+// on every future version bump. None of the vendor libraries (xlsx,
+// exceljs, html2canvas, jsPDF, msal-browser, pdf.js/pdf.worker) are
+// precached here -- as of 2026-09-17 every one of them is loaded lazily,
+// injected by js/app.js on first actual use (OneDrive login, Excel
+// import/export, WhatsApp PDF share) rather than eagerly on page load, so
+// precaching them here would just spend an install-time download on
+// something a given session may never touch. The runtime fetch handler
+// below still caches each one normally the first time a session does.
 const SHELL_ASSETS = [
   './',
   './index.html',
   './css/styles.css?v=20260917a',
-  './js/app.js?v=20260917a',
+  './js/app.js?v=20260917b',
   './js/auth.js?v=20260912a',
   './js/publish.js?v=20260912a',
   './js/splash.js?v=20260913b',
-  './js/vendor/xlsx.full.min.js?v=20260915h',
-  './js/vendor/exceljs.min.js?v=20260912a',
   './manifest.webmanifest',
 ];
 
@@ -53,10 +49,6 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-/* Network-first: this app embeds its NPA data directly in index.html, so we
-   always try the network first for the freshest data/app version, falling
-   back to the cached copy only when genuinely offline. Never silently serve
-   stale banking data while a real connection is available. */
 // Files polled on a timer to pick up changes made from other devices. Each
 // poll's URL carries a unique cache-busting timestamp, so it is never
 // requested again with that exact URL: caching the response only ever adds
@@ -98,13 +90,30 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
+  // Stale-while-revalidate for the app shell (HTML/CSS/JS/manifest/vendor
+  // libraries): serve the cached copy instantly if one exists -- no live
+  // network round-trip standing between the click and first paint -- while
+  // a background fetch refreshes the cache for next time. Safe together
+  // with this app's versioned-URL cache-busting (every asset carries
+  // ?v=...): a version bump is a brand-new URL with nothing cached yet, so
+  // that one request is a normal network fetch same as before, and only a
+  // repeat load of an already-seen URL gets the instant-from-cache
+  // benefit. This used to be network-first for literally everything,
+  // meaning even a repeat visit to an unchanged app had to wait on a live
+  // round-trip before anything appeared at all -- worse the weaker the
+  // network, and a real contributor to "the app is slow to open" reported
+  // across several branch computers on different networks (2026-09-17).
+  // Data (above) deliberately keeps the old network-first behavior --
+  // Alok's explicit request, 2026-09-12: never show stale banking figures
+  // while genuinely online.
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
-        return response;
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.match(event.request).then((cached) => {
+        const network = fetch(event.request)
+          .then((response) => { cache.put(event.request, response.clone()).catch(() => {}); return response; })
+          .catch(() => cached);
+        return cached || network;
       })
-      .catch(() => caches.match(event.request))
+    )
   );
 });
