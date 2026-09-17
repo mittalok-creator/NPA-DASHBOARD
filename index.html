@@ -459,7 +459,19 @@
          etc.) that would collide with this app's own -- same reasoning an
          iframe is the right call here as it would be for any third-party
          widget. See tools/passsheet.html for the tool itself, unchanged
-         from what Alok supplied. -->
+         from what Alok supplied.
+
+         This and the other 6 tool iframes below (Region Summary, PNPA
+         Summary, Telephone Directory, HBR Report, NPA SOL Summary, Branch
+         Map) deliberately carry `data-src`, not `src` -- each tool page
+         has its own heavy vendor scripts (pdf.min.js, xlsx.full.min.js,
+         exceljs.min.js, several hundred KB to over 1MB apiece), and with
+         a real `src` every one of them loaded, unconditionally, the
+         moment the dashboard itself opened, regardless of which single
+         tab a viewer actually wanted -- a large, invisible-to-the-user
+         contributor to "the app is slow/blank to open" (2026-09-17).
+         switchView() in js/app.js now copies `data-src` into `src` the
+         first time (only) a viewer actually opens that tab. -->
     <section class="view" data-view="passsheet" id="viewPassSheet">
       <div class="tool-page">
         <header class="onedrive-page-head">
@@ -474,7 +486,7 @@
           <span class="onedrive-page-sub">Passbook PDF → structured Excel ledger, read entirely in your browser</span>
         </header>
         <div class="tool-frame-wrap">
-          <iframe id="passSheetFrame" class="tool-frame" src="tools/passsheet.html?v=20260912a" title="PassSheet — passbook PDF to Excel"></iframe>
+          <iframe id="passSheetFrame" class="tool-frame" data-src="tools/passsheet.html?v=20260912a" title="PassSheet — passbook PDF to Excel"></iframe>
         </div>
       </div>
     </section>
@@ -504,7 +516,7 @@
           <span class="onedrive-page-sub">Whole-bank NPA file → Region/Branch-wise KCC &amp; Slippage summary, read entirely in your browser</span>
         </header>
         <div class="tool-frame-wrap">
-          <iframe id="regionSummaryFrame" class="tool-frame" src="tools/npa-region-summary.html?v=20260912a" title="NPA Region Summary"></iframe>
+          <iframe id="regionSummaryFrame" class="tool-frame" data-src="tools/npa-region-summary.html?v=20260912a" title="NPA Region Summary"></iframe>
         </div>
       </div>
     </section>
@@ -535,7 +547,7 @@
           <span class="onedrive-page-sub">Whole-bank Daily PNPA file → Hathras SOL ID-wise KCC &amp; Total, read entirely in your browser</span>
         </header>
         <div class="tool-frame-wrap">
-          <iframe id="pnpaSummaryFrame" class="tool-frame" src="tools/npa-daily-pnpa-summary.html?v=20260912a" title="Daily PNPA Summary"></iframe>
+          <iframe id="pnpaSummaryFrame" class="tool-frame" data-src="tools/npa-daily-pnpa-summary.html?v=20260912a" title="Daily PNPA Summary"></iframe>
         </div>
       </div>
     </section>
@@ -559,7 +571,7 @@
           <span class="onedrive-page-sub">Hathras region staff directory — search by name, branch, designation or number</span>
         </header>
         <div class="tool-frame-wrap">
-          <iframe id="telephoneDirectoryFrame" class="tool-frame" src="tools/telephone-directory.html?v=20260912a" title="Telephone Directory"></iframe>
+          <iframe id="telephoneDirectoryFrame" class="tool-frame" data-src="tools/telephone-directory.html?v=20260912a" title="Telephone Directory"></iframe>
         </div>
       </div>
     </section>
@@ -585,7 +597,7 @@
           <span class="onedrive-page-sub">GL Balancing Report PDF → branch-wise &amp; account-wise summary, read entirely in your browser</span>
         </header>
         <div class="tool-frame-wrap">
-          <iframe id="hbrReportFrame" class="tool-frame" src="tools/hbr-report.html?v=20260912a" title="HBR Report"></iframe>
+          <iframe id="hbrReportFrame" class="tool-frame" data-src="tools/hbr-report.html?v=20260912a" title="HBR Report"></iframe>
         </div>
       </div>
     </section>
@@ -604,7 +616,7 @@
           <span class="onedrive-page-sub">NPA Accounts report (.txt) → SOL ID-wise Debit Balance summary, read entirely in your browser</span>
         </header>
         <div class="tool-frame-wrap">
-          <iframe id="npaSolSummaryFrame" class="tool-frame" src="tools/npa-sol-summary.html?v=20260914d" title="NPA SOL Summary"></iframe>
+          <iframe id="npaSolSummaryFrame" class="tool-frame" data-src="tools/npa-sol-summary.html?v=20260914d" title="NPA SOL Summary"></iframe>
         </div>
       </div>
     </section>
@@ -638,7 +650,7 @@
           <span class="onedrive-page-sub">All 57 branches, plotted from their own site GPS — roads, names, Google Maps directions</span>
         </header>
         <div class="tool-frame-wrap">
-          <iframe id="branchMapFrame" class="tool-frame" src="tools/branch-map.html?v=20260915g" title="Branch Map"></iframe>
+          <iframe id="branchMapFrame" class="tool-frame" data-src="tools/branch-map.html?v=20260915g" title="Branch Map"></iframe>
         </div>
       </div>
     </section>
@@ -1134,24 +1146,22 @@
 </aside>
 
 
-<script src="js/vendor/msal-browser.min.js?v=20260912a"></script>
-<script src="js/vendor/xlsx.full.min.js?v=20260915h"></script>
-<!-- SheetJS (above) only writes number formats, not cell styles (fonts,
-     fills, borders) in its free Community Edition -- ExcelJS is used
-     specifically for the OTS Calculator's Excel export, which needs to
-     look properly formatted rather than a bare grid of numbers. -->
-<script src="js/vendor/exceljs.min.js?v=20260912a"></script>
-<!-- html2canvas + jsPDF: render the OTS Calculator's print sheet to an
-     actual PDF file client-side (a Blob, not just triggering the browser's
-     print dialog), so it can be handed to the Web Share API and shared
-     straight to WhatsApp instead of a manual "save PDF, then attach it". -->
-<script src="js/vendor/html2canvas.min.js?v=20260912a"></script>
-<script src="js/vendor/jspdf.umd.min.js?v=20260915h"></script>
+<!-- msal-browser, xlsx, exceljs, html2canvas and jsPDF used to be loaded
+     here as plain blocking <script src> tags -- ~2.76MB combined, forcing
+     every single page load to download and parse all five before app.js
+     even started, even though most visits never touch OneDrive login,
+     Excel import/export, or the WhatsApp PDF share button. That was the
+     single biggest fixable cause of "the app is slow/blank to open"
+     reported across several branch computers on different networks
+     (2026-09-17). They're now loaded lazily, injected on first actual use
+     by ensureXLSX()/ensureExcelJS()/ensureHtml2Canvas()/ensureJsPDF()/
+     ensureMsal() near the top of js/app.js -- see that file for the one
+     place their version query strings now live. -->
 <script src="js/auth.js?v=20260912a"></script>
 <script src="js/publish.js?v=20260912a"></script>
 <script src="js/splash.js?v=20260913b"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260917a"></script>
+<script src="js/app.js?v=20260917b"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {

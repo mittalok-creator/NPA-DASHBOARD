@@ -25,6 +25,37 @@ function lokAdalatMin(s){
   return {eligible:true, amount:s.os*rate, pct:rate};
 }
 
+/* ---------- Lazy-loaded vendor libraries ----------
+   msal-browser, xlsx, exceljs, html2canvas and jsPDF used to be plain
+   blocking <script src> tags in index.html -- ~2.76MB combined, parsed
+   and executed on every single page load before app.js even started,
+   even though the huge majority of visits are just viewing NPA data and
+   never touch OneDrive login, Excel import/export, or the WhatsApp PDF
+   share button. That was the single biggest fixable cause of "the app
+   is slow/blank to open" reported across several branch computers on
+   different networks (2026-09-17) -- fixed by injecting each library's
+   <script> tag on first actual use instead, cached so a second use on
+   the same page never re-fetches it. Version query strings here must
+   stay in sync with the versions these libraries were last bumped to. */
+const __vendorScriptPromises = {};
+function loadVendorScript(src){
+  if(!__vendorScriptPromises[src]){
+    __vendorScriptPromises[src] = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => resolve();
+      s.onerror = () => { delete __vendorScriptPromises[src]; reject(new Error('Failed to load '+src)); };
+      document.head.appendChild(s);
+    });
+  }
+  return __vendorScriptPromises[src];
+}
+function ensureXLSX(){ return typeof XLSX!=='undefined' ? Promise.resolve() : loadVendorScript('js/vendor/xlsx.full.min.js?v=20260915h'); }
+function ensureExcelJS(){ return typeof ExcelJS!=='undefined' ? Promise.resolve() : loadVendorScript('js/vendor/exceljs.min.js?v=20260912a'); }
+function ensureHtml2Canvas(){ return typeof html2canvas!=='undefined' ? Promise.resolve() : loadVendorScript('js/vendor/html2canvas.min.js?v=20260912a'); }
+function ensureJsPDF(){ return window.jspdf ? Promise.resolve() : loadVendorScript('js/vendor/jspdf.umd.min.js?v=20260915h'); }
+function ensureMsal(){ return typeof msal!=='undefined' ? Promise.resolve() : loadVendorScript('js/vendor/msal-browser.min.js?v=20260912a'); }
+
 /* ---------- Build indexes once ---------- */
 const npaByAcct = new Map();
 const npaByHelper = new Map();
@@ -237,6 +268,7 @@ async function shareFileOrFallback(blob, fileName, mimeType, shareText){
 async function shareOtsPdf(){
   const slots = window.__slots; const custRow = window.__custRow;
   if(!slots || !custRow) return;
+  await Promise.all([ensureHtml2Canvas(), ensureJsPDF()]);
   renderPrintView();
   const printEl = document.getElementById('printArea');
   const prevCss = printEl.style.cssText;
@@ -393,6 +425,7 @@ function renderShareCard(){
 async function shareOtsImage(){
   const slots = window.__slots; const custRow = window.__custRow;
   if(!slots || !custRow) return;
+  await ensureHtml2Canvas();
   renderShareCard();
   const cardEl = document.getElementById('shareCardArea');
   const prevCss = cardEl.style.cssText;
@@ -772,6 +805,7 @@ function onedriveSavedView(){
 // opens) all await the same promise instead of racing separate ones.
 async function onedriveMsal(){
   if(!onedriveMsalApp){
+    await ensureMsal();
     onedriveMsalApp = new msal.PublicClientApplication({
       auth: { clientId: ONEDRIVE_CLIENT_ID, authority: 'https://login.microsoftonline.com/consumers', redirectUri: ONEDRIVE_REDIRECT_URI },
       cache: { cacheLocation: 'localStorage' },
@@ -1597,6 +1631,7 @@ window.removeSavedOts = removeSavedOts;
 async function exportOtsWorksheet(){
   const rows = otsWorksheetRows();
   if(!rows.length){ alert('There is no saved OTS Amount to export yet.'); return; }
+  await Promise.all([ensureXLSX(), ensureExcelJS()]);
   const t = otsWorksheetTotals(rows);
 
   const wb = new ExcelJS.Workbook();
@@ -2798,6 +2833,7 @@ const XL_CALC_SHEET = 'Calculation Details';
 async function exportOtsExcel(){
   const slots = window.__slots; const custRow = window.__custRow;
   if(!slots || !custRow) return;
+  await Promise.all([ensureXLSX(), ensureExcelJS()]);
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('OTS Calculator', { views: [{showGridLines:false}] });
@@ -3457,9 +3493,10 @@ function buildLokAdalatMap(allRows, hIdx){
   }
   return map;
 }
-function handleBranchContactsUpload(evt){
+async function handleBranchContactsUpload(evt){
   const file = evt.target.files[0];
   if(!file) return;
+  await ensureXLSX();
   const labelEl = document.getElementById('branchContactsUploadDropLabel');
   if(labelEl) labelEl.textContent = file.name;
   const statusEl = document.getElementById('branchContactsUploadStatus');
@@ -3496,9 +3533,10 @@ function handleBranchContactsUpload(evt){
   };
   if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
 }
-function handleLokAdalatUpload(evt){
+async function handleLokAdalatUpload(evt){
   const file = evt.target.files[0];
   if(!file) return;
+  await ensureXLSX();
   const labelEl = document.getElementById('lokAdalatUploadDropLabel');
   if(labelEl) labelEl.textContent = file.name;
   const statusEl = document.getElementById('lokAdalatUploadStatus');
@@ -3823,9 +3861,10 @@ function processDailyParsed(parsed, filename, statusEl, summaryEl){
   }
 }
 
-function handleFileUpload(evt){
+async function handleFileUpload(evt){
   const file = evt.target.files[0];
   if(!file) return;
+  await ensureXLSX();
   document.getElementById('uploadDropLabel').textContent = file.name;
   const statusEl = document.getElementById('uploadStatus');
   const summaryEl = document.getElementById('uploadSummary');
@@ -3857,9 +3896,10 @@ function handleFileUpload(evt){
   if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
 }
 
-function handleMasterFileUpload(evt){
+async function handleMasterFileUpload(evt){
   const file = evt.target.files[0];
   if(!file) return;
+  await ensureXLSX();
   const labelEl = document.getElementById('masterUploadDropLabel');
   if(labelEl) labelEl.textContent = file.name;
   const statusEl = document.getElementById('masterUploadStatus');
@@ -3909,9 +3949,10 @@ function handleMasterFileUpload(evt){
    only of a bad NPA% showing until the next Publish. Uploading always fully
    replaces the previous figures (a stale branch just silently loses its %
    until re-uploaded, rather than guessing which branches carry forward). */
-function handleBranchAdvUpload(evt){
+async function handleBranchAdvUpload(evt){
   const file = evt.target.files[0];
   if(!file) return;
+  await ensureXLSX();
   const labelEl = document.getElementById('branchAdvUploadDropLabel');
   if(labelEl) labelEl.textContent = file.name;
   const statusEl = document.getElementById('branchAdvUploadStatus');
@@ -4050,6 +4091,7 @@ const EXPORT_XL_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="no
    so it stays plain: bold header row, real numbers (not pre-formatted
    strings) via optional per-column numFmt, no borders/merges/print setup. */
 async function exportRowsToExcel(filename, sheetName, headers, rows, numFmts){
+  await ensureExcelJS();
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(sheetName, { views: [{showGridLines:false, state:'frozen', ySplit:1}] });
   ws.columns = headers.map(h => ({ header: h, width: Math.max(14, h.length+6) }));
@@ -5322,9 +5364,10 @@ let pnpaBranchFilter = '';
 function setPnpaBucketTab(tab){ pnpaBucketTab = tab; renderPnpaDashboardBody(); }
 window.setPnpaBucketTab = setPnpaBucketTab;
 
-function handlePnpaUpload(evt){
+async function handlePnpaUpload(evt){
   const file = evt.target.files[0];
   if(!file) return;
+  await ensureXLSX();
   const labelEl = document.getElementById('pnpaUploadDropLabel');
   if(labelEl) labelEl.textContent = file.name;
   const statusEl = document.getElementById('pnpaUploadStatus');
@@ -5612,9 +5655,10 @@ function setKccovView(v){
 }
 window.setKccovView = setKccovView;
 
-function handleKccOverdueUpload(evt){
+async function handleKccOverdueUpload(evt){
   const file = evt.target.files[0];
   if(!file) return;
+  await ensureXLSX();
   const labelEl = document.getElementById('kccOverdueUploadDropLabel');
   if(labelEl) labelEl.textContent = file.name;
   const statusEl = document.getElementById('kccOverdueUploadStatus');
@@ -6020,7 +6064,24 @@ const UTILITY_CHILD_VIEWS = ['onedrive','passsheet','regionsummary','pnpasummary
    unbroken transition instead of two disconnected snaps. Skipped entirely
    under prefers-reduced-motion, and on the very first call (no current
    view yet, e.g. app startup), so neither adds any actual delay there. */
+/* The 7 tool iframes (see index.html for why) carry data-src, not src, so
+   they don't load until a viewer actually opens that specific tab -- each
+   one loaded here exactly once (a second visit to the same tab is a no-op,
+   the iframe just stays as it already was). */
+const TOOL_IFRAME_BY_VIEW = {
+  passsheet: 'passSheetFrame', regionsummary: 'regionSummaryFrame',
+  pnpasummary: 'pnpaSummaryFrame', telephonedirectory: 'telephoneDirectoryFrame',
+  hbrreport: 'hbrReportFrame', npasolsummary: 'npaSolSummaryFrame',
+  branchmap: 'branchMapFrame',
+};
+function loadToolIframeIfNeeded(view){
+  const frameId = TOOL_IFRAME_BY_VIEW[view];
+  if(!frameId) return;
+  const frame = document.getElementById(frameId);
+  if(frame && !frame.getAttribute('src') && frame.dataset.src) frame.src = frame.dataset.src;
+}
 function switchView(view){
+  loadToolIframeIfNeeded(view);
   const current = document.querySelector('.view.active');
   const target = document.querySelector(`.view[data-view="${view}"]`);
   const doSwitch = () => {
@@ -6361,9 +6422,23 @@ window.onOtsInput = onOtsInput;
    js/publish.js -- no separate backend/database. The timestamp query param
    bypasses HTTP/CDN caching -- this is live banking data and must never be
    served stale while a real connection is available (same reasoning as the
-   service worker's network-first fetch). */
-function fetchJson(url){
-  return fetch(url).then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+   service worker's network-first fetch).
+
+   30s timeout (added 2026-09-17): plain fetch() never rejects on a merely
+   stalled connection (as opposed to an outright failure), only on one that
+   actually errors out -- so loadNpaData()'s existing retry-then-error-with-
+   Retry-button handling below never used to fire for that case, and the
+   page could sit on its loading spinner forever with nothing wrong showing
+   at all. This was a real contributor to "sometimes the app just goes
+   blank," reported across several branch computers on different networks.
+   30s is generous enough not to abort a merely slow (not stalled) transfer
+   of this file's several-MB size on a weak connection. */
+function fetchJson(url, timeoutMs){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || 30000);
+  return fetch(url, { signal: controller.signal })
+    .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .finally(() => clearTimeout(timer));
 }
 function loadNpaData(isRetry){
   fetchJson('data/latest.json?t=' + Date.now())
