@@ -5121,6 +5121,7 @@ function renderDashboard(){
   currentDashStats = s;
   populateBranchFilter(s.allBranches);
   updateDashTitle();
+  renderDashRecoveryBand(branchFilter, s);
 
   const assetItems = ASSET_ORDER.filter(k=>s.assetMix[k]).map(k=>({
     label: assetLabel(k)+' ('+k+')', value:s.assetMix[k].os, color:ASSET_SEV_COLOR[k],
@@ -6090,22 +6091,27 @@ function loadToolIframeIfNeeded(view){
   if(frame && !frame.getAttribute('src') && frame.dataset.src) frame.src = frame.dataset.src;
 }
 
-/* ---------- Recovery Dashboard (Region + Branch) ----------
+/* ---------- Recovery data (Region + Branch summary band on Dashboard) ----------
    Built from a single "Branch Data"-shaped sheet -- 55 branch rows (Sol ID,
    Advance, NPA by month, targets, KCC PNPA, Limit Review, RCT) plus a
    region-total row -- uploaded via handleBranchRecoveryUpload below.
    Deliberately computes every rank/watchlist/leaderboard figure itself
    from that one sheet (COUNTIF-style ranks, top-10/top-5 lists, ratio-band
    counts) rather than reading a second, pre-computed sheet, since Alok's
-   stated workflow is uploading only the raw branch-wise sheet each time
-   (2026-09-19) -- matches the standalone mockup previewed and approved the
-   same day (https://claude.ai/artifact/8CzdXpgVqUNDhSsCpzyQ5e), same
-   layout and chart treatment, now data-driven from DATA.branchRecovery
-   instead of a fixed JSON blob. */
+   stated workflow is uploading only the raw branch-wise sheet each time.
+
+   Originally shipped (2026-09-19) as its own standalone "Recovery" nav
+   tab with its own Region/Branch sub-tabs and branch picker, matching the
+   mockup previewed and approved that same day
+   (https://claude.ai/artifact/8CzdXpgVqUNDhSsCpzyQ5e). Merged the same
+   day into the main Dashboard as a "summary band" above the existing
+   account-level detail, at Alok's request: one Dashboard tab instead of
+   two, Region vs Branch now follows the Dashboard's own #dashBranchFilter
+   (see renderDashRecoveryBand()) rather than its own tab bar. The OTS
+   Calculator/Search & Settlement tab is untouched by this -- it reads
+   DATA.npa exclusively and never looks at BRANCH_RECOVERY_DATA. */
 let BRANCH_RECOVERY_DATA = null;
 let __pendingBranchRecoveryData = null;
-let recoveryTab = 'region';
-let recoverySol = null;
 
 const RECOVERY_COLS = {
   advance:'D', npaMar25:'E', npaMar26:'F', npaMay26:'G', npaJun26:'H', npaJul26:'I', npaAug26:'J',
@@ -6231,14 +6237,16 @@ async function handleBranchRecoveryUpload(evt){
       const parsed = parseBranchRecoverySheet(rows);
       __pendingBranchRecoveryData = parsed;
       BRANCH_RECOVERY_DATA = parsed;
-      recoverySol = parsed.branches[0]?.sol ?? null;
       const label = document.getElementById('branchRecoveryStatusLabel');
       if(label) label.textContent = `${parsed.branchesCount} branch(es) loaded, as on ${parsed.positionAsOn} (${file.name})`;
       statusEl.innerHTML = `<div class="upload-status ok">✔ ${parsed.branchesCount} branch(es) parsed, as on ${esc(parsed.positionAsOn)}. Goes live the next time you hit Publish.</div>`;
       clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
-      if(document.querySelector('.view.active')?.dataset.view==='recovery') renderRecoveryDashboard();
+      if(document.querySelector('.view.active')?.dataset.view==='dashboard'){
+        const sel = document.getElementById('dashBranchFilter');
+        renderDashRecoveryBand(sel ? sel.value : '', currentDashStats);
+      }
     } catch(err){
       statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
     }
@@ -6246,16 +6254,18 @@ async function handleBranchRecoveryUpload(evt){
   reader.readAsArrayBuffer(file);
 }
 
-function renderRecoveryDashboard(){
-  const el = document.getElementById('recoveryDashboardArea');
-  if(!el) return;
-  if(BRANCH_RECOVERY_DATA){ renderRecoveryBody(); return; }
-  el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading Recovery Dashboard data…</p></div>`;
+/* Fetched lazily (once) the first time the Dashboard is opened this
+   session -- not tied to any one DOM container, since the Recovery band
+   now lives inside the merged Dashboard view rather than its own tab. */
+let __branchRecoveryFetchInFlight = false;
+let __branchRecoveryFetchFailed = false;
+function ensureBranchRecoveryDataLoaded(onSettled){
+  if(BRANCH_RECOVERY_DATA || __branchRecoveryFetchFailed || __branchRecoveryFetchInFlight) return;
+  __branchRecoveryFetchInFlight = true;
   fetchJson('data/branch-recovery.json?t=' + Date.now())
-    .then(d => { BRANCH_RECOVERY_DATA = d; recoverySol = recoverySol ?? (d.branches[0]?.sol ?? null); renderRecoveryBody(); })
-    .catch(() => {
-      el.innerHTML = `<div class="empty-state"><h2>No Recovery Dashboard data yet</h2><p>Upload the Branch Data sheet from Settings → Update Data, then Publish.</p></div>`;
-    });
+    .then(d => { BRANCH_RECOVERY_DATA = d; })
+    .catch(() => { __branchRecoveryFetchFailed = true; })
+    .finally(() => { __branchRecoveryFetchInFlight = false; if(onSettled) onSettled(); });
 }
 function recFmtCr(v){ return (v/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function recFmtL(v){ return v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -6314,7 +6324,7 @@ function recGaugeRing(pct, size){
   const cx=size/2, cy=size/2;
   const color = clamped>=1?'var(--pos)':clamped>=0.5?'var(--accent)':'var(--amber)';
   return `<svg viewBox="0 0 ${size} ${size}">
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--card-2)" stroke-width="11"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--rec-card-2)" stroke-width="11"/>
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="11" stroke-linecap="round"
       stroke-dasharray="${(c*clamped).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${cx} ${cy})"/>
     <text x="${cx}" y="${cy+6}" text-anchor="middle" font-family="var(--font-mono)" font-weight="800" font-size="19" fill="var(--ink)">${(clamped*100).toFixed(0)}%</text>
@@ -6335,64 +6345,13 @@ function recDonutChart(segments, size){
 }
 function recRankBadge(rank, n){ const t = rank<=n/3?'top':rank<=2*n/3?'mid':'low'; return `<span class="rec-rank-badge ${t}">${rank}/${n}</span>`; }
 
-function renderRecoveryBody(){
-  const el = document.getElementById('recoveryDashboardArea');
-  if(!el || !BRANCH_RECOVERY_DATA) return;
-  const D = BRANCH_RECOVERY_DATA;
-  if(recoverySol==null) recoverySol = D.branches[0]?.sol ?? null;
-  el.innerHTML = `
-    <div class="rec-mast">
-      <div class="rec-mast-sub">Position as on <b>${esc(D.positionAsOn)}</b> &nbsp;·&nbsp; ${D.branchesCount} branches</div>
-      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-        <div class="rec-branch-picker" id="recBranchPickerWrap" ${recoveryTab==='branch'?'':'hidden'}>
-          <label>Branch</label>
-          <select id="recBranchSelect"></select>
-        </div>
-        <div class="rec-tabbar">
-          <button id="recTabRegion" class="${recoveryTab==='region'?'active':''}" onclick="recoverySwitchTab('region')">Region</button>
-          <button id="recTabBranch" class="${recoveryTab==='branch'?'active':''}" onclick="recoverySwitchTab('branch')">Branch</button>
-        </div>
-      </div>
-    </div>
-    <div class="rec-view" id="recViewRegion"></div>
-    <div class="rec-view" id="recViewBranch"></div>
-  `;
-  const sel = document.getElementById('recBranchSelect');
-  D.branches.forEach(b=>{
-    const opt = document.createElement('option');
-    opt.value = b.sol; opt.textContent = `${b.sol} — ${b.name}`;
-    if(b.sol===recoverySol) opt.selected = true;
-    sel.appendChild(opt);
-  });
-  sel.onchange = (e)=>{ recoverySol = Number(e.target.value); recoveryRenderBranch(); };
-  document.getElementById('recViewRegion').classList.toggle('active', recoveryTab==='region');
-  document.getElementById('recViewBranch').classList.toggle('active', recoveryTab==='branch');
-  recoveryRenderRegion();
-  if(recoveryTab==='branch') recoveryRenderBranch();
-}
-function recoverySwitchTab(tab){
-  recoveryTab = tab;
-  document.getElementById('recTabRegion')?.classList.toggle('active', tab==='region');
-  document.getElementById('recTabBranch')?.classList.toggle('active', tab==='branch');
-  document.getElementById('recViewRegion')?.classList.toggle('active', tab==='region');
-  document.getElementById('recViewBranch')?.classList.toggle('active', tab==='branch');
-  const pickerWrap = document.getElementById('recBranchPickerWrap');
-  if(pickerWrap) pickerWrap.hidden = tab!=='branch';
-  if(tab==='branch') recoveryRenderBranch();
-}
-window.recoverySwitchTab = recoverySwitchTab;
-function recoverySelectBranchAndSwitch(sol){
-  recoverySol = sol;
-  const sel = document.getElementById('recBranchSelect');
-  if(sel) sel.value = String(sol);
-  recoveryTab = 'branch';
-  renderRecoveryBody();
-  document.getElementById('mainCol')?.scrollTo({top:0,behavior:'smooth'});
-}
-window.recoverySelectBranchAndSwitch = recoverySelectBranchAndSwitch;
-
+/* Region and Branch "views" are no longer their own tab -- which one
+   renders is decided by the Dashboard's own #dashBranchFilter (see
+   renderDashRecoveryBand()), same branch the account-level section below
+   it is already scoped to. Both functions write into the one
+   #dashRecoveryBand container. */
 function recoveryRenderRegion(){
-  const wrap = document.getElementById('recViewRegion');
+  const wrap = document.getElementById('dashRecoveryBand');
   if(!wrap || !BRANCH_RECOVERY_DATA) return;
   const D = BRANCH_RECOVERY_DATA, R = D.region, N = D.branchesCount;
   const trajPoints = [R.npaMar25,R.npaMar26,R.npaMay26,R.npaJun26,R.npaJul26,R.npaAug26,R.npaDay1,R.npaDay2].map(v=>v/100);
@@ -6402,7 +6361,7 @@ function recoveryRenderRegion(){
   const wl = D.watchlist;
   const wlMax = Math.max(1e-9, ...wl.map(w=>w.npaCr));
   const wlRows = wl.map((w,i)=>`
-    <div class="rec-wl-row" onclick="recoverySelectBranchAndSwitch(${w.sol})">
+    <div class="rec-wl-row" onclick="drillBranchBySol(${w.sol})">
       <div class="rec-wl-rank">${i+1}</div>
       <div class="rec-wl-main">
         <div class="rec-wl-name">${esc(w.name)} <span class="sol">SOL ${w.sol}</span></div>
@@ -6492,11 +6451,11 @@ function recoveryRenderRegion(){
   `;
 }
 
-function recoveryRenderBranch(){
-  const wrap = document.getElementById('recViewBranch');
-  if(!wrap || !BRANCH_RECOVERY_DATA || recoverySol==null) return;
+function recoveryRenderBranch(sol){
+  const wrap = document.getElementById('dashRecoveryBand');
+  if(!wrap || !BRANCH_RECOVERY_DATA || sol==null) return;
   const D = BRANCH_RECOVERY_DATA;
-  const B = D.branches.find(b=>b.sol===recoverySol);
+  const B = D.branches.find(b=>b.sol===sol);
   if(!B){ wrap.innerHTML = `<div class="empty-state"><p>Branch not found in the latest upload.</p></div>`; return; }
   const R = D.region, N = D.branchesCount;
   const trajPoints = [B.npaMar25,B.npaMar26,B.npaMay26,B.npaJun26,B.npaJul26,B.npaAug26,B.npaDay1,B.npaDay2];
@@ -6600,6 +6559,101 @@ function recoveryRenderBranch(){
   `;
 }
 
+/* Resolves the Dashboard's #dashBranchFilter (a branch NAME string,
+   matched against DATA.npa rows) to the Sol ID BRANCH_RECOVERY_DATA is
+   keyed by -- reusing s.branchMap's own solId (captured straight off the
+   NPA rows' Sol ID column, same source dashboardBranchInfoCard already
+   trusts) rather than inventing a second name/ID mapping.
+   Returns: null = Regional Office (no branch picked), a number = the
+   branch's Sol ID, undefined = a branch is picked but its Sol ID isn't
+   known from today's NPA upload (rare/dirty data -- can't be resolved). */
+function dashRecoverySolFor(branchFilter, s){
+  if(!branchFilter) return null;
+  const rec = s.branchMap.get(branchFilter);
+  return (rec && rec.solId) ? Number(rec.solId) : undefined;
+}
+/* Watchlist-row / top-branch click-through -- same "jump to this branch"
+   gesture the old standalone Recovery tab had, now driving the one
+   Dashboard branch filter instead of a separate Recovery branch picker. */
+function drillBranchBySol(sol){
+  if(!currentDashStats) return;
+  let foundName = null;
+  currentDashStats.branchMap.forEach((v,name)=>{ if(v.solId && String(v.solId)===String(sol)) foundName = name; });
+  if(foundName) drillBranch(foundName);
+}
+window.drillBranchBySol = drillBranchBySol;
+
+/* Shown in the summary band whenever data/branch-recovery.json hasn't
+   been uploaded yet (or failed to load) -- covers only what the daily
+   account-wise NPA upload can actually provide (Gross NPA, accounts,
+   branch-wise NPA). Trajectory/targets/forward-pipeline/RCT-efficiency
+   have no equivalent anywhere in DATA.npa, so those cards simply don't
+   appear in this state rather than showing fabricated numbers -- see the
+   plan note this was built from. */
+function renderDashRecoveryFallback(branchFilter, s){
+  const scopeLabel = branchFilter ? esc(branchFilter) : 'Regional Office (all branches)';
+  let os, count, topListHtml = '';
+  if(branchFilter){
+    const b = s.branchMap.get(branchFilter);
+    os = b ? b.os : 0; count = b ? b.count : 0;
+  } else {
+    os = s.totalOS; count = s.totalAccounts;
+    const top = [...s.branchMap.entries()].sort((a,b)=>b[1].os-a[1].os).slice(0,10);
+    const maxOs = Math.max(1e-9, ...top.map(([,v])=>v.os));
+    const rows = top.map(([name,v],i)=>`
+      <div class="rec-wl-row" onclick="drillBranch('${esc(name)}')">
+        <div class="rec-wl-rank">${i+1}</div>
+        <div class="rec-wl-main">
+          <div class="rec-wl-name">${esc(name)}${v.solId?` <span class="sol">SOL ${esc(v.solId)}</span>`:''}</div>
+          <div class="rec-wl-bar-track"><div class="rec-wl-bar-fill" style="width:${(v.os/maxOs*100).toFixed(1)}%"></div></div>
+        </div>
+        <div class="rec-wl-figs"><div class="rec-wl-amt num">${fmtCr(v.os)}</div><div class="rec-wl-pct num">${v.count.toLocaleString('en-IN')} a/c</div></div>
+      </div>`).join('');
+    topListHtml = `<div class="rec-section-title">Top branches by NPA (from today's account-wise upload)</div><div class="rec-card">${rows}</div>`;
+  }
+  return `
+    <div class="rec-hero" style="grid-template-columns:repeat(2,1fr)">
+      <div class="rec-hero-tile"><div class="rec-hero-label">Gross NPA</div><div class="rec-hero-val num">${fmtCr(os)}</div><div class="rec-hero-note">${scopeLabel}</div></div>
+      <div class="rec-hero-tile"><div class="rec-hero-label">Accounts</div><div class="rec-hero-val num">${count.toLocaleString('en-IN')}</div><div class="rec-hero-note">From today's NPA upload</div></div>
+    </div>
+    ${topListHtml}
+    <div class="rec-priority-strip">Full Recovery detail (targets, trajectory, forward pipeline, RCT efficiency) needs today's Branch Data Excel — Settings → Update Data → "Recovery Dashboard — Branch-wise data".</div>
+  `;
+}
+/* The Dashboard's one entry point into the Recovery summary band --
+   called from renderDashboard() every time the branch filter or the
+   underlying NPA data changes, same as the account-level section below
+   it. Picks Region vs Branch purely off the Dashboard's own filter (see
+   dashRecoverySolFor above), not a separate Recovery tab state. */
+function renderDashRecoveryBand(branchFilter, s){
+  const el = document.getElementById('dashRecoveryBand');
+  if(!el) return;
+  if(!BRANCH_RECOVERY_DATA){
+    el.innerHTML = renderDashRecoveryFallback(branchFilter, s);
+    ensureBranchRecoveryDataLoaded(()=>{
+      if(document.querySelector('.view.active')?.dataset.view==='dashboard'){
+        const sel = document.getElementById('dashBranchFilter');
+        renderDashRecoveryBand(sel ? sel.value : '', currentDashStats);
+      }
+    });
+    return;
+  }
+  const sol = dashRecoverySolFor(branchFilter, s);
+  if(sol===null){
+    recoveryRenderRegion();
+    return;
+  }
+  const B = sol!==undefined ? BRANCH_RECOVERY_DATA.branches.find(b=>b.sol===sol) : null;
+  if(B){
+    recoveryRenderBranch(sol);
+  } else {
+    const note = sol===undefined
+      ? `Is branch ka Sol ID aaj ke NPA upload se nahi mil paya, Recovery data match nahi ho saka.`
+      : `Is branch (SOL ${sol}) ka Recovery data aaj ke Branch Data upload mein nahi mila.`;
+    el.innerHTML = renderDashRecoveryFallback(branchFilter, s) + `<div style="margin-top:10px;font-size:11.5px;color:var(--ink-mute)">${esc(note)}</div>`;
+  }
+}
+
 function switchView(view){
   loadToolIframeIfNeeded(view);
   const current = document.querySelector('.view.active');
@@ -6611,7 +6665,6 @@ function switchView(view){
     if(view==='dashboard') renderDashboard();
     if(view==='pnpa') renderPnpaDashboard();
     if(view==='kccov') renderKccOverdue();
-    if(view==='recovery') renderRecoveryDashboard();
     // Resume a still-valid OneDrive sign-in silently (no popup) whenever
     // this tab is opened while it's still showing the Connect screen --
     // once signed in, coming back to the tab should go straight into the
