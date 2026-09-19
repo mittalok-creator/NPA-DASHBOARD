@@ -4222,6 +4222,7 @@ function pendingUnpublishedLabel(){
   if(__pendingData) parts.push('the uploaded daily NPA file (not yet applied)');
   if(typeof __pendingPnpaData!=='undefined' && __pendingPnpaData) parts.push('the Daily PNPA upload');
   if(typeof __pendingKccOverdueData!=='undefined' && __pendingKccOverdueData) parts.push('the KCC Overdue upload');
+  if(typeof __pendingBranchRecoveryData!=='undefined' && __pendingBranchRecoveryData) parts.push('the Recovery Dashboard upload');
   return parts;
 }
 window.addEventListener('beforeunload', (e) => {
@@ -4267,10 +4268,14 @@ function openPublishReview(){
     icon: ICON_BANKNOTE, title: 'NPA Book', maybe: true,
     sub: `${summary.rowCount.toLocaleString('en-IN')} accounts · as on ${fmtAsOnDisplay()}`,
   })];
-  let pnpaLabel = null, kccovLabel = null;
+  let pnpaLabel = null, kccovLabel = null, branchRecoveryLabel = null;
   if(__pendingPnpaData){
     pnpaLabel = `Daily PNPA (${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingPnpaData.asOnDate||''})`;
     items.push(publishReviewItemRow({ icon: ICON_ALERT_CIRCLE, title: 'Daily PNPA', sub: `${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingPnpaData.asOnDate||'')}` }));
+  }
+  if(__pendingBranchRecoveryData){
+    branchRecoveryLabel = `Recovery Dashboard (${__pendingBranchRecoveryData.branchesCount} branches, as on ${__pendingBranchRecoveryData.positionAsOn||''})`;
+    items.push(publishReviewItemRow({ icon: ICON_TARGET, title: 'Recovery Dashboard', sub: `${__pendingBranchRecoveryData.branchesCount} branches · as on ${esc(__pendingBranchRecoveryData.positionAsOn||'')}` }));
   }
   if(__pendingKccOverdueData){
     kccovLabel = `KCC Overdue (${__pendingKccOverdueData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingKccOverdueData.asOnDate||''})`;
@@ -4300,7 +4305,7 @@ function openPublishReview(){
       publishedBy: user.login || null,
       isRollback: false,
     },
-    labels: { pnpaLabel, kccovLabel },
+    labels: { pnpaLabel, kccovLabel, branchRecoveryLabel },
   };
   document.getElementById('publishConfirmBtn').textContent = 'Confirm & Publish';
   document.getElementById('publishReviewPanel').style.display = 'block';
@@ -4328,6 +4333,9 @@ async function confirmPublish(){
     if(__pendingPublish.type!=='rollback' && __pendingKccOverdueData){
       extraFiles = (extraFiles||[]).concat([{ path:'data/kcc-overdue.json', content: __pendingKccOverdueData, label: labels.kccovLabel }]);
     }
+    if(__pendingPublish.type!=='rollback' && __pendingBranchRecoveryData){
+      extraFiles = (extraFiles||[]).concat([{ path:'data/branch-recovery.json', content: __pendingBranchRecoveryData, label: labels.branchRecoveryLabel }]);
+    }
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
       : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress, extraFiles);
@@ -4335,6 +4343,7 @@ async function confirmPublish(){
     document.getElementById('publishBtn').disabled = true;
     __pendingPnpaData = null;
     __pendingKccOverdueData = null;
+    __pendingBranchRecoveryData = null;
     closePublishReview();
     loadVersionHistory();
   } catch(err){
@@ -6080,6 +6089,517 @@ function loadToolIframeIfNeeded(view){
   const frame = document.getElementById(frameId);
   if(frame && !frame.getAttribute('src') && frame.dataset.src) frame.src = frame.dataset.src;
 }
+
+/* ---------- Recovery Dashboard (Region + Branch) ----------
+   Built from a single "Branch Data"-shaped sheet -- 55 branch rows (Sol ID,
+   Advance, NPA by month, targets, KCC PNPA, Limit Review, RCT) plus a
+   region-total row -- uploaded via handleBranchRecoveryUpload below.
+   Deliberately computes every rank/watchlist/leaderboard figure itself
+   from that one sheet (COUNTIF-style ranks, top-10/top-5 lists, ratio-band
+   counts) rather than reading a second, pre-computed sheet, since Alok's
+   stated workflow is uploading only the raw branch-wise sheet each time
+   (2026-09-19) -- matches the standalone mockup previewed and approved the
+   same day (https://claude.ai/artifact/8CzdXpgVqUNDhSsCpzyQ5e), same
+   layout and chart treatment, now data-driven from DATA.branchRecovery
+   instead of a fixed JSON blob. */
+let BRANCH_RECOVERY_DATA = null;
+let __pendingBranchRecoveryData = null;
+let recoveryTab = 'region';
+let recoverySol = null;
+
+const RECOVERY_COLS = {
+  advance:'D', npaMar25:'E', npaMar26:'F', npaMay26:'G', npaJun26:'H', npaJul26:'I', npaAug26:'J',
+  npaDay1:'K', npaDay2:'L', npaRatio:'M', movSinceMar26:'N', movSinceJul26:'O', movLastMonth:'P',
+  movYesterday:'Q', targetSep26:'R', gapSep26:'S', targetMar27:'T', gapMar27:'U',
+  npa5to10Acc:'V', npa5to10Amt:'W', npa10plusAcc:'X', npa10plusAmt:'Y',
+  kccMonthlyAcc:'Z', kccMonthlyAmt:'AA', kccMar27Acc:'AB', kccMar27Amt:'AC',
+  kccMar28Acc:'AD', kccMar28Amt:'AE', limitSep26Acc:'AF', limitSep26Amt:'AG',
+  limitMar27Acc:'AH', limitMar27Amt:'AI', rollover:'AJ', collection:'AK', turnover:'AL',
+  kcc5to10Acc:'AM', kcc5to10Amt:'AN', kcc10plusAcc:'AO', kcc10plusAmt:'AP',
+};
+function recoveryColIdx(letters){
+  let n = 0;
+  for(const ch of letters) n = n*26 + (ch.charCodeAt(0)-64);
+  return n-1; // 0-based, matches sheet_to_json({header:1}) row arrays
+}
+const RECOVERY_COL_IDX = Object.fromEntries(Object.entries(RECOVERY_COLS).map(([k,v])=>[k,recoveryColIdx(v)]));
+const RECOVERY_SOL_IDX = recoveryColIdx('B'), RECOVERY_NAME_IDX = recoveryColIdx('C');
+
+function parseBranchRecoverySheet(rows){
+  // rows: array-of-arrays from XLSX.utils.sheet_to_json(sheet,{header:1,raw:true}),
+  // 0-based -- sheet row 1 -> rows[0], row 4 -> rows[3], etc. (matches the
+  // fixed "Branch Data" layout: header rows 1-3, branches rows 4-58, region
+  // total row 59).
+  const num = v => { const n = Number(v); return isFinite(n) ? n : 0; };
+  const readRow = (r) => {
+    const row = rows[r] || [];
+    const out = { sol: num(row[RECOVERY_SOL_IDX]), name: String(row[RECOVERY_NAME_IDX]||'').trim() };
+    for(const key in RECOVERY_COL_IDX) out[key] = num(row[RECOVERY_COL_IDX[key]]);
+    return out;
+  };
+  // Branch rows start at sheet row 4 (index 3) and run as long as column B
+  // keeps carrying a Sol ID -- not hardcoded to the current 55 branches, so
+  // a future branch opening/closing (row added/removed from the sheet)
+  // doesn't silently truncate or misread the list.
+  const branches = [];
+  let r = 3;
+  for(; r<rows.length; r++){
+    if(!rows[r] || !num(rows[r][RECOVERY_SOL_IDX])) break;
+    branches.push(readRow(r));
+  }
+  if(!branches.length) throw new Error('No branch rows found (expected Sol ID in column B, starting row 4).');
+  // Region total: the sheet's own total row if present (first row after the
+  // last branch row with no Sol ID but a numeric Advance), else summed here.
+  let region = null;
+  for(; r<rows.length; r++){
+    const row = rows[r];
+    if(row && !num(row[RECOVERY_SOL_IDX]) && num(row[RECOVERY_COL_IDX.advance])){ region = readRow(r); break; }
+  }
+  if(!region){
+    region = { sol:null, name:'HATHRAS REGION' };
+    for(const key in RECOVERY_COL_IDX){
+      if(key==='npaRatio' || key==='rollover' || key==='collection' || key==='turnover') continue;
+      region[key] = branches.reduce((s,b)=>s+b[key],0);
+    }
+    region.npaRatio = region.advance ? region.npaDay2/region.advance : 0;
+    region.rollover = branches.length ? branches.reduce((s,b)=>s+b.rollover,0)/branches.length : 0;
+    region.collection = branches.length ? branches.reduce((s,b)=>s+b.collection,0)/branches.length : 0;
+    region.turnover = branches.length ? branches.reduce((s,b)=>s+b.turnover,0)/branches.length : 0;
+  } else {
+    region.name = 'HATHRAS REGION';
+  }
+
+  const rankDesc = (field) => {
+    const vals = branches.map(b=>b[field]);
+    branches.forEach(b=>{ b['rank_'+field] = vals.filter(v=>v>b[field]).length + 1; });
+  };
+  const rankAsc = (field) => {
+    const vals = branches.map(b=>b[field]);
+    branches.forEach(b=>{ b['rank_'+field] = vals.filter(v=>v<b[field]).length + 1; });
+  };
+  ['npaDay2','npaRatio','gapMar27','kccMonthlyAmt','rollover','collection','turnover','advance'].forEach(rankDesc);
+  rankAsc('movSinceMar26');
+
+  const N = branches.length;
+  const watchlist = branches.slice().sort((a,b)=>b.npaDay2-a.npaDay2).slice(0,10)
+    .map(b=>({ sol:b.sol, name:b.name, advanceCr:b.advance/100, npaCr:b.npaDay2/100, ratio:b.npaRatio, movSinceMar26L:b.movSinceMar26, gapMar27L:b.gapMar27 }));
+  const reductions = branches.slice().filter(b=>b.movSinceMar26<0).sort((a,b)=>a.movSinceMar26-b.movSinceMar26).slice(0,5)
+    .map(b=>({ name:b.name, valueL: Math.abs(b.movSinceMar26) }));
+  const increases = branches.slice().filter(b=>b.movSinceMar26>0).sort((a,b)=>b.movSinceMar26-a.movSinceMar26).slice(0,5)
+    .map(b=>({ name:b.name, valueL: b.movSinceMar26 }));
+  const ratioSorted = branches.slice().sort((a,b)=>b.npaRatio-a.npaRatio);
+  const ticketSpread = {
+    above15: branches.filter(b=>b.npaRatio>0.15).length,
+    mid5to15: branches.filter(b=>b.npaRatio>=0.05 && b.npaRatio<=0.15).length,
+    below5: branches.filter(b=>b.npaRatio<0.05).length,
+    highestName: ratioSorted[0]?.name||'—', highestPct: ratioSorted[0]?.npaRatio||0,
+    lowestName: ratioSorted[ratioSorted.length-1]?.name||'—', lowestPct: ratioSorted[ratioSorted.length-1]?.npaRatio||0,
+  };
+
+  const day2Serial = Number((rows[1]||[])[RECOVERY_COL_IDX.npaDay2]);
+  const day1Serial = Number((rows[1]||[])[RECOVERY_COL_IDX.npaDay1]);
+  const day2Date = isFinite(day2Serial) && day2Serial>0 ? excelSerialToDate(day2Serial) : null;
+  const day1Date = isFinite(day1Serial) && day1Serial>0 ? excelSerialToDate(day1Serial) : null;
+  return {
+    positionAsOn: day2Date ? fmtDate(day2Date) : '—',
+    day1Label: day1Date ? fmtDate(day1Date) : 'Day 1',
+    day2Label: day2Date ? fmtDate(day2Date) : 'Day 2',
+    region, branches: branches.sort((a,b)=>a.sol-b.sol), watchlist, reductions, increases, ticketSpread,
+    kccHighValue: {
+      acc: branches.reduce((s,b)=>s+b.kcc5to10Acc+b.kcc10plusAcc,0),
+      amtCr: branches.reduce((s,b)=>s+b.kcc5to10Amt+b.kcc10plusAmt,0)/100,
+    },
+    branchesCount: N,
+  };
+}
+async function handleBranchRecoveryUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  await ensureXLSX();
+  const labelEl = document.getElementById('branchRecoveryUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('branchRecoveryUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Branch Data file…</div>`;
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array', cellDates:false});
+      const sheetName = wb.SheetNames.find(n=>/branch\s*data/i.test(n)) || wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+      const parsed = parseBranchRecoverySheet(rows);
+      __pendingBranchRecoveryData = parsed;
+      BRANCH_RECOVERY_DATA = parsed;
+      recoverySol = parsed.branches[0]?.sol ?? null;
+      const label = document.getElementById('branchRecoveryStatusLabel');
+      if(label) label.textContent = `${parsed.branchesCount} branch(es) loaded, as on ${parsed.positionAsOn} (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${parsed.branchesCount} branch(es) parsed, as on ${esc(parsed.positionAsOn)}. Goes live the next time you hit Publish.</div>`;
+      clearStalePublishStatus();
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.querySelector('.view.active')?.dataset.view==='recovery') renderRecoveryDashboard();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderRecoveryDashboard(){
+  const el = document.getElementById('recoveryDashboardArea');
+  if(!el) return;
+  if(BRANCH_RECOVERY_DATA){ renderRecoveryBody(); return; }
+  el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading Recovery Dashboard data…</p></div>`;
+  fetchJson('data/branch-recovery.json?t=' + Date.now())
+    .then(d => { BRANCH_RECOVERY_DATA = d; recoverySol = recoverySol ?? (d.branches[0]?.sol ?? null); renderRecoveryBody(); })
+    .catch(() => {
+      el.innerHTML = `<div class="empty-state"><h2>No Recovery Dashboard data yet</h2><p>Upload the Branch Data sheet from Settings → Update Data, then Publish.</p></div>`;
+    });
+}
+function recFmtCr(v){ return (v/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function recFmtL(v){ return v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function recFmtInt(v){ return Math.round(v).toLocaleString('en-IN'); }
+function recFmtPct(v){ return (v*100).toFixed(2)+'%'; }
+function recSigned(v,unit){ return (v<0?'▼ ':v>0?'▲ ':'— ') + Math.abs(v).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ' + unit; }
+function recTrajChart(points, labels, targets, unit, w, h){
+  w = w||560; h = h||190;
+  // r:34 (not 14) -- the last two axis labels are full DD-MM-YYYY dates
+  // (CLAUDE.md: dates shown as text are never a short "17-Sep"), wide
+  // enough to run past the SVG's own viewBox and get silently clipped at
+  // r:14: this margin is sized for the widest of those two labels.
+  const pad = {l:38,r:34,t:14,b:24};
+  const vals = points.concat(targets.map(t=>t.value));
+  const vMin = Math.min(...vals), vMax = Math.max(...vals);
+  const span = (vMax - vMin) || 1;
+  const yMin = vMin - span*0.12, yMax = vMax + span*0.18;
+  const x = i => pad.l + (i/(points.length-1))*(w-pad.l-pad.r);
+  const y = v => h-pad.b - ((v-yMin)/(yMax-yMin))*(h-pad.t-pad.b);
+  const linePts = points.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const areaPts = `${x(0).toFixed(1)},${(h-pad.b).toFixed(1)} ${linePts} ${x(points.length-1).toFixed(1)},${(h-pad.b).toFixed(1)}`;
+  const gridN = 4;
+  let grid = '';
+  for(let i=0;i<=gridN;i++){
+    const gv = yMin + (yMax-yMin)*i/gridN;
+    const gy = y(gv);
+    grid += `<line x1="${pad.l}" y1="${gy.toFixed(1)}" x2="${w-pad.r}" y2="${gy.toFixed(1)}"/>`;
+    grid += `<text x="4" y="${(gy+3).toFixed(1)}">${gv.toFixed(1)}</text>`;
+  }
+  let targetLines = '';
+  targets.forEach(t=>{
+    const gy = y(t.value);
+    targetLines += `<line class="rec-traj-target" x1="${pad.l}" y1="${gy.toFixed(1)}" x2="${w-pad.r}" y2="${gy.toFixed(1)}"/>`;
+    targetLines += `<text class="rec-traj-target-label" x="${w-pad.r-4}" y="${(gy-4).toFixed(1)}" text-anchor="end">${esc(t.label)} ${t.value.toFixed(1)}</text>`;
+  });
+  const lastX = x(points.length-1), lastY = y(points[points.length-1]);
+  const axisLabels = labels.map((l,i)=>`<text x="${x(i).toFixed(1)}" y="${h-6}" text-anchor="middle">${esc(l)}</text>`).join('');
+  const uid = 'recg'+Math.random().toString(36).slice(2,8);
+  return `<svg class="rec-traj-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="NPA trajectory">
+    <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--accent)" stop-opacity=".32"/>
+      <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+    </linearGradient></defs>
+    <g class="rec-traj-grid">${grid}</g>
+    ${targetLines}
+    <polygon points="${areaPts}" fill="url(#${uid})" stroke="none"/>
+    <polyline points="${linePts}" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle class="rec-traj-dot" cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="4.5"/>
+    <text class="rec-traj-today" x="${(lastX-4).toFixed(1)}" y="${(lastY-11).toFixed(1)}" text-anchor="end">${points[points.length-1].toFixed(1)} ${esc(unit)}</text>
+    <g class="rec-traj-axis">${axisLabels}</g>
+  </svg>`;
+}
+function recGaugeRing(pct, size){
+  size = size||118;
+  const r = 48, c = 2*Math.PI*r, clamped = Math.max(0,Math.min(1, isFinite(pct)?pct:0));
+  const cx=size/2, cy=size/2;
+  const color = clamped>=1?'var(--pos)':clamped>=0.5?'var(--accent)':'var(--amber)';
+  return `<svg viewBox="0 0 ${size} ${size}">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--card-2)" stroke-width="11"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="11" stroke-linecap="round"
+      stroke-dasharray="${(c*clamped).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${cx} ${cy})"/>
+    <text x="${cx}" y="${cy+6}" text-anchor="middle" font-family="var(--font-mono)" font-weight="800" font-size="19" fill="var(--ink)">${(clamped*100).toFixed(0)}%</text>
+  </svg>`;
+}
+function recDonutChart(segments, size){
+  size = size||112;
+  const r=44, cx=size/2, cy=size/2, c=2*Math.PI*r;
+  const total = segments.reduce((a,s)=>a+s.value,0)||1;
+  let offset=0, circles='';
+  segments.forEach(s=>{
+    const frac = s.value/total;
+    circles += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="16"
+      stroke-dasharray="${(c*frac).toFixed(1)} ${c.toFixed(1)}" stroke-dashoffset="${(-c*offset).toFixed(1)}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset += frac;
+  });
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${circles}</svg>`;
+}
+function recRankBadge(rank, n){ const t = rank<=n/3?'top':rank<=2*n/3?'mid':'low'; return `<span class="rec-rank-badge ${t}">${rank}/${n}</span>`; }
+
+function renderRecoveryBody(){
+  const el = document.getElementById('recoveryDashboardArea');
+  if(!el || !BRANCH_RECOVERY_DATA) return;
+  const D = BRANCH_RECOVERY_DATA;
+  if(recoverySol==null) recoverySol = D.branches[0]?.sol ?? null;
+  el.innerHTML = `
+    <div class="rec-mast">
+      <div class="rec-mast-sub">Position as on <b>${esc(D.positionAsOn)}</b> &nbsp;·&nbsp; ${D.branchesCount} branches</div>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div class="rec-branch-picker" id="recBranchPickerWrap" ${recoveryTab==='branch'?'':'hidden'}>
+          <label>Branch</label>
+          <select id="recBranchSelect"></select>
+        </div>
+        <div class="rec-tabbar">
+          <button id="recTabRegion" class="${recoveryTab==='region'?'active':''}" onclick="recoverySwitchTab('region')">Region</button>
+          <button id="recTabBranch" class="${recoveryTab==='branch'?'active':''}" onclick="recoverySwitchTab('branch')">Branch</button>
+        </div>
+      </div>
+    </div>
+    <div class="rec-view" id="recViewRegion"></div>
+    <div class="rec-view" id="recViewBranch"></div>
+  `;
+  const sel = document.getElementById('recBranchSelect');
+  D.branches.forEach(b=>{
+    const opt = document.createElement('option');
+    opt.value = b.sol; opt.textContent = `${b.sol} — ${b.name}`;
+    if(b.sol===recoverySol) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.onchange = (e)=>{ recoverySol = Number(e.target.value); recoveryRenderBranch(); };
+  document.getElementById('recViewRegion').classList.toggle('active', recoveryTab==='region');
+  document.getElementById('recViewBranch').classList.toggle('active', recoveryTab==='branch');
+  recoveryRenderRegion();
+  if(recoveryTab==='branch') recoveryRenderBranch();
+}
+function recoverySwitchTab(tab){
+  recoveryTab = tab;
+  document.getElementById('recTabRegion')?.classList.toggle('active', tab==='region');
+  document.getElementById('recTabBranch')?.classList.toggle('active', tab==='branch');
+  document.getElementById('recViewRegion')?.classList.toggle('active', tab==='region');
+  document.getElementById('recViewBranch')?.classList.toggle('active', tab==='branch');
+  const pickerWrap = document.getElementById('recBranchPickerWrap');
+  if(pickerWrap) pickerWrap.hidden = tab!=='branch';
+  if(tab==='branch') recoveryRenderBranch();
+}
+window.recoverySwitchTab = recoverySwitchTab;
+function recoverySelectBranchAndSwitch(sol){
+  recoverySol = sol;
+  const sel = document.getElementById('recBranchSelect');
+  if(sel) sel.value = String(sol);
+  recoveryTab = 'branch';
+  renderRecoveryBody();
+  document.getElementById('mainCol')?.scrollTo({top:0,behavior:'smooth'});
+}
+window.recoverySelectBranchAndSwitch = recoverySelectBranchAndSwitch;
+
+function recoveryRenderRegion(){
+  const wrap = document.getElementById('recViewRegion');
+  if(!wrap || !BRANCH_RECOVERY_DATA) return;
+  const D = BRANCH_RECOVERY_DATA, R = D.region, N = D.branchesCount;
+  const trajPoints = [R.npaMar25,R.npaMar26,R.npaMay26,R.npaJun26,R.npaJul26,R.npaAug26,R.npaDay1,R.npaDay2].map(v=>v/100);
+  const trajLabels = ['Mar-25','Mar-26','May-26','Jun-26','Jul-26','Aug-26',D.day1Label,D.day2Label];
+  const targets = [{label:'Sep-26 target',value:R.targetSep26/100},{label:'Mar-27 target',value:R.targetMar27/100}];
+
+  const wl = D.watchlist;
+  const wlMax = Math.max(1e-9, ...wl.map(w=>w.npaCr));
+  const wlRows = wl.map((w,i)=>`
+    <div class="rec-wl-row" onclick="recoverySelectBranchAndSwitch(${w.sol})">
+      <div class="rec-wl-rank">${i+1}</div>
+      <div class="rec-wl-main">
+        <div class="rec-wl-name">${esc(w.name)} <span class="sol">SOL ${w.sol}</span></div>
+        <div class="rec-wl-bar-track"><div class="rec-wl-bar-fill" style="width:${(w.npaCr/wlMax*100).toFixed(1)}%"></div></div>
+      </div>
+      <div class="rec-wl-figs"><div class="rec-wl-amt num">₹${recFmtCr(w.npaCr*100)} cr</div><div class="rec-wl-pct num">${recFmtPct(w.ratio)} ratio</div></div>
+    </div>`).join('');
+
+  const lbMax = v => Math.max(1e-9, ...v.map(x=>x.valueL));
+  const redMax = lbMax(D.reductions), incMax = lbMax(D.increases);
+  const lbBlock = (list,max,cls) => list.map(item=>`
+    <div class="rec-lb-bar-track"><div class="rec-lb-bar-fill" style="width:${(item.valueL/max*100).toFixed(1)}%;background:var(--${cls})"></div></div>
+    <div class="rec-lb-row"><span class="rec-lb-name">${esc(item.name)}</span><span class="rec-lb-val num">${item.valueL.toFixed(2)} L</span></div>`).join('');
+
+  const spread = D.ticketSpread;
+  const wlNpaSum = wl.reduce((a,w)=>a+w.npaCr,0);
+  const wlShare = R.npaDay2 ? ((wlNpaSum*100)/R.npaDay2*100).toFixed(1) : '0.0';
+
+  wrap.innerHTML = `
+    <div class="rec-hero">
+      <div class="rec-hero-tile"><div class="rec-hero-label">Gross NPA</div><div class="rec-hero-val num">₹${recFmtCr(R.npaDay2)}<small>cr</small></div><div class="rec-hero-note">${recFmtPct(R.npaRatio)} of advances</div></div>
+      <div class="rec-hero-tile"><div class="rec-hero-label">Movement since Mar-26</div><div class="rec-hero-val num" style="color:${R.movSinceMar26<0?'var(--pos)':'var(--neg)'}">${recSigned(R.movSinceMar26/100,'cr')}</div><div class="rec-hero-note">Since Jul-26 ${recSigned(R.movSinceJul26/100,'cr')}</div></div>
+      <div class="rec-hero-tile"><div class="rec-hero-label">Gap to Mar-27 target</div><div class="rec-hero-val num">₹${recFmtCr(R.gapMar27)}<small>cr</small></div><div class="rec-hero-note">Sep-26 gap ₹${recFmtCr(R.gapSep26)} cr · target ₹${recFmtCr(R.targetMar27)} cr</div></div>
+    </div>
+    <div class="rec-kpi-row">
+      <div class="rec-kpi-tile"><div class="k-label">Gross Advances</div><div class="k-val num">₹${recFmtCr(R.advance)} cr</div><div class="k-note">Across ${N} branches</div></div>
+      <div class="rec-kpi-tile"><div class="k-label">Yesterday's move</div><div class="k-val num" style="color:${R.movYesterday<0?'var(--pos)':'var(--neg)'}">${recSigned(R.movYesterday,'L')}</div><div class="k-note">Since Jul-26 ${recSigned(R.movSinceJul26,'L')}</div></div>
+      <div class="rec-kpi-tile"><div class="k-label">KCC PNPA due this month</div><div class="k-val num">${recFmtInt(R.kccMonthlyAcc)} a/c</div><div class="k-note">₹${recFmtCr(R.kccMonthlyAmt)} cr</div></div>
+    </div>
+    <div class="rec-grid-2">
+      <div class="rec-card">
+        <h3>NPA Trajectory — Mar-25 to date</h3>
+        <div class="sub">Peak ₹${recFmtCr(R.npaMar25)} cr (Mar-25) → ₹${recFmtCr(R.npaDay2)} cr today</div>
+        <div class="rec-traj-wrap">${recTrajChart(trajPoints,trajLabels,targets,'cr')}</div>
+      </div>
+      <div class="rec-card">
+        <h3>Target tracking — region level</h3>
+        <div class="sub">Progress since Mar-26</div>
+        <div class="rec-gauges">
+          <div class="rec-gauge">${recGaugeRing((R.npaMar26-R.npaDay2)/(R.npaMar26-R.targetSep26))}<div class="rec-gauge-title">Sep-26</div>
+            <div class="rec-gauge-stats">Target <b class="num">₹${recFmtCr(R.targetSep26)} cr</b><br>Gap <b class="num">₹${recFmtCr(R.gapSep26)} cr</b></div></div>
+          <div class="rec-gauge">${recGaugeRing((R.npaMar26-R.npaDay2)/(R.npaMar26-R.targetMar27))}<div class="rec-gauge-title">Mar-27</div>
+            <div class="rec-gauge-stats">Target <b class="num">₹${recFmtCr(R.targetMar27)} cr</b><br>Gap <b class="num">₹${recFmtCr(R.gapMar27)} cr</b></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="rec-section-title">Forward pipeline</div>
+    <div class="rec-card">
+      <div class="rec-pipeline-grid">
+        <div class="rec-pipe-item"><div class="p-label">KCC PNPA — this month</div><div class="p-val num">${recFmtInt(R.kccMonthlyAcc)} a/c</div><div class="p-sub num">₹${recFmtCr(R.kccMonthlyAmt)} cr</div></div>
+        <div class="rec-pipe-item"><div class="p-label">KCC PNPA — upto Mar-27</div><div class="p-val num">${recFmtInt(R.kccMar27Acc)} a/c</div><div class="p-sub num">₹${recFmtCr(R.kccMar27Amt)} cr</div></div>
+        <div class="rec-pipe-item"><div class="p-label">KCC PNPA — upto Mar-28</div><div class="p-val num">${recFmtInt(R.kccMar28Acc)} a/c</div><div class="p-sub num">₹${recFmtCr(R.kccMar28Amt)} cr</div></div>
+        <div class="rec-pipe-item"><div class="p-label">Limit review — Sep-26</div><div class="p-val num">${recFmtInt(R.limitSep26Acc)} a/c</div><div class="p-sub num">₹${recFmtCr(R.limitSep26Amt)} cr</div></div>
+        <div class="rec-pipe-item"><div class="p-label">Limit review — Mar-27</div><div class="p-val num">${recFmtInt(R.limitMar27Acc)} a/c</div><div class="p-sub num">₹${recFmtCr(R.limitMar27Amt)} cr</div></div>
+        <div class="rec-pipe-item"><div class="p-label">High-value KCC (₹5L+)</div><div class="p-val num">${recFmtInt(D.kccHighValue.acc)} a/c</div><div class="p-sub num">₹${D.kccHighValue.amtCr.toFixed(2)} cr</div></div>
+      </div>
+    </div>
+    <div class="rec-section-title">Branch watchlist — ten largest NPA books (${wlShare}% of regional NPA)</div>
+    <div class="rec-card">${wlRows}</div>
+    <div class="rec-grid-2" style="margin-top:14px">
+      <div class="rec-card">
+        <h3>Reductions &amp; increases <span class="sub">— since Mar-26, ₹ lakh</span></h3>
+        <div class="rec-lb-cols">
+          <div><div class="rec-lb-h pos">▼ Reductions</div>${lbBlock(D.reductions,redMax,'pos')}</div>
+          <div><div class="rec-lb-h neg">▲ Increases</div>${lbBlock(D.increases,incMax,'neg')}</div>
+        </div>
+      </div>
+      <div class="rec-card">
+        <h3>Ticket size, spread &amp; efficiency</h3>
+        <div class="rec-donut-wrap">
+          ${recDonutChart([{value:spread.above15,color:'var(--neg)'},{value:spread.mid5to15,color:'var(--amber)'},{value:spread.below5,color:'var(--pos)'}])}
+          <div class="rec-donut-legend">
+            <div class="rec-legend-row"><span class="rec-legend-dot" style="background:var(--neg)"></span>Above 15%<span class="rec-legend-val num">${spread.above15}</span></div>
+            <div class="rec-legend-row"><span class="rec-legend-dot" style="background:var(--amber)"></span>5–15%<span class="rec-legend-val num">${spread.mid5to15}</span></div>
+            <div class="rec-legend-row"><span class="rec-legend-dot" style="background:var(--pos)"></span>Below 5%<span class="rec-legend-val num">${spread.below5}</span></div>
+          </div>
+        </div>
+        <div class="rec-spread-note">Highest ${esc(spread.highestName)} ${(spread.highestPct*100).toFixed(1)}% · lowest ${esc(spread.lowestName)} ${(spread.lowestPct*100).toFixed(1)}%</div>
+        <div class="rec-rct-bars">
+          <div class="rec-rct-row"><span>Rollover</span><div class="rec-rct-track"><div class="rec-rct-fill" style="width:${(R.rollover*100).toFixed(1)}%"></div></div><span class="num">${recFmtPct(R.rollover)}</span></div>
+          <div class="rec-rct-row"><span>Collection</span><div class="rec-rct-track"><div class="rec-rct-fill" style="width:${(R.collection*100).toFixed(1)}%"></div></div><span class="num">${recFmtPct(R.collection)}</span></div>
+          <div class="rec-rct-row"><span>Turnover</span><div class="rec-rct-track"><div class="rec-rct-fill" style="width:${(R.turnover*100).toFixed(1)}%"></div></div><span class="num">${recFmtPct(R.turnover)}</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="rec-priority-strip"><b>Priority:</b> gap to close ₹${recFmtCr(R.gapSep26)} cr by Sep-26 and ₹${recFmtCr(R.gapMar27)} cr by Mar-27 · ${recFmtInt(R.kccMonthlyAcc)} KCC a/c (₹${recFmtCr(R.kccMonthlyAmt)} cr) due this month</div>
+  `;
+}
+
+function recoveryRenderBranch(){
+  const wrap = document.getElementById('recViewBranch');
+  if(!wrap || !BRANCH_RECOVERY_DATA || recoverySol==null) return;
+  const D = BRANCH_RECOVERY_DATA;
+  const B = D.branches.find(b=>b.sol===recoverySol);
+  if(!B){ wrap.innerHTML = `<div class="empty-state"><p>Branch not found in the latest upload.</p></div>`; return; }
+  const R = D.region, N = D.branchesCount;
+  const trajPoints = [B.npaMar25,B.npaMar26,B.npaMay26,B.npaJun26,B.npaJul26,B.npaAug26,B.npaDay1,B.npaDay2];
+  const trajLabels = ['Mar-25','Mar-26','May-26','Jun-26','Jul-26','Aug-26',D.day1Label,D.day2Label];
+  const targets = [{label:'Sep-26 target',value:B.targetSep26},{label:'Mar-27 target',value:B.targetMar27}];
+  const shareOfRegion = R.npaDay2 ? B.npaDay2/R.npaDay2 : 0;
+
+  const cmpRows = [
+    {label:'NPA outstanding ₹cr', you:B.npaDay2/100, region:R.npaDay2/100, rank:B.rank_npaDay2, fmt:v=>recFmtCr(v*100)},
+    {label:'NPA ratio', you:B.npaRatio, region:R.npaRatio, rank:B.rank_npaRatio, fmt:v=>recFmtPct(v)},
+    {label:'Movement since Mar-26 ₹L', you:B.movSinceMar26, region:R.movSinceMar26, rank:B.rank_movSinceMar26, fmt:v=>v.toFixed(2)},
+    {label:'Gap to Mar-27 ₹L', you:B.gapMar27, region:R.gapMar27, rank:B.rank_gapMar27, fmt:v=>v.toFixed(2)},
+    {label:'Monthly KCC PNPA ₹L', you:B.kccMonthlyAmt, region:R.kccMonthlyAmt, rank:B.rank_kccMonthlyAmt, fmt:v=>v.toFixed(2)},
+    {label:'Advances ₹cr', you:B.advance/100, region:R.advance/100, rank:B.rank_advance, fmt:v=>recFmtCr(v*100)},
+    {label:'Rollover efficiency', you:B.rollover, region:R.rollover, rank:B.rank_rollover, fmt:v=>recFmtPct(v)},
+    {label:'Collection efficiency', you:B.collection, region:R.collection, rank:B.rank_collection, fmt:v=>recFmtPct(v)},
+    {label:'Turnover efficiency', you:B.turnover, region:R.turnover, rank:B.rank_turnover, fmt:v=>recFmtPct(v)},
+  ];
+  const cmpHtml = cmpRows.map(r=>{
+    const max = Math.max(Math.abs(r.you),Math.abs(r.region))||1;
+    return `<div class="rec-cmp-row">
+      <div class="rec-cmp-label">${esc(r.label)}</div>
+      <div class="rec-cmp-bars">
+        <div class="rec-cmp-bar-row"><span class="rec-cmp-bar-tag">You</span><div class="rec-cmp-bar-track"><div class="rec-cmp-bar-fill you" style="width:${(Math.abs(r.you)/max*100).toFixed(1)}%"></div></div><span class="rec-cmp-bar-val num">${r.fmt(r.you)}</span></div>
+        <div class="rec-cmp-bar-row"><span class="rec-cmp-bar-tag">Region</span><div class="rec-cmp-bar-track"><div class="rec-cmp-bar-fill region" style="width:${(Math.abs(r.region)/max*100).toFixed(1)}%"></div></div><span class="rec-cmp-bar-val num">${r.fmt(r.region)}</span></div>
+      </div>
+      ${recRankBadge(r.rank,N)}
+    </div>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="rec-branch-head">
+      <h2>${esc(B.name)}</h2>
+      <span class="rec-chip">SOL <b class="num">${B.sol}</b></span>
+      <span class="rec-chip">${recRankBadge(B.rank_npaDay2,N)} by NPA outstanding</span>
+      <span class="rec-chip"><b class="num">${(shareOfRegion*100).toFixed(1)}%</b> of regional NPA book</span>
+    </div>
+    <div class="rec-hero">
+      <div class="rec-hero-tile"><div class="rec-hero-label">NPA Outstanding</div><div class="rec-hero-val num">₹${recFmtL(B.npaDay2)}<small>L</small></div><div class="rec-hero-note">₹${recFmtCr(B.npaDay2)} cr · ${recFmtPct(B.npaRatio)} ratio</div></div>
+      <div class="rec-hero-tile"><div class="rec-hero-label">Movement since Mar-26</div><div class="rec-hero-val num" style="color:${B.movSinceMar26<0?'var(--pos)':'var(--neg)'}">${recSigned(B.movSinceMar26,'L')}</div><div class="rec-hero-note">Since Jul-26 ${recSigned(B.movSinceJul26,'L')} · yesterday ${recSigned(B.movYesterday,'L')}</div></div>
+      <div class="rec-hero-tile"><div class="rec-hero-label">Gap to Mar-27 target</div><div class="rec-hero-val num">₹${recFmtL(B.gapMar27)}<small>L</small></div><div class="rec-hero-note">Sep-26 gap ₹${recFmtL(B.gapSep26)} L · target ₹${recFmtL(B.targetMar27)} L</div></div>
+    </div>
+    <div class="rec-kpi-row">
+      <div class="rec-kpi-tile"><div class="k-label">Advances</div><div class="k-val num">₹${recFmtCr(B.advance)} cr</div><div class="k-note">Region ₹${recFmtCr(R.advance)} cr</div></div>
+      <div class="rec-kpi-tile"><div class="k-label">NPA ratio vs region</div><div class="k-val num" style="color:${B.npaRatio>R.npaRatio?'var(--neg)':'var(--pos)'}">${recFmtPct(B.npaRatio)}</div><div class="k-note">Region ${recFmtPct(R.npaRatio)}${B.npaRatio>R.npaRatio?' — above RO level':''}</div></div>
+      <div class="rec-kpi-tile"><div class="k-label">KCC PNPA this month</div><div class="k-val num">${recFmtInt(B.kccMonthlyAcc)} a/c</div><div class="k-note">₹${recFmtL(B.kccMonthlyAmt)} L</div></div>
+    </div>
+    <div class="rec-grid-2">
+      <div class="rec-card">
+        <h3>NPA trajectory — Mar-25 to date</h3>
+        <div class="sub">Peak ₹${recFmtL(B.npaMar25)} L (Mar-25) → ₹${recFmtL(B.npaDay2)} L today</div>
+        <div class="rec-traj-wrap">${recTrajChart(trajPoints,trajLabels,targets,'L')}</div>
+      </div>
+      <div class="rec-card">
+        <h3>Target tracking — this branch</h3>
+        <div class="sub">${B.npaRatio>R.npaRatio?'Above the regional NPA ratio — needs closer follow-up.':'At or below the regional NPA ratio.'}</div>
+        <div class="rec-gauges">
+          <div class="rec-gauge">${recGaugeRing((B.npaMar26-B.npaDay2)/(B.npaMar26-B.targetSep26))}<div class="rec-gauge-title">Sep-26</div>
+            <div class="rec-gauge-stats">Target <b class="num">₹${recFmtL(B.targetSep26)} L</b><br>Gap <b class="num">₹${recFmtL(B.gapSep26)} L</b></div></div>
+          <div class="rec-gauge">${recGaugeRing((B.npaMar26-B.npaDay2)/(B.npaMar26-B.targetMar27))}<div class="rec-gauge-title">Mar-27</div>
+            <div class="rec-gauge-stats">Target <b class="num">₹${recFmtL(B.targetMar27)} L</b><br>Gap <b class="num">₹${recFmtL(B.gapMar27)} L</b></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="rec-section-title">Forward pipeline</div>
+    <div class="rec-card">
+      <div class="rec-pipeline-grid">
+        <div class="rec-pipe-item"><div class="p-label">KCC PNPA — this month</div><div class="p-val num">${recFmtInt(B.kccMonthlyAcc)} a/c</div><div class="p-sub num">₹${recFmtL(B.kccMonthlyAmt)} L</div></div>
+        <div class="rec-pipe-item"><div class="p-label">KCC PNPA — upto Mar-27</div><div class="p-val num">${recFmtInt(B.kccMar27Acc)} a/c</div><div class="p-sub num">₹${recFmtL(B.kccMar27Amt)} L</div></div>
+        <div class="rec-pipe-item"><div class="p-label">KCC PNPA — upto Mar-28</div><div class="p-val num">${recFmtInt(B.kccMar28Acc)} a/c</div><div class="p-sub num">₹${recFmtL(B.kccMar28Amt)} L</div></div>
+        <div class="rec-pipe-item"><div class="p-label">Limit review — Sep-26</div><div class="p-val num">${recFmtInt(B.limitSep26Acc)} a/c</div><div class="p-sub num">₹${recFmtL(B.limitSep26Amt)} L</div></div>
+        <div class="rec-pipe-item"><div class="p-label">Limit review — Mar-27</div><div class="p-val num">${recFmtInt(B.limitMar27Acc)} a/c</div><div class="p-sub num">₹${recFmtL(B.limitMar27Amt)} L</div></div>
+        <div class="rec-pipe-item"><div class="p-label">KCC PNPA ₹5L+</div><div class="p-val num">${recFmtInt(B.kcc5to10Acc+B.kcc10plusAcc)} a/c</div><div class="p-sub num">₹${recFmtL(B.kcc5to10Amt+B.kcc10plusAmt)} L</div></div>
+      </div>
+    </div>
+    <div class="rec-grid-2" style="margin-top:14px">
+      <div class="rec-card">
+        <h3>NPA by ticket size</h3>
+        <div class="rec-donut-wrap">
+          ${recDonutChart([{value:B.npa10plusAmt,color:'var(--neg)'},{value:B.npa5to10Amt,color:'var(--amber)'},{value:Math.max(0,B.npaDay2-B.npa5to10Amt-B.npa10plusAmt),color:'var(--pos)'}])}
+          <div class="rec-donut-legend">
+            <div class="rec-legend-row"><span class="rec-legend-dot" style="background:var(--neg)"></span>₹10L and above<span class="rec-legend-val num">₹${recFmtL(B.npa10plusAmt)} L</span></div>
+            <div class="rec-legend-row"><span class="rec-legend-dot" style="background:var(--amber)"></span>₹5–10L<span class="rec-legend-val num">₹${recFmtL(B.npa5to10Amt)} L</span></div>
+            <div class="rec-legend-row"><span class="rec-legend-dot" style="background:var(--pos)"></span>Below ₹5L (balance)<span class="rec-legend-val num">₹${recFmtL(Math.max(0,B.npaDay2-B.npa5to10Amt-B.npa10plusAmt))} L</span></div>
+          </div>
+        </div>
+        <div class="rec-spread-note">Small-ticket accounts carry ${((Math.max(0,B.npaDay2-B.npa5to10Amt-B.npa10plusAmt)/(B.npaDay2||1))*100).toFixed(1)}% of this branch's NPA book</div>
+        <div class="rec-rct-bars">
+          <div class="rec-rct-row"><span>Rollover</span><div class="rec-rct-track"><div class="rec-rct-fill" style="width:${(B.rollover*100).toFixed(1)}%"></div></div><span class="num">${recFmtPct(B.rollover)}</span></div>
+          <div class="rec-rct-row"><span>Collection</span><div class="rec-rct-track"><div class="rec-rct-fill" style="width:${(B.collection*100).toFixed(1)}%"></div></div><span class="num">${recFmtPct(B.collection)}</span></div>
+          <div class="rec-rct-row"><span>Turnover</span><div class="rec-rct-track"><div class="rec-rct-fill" style="width:${(B.turnover*100).toFixed(1)}%"></div></div><span class="num">${recFmtPct(B.turnover)}</span></div>
+        </div>
+      </div>
+      <div class="rec-card">
+        <h3>This branch vs the region</h3>
+        <div class="sub">Rank 1 = largest / highest in the region · efficiency ranks are best-first</div>
+        <div style="margin-top:8px">${cmpHtml}</div>
+      </div>
+    </div>
+    <div class="rec-priority-strip"><b>Priority for ${esc(B.name).toUpperCase()}:</b> close ₹${recFmtL(Math.max(0,B.gapMar27))} L to reach the Mar-27 target · ${recFmtInt(B.kccMonthlyAcc)} KCC a/c (₹${recFmtL(B.kccMonthlyAmt)} L) due this month · collection efficiency ${recFmtPct(B.collection)}</div>
+  `;
+}
+
 function switchView(view){
   loadToolIframeIfNeeded(view);
   const current = document.querySelector('.view.active');
@@ -6091,6 +6611,7 @@ function switchView(view){
     if(view==='dashboard') renderDashboard();
     if(view==='pnpa') renderPnpaDashboard();
     if(view==='kccov') renderKccOverdue();
+    if(view==='recovery') renderRecoveryDashboard();
     // Resume a still-valid OneDrive sign-in silently (no popup) whenever
     // this tab is opened while it's still showing the Connect screen --
     // once signed in, coming back to the tab should go straight into the
@@ -6289,6 +6810,8 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('pnpaFileInput','change',(e)=>handlePnpaUpload(e));
   on('kccOverdueUploadDrop','click',()=>document.getElementById('kccOverdueFileInput').click());
   on('kccOverdueFileInput','change',(e)=>handleKccOverdueUpload(e));
+  on('branchRecoveryUploadDrop','click',()=>document.getElementById('branchRecoveryFileInput').click());
+  on('branchRecoveryFileInput','change',(e)=>handleBranchRecoveryUpload(e));
   on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
