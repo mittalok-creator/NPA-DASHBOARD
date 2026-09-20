@@ -123,6 +123,18 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Rollback: Recovery Dashboard and everything built on top of it, reverted to the 2026-09-17 baseline (2026-09-20)
+
+Alok asked to stop and roll the app all the way back to how it looked on 18-Sep -- his own words: "sab mashup ho gaya hai, mujhe sochne ke liye time chahiye, phir dubara try karenge" (it's all become a mess, I need time to think, we'll try again later). This follows the Recovery Dashboard feature (added 2026-09-19) and everything built on top of it across the next day and a half: the Admin-only "This Month's Target" card, the KCC Overdue cross-reference line, the region-source (typed/computed) indicator, three rounds of dedup fixes for the resulting duplicate NPA/Advances figures, and the "Data as on" confirmation rows added to the PNPA/KCC Overdue/Recovery Branch Data uploads. A Dashboard-redesign preview (3-tab mockup, published as a standalone Artifact, never wired into the live app) is also shelved -- no live code existed for it to revert.
+
+Reverted `css/styles.css`, `index.html`, `js/app.js`, `js/publish.js`, `sw.js` to their exact state as of commit `944bac9` (2026-09-17 16:34, "Fix 4x payload-size regression" -- the last commit before any Recovery Dashboard work began; nothing landed on `main` on 18-Sep itself, so that commit's tree *is* the 18-Sep state). Chosen as a clean `git checkout <commit> -- <files>` from that exact commit rather than a hand-edited approximation, so the reverted app is byte-for-byte what was actually live then, not a guess.
+
+**Deliberately NOT reverted**, per Alok's explicit choice when asked: `data/*.json` (the real NPA/KCC Overdue/Recovery-branch data uploaded on 18/19/20-Sep) -- the app shows the classic pre-Recovery-Dashboard UI again, but against today's real, latest figures, not stale 17-Sep ones. `data/branch-recovery.json` now sits unused in the repo (the reverted code never reads it) -- harmless, left in place rather than deleted, since Recovery Dashboard's data parsing already round-trips it correctly and this may be revisited later. This `PROJECT_ROADMAP.md` file itself is also not reverted -- every round's own entry stays, this one included, so the full history of what was tried and why stays auditable rather than silently disappearing.
+
+Verified: `node --check js/app.js` clean; grepped `js/app.js` and `index.html` for every Recovery-Dashboard-era symbol (`recoveryRenderRegion`, `BRANCH_RECOVERY_DATA`, `regionTargets`, `dashRecoveryBand`) -- zero matches, confirming a full, clean revert rather than a partial one; `git diff --stat` against `data/` shows no changes at all.
+
+If/when Alok wants to try the Recovery Dashboard direction again, every commit for it is still in this repo's history (`83a8be3` onward) -- nothing was force-pushed or deleted, so it can be re-applied instead of rebuilt from scratch whenever he's ready.
+
 ### New: "Data as on" confirmation added to every upload that was missing it (2026-09-20, same day)
 
 Alok asked that every upload show the same "Data as on" review step the main daily NPA upload already had -- parsed successfully, then an editable date field pre-filled from a best guess, with a hint to adjust if it looks wrong -- not just that one upload.
