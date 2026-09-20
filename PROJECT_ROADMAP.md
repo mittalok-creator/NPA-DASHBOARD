@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### New: "Data as on" confirmation added to every upload that was missing it (2026-09-20, same day)
+
+Alok asked that every upload show the same "Data as on" review step the main daily NPA upload already had -- parsed successfully, then an editable date field pre-filled from a best guess, with a hint to adjust if it looks wrong -- not just that one upload.
+
+Audited every upload handler first rather than applying this everywhere blindly. Three genuinely lacked it: **Daily PNPA** and **KCC Overdue** (`handlePnpaUpload`/`handleKccOverdueUpload`) both silently guessed the date from the filename and fell back to "today" with no way to see or correct it; **Recovery Dashboard "Branch Data" Excel** (`handleBranchRecoveryUpload`) derived its date from a cell inside the sheet itself, more reliable than a filename guess but still silent -- a blank/moved header cell would show `'—'` with no warning. Everything else was left untouched, each for a stated reason: Customer Master and Branch Contacts aren't point-in-time data at all; Branch-wise Advance & NPA Mar/Jun's two dates are fixed column headers, not a variable reporting date; Lok Adalat already carries a reliable per-row Date column, so there's no single upload-wide date to confirm.
+
+Generalized the main upload's own pattern into a shared `showAsOnDateRow(prefix, guessed, source)` helper (`js/app.js`) rather than triplicating it, driving a `{prefix}AsOnDateRow`/`{prefix}AsOnDateInput`/`{prefix}AsOnDateHint` DOM triple per upload (`index.html`) -- `source` only changes the hint wording ("read from the filename" vs. "read from the sheet"). Editing the date now updates that upload's own pending-data object before publish (`__pendingPnpaData.asOnDate`, `__pendingKccOverdueData.asOnDate`, or the parsed Recovery data's `positionAsOn`, re-formatted through `fmtDate()` per this app's DD-MM-YYYY rule) instead of the original guess being baked in silently.
+
+Verified: uploaded files with filenames that don't match the date pattern correctly show the "couldn't read a date" hint instead of silently defaulting to today; editing the date field updates the correct pending-data object end-to-end through to the Publish Review panel; a normally-named file still pre-fills exactly as before. `node --check js/app.js` clean.
+
 ### New: "This Month's Target" -- Admin-only manual entry on the Recovery Dashboard (2026-09-20, same day)
 
 Alok asked for a provision to set This Month's Target, This Month's Commitment, and the next financial-year-end target (Mar-27 for now) directly inside the app -- typed by him alone, only when signed in via GitHub, and shown to every viewer once saved. None of these three figures exist anywhere in his daily Branch Data Excel upload, so there was no file to parse them from.

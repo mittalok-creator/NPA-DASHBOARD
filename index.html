@@ -833,6 +833,11 @@
       </div>
       <input type="file" id="pnpaFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
       <div id="pnpaUploadStatus"></div>
+      <div id="pnpaAsOnDateRow" class="as-on-row" style="display:none">
+        <label for="pnpaAsOnDateInput">Data as on</label>
+        <input type="date" id="pnpaAsOnDateInput">
+        <span class="as-on-hint" id="pnpaAsOnDateHint"></span>
+      </div>
       <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser. Even though the file covers the whole bank, only Hathras region's rows are kept, and zero-balance accounts are dropped automatically. Powers the separate "Daily PNPA" tab — branch-wise summary split into KCC (CC004), KCC Animal Husbandry (CC043), Limit Review (any scheme flagged for a limit review) and all other schemes, sorted highest first, with a tap-through account list per branch (Account No, Name, O/S, CADU, Limit, Review Date, Reason). Uploading replaces the previous figures. Goes live the next time you hit Publish, same commit as the daily NPA data.</p>
     </details>
 
@@ -845,6 +850,11 @@
       </div>
       <input type="file" id="kccOverdueFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
       <div id="kccOverdueUploadStatus"></div>
+      <div id="kccovAsOnDateRow" class="as-on-row" style="display:none">
+        <label for="kccovAsOnDateInput">Data as on</label>
+        <input type="date" id="kccovAsOnDateInput">
+        <span class="as-on-hint" id="kccovAsOnDateHint"></span>
+      </div>
       <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser. Powers the separate "KCC Overdue" tab — filterable by Branch, F.Y., Cust NPA Date (month or a custom date range), and scheme (KCC/CC004, KCC Animal Husbandry/CC043, OD-023 Tatkal), with branch-wise summaries and a tap-through account list. Uploading replaces the previous figures. Goes live the next time you hit Publish, same commit as the daily NPA data.</p>
     </details>
 
@@ -857,6 +867,11 @@
       </div>
       <input type="file" id="branchRecoveryFileInput" accept=".xlsx,.xlsb,.xls" style="display:none">
       <div id="branchRecoveryUploadStatus"></div>
+      <div id="branchRecoveryAsOnDateRow" class="as-on-row" style="display:none">
+        <label for="branchRecoveryAsOnDateInput">Data as on</label>
+        <input type="date" id="branchRecoveryAsOnDateInput">
+        <span class="as-on-hint" id="branchRecoveryAsOnDateHint"></span>
+      </div>
       <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser. Powers the Recovery summary band at the top of the Dashboard tab — region and branch-wise NPA position, trajectory, target tracking and RCT efficiency, following whichever branch is picked in the Dashboard's own branch filter. Every rank/watchlist/leaderboard figure is computed fresh from this sheet each time, so uploading only the "Branch Data" sheet (or the full workbook — the matching sheet is found automatically) is enough. Each upload fully replaces the previous figures. Goes live the next time you hit Publish, same commit as the daily NPA data.</p>
     </details>
 
@@ -1197,7 +1212,7 @@
 <script src="js/publish.js?v=20260919a"></script>
 <script src="js/splash.js?v=20260917a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260920d"></script>
+<script src="js/app.js?v=20260920e"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {

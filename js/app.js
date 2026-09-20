@@ -3208,6 +3208,34 @@ function parseAsOnDateFromFilename(filename){
 function dateToInputValue(d){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
+/* Same "Data as on" review row the main daily NPA upload has always had
+   (#asOnDateRow/#asOnDateInput/#asOnDateHint, see processDailyParsed
+   below) -- generalized so Daily PNPA, KCC Overdue and the Recovery
+   Dashboard's Branch Data upload can each show their own guessed date for
+   the admin to confirm/correct before Publish, instead of silently
+   trusting a filename guess or an in-file cell with no way to see or fix
+   it if it's wrong (Alok's request, 2026-09-20 -- "har report upload mein
+   ye date pucho"). `prefix` selects the `#{prefix}AsOnDateRow` etc.
+   elements; `source` only changes the hint wording (a guess from the
+   filename reads differently than one read out of the workbook itself).
+   Returns the row's resulting value (dateToInputValue format) so the
+   caller can seed its own pending-data object with it immediately. */
+function showAsOnDateRow(prefix, guessed, source){
+  source = source || 'filename';
+  const row = document.getElementById(prefix+'AsOnDateRow');
+  const input = document.getElementById(prefix+'AsOnDateInput');
+  const hint = document.getElementById(prefix+'AsOnDateHint');
+  if(!row || !input) return dateToInputValue(guessed||new Date());
+  row.style.display = 'flex';
+  if(guessed){
+    input.value = dateToInputValue(guessed);
+    if(hint) hint.textContent = source==='infile' ? '(read from the sheet — adjust if this looks wrong)' : '(read from the filename — adjust if this looks wrong)';
+  } else {
+    input.value = dateToInputValue(new Date());
+    if(hint) hint.textContent = source==='infile' ? "(couldn't read a date from the sheet — please set it)" : "(couldn't read a date from the filename — please set it)";
+  }
+  return input.value;
+}
 
 /* ---------- HO daily file mapping (works for both .csv and .xlsx, multi-region aware) ----------
    Maps the daily "e-AB NPA AC WISE" CBS export (one row per loan account) into the
@@ -5422,7 +5450,7 @@ async function handlePnpaUpload(evt){
       const rows = parsePnpaRows(header, dataRows);
       if(!rows.length) throw new Error('No account rows found in this file.');
       const guessed = parseAsOnDateFromFilename(file.name);
-      const asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
+      const asOnDate = showAsOnDateRow('pnpa', guessed);
       __pendingPnpaData = { asOnDate, rows };
       PNPA_DATA = __pendingPnpaData;
       const label = document.getElementById('pnpaStatusLabel');
@@ -5718,7 +5746,7 @@ async function handleKccOverdueUpload(evt){
       const rows = parseKccOverdueRows(header, dataRows);
       if(!rows.length) throw new Error('No account rows found in this file.');
       const guessed = parseAsOnDateFromFilename(file.name);
-      const asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
+      const asOnDate = showAsOnDateRow('kccov', guessed);
       __pendingKccOverdueData = { asOnDate, rows };
       KCC_OVERDUE_DATA = __pendingKccOverdueData;
       const label = document.getElementById('kccovStatusLabel');
@@ -6263,6 +6291,13 @@ async function handleBranchRecoveryUpload(evt){
       const sheetName = wb.SheetNames.find(n=>/branch\s*data/i.test(n)) || wb.SheetNames[0];
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
       const parsed = parseBranchRecoverySheet(rows);
+      // parseBranchRecoverySheet reads its own "as on" date out of a cell
+      // inside the sheet (fmtDate-formatted already) -- shown back here as
+      // an editable row, same as the filename-guess uploads, rather than
+      // silently trusting a header cell that could be blank or moved.
+      const guessedDate = toDate(parsed.positionAsOn);
+      const editedAsOn = showAsOnDateRow('branchRecovery', guessedDate, 'infile');
+      parsed.positionAsOn = fmtDate(new Date(editedAsOn+'T00:00:00'));
       __pendingBranchRecoveryData = parsed;
       BRANCH_RECOVERY_DATA = parsed;
       const label = document.getElementById('branchRecoveryStatusLabel');
@@ -7007,6 +7042,15 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
   on('asOnDateInput','change',(e)=>{ __pendingAsOnDate = e.target.value; });
+  on('pnpaAsOnDateInput','change',(e)=>{ if(__pendingPnpaData) __pendingPnpaData.asOnDate = e.target.value; });
+  on('kccovAsOnDateInput','change',(e)=>{ if(__pendingKccOverdueData) __pendingKccOverdueData.asOnDate = e.target.value; });
+  on('branchRecoveryAsOnDateInput','change',(e)=>{
+    if(BRANCH_RECOVERY_DATA) BRANCH_RECOVERY_DATA.positionAsOn = fmtDate(new Date(e.target.value+'T00:00:00'));
+    if(document.querySelector('.view.active')?.dataset.view==='dashboard'){
+      const sel = document.getElementById('dashBranchFilter');
+      renderDashRecoveryBand(sel ? sel.value : '', currentDashStats);
+    }
+  });
   on('updateCancelBtn','click',()=>toggleUpdateModal(false));
   on('applyDataBtn','click',()=>applyNewData());
   on('downloadAppBtn','click',()=>downloadUpdatedApp());
