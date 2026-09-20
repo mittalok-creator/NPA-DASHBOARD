@@ -5055,29 +5055,6 @@ window.showSchemeList = showSchemeList;
 window.showSlabList = showSlabList;
 window.showHighValueCustList = showHighValueCustList;
 
-/* Shown in the top-right corner of the "Total Outstanding" hero card,
-   below the NPA% badge -- a March/June + gap treatment using the
-   per-branch NPA March/June figures from the Branch Advance upload.
-   Only aggregates
-   over branches that actually have a Mar/Jun figure (and only compares
-   against THOSE branches' current O/S), same safeguard as the advance
-   aggregation just above -- so a partial upload never produces a
-   misleading gap by comparing against branches with no baseline. */
-function dashboardCornerStats(s){
-  let marOS=0, marBase=0, marN=0, junOS=0, junBase=0, junN=0;
-  s.branchMap.forEach((v)=>{
-    const rec = DATA.branchAdvances[v.solId];
-    if(rec && rec.npaMar26!=null){ marOS+=v.os; marBase+=rec.npaMar26; marN++; }
-    if(rec && rec.npaJun26!=null){ junOS+=v.os; junBase+=rec.npaJun26; junN++; }
-  });
-  if(!marN && !junN) return '';
-  const gapLine = (v) => { const improved = v<=0; return `<span style="color:${improved?'var(--green)':'var(--red)'}">${improved?'▼':'▲'} ${fmtCr(Math.abs(v))}</span>`; };
-  let html = '<div class="hero-kpi-corner-stats">';
-  if(marN) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>Mar</span><b>${fmtCr(marBase)}</b></div><div class="hero-kpi-corner-gap">${gapLine(marOS-marBase)}</div></div>`;
-  if(junN) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>Jun</span><b>${fmtCr(junBase)}</b></div><div class="hero-kpi-corner-gap">${gapLine(junOS-junBase)}</div></div>`;
-  html += '</div>';
-  return html;
-}
 
 /* Branch profile card shown at the top of the Dashboard. A single branch
    picked from #dashBranchFilter reads its Sol ID off s.branchMap (captured
@@ -5136,8 +5113,12 @@ function renderDashboard(){
 
   const branchTop = [...s.branchMap.entries()].sort((a,b)=>b[1].os-a[1].os).slice(0,10)
     .map(([branch,v])=>{
+      // Prefer Recovery Excel's own ratio for this branch (consistent with
+      // the summary band above); fall back to the Branch Advance file only
+      // for a branch Recovery data doesn't cover, or before it's uploaded.
+      const recBranch = BRANCH_RECOVERY_DATA && v.solId ? BRANCH_RECOVERY_DATA.branches.find(b=>String(b.sol)===String(v.solId)) : null;
       const rec = DATA.branchAdvances[v.solId];
-      const npaPct = rec && rec.adv>0 ? (v.os/rec.adv*100) : null;
+      const npaPct = recBranch ? recBranch.npaRatio*100 : (rec && rec.adv>0 ? (v.os/rec.adv*100) : null);
       return {label:branch, value:v.os, color:'var(--accent)',
         valueLabel:`${v.count.toLocaleString('en-IN')} · ${fmtCr(v.os)} · ${(s.totalOS?(v.os/s.totalOS*100):0).toFixed(2)}%`,
         badge: npaPct!==null ? npaPct.toFixed(1)+'%' : null,
@@ -5168,25 +5149,6 @@ function renderDashboard(){
   const highRiskPct = s.totalOS ? (highRiskOS/s.totalOS*100) : 0;
   const avgTicket = s.totalAccounts ? s.totalOS/s.totalAccounts : 0;
 
-  /* NPA % (NPA outstanding ÷ total advance) for whatever's currently in
-     view -- the whole book when "Regional Office" is selected, or just that
-     branch when one is picked from the filter, since s.branchMap already
-     reflects that filter. Only aggregates over branches with an uploaded
-     advance figure, so a partially-uploaded advance file never silently
-     understates the ratio by dividing by a smaller, incomplete total. */
-  let advOsSum=0, advSum=0, advBranchCount=0;
-  s.branchMap.forEach((v)=>{
-    const rec = DATA.branchAdvances[v.solId];
-    if(rec && rec.adv>0){ advOsSum+=v.os; advSum+=rec.adv; advBranchCount++; }
-  });
-  const aggNpaPct = advSum>0 ? (advOsSum/advSum*100) : null;
-  const heroCorner = dashboardCornerStats(s);
-  let heroNpaBadge = '';
-  if(aggNpaPct!==null){
-    const sev = npaPctSeverity(aggNpaPct);
-    heroNpaBadge = `<div class="hero-kpi-badge" style="background:${sev.soft};color:${sev.color}">${aggNpaPct.toFixed(1)}% NPA</div>`;
-  }
-
   /* "What should happen next" -- the single largest concentration of aged,
      actionable exposure (excludes the "not yet eligible" bucket, since that
      one isn't actionable yet), computed fresh from real data every render
@@ -5197,7 +5159,6 @@ function renderDashboard(){
   el.innerHTML = `
     ${dashboardBranchInfoCard(branchFilter, s)}
     <div class="hero-kpi-row">
-      ${heroKpiCard({id:'heroTotalOs', label:'Total Outstanding', fallback:fmtCr(s.totalOS), sub:s.totalAccounts.toLocaleString('en-IN')+' accounts', icon:ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', badge:heroNpaBadge, corner:heroCorner})}
       ${heroKpiCard({id:'heroTotalAccts', label:'Total Accounts', fallback:s.totalAccounts.toLocaleString('en-IN'), sub:s.custCount.toLocaleString('en-IN')+' unique customers', icon:ICON_USERS, tint:'var(--gauge-track)', color:'var(--accent-2)'})}
       ${heroKpiCard({id:'heroHighRisk', label:'High-Risk Exposure', fallback:fmtCr(highRiskOS), sub:'DA3 + Loss · '+highRiskPct.toFixed(1)+'% of book', icon:ICON_ALERT_TRIANGLE, tint:'var(--red-soft)', color:'var(--red)', onclick:(s.assetMix.LOSS||s.assetMix.DA3)?`showAssetList('${s.assetMix.LOSS?'LOSS':'DA3'}')`:''})}
       ${heroKpiCard({id:'heroAvgTicket', label:'Average Ticket Size', fallback:fmtINR2(avgTicket), sub:'per account, this book', icon:ICON_TICKET, tint:'var(--amber-soft)', color:'var(--amber)'})}
@@ -5285,8 +5246,6 @@ function renderDashboard(){
   `;
   initAcctListScroll(s.allAcctSorted);
 
-  const heroOs = document.getElementById('heroTotalOs');
-  if(heroOs) animateNumber(heroOs, 0, s.totalOS, fmtCr, 900);
   const heroAccts = document.getElementById('heroTotalAccts');
   if(heroAccts) animateNumber(heroAccts, 0, s.totalAccounts, n=>Math.round(n).toLocaleString('en-IN'), 900);
   const heroRisk = document.getElementById('heroHighRisk');
@@ -6267,6 +6226,44 @@ function ensureBranchRecoveryDataLoaded(onSettled){
     .catch(() => { __branchRecoveryFetchFailed = true; })
     .finally(() => { __branchRecoveryFetchInFlight = false; if(onSettled) onSettled(); });
 }
+/* Same lazy-once pattern, for the separate KCC Overdue upload -- fetched
+   here too (not only when the KCC Overdue tab/Cmd+K opens) so the
+   Recovery band's "KCC PNPA -- this month" pipeline card can show a
+   live cross-reference against it (see recKccOverdueCrossRef below). */
+let __kccOverdueFetchInFlight = false;
+let __kccOverdueFetchFailed = false;
+function ensureKccOverdueDataLoaded(onSettled){
+  if(KCC_OVERDUE_DATA || __kccOverdueFetchFailed || __kccOverdueFetchInFlight) return;
+  __kccOverdueFetchInFlight = true;
+  fetchJson('data/kcc-overdue.json?t=' + Date.now())
+    .then(d => { KCC_OVERDUE_DATA = d; })
+    .catch(() => { __kccOverdueFetchFailed = true; })
+    .finally(() => { __kccOverdueFetchInFlight = false; if(onSettled) onSettled(); });
+}
+/* Live totals from the actual KCC Overdue upload, scoped to a Sol ID (or
+   the whole region when sol is null) -- shown as a labeled cross-check
+   next to the Branch Data Excel's own typed-in "KCC PNPA -- this month"
+   figure, NOT a replacement for it. Deliberately the upload's full
+   count/OS rather than a "due this month" sub-bucket: the exact
+   business rule for bucketing KCC Overdue rows by month (which date
+   column, which cutoff) hasn't been confirmed, so this only ever claims
+   to be "the live KCC Overdue book", never "this month's KCC PNPA". */
+function kccOverdueScopeStats(sol){
+  if(!KCC_OVERDUE_DATA) return null;
+  let rows = KCC_OVERDUE_DATA.rows;
+  if(sol!=null){
+    const branchName = Object.keys(KCCOV_BRANCH_SOL).find(name=>String(KCCOV_BRANCH_SOL[name])===String(sol));
+    rows = branchName ? rows.filter(r=>r[KC.BRANCH]===branchName) : [];
+  }
+  const count = rows.length;
+  const os = rows.reduce((a,r)=>a+(typeof r[KC.OS]==='number'?r[KC.OS]:0),0);
+  return { count, os, asOnDate: KCC_OVERDUE_DATA.asOnDate };
+}
+function recKccOverdueCrossRef(sol){
+  const stat = kccOverdueScopeStats(sol);
+  if(!stat) return '';
+  return `<div class="p-sub" style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--line)">Live KCC Overdue book: <b class="num">${stat.count.toLocaleString('en-IN')}</b> a/c, <b class="num">${fmtCr(stat.os)}</b> · as on ${esc(stat.asOnDate||'—')}</div>`;
+}
 function recFmtCr(v){ return (v/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function recFmtL(v){ return v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function recFmtInt(v){ return Math.round(v).toLocaleString('en-IN'); }
@@ -6411,7 +6408,7 @@ function recoveryRenderRegion(){
     <div class="rec-section-title">Forward pipeline</div>
     <div class="rec-card">
       <div class="rec-pipeline-grid">
-        <div class="rec-pipe-item"><div class="p-label">KCC PNPA — this month</div><div class="p-val num">${recFmtInt(R.kccMonthlyAcc)} a/c</div><div class="p-sub num">₹${recFmtCr(R.kccMonthlyAmt)} cr</div></div>
+        <div class="rec-pipe-item"><div class="p-label">KCC PNPA — this month</div><div class="p-val num">${recFmtInt(R.kccMonthlyAcc)} a/c</div><div class="p-sub num">₹${recFmtCr(R.kccMonthlyAmt)} cr</div>${recKccOverdueCrossRef(null)}</div>
         <div class="rec-pipe-item"><div class="p-label">KCC PNPA — upto Mar-27</div><div class="p-val num">${recFmtInt(R.kccMar27Acc)} a/c</div><div class="p-sub num">₹${recFmtCr(R.kccMar27Amt)} cr</div></div>
         <div class="rec-pipe-item"><div class="p-label">KCC PNPA — upto Mar-28</div><div class="p-val num">${recFmtInt(R.kccMar28Acc)} a/c</div><div class="p-sub num">₹${recFmtCr(R.kccMar28Amt)} cr</div></div>
         <div class="rec-pipe-item"><div class="p-label">Limit review — Sep-26</div><div class="p-val num">${recFmtInt(R.limitSep26Acc)} a/c</div><div class="p-sub num">₹${recFmtCr(R.limitSep26Amt)} cr</div></div>
@@ -6523,7 +6520,7 @@ function recoveryRenderBranch(sol){
     <div class="rec-section-title">Forward pipeline</div>
     <div class="rec-card">
       <div class="rec-pipeline-grid">
-        <div class="rec-pipe-item"><div class="p-label">KCC PNPA — this month</div><div class="p-val num">${recFmtInt(B.kccMonthlyAcc)} a/c</div><div class="p-sub num">₹${recFmtL(B.kccMonthlyAmt)} L</div></div>
+        <div class="rec-pipe-item"><div class="p-label">KCC PNPA — this month</div><div class="p-val num">${recFmtInt(B.kccMonthlyAcc)} a/c</div><div class="p-sub num">₹${recFmtL(B.kccMonthlyAmt)} L</div>${recKccOverdueCrossRef(B.sol)}</div>
         <div class="rec-pipe-item"><div class="p-label">KCC PNPA — upto Mar-27</div><div class="p-val num">${recFmtInt(B.kccMar27Acc)} a/c</div><div class="p-sub num">₹${recFmtL(B.kccMar27Amt)} L</div></div>
         <div class="rec-pipe-item"><div class="p-label">KCC PNPA — upto Mar-28</div><div class="p-val num">${recFmtInt(B.kccMar28Acc)} a/c</div><div class="p-sub num">₹${recFmtL(B.kccMar28Amt)} L</div></div>
         <div class="rec-pipe-item"><div class="p-label">Limit review — Sep-26</div><div class="p-val num">${recFmtInt(B.limitSep26Acc)} a/c</div><div class="p-sub num">₹${recFmtL(B.limitSep26Amt)} L</div></div>
@@ -6585,19 +6582,37 @@ window.drillBranchBySol = drillBranchBySol;
 
 /* Shown in the summary band whenever data/branch-recovery.json hasn't
    been uploaded yet (or failed to load) -- covers only what the daily
-   account-wise NPA upload can actually provide (Gross NPA, accounts,
-   branch-wise NPA). Trajectory/targets/forward-pipeline/RCT-efficiency
-   have no equivalent anywhere in DATA.npa, so those cards simply don't
-   appear in this state rather than showing fabricated numbers -- see the
-   plan note this was built from. */
+   account-wise NPA upload (and, for a ratio, the separately-uploaded
+   Branch Advance file) can actually provide (Gross NPA, accounts,
+   branch-wise NPA, NPA%, Mar/Jun baseline). Trajectory/targets/forward-
+   pipeline/RCT-efficiency have no equivalent anywhere in DATA.npa, so
+   those cards simply don't appear in this state rather than showing
+   fabricated numbers -- see the plan note this was built from.
+
+   The NPA%/Mar-Jun-baseline computation here used to live as its own,
+   separately-displayed "aggNpaPct"/dashboardCornerStats() card on the
+   account-level Dashboard hero row (see PROJECT_ROADMAP.md, 2026-09-20)
+   -- moved here so there is exactly one home for "what's the NPA ratio"
+   at any given moment: this band, sourced from Recovery Excel when it's
+   loaded, or from the Branch Advance file here when it isn't. */
 function renderDashRecoveryFallback(branchFilter, s){
   const scopeLabel = branchFilter ? esc(branchFilter) : 'Regional Office (all branches)';
   let os, count, topListHtml = '';
+  let advOsSum=0, advSum=0, marOS=0, marBase=0, marN=0, junOS=0, junBase=0, junN=0;
+  const foldIn = (v) => {
+    const rec = DATA.branchAdvances[v.solId];
+    if(!rec) return;
+    if(rec.adv>0){ advOsSum+=v.os; advSum+=rec.adv; }
+    if(rec.npaMar26!=null){ marOS+=v.os; marBase+=rec.npaMar26; marN++; }
+    if(rec.npaJun26!=null){ junOS+=v.os; junBase+=rec.npaJun26; junN++; }
+  };
   if(branchFilter){
     const b = s.branchMap.get(branchFilter);
     os = b ? b.os : 0; count = b ? b.count : 0;
+    if(b) foldIn(b);
   } else {
     os = s.totalOS; count = s.totalAccounts;
+    s.branchMap.forEach(foldIn);
     const top = [...s.branchMap.entries()].sort((a,b)=>b[1].os-a[1].os).slice(0,10);
     const maxOs = Math.max(1e-9, ...top.map(([,v])=>v.os));
     const rows = top.map(([name,v],i)=>`
@@ -6611,9 +6626,19 @@ function renderDashRecoveryFallback(branchFilter, s){
       </div>`).join('');
     topListHtml = `<div class="rec-section-title">Top branches by NPA (from today's account-wise upload)</div><div class="rec-card">${rows}</div>`;
   }
+  const aggNpaPct = advSum>0 ? (advOsSum/advSum*100) : null;
+  const gapNote = (label,v) => { const improved=v<=0; return `${label} <b>${improved?'▼':'▲'}</b> ${fmtCr(Math.abs(v))}`; };
+  const baselineParts = [];
+  if(marN) baselineParts.push(gapNote('Mar baseline gap', marOS-marBase));
+  if(junN) baselineParts.push(gapNote('Jun baseline gap', junOS-junBase));
   return `
     <div class="rec-hero" style="grid-template-columns:repeat(2,1fr)">
-      <div class="rec-hero-tile"><div class="rec-hero-label">Gross NPA</div><div class="rec-hero-val num">${fmtCr(os)}</div><div class="rec-hero-note">${scopeLabel}</div></div>
+      <div class="rec-hero-tile">
+        <div class="rec-hero-label">Gross NPA</div>
+        <div class="rec-hero-val num">${fmtCr(os)}</div>
+        <div class="rec-hero-note">${scopeLabel}${aggNpaPct!==null?` · ${aggNpaPct.toFixed(1)}% of advances`:''}</div>
+        ${baselineParts.length?`<div class="rec-hero-note">${baselineParts.join(' &nbsp;·&nbsp; ')}</div>`:''}
+      </div>
       <div class="rec-hero-tile"><div class="rec-hero-label">Accounts</div><div class="rec-hero-val num">${count.toLocaleString('en-IN')}</div><div class="rec-hero-note">From today's NPA upload</div></div>
     </div>
     ${topListHtml}
@@ -6628,6 +6653,12 @@ function renderDashRecoveryFallback(branchFilter, s){
 function renderDashRecoveryBand(branchFilter, s){
   const el = document.getElementById('dashRecoveryBand');
   if(!el) return;
+  ensureKccOverdueDataLoaded(()=>{
+    if(document.querySelector('.view.active')?.dataset.view==='dashboard'){
+      const sel = document.getElementById('dashBranchFilter');
+      renderDashRecoveryBand(sel ? sel.value : '', currentDashStats);
+    }
+  });
   if(!BRANCH_RECOVERY_DATA){
     el.innerHTML = renderDashRecoveryFallback(branchFilter, s);
     ensureBranchRecoveryDataLoaded(()=>{
