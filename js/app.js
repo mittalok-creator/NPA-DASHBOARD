@@ -484,15 +484,7 @@ function toggleShareOtsMenu(evt){
   }), 0);
 }
 window.toggleShareOtsMenu = toggleShareOtsMenu;
-/* Illustrative severity bands for NPA % (NPA outstanding / total advance),
-   not a claim of official RBI benchmark thresholds -- just enough to spot
-   a high-NPA branch/region at a glance. */
-function npaPctSeverity(pct){
-  if(pct>=10) return {color:'var(--red)', soft:'var(--red-soft)'};
-  if(pct>=5) return {color:'var(--amber)', soft:'var(--amber-soft)'};
-  return {color:'var(--green)', soft:'var(--green-soft)'};
-}
-const ASSET_LABELS = {SUB_STD:'Substandard asset', DA1:'Doubtful — up to 1 year', DA2:'Doubtful — 1 to 3 years', DA3:'Doubtful — more than 3 years', LOSS:'Loss asset'};
+const ASSET_LABELS ={SUB_STD:'Substandard asset', DA1:'Doubtful — up to 1 year', DA2:'Doubtful — 1 to 3 years', DA3:'Doubtful — more than 3 years', LOSS:'Loss asset'};
 function assetLabel(code){ return ASSET_LABELS[code] || code; }
 function titleCase(s){ return String(s||'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()); }
 
@@ -5111,21 +5103,6 @@ function renderDashboard(){
     onclick:`showAssetList('${jsq(k)}')`
   }));
 
-  const branchTop = [...s.branchMap.entries()].sort((a,b)=>b[1].os-a[1].os).slice(0,10)
-    .map(([branch,v])=>{
-      // Prefer Recovery Excel's own ratio for this branch (consistent with
-      // the summary band above); fall back to the Branch Advance file only
-      // for a branch Recovery data doesn't cover, or before it's uploaded.
-      const recBranch = BRANCH_RECOVERY_DATA && v.solId ? BRANCH_RECOVERY_DATA.branches.find(b=>String(b.sol)===String(v.solId)) : null;
-      const rec = DATA.branchAdvances[v.solId];
-      const npaPct = recBranch ? recBranch.npaRatio*100 : (rec && rec.adv>0 ? (v.os/rec.adv*100) : null);
-      return {label:branch, value:v.os, color:'var(--accent)',
-        valueLabel:`${v.count.toLocaleString('en-IN')} · ${fmtCr(v.os)} · ${(s.totalOS?(v.os/s.totalOS*100):0).toFixed(2)}%`,
-        badge: npaPct!==null ? npaPct.toFixed(1)+'%' : null,
-        badgeColor: npaPct!==null ? npaPctSeverity(npaPct).color : null,
-        onclick:`drillBranch('${jsq(branch)}')`};
-    });
-
   const agingItems = s.buckets.map(b=>({label:b.label, value:b.os, color:'var(--accent-2)',
     valueLabel:`${b.count.toLocaleString('en-IN')} · ${fmtCr(b.os)}`,
     onclick:`showBucketList('${b.id}')`}));
@@ -5217,11 +5194,6 @@ function renderDashboard(){
         <div class="chart-title">NPA Ageing<span class="chart-sub">days since NPA date · tap a row for the list</span></div>
         <div class="bar-list">${barRows(agingItems)}</div>
       </div>
-      ${branchFilter ? '' : `
-      <div class="chart-card chart-card-wide">
-        <div class="chart-title">Top Branches by Exposure<span class="chart-sub">top 10 of ${s.branchCount.toLocaleString('en-IN')} branch(es) · tap to drill into a branch</span></div>
-        <div class="bar-list">${barRows(branchTop)}</div>
-      </div>`}
     </div>
 
     <div class="section-label">Customer-Wise Outstanding</div>

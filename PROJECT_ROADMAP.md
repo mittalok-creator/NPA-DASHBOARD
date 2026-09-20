@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: removed the last duplicate branch-NPA ranking from the Dashboard (2026-09-20, same day)
+
+The previous round deduped the Gross NPA/Advances/ratio hero figures, but Alok reported the Dashboard was still "double double" -- one more duplicate had survived: the Recovery band's "Branch watchlist — ten largest NPA books" (from the uploaded Branch Data Excel) and the account-level section's own "Top Branches by Exposure" chart (`branchTop`, a top-10-by-outstanding bar list built from the daily NPA upload) were both a "top 10 branches by NPA" ranking, shown on the same page, region view only, from two different sources.
+
+Confirmed with Alok exactly how far to go before touching anything: remove only the duplicate "Top Branches by Exposure" chart; everything else in the account-level section (Asset Classification Mix, NPA Ageing, Ticket Slabs, KCC vs Non-KCC split, Customer-Wise KPIs, the All Accounts table) stays, since none of it has any equivalent in the Branch Data Excel (that sheet is branch-level only) -- the daily NPA upload's job below the Recovery band is account-wise list/search/OTS linkage and these account-level breakdowns, never a second branch-level NPA ranking. Removed the `branchTop` computation and its chart card, plus the now-unused `npaPctSeverity()` helper (its only two call sites -- the removed chart's badge and the previous round's already-removed NPA% badge -- were both gone).
+
+Verified: Playwright confirms exactly one "top branches by NPA" list on the page (Recovery's watchlist), the old chart and its title are gone entirely, Asset Classification/NPA Ageing/Customer-Wise/All Accounts all still render and their click-throughs still work, and the OTS Calculator is unaffected.
+
 ### Follow-up: deduplicated the merged Dashboard's NPA/Advances/ratio, cross-checked against KCC Overdue (2026-09-20)
 
 A day after the Recovery band merged into the main Dashboard, Alok reported "data double ho raha hai" (data showing duplicated). Investigated first, not guessed: **three independent, unreconciled "Gross NPA/Advances/NPA%" figures** were rendering on the same page at once -- the Recovery band's own Gross NPA/Advances/ratio (from the uploaded Branch Data Excel), the account-level hero row's "Total Outstanding" tile (from the daily account-wise NPA upload -- and even the band's own pre-upload fallback state showed this *exact same* number a second time, since the fallback reads the same computation), and a third NPA%/Advances pairing computed from yet another upload, the "Branch-wise Advance & NPA Mar/Jun" file (surfacing as an "X% NPA" badge on the Total Outstanding tile, a Mar/Jun baseline card, and a per-branch NPA% badge in the Top-10-Branches list). None of the three was ever compared against another, and nothing anywhere compared the three uploads' "as on" dates.
