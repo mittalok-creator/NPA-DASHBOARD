@@ -91,6 +91,22 @@ DATA.branchContacts = DATA.branchContacts || {};
    Loan Detail screen -- see drawDetailBody. */
 DATA.specialNotes = DATA.specialNotes || {};
 
+/* Region-level "This Month's Target" -- typed directly by the Admin
+   (Settings -> Update Data -> "Recovery -- This Month's Target"), not
+   read from any uploaded file: {thisMonthTarget, thisMonthCommitment,
+   marchTarget, updatedAt, updatedBy}, all in Rs crore. Shown as its own
+   card on the Recovery Dashboard's region view, deliberately separate
+   from (not replacing) the Sep-26/Mar-27 progress gauges the Branch Data
+   Excel already drives -- Alok's own request, 2026-09-20, after two
+   rounds of removing duplicate figures on that same page: these three
+   numbers don't come from his daily Excel at all, so a manual admin-only
+   entry point was the only way to track them, and keeping them in their
+   own card avoids recreating the exact "two sources for one number"
+   problem those rounds just fixed. Same "own slow-moving schedule, not
+   reset on a daily NPA update" treatment as branchAdvances/specialNotes
+   above, and part of the publish payload like they are. */
+DATA.regionTargets = DATA.regionTargets || {};
+
 /* Lok Adalat -- proposed-OTS accounts where token money has already been
    collected ahead of a Lok Adalat (Alok's request, 2026-09-11, following
    up on an earlier throwaway version of this same idea). Keyed by Account
@@ -3096,7 +3112,7 @@ window.exportOtsExcel = exportOtsExcel;
 function toggleUpdateModal(show){
   document.getElementById('updateModalOverlay').classList.toggle('show', show);
   closePublishReview();
-  if(show){ loadVersionHistory(); renderSpecialNoteList(); updateLokAdalatClearBtn(); }
+  if(show){ loadVersionHistory(); renderSpecialNoteList(); updateLokAdalatClearBtn(); populateRegionTargetsInputs(); }
   if(!show){
     document.getElementById('uploadStatus').innerHTML='';
     document.getElementById('uploadSummary').innerHTML='';
@@ -3708,6 +3724,72 @@ function renderSpecialNoteList(){
 window.loadSpecialNoteIntoEditor = loadSpecialNoteIntoEditor;
 window.removeSpecialNoteByAcct = removeSpecialNoteByAcct;
 
+/* Region "This Month's Target" -- same manual-entry-no-file-upload shape
+   as Special Note above, but a single fixed-shape object instead of a
+   per-account map (there's only ever one region, no lookup step needed).
+   Reachable only from inside the already-admin-gated Update Data modal
+   (openUpdateModalAsAdmin -> UPGBAuth.requireAdmin), matching Alok's own
+   "only I can feed this, if signed in via GitHub" request -- every
+   viewer sees the saved figures once published, only Admin can change
+   them. */
+function populateRegionTargetsInputs(){
+  const t = DATA.regionTargets || {};
+  const setVal = (id, v) => { const el = document.getElementById(id); if(el) el.value = (v==null ? '' : v); };
+  setVal('regionTargetThisMonth', t.thisMonthTarget);
+  setVal('regionTargetCommitment', t.thisMonthCommitment);
+  setVal('regionTargetMarch', t.marchTarget);
+  updateRegionTargetsLabel();
+}
+function updateRegionTargetsLabel(){
+  const t = DATA.regionTargets || {};
+  const set = [t.thisMonthTarget, t.thisMonthCommitment, t.marchTarget].some(v=>v!=null);
+  const label = document.getElementById('regionTargetsStatusLabel');
+  if(label) label.textContent = set ? `set${t.updatedAt?' · '+fmtDate(new Date(t.updatedAt)):''}` : 'not set yet';
+  const clearBtn = document.getElementById('regionTargetsClearBtn');
+  if(clearBtn) clearBtn.disabled = !set;
+}
+function saveRegionTargets(){
+  const numOrNull = (id) => {
+    const el = document.getElementById(id);
+    const v = el ? el.value.trim() : '';
+    return v==='' ? null : Number(v);
+  };
+  const thisMonthTarget = numOrNull('regionTargetThisMonth');
+  const thisMonthCommitment = numOrNull('regionTargetCommitment');
+  const marchTarget = numOrNull('regionTargetMarch');
+  const statusEl = document.getElementById('regionTargetsStatus');
+  if(thisMonthTarget==null && thisMonthCommitment==null && marchTarget==null){
+    if(statusEl) statusEl.innerHTML = `<div class="upload-status err">⚠ Enter at least one figure before saving.</div>`;
+    return;
+  }
+  const user = (window.UPGBAuth && window.UPGBAuth.getCurrentUser()) || {};
+  DATA.regionTargets = { thisMonthTarget, thisMonthCommitment, marchTarget, updatedAt: new Date().toISOString(), updatedBy: user.login || null };
+  if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Saved. Goes live for everyone on Publish.</div>`;
+  clearStalePublishStatus();
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+  updateRegionTargetsLabel();
+  if(document.querySelector('.view.active')?.dataset.view==='dashboard'){
+    const sel = document.getElementById('dashBranchFilter');
+    renderDashRecoveryBand(sel ? sel.value : '', currentDashStats);
+  }
+}
+function clearRegionTargets(){
+  if(![DATA.regionTargets?.thisMonthTarget, DATA.regionTargets?.thisMonthCommitment, DATA.regionTargets?.marchTarget].some(v=>v!=null)) return;
+  DATA.regionTargets = {};
+  ['regionTargetThisMonth','regionTargetCommitment','regionTargetMarch'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const statusEl = document.getElementById('regionTargetsStatus');
+  if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Cleared. Goes live for everyone on Publish.</div>`;
+  clearStalePublishStatus();
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+  updateRegionTargetsLabel();
+  if(document.querySelector('.view.active')?.dataset.view==='dashboard'){
+    const sel = document.getElementById('dashBranchFilter');
+    renderDashRecoveryBand(sel ? sel.value : '', currentDashStats);
+  }
+}
+
 function carryForwardMapFromCurrentData(){
   const map = new Map();
   DATA.npa.rows.forEach(r=>{
@@ -4281,6 +4363,14 @@ function openPublishReview(){
   if(lokAdalatCount){
     items.push(publishReviewItemRow({ icon: ICON_NOTE, title: 'Lok Adalat (Token Received)', maybe: true, sub: `${lokAdalatCount.toLocaleString('en-IN')} account(s)` }));
   }
+  const rt = DATA.regionTargets||{};
+  if(rt.thisMonthTarget!=null || rt.thisMonthCommitment!=null || rt.marchTarget!=null){
+    items.push(publishReviewItemRow({ icon: ICON_TARGET, title: "This Month's Target (Admin)", maybe: true, sub: [
+      rt.thisMonthTarget!=null?`Target ₹${rt.thisMonthTarget} cr`:null,
+      rt.thisMonthCommitment!=null?`Commitment ₹${rt.thisMonthCommitment} cr`:null,
+      rt.marchTarget!=null?`Mar-27 ₹${rt.marchTarget} cr`:null,
+    ].filter(Boolean).join(' · ') }));
+  }
   document.getElementById('publishReviewSummary').innerHTML = `
     ${addedLine}
     ${staleLine}
@@ -4289,7 +4379,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, regionTargets: DATA.regionTargets||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -6320,6 +6410,32 @@ function recDonutChart(segments, size){
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${circles}</svg>`;
 }
 function recRankBadge(rank, n){ const t = rank<=n/3?'top':rank<=2*n/3?'mid':'low'; return `<span class="rec-rank-badge ${t}">${rank}/${n}</span>`; }
+/* "This Month's Target" -- Admin-typed (Settings -> Update Data), not
+   from the uploaded Excel. Deliberately its own card, not folded into
+   the hero/KPI tiles above (which are all Excel-sourced) or the Sep-26/
+   Mar-27 gauges below (which track progress against the Excel's own
+   target columns) -- three independent numbers, three visibly separate
+   homes, so nothing here is ever mistaken for -- or silently overwrites
+   -- an Excel-derived figure. Renders nothing at all when the Admin
+   hasn't set anything yet, rather than a card full of "Not set". */
+function recAdminTargetsCardHtml(){
+  const rt = DATA.regionTargets || {};
+  const tiles = [
+    rt.thisMonthTarget!=null ? {label:'This Month Target', val:`₹${rt.thisMonthTarget.toFixed(2)} cr`} : null,
+    rt.thisMonthCommitment!=null ? {label:'This Month Commitment', val:`₹${rt.thisMonthCommitment.toFixed(2)} cr`} : null,
+    rt.marchTarget!=null ? {label:'Mar-27 Target', val:`₹${rt.marchTarget.toFixed(2)} cr`} : null,
+  ].filter(Boolean);
+  if(!tiles.length) return '';
+  const updatedNote = rt.updatedAt ? `as on ${esc(fmtDate(new Date(rt.updatedAt)))}${rt.updatedBy?' · set by '+esc(rt.updatedBy):''}` : '';
+  return `
+    <div class="rec-card rec-admin-targets">
+      <h3>This Month's Target <span class="rec-admin-badge">Set by Admin</span></h3>
+      <div class="sub">Typed directly, not from the uploaded Branch Data Excel${updatedNote?' · '+updatedNote:''}</div>
+      <div class="rec-kpi-row" style="margin-top:12px">
+        ${tiles.map(x=>`<div class="rec-kpi-tile"><div class="k-label">${esc(x.label)}</div><div class="k-val num">${x.val}</div></div>`).join('')}
+      </div>
+    </div>`;
+}
 
 /* Region and Branch "views" are no longer their own tab -- which one
    renders is decided by the Dashboard's own #dashBranchFilter (see
@@ -6378,6 +6494,7 @@ function recoveryRenderRegion(){
       <div class="rec-kpi-tile"><div class="k-label">Yesterday's move</div><div class="k-val num" style="color:${R.movYesterday<0?'var(--pos)':'var(--neg)'}">${recSigned(R.movYesterday,'L')}</div><div class="k-note">Since Jul-26 ${recSigned(R.movSinceJul26,'L')}</div></div>
       <div class="rec-kpi-tile"><div class="k-label">KCC PNPA due this month</div><div class="k-val num">${recFmtInt(R.kccMonthlyAcc)} a/c</div><div class="k-note">₹${recFmtCr(R.kccMonthlyAmt)} cr</div></div>
     </div>
+    ${recAdminTargetsCardHtml()}
     <div class="rec-grid-2">
       <div class="rec-card">
         <h3>NPA Trajectory — Mar-25 to date</h3>
@@ -6906,6 +7023,8 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('specialNoteText','input',()=>onSpecialNoteTextInput());
   on('specialNoteSaveBtn','click',()=>saveSpecialNote());
   on('specialNoteRemoveBtn','click',()=>removeSpecialNote());
+  on('regionTargetsSaveBtn','click',()=>saveRegionTargets());
+  on('regionTargetsClearBtn','click',()=>clearRegionTargets());
   on('dashBranchFilter','change',()=>renderDashboardSmooth());
   // One consolidated Refresh button (top header/sidebar) always does a full
   // page reload, for every view. It used to branch per-view -- Bank
