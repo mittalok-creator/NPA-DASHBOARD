@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: region target/NPA source (typed vs. computed) made visible (2026-09-20, same day)
+
+Alok asked whether he needs to upload a separate month-wise target table, since the Sep-26/Mar-27 region targets he types into his Branch Data Excel's own "HATHRAS REGION" total row aren't simply the sum of the 55 branches' individual targets -- branch commitments and the region's own assigned target can genuinely differ. Checked `parseBranchRecoverySheet()` first: it already reads that total row's own typed cells verbatim (targets included) whenever the row is present in the upload, and only falls back to summing the branch rows when that row is missing entirely -- so no separate table was ever needed, he just has to keep including that one row (part of the same "Branch Data" sheet, not an extra upload).
+
+The gap was that this was silent -- decrypting the currently-live `data/branch-recovery.json` to check which path had run for his last real upload, the region's target figures happened to exactly equal the branch-sum, so there was no way to tell from the number alone whether that was his real typed figure (which happens to equal the sum) or the fallback having silently kicked in. Alok asked for visibility (AskUserQuestion) rather than just an explanation.
+
+Tagged the parser's output with `regionTotalSource` (`'typed'` when the sheet's own total row was found, `'computed'` when it wasn't), surfaced as a note at the top of the Recovery band's region view -- a quiet note when typed, an amber warning naming the exact risk ("may not match your actual assigned regional target") when computed. Verified against the real uploaded workbook both ways: parsing it as-is tags `'typed'`; parsing a version with the total row stripped out correctly falls back and tags `'computed'`.
+
 ### Follow-up: removed the last duplicate branch-NPA ranking from the Dashboard (2026-09-20, same day)
 
 The previous round deduped the Gross NPA/Advances/ratio hero figures, but Alok reported the Dashboard was still "double double" -- one more duplicate had survived: the Recovery band's "Branch watchlist — ten largest NPA books" (from the uploaded Branch Data Excel) and the account-level section's own "Top Branches by Exposure" chart (`branchTop`, a top-10-by-outstanding bar list built from the daily NPA upload) were both a "top 10 branches by NPA" ranking, shown on the same page, region view only, from two different sources.
