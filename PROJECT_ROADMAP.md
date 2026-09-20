@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### New: "This Month's Target" -- Admin-only manual entry on the Recovery Dashboard (2026-09-20, same day)
+
+Alok asked for a provision to set This Month's Target, This Month's Commitment, and the next financial-year-end target (Mar-27 for now) directly inside the app -- typed by him alone, only when signed in via GitHub, and shown to every viewer once saved. None of these three figures exist anywhere in his daily Branch Data Excel upload, so there was no file to parse them from.
+
+Added `DATA.regionTargets` (`{thisMonthTarget, thisMonthCommitment, marchTarget, updatedAt, updatedBy}`, ₹ crore), following the exact same manual-entry-no-file-upload shape already established for Special Note -- a new panel in Settings → Update Data ("Recovery — This Month's Target (Admin)"), reachable only through the already-admin-gated Update Data modal (`openUpdateModalAsAdmin` → `UPGBAuth.requireAdmin`), so only a GitHub-signed-in Admin can ever change it. Saved directly into `DATA` (not staged separately) and carried in the main publish payload alongside `specialNotes`/`lokAdalat`, so it goes live for every viewer on the next Publish exactly like those do.
+
+Given this project's last three rounds were all about eliminating duplicate/conflicting figures on this same Dashboard, this was deliberately kept as its own clearly-labeled card ("This Month's Target — Set by Admin", accent-bordered to stand apart) rather than merged into or replacing the Sep-26/Mar-27 progress gauges the Branch Data Excel already drives -- three independent numbers, three visibly separate homes, confirmed with Alok before writing any code. Renders nothing at all until the Admin actually sets a value, rather than a card full of "Not set".
+
 ### Follow-up: region target/NPA source (typed vs. computed) made visible (2026-09-20, same day)
 
 Alok asked whether he needs to upload a separate month-wise target table, since the Sep-26/Mar-27 region targets he types into his Branch Data Excel's own "HATHRAS REGION" total row aren't simply the sum of the 55 branches' individual targets -- branch commitments and the region's own assigned target can genuinely differ. Checked `parseBranchRecoverySheet()` first: it already reads that total row's own typed cells verbatim (targets included) whenever the row is present in the upload, and only falls back to summing the branch rows when that row is missing entirely -- so no separate table was ever needed, he just has to keep including that one row (part of the same "Branch Data" sheet, not an extra upload).
