@@ -6087,11 +6087,16 @@ function parseBranchRecoverySheet(rows){
   if(!branches.length) throw new Error('No branch rows found (expected Sol ID in column B, starting row 4).');
   // Region total: the sheet's own total row if present (first row after the
   // last branch row with no Sol ID but a numeric Advance), else summed here.
+  // Which path ran matters beyond just Advance/NPA -- targets in particular
+  // are a separately-assigned regional figure, not necessarily the sum of
+  // branch commitments (Alok's own report, 2026-09-20), so regionTotalSource
+  // is carried through to the UI rather than silently picking one.
   let region = null;
   for(; r<rows.length; r++){
     const row = rows[r];
     if(row && !num(row[RECOVERY_SOL_IDX]) && num(row[RECOVERY_COL_IDX.advance])){ region = readRow(r); break; }
   }
+  let regionTotalSource;
   if(!region){
     region = { sol:null, name:'HATHRAS REGION' };
     for(const key in RECOVERY_COL_IDX){
@@ -6102,8 +6107,10 @@ function parseBranchRecoverySheet(rows){
     region.rollover = branches.length ? branches.reduce((s,b)=>s+b.rollover,0)/branches.length : 0;
     region.collection = branches.length ? branches.reduce((s,b)=>s+b.collection,0)/branches.length : 0;
     region.turnover = branches.length ? branches.reduce((s,b)=>s+b.turnover,0)/branches.length : 0;
+    regionTotalSource = 'computed';
   } else {
     region.name = 'HATHRAS REGION';
+    regionTotalSource = 'typed';
   }
 
   const rankDesc = (field) => {
@@ -6141,7 +6148,7 @@ function parseBranchRecoverySheet(rows){
     positionAsOn: day2Date ? fmtDate(day2Date) : '—',
     day1Label: day1Date ? fmtDate(day1Date) : 'Day 1',
     day2Label: day2Date ? fmtDate(day2Date) : 'Day 2',
-    region, branches: branches.sort((a,b)=>a.sol-b.sol), watchlist, reductions, increases, ticketSpread,
+    region, regionTotalSource, branches: branches.sort((a,b)=>a.sol-b.sol), watchlist, reductions, increases, ticketSpread,
     kccHighValue: {
       acc: branches.reduce((s,b)=>s+b.kcc5to10Acc+b.kcc10plusAcc,0),
       amtCr: branches.reduce((s,b)=>s+b.kcc5to10Amt+b.kcc10plusAmt,0)/100,
@@ -6348,8 +6355,19 @@ function recoveryRenderRegion(){
   const spread = D.ticketSpread;
   const wlNpaSum = wl.reduce((a,w)=>a+w.npaCr,0);
   const wlShare = R.npaDay2 ? ((wlNpaSum*100)/R.npaDay2*100).toFixed(1) : '0.0';
+  // Region-level Advance/NPA/targets either come straight from the
+  // uploaded sheet's own "HATHRAS REGION" total row (Alok's own typed
+  // figures -- a target in particular is a separately-assigned number,
+  // not necessarily the sum of branch commitments), or, only when that
+  // row is missing from the upload, get computed as a sum of the branch
+  // rows here. Surfaced so it's never silently ambiguous which one
+  // produced the numbers below (Alok's report, 2026-09-20).
+  const regionSourceNote = D.regionTotalSource==='computed'
+    ? `<div class="rec-region-source-note warn">⚠ Region total row not found in this upload — Gross NPA, Advances and targets below are computed as a sum of the ${N} branch rows, which may not match your actual assigned regional target.</div>`
+    : `<div class="rec-region-source-note">Region figures as typed in the sheet's own total row.</div>`;
 
   wrap.innerHTML = `
+    ${regionSourceNote}
     <div class="rec-hero">
       <div class="rec-hero-tile"><div class="rec-hero-label">Gross NPA</div><div class="rec-hero-val num">₹${recFmtCr(R.npaDay2)}<small>cr</small></div><div class="rec-hero-note">${recFmtPct(R.npaRatio)} of advances</div></div>
       <div class="rec-hero-tile"><div class="rec-hero-label">Movement since Mar-26</div><div class="rec-hero-val num" style="color:${R.movSinceMar26<0?'var(--pos)':'var(--neg)'}">${recSigned(R.movSinceMar26/100,'cr')}</div><div class="rec-hero-note">Since Jul-26 ${recSigned(R.movSinceJul26/100,'cr')}</div></div>
