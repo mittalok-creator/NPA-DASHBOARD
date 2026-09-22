@@ -103,6 +103,23 @@ DATA.specialNotes = DATA.specialNotes || {};
    specialNotes above, and part of the publish payload like they are. */
 DATA.lokAdalat = DATA.lokAdalat || {};
 
+/* Interest Reversal master list -- keyed by Account No. (string) -> amount
+   (₹). Uploaded via Settings -> Update Data -> "Interest Reversal (master
+   list)" (see handleInterestReversalMasterUpload). Head Office's own daily
+   NPA export carries an "Intt Rev" column, but it's proven too unreliable
+   to trust alone -- it silently went blank for every account the very
+   upload after Alok's file was first merged in on 2026-09-08, since there
+   was nowhere for that figure to persist. This master list is now the
+   authoritative source instead: applyInterestReversalMaster() overrides
+   Interest Reversal with this list's figure, by Account No., on every
+   future daily NPA upload (see processDailyParsed()). Same "own
+   slow-moving schedule, not reset on a daily NPA update" treatment as
+   branchAdvances/branchContacts/specialNotes/lokAdalat above, and part of
+   the publish payload like they are -- so it only ever needs re-uploading
+   when Alok has an updated/corrected list, never alongside a routine
+   daily NPA file. */
+DATA.interestReversalMaster = DATA.interestReversalMaster || {};
+
 /* ---------- Date helpers (NPA dates are raw Excel serials) ---------- */
 const XL_EPOCH = new Date(1899,11,30);
 function excelSerialToDate(n){ return new Date(XL_EPOCH.getTime() + n*86400000); }
@@ -3404,6 +3421,29 @@ function buildBranchAdvanceMap(allRows, hIdx){
   }
   return map;
 }
+/* Interest Reversal master list -- Account No. + amount, matched by exact
+   Account No. (not Customer ID/Sol ID, since Interest Reversal is an
+   account-level figure). A row with an unparseable amount is skipped
+   rather than defaulting to 0, so a genuinely blank/malformed cell in
+   Alok's file doesn't silently zero out an account that already had a
+   real figure from an earlier upload of this same list. */
+function buildInterestReversalMasterMap(allRows, hIdx){
+  const header = (allRows[hIdx]||[]).map(normHeader);
+  const idx = (...names) => { for(const n of names){ const i = header.indexOf(normHeader(n)); if(i>=0) return i; } return -1; };
+  const iAcct = idx('accountnumber','accountno','acctno');
+  if(iAcct<0) throw new Error('Could not find an "Account Number" column.');
+  const iAmt = idx('interestreversal','intreversal','amount');
+  if(iAmt<0) throw new Error('Could not find an "Interest Reversal" amount column.');
+  const map = {};
+  for(const row of allRows.slice(hIdx+1)){
+    const acct = cellStr(row, iAcct);
+    if(!acct) continue;
+    const amt = parseFloat(row[iAmt]);
+    if(isNaN(amt)) continue;
+    map[acct] = amt;
+  }
+  return map;
+}
 /* Branch Contacts (Manager + Recovery Officer) template/upload -- matches
    branches by Sol ID same as buildBranchAdvanceMap above, not by name.
    Every contact field is optional (collection is ongoing); a row with a
@@ -3780,12 +3820,27 @@ function renderValidationReport(result){
   el.innerHTML = html;
 }
 
+/* Alok's own Interest Reversal list (DATA.interestReversalMaster) is the
+   authoritative source, overriding whatever HO's own file carried that day
+   for any account it covers -- HO's "Intt Rev" column has proven too
+   inconsistent to rely on alone (see DATA.interestReversalMaster's own
+   comment above). Accounts the master doesn't cover keep HO's own file's
+   value (or blank/0), unchanged. Called from both parsing branches below. */
+function applyInterestReversalMaster(rows){
+  const master = DATA.interestReversalMaster;
+  if(!master) return;
+  rows.forEach(r=>{
+    const v = master[String(r[C.ACCT_NO])];
+    if(v!=null) r[C.URI] = v;
+  });
+}
 function processDailyParsed(parsed, filename, statusEl, summaryEl){
   if(parsed.isHoFormat){
     const {rows, sciCount, badBalCount, blankCustCount} = mapHoRowsToNpa(parsed.header, parsed.rows);
     if(!rows.length) throw new Error('No account rows found in this file.');
     const carryForward = carryForwardMapFromCurrentData();
     mergeCustomerDetails(rows, __pendingMaster, carryForward);
+    applyInterestReversalMaster(rows);
     const validation = validateNpaRows(rows);
     if(blankCustCount>0) validation.errors.unshift(`${blankCustCount.toLocaleString('en-IN')} row(s) had a blank Customer ID and were excluded from the upload entirely.`);
     if(badBalCount>0) validation.errors.unshift(`${badBalCount.toLocaleString('en-IN')} row(s) have a missing/non-numeric Balance Amount.`);
@@ -3834,6 +3889,7 @@ function processDailyParsed(parsed, filename, statusEl, summaryEl){
     const npaRows = npaRaw.slice(1)
       .filter(r=>r[6]!=='' && r[6]!==undefined && r[6]!==null)
       .map(r=>{ const row=[]; for(let i=0;i<NPA_COLUMN_COUNT;i++) row.push(normalizeCell(r[i])); return row; });
+    applyInterestReversalMaster(npaRows);
 
     let oldOtsRows = [];
     const oldOtsSheetName = findSheet(wb, ['oldots']);
@@ -3994,6 +4050,53 @@ async function handleBranchAdvUpload(evt){
   if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
 }
 
+/* Interest Reversal is Alok's own list, not HO's daily file -- so, same as
+   Branch Advance above, this applies immediately (no separate Apply step)
+   and always fully replaces the previous list. Once loaded, it's applied
+   automatically to every future daily NPA upload by applyInterestReversalMaster()
+   (see processDailyParsed()), so it never needs re-uploading alongside a
+   routine daily file -- only when Alok has an updated/corrected list. */
+async function handleInterestReversalMasterUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  await ensureXLSX();
+  const labelEl = document.getElementById('intReversalMasterUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('intReversalMasterUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Interest Reversal file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      const headerHints = ['accountnumber','accountno'];
+      let allRows, hIdx;
+      if(isCsv){
+        allRows = parseCSV(String(e.target.result));
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      }
+      const map = buildInterestReversalMasterMap(allRows, hIdx);
+      const count = Object.keys(map).length;
+      if(!count) throw new Error('No valid Account Number/Interest Reversal rows found.');
+      DATA.interestReversalMaster = map;
+      const label = document.getElementById('intReversalMasterStatusLabel');
+      if(label) label.textContent = `${count.toLocaleString('en-IN')} account(s) loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} Interest Reversal figure(s) parsed. Will apply to every future daily NPA upload automatically.</div>`;
+      clearStalePublishStatus();
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
 function applyNewData(){
   if(!__pendingData || (__lastValidation && !__lastValidation.ok)) return;
   const applyBtn = document.getElementById('applyDataBtn');
@@ -4139,6 +4242,11 @@ function downloadBranchAdvTemplate(){
   const headers = ['Sol ID','Branch Name','Advance (₹ Lakhs)','NPA MARCH 26 (₹ Lakhs)','NPA JUNE 26(₹ Lakhs)'];
   const example = ['9282','M.G.Hathras','1877.53','71.53','75.45'];
   downloadCsvTemplate('UPGB_Branch_Advance_Template.csv', headers, example);
+}
+function downloadInterestReversalMasterTemplate(){
+  const headers = ['Account_Number','Interest Reversal'];
+  const example = ['151635110000123','5525'];
+  downloadCsvTemplate('UPGB_Interest_Reversal_Template.csv', headers, example);
 }
 /* Branch Contacts template -- unlike the other "blank + one example row"
    templates above, this one pre-fills Sol ID/Old Sol ID/Branch Name for
@@ -4292,7 +4400,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -6278,6 +6386,8 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('masterFileInput','change',(e)=>handleMasterFileUpload(e));
   on('branchAdvUploadDrop','click',()=>document.getElementById('branchAdvFileInput').click());
   on('branchAdvFileInput','change',(e)=>handleBranchAdvUpload(e));
+  on('intReversalMasterUploadDrop','click',()=>document.getElementById('intReversalMasterFileInput').click());
+  on('intReversalMasterFileInput','change',(e)=>handleInterestReversalMasterUpload(e));
   on('branchContactsUploadDrop','click',()=>document.getElementById('branchContactsFileInput').click());
   on('branchContactsFileInput','change',(e)=>handleBranchContactsUpload(e));
   on('downloadBranchContactsTemplateBtn','click',()=>downloadBranchContactsTemplate());
@@ -6292,6 +6402,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
+  on('downloadIntReversalMasterTemplateBtn','click',()=>downloadInterestReversalMasterTemplate());
   on('asOnDateInput','change',(e)=>{ __pendingAsOnDate = e.target.value; });
   on('updateCancelBtn','click',()=>toggleUpdateModal(false));
   on('applyDataBtn','click',()=>applyNewData());
