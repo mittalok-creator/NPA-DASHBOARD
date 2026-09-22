@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branch Split</title>
+<!-- Synced with the main app's own theme toggle -- this tool is embedded
+     via iframe on the same origin as the main app, so it can read the
+     exact localStorage key the main app's own theme toggle writes (see
+     setTheme() in js/app.js) directly, no postMessage needed. -->
+<script>
+(function(){
+  function syncTheme(){
+    try{
+      var t = localStorage.getItem('upgb-theme');
+      if(t==='dark'||t==='light') document.documentElement.dataset.theme = t;
+      else delete document.documentElement.dataset.theme;
+    }catch(e){}
+  }
+  syncTheme();
+  window.addEventListener('storage', function(e){ if(e.key==='upgb-theme') syncTheme(); });
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<!-- Self-hosted, not CDN-linked, matching this app's convention for every
+     vendor library (a bank office network is exactly the kind of place
+     likely to block an arbitrary CDN domain). xlsx.full.min.js and
+     exceljs.min.js both already ship for other tools; jszip.min.js is new
+     here (2026-09-22), for the "your browser can't write to a folder
+     directly" fallback path. -->
+<script src="../js/vendor/xlsx.full.min.js"></script>
+<script src="../js/vendor/exceljs.min.js"></script>
+<script src="../js/vendor/jszip.min.js"></script>
+<style>
+  /* Same token system as the app's own Utility Hub toolset (HBR Report,
+     NPA SOL Summary, Telephone Directory, Branch Map, PassSheet). */
+  :root{
+    --bg:#F2F5F3;
+    --surface:#FFFFFF;
+    --surface-muted:#EAEFEC;
+    --ink:#16211C;
+    --ink-muted:#5C6D64;
+    --line:#D7DED9;
+    --accent:#0E6B57;
+    --accent-ink:#FFFFFF;
+    --accent-soft:#DCEEE8;
+    --warn:#9A6A0A;
+    --warn-soft:#F3E7CE;
+    --danger:#A5432B;
+    --danger-soft:#F6E2DC;
+    --shadow: 0 1px 2px rgba(20,40,32,.06), 0 6px 20px -8px rgba(20,40,32,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0F1C17; --surface:#15251F; --surface-muted:#1B2C25;
+      --ink:#E7F1EC; --ink-muted:#93AA9F; --line:#28392F;
+      --accent:#52C09B; --accent-ink:#08150F; --accent-soft:#1E362C;
+      --warn:#E2B85B; --warn-soft:#3A3020; --danger:#E28A6F; --danger-soft:#3A241D;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0F1C17; --surface:#15251F; --surface-muted:#1B2C25;
+    --ink:#E7F1EC; --ink-muted:#93AA9F; --line:#28392F;
+    --accent:#52C09B; --accent-ink:#08150F; --accent-soft:#1E362C;
+    --warn:#E2B85B; --warn-soft:#3A3020; --danger:#E28A6F; --danger-soft:#3A241D;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg)}
+  body{color:var(--ink);font-family:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;font-size:14px;line-height:1.5;padding-inline:16px}
+  .num{font-variant-numeric:tabular-nums;font-family:'IBM Plex Mono',ui-monospace,monospace}
+  .wrap{max-width:900px;margin:0 auto;padding-block:20px 60px}
+  h1{font-family:'Spectral', Georgia, serif;font-weight:700;font-size:22px;margin:0 0 2px}
+  .subtitle{color:var(--ink-muted);font-size:13px;margin-bottom:20px}
+
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:18px 20px;margin-bottom:14px}
+  .panel[hidden]{display:none}
+  .step-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .step-badge{flex:none;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .step-title{font-weight:700;font-size:14.5px}
+  .step-sub{color:var(--ink-muted);font-size:12px;margin-top:1px}
+
+  .mode-row{display:flex;gap:10px;flex-wrap:wrap}
+  .mode-btn{flex:1;min-width:180px;border:1.5px solid var(--line);background:var(--surface-muted);color:var(--ink);border-radius:10px;padding:12px 14px;cursor:pointer;text-align:left;font-family:inherit}
+  .mode-btn b{display:block;font-size:13.5px;margin-bottom:3px}
+  .mode-btn span{color:var(--ink-muted);font-size:11.5px}
+  .mode-btn.active{border-color:var(--accent);background:var(--accent-soft)}
+  .mode-btn.active b{color:var(--accent)}
+
+  .drop{border:1.5px dashed var(--line);border-radius:10px;padding:20px;text-align:center;cursor:pointer;background:var(--surface-muted)}
+  .drop:hover{border-color:var(--accent)}
+  .drop .main{font-weight:600;font-size:13.5px}
+  .drop .sub{color:var(--ink-muted);font-size:11.5px;margin-top:3px}
+
+  select, .btn{font-family:inherit;font-size:13px}
+  select{padding:8px 10px;border-radius:8px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
+  .btn{border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9px;padding:9px 16px;cursor:pointer;font-weight:600}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .btn.danger{background:var(--danger-soft);color:var(--danger);border-color:var(--danger-soft)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.small{padding:5px 10px;font-size:11.5px;font-weight:600}
+
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .badge{background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:3px 11px;font-weight:700;font-size:12px}
+  .note{color:var(--ink-muted);font-size:12px;margin-top:8px;line-height:1.5}
+  .note.warn{color:var(--warn)}
+
+  .branch-list{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px}
+  .branch-row{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .branch-row:last-child{border-bottom:0}
+  .branch-row .name{flex:1;font-weight:600}
+  .branch-row .cnt{color:var(--ink-muted)}
+
+  .progress-track{height:8px;border-radius:99px;background:var(--surface-muted);overflow:hidden;margin:10px 0}
+  .progress-fill{height:100%;background:var(--accent);width:0%;transition:width .2s}
+  .log{background:var(--surface-muted);border:1px solid var(--line);border-radius:10px;padding:10px 12px;height:150px;overflow:auto;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11.5px;white-space:pre-wrap;line-height:1.6}
+  .status-line{font-weight:700;font-size:12.5px;padding:8px 12px;border-radius:8px;background:var(--accent-soft);color:var(--accent);margin-bottom:10px}
+  .status-line.err{background:var(--danger-soft);color:var(--danger)}
+
+  @media (max-width:640px){ .mode-row{flex-direction:column} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Branch Split</h1>
+    <div class="subtitle">Daily NPA export → one workbook per branch, region-aware, address-enriched.</div>
+  </header>
+
+  <div class="panel" id="modeStep">
+    <div class="step-head"><div class="step-badge">01</div><div><div class="step-title">Mode</div><div class="step-sub">Pick how much detail each branch's file should have.</div></div></div>
+    <div class="mode-row">
+      <button type="button" class="mode-btn" id="modeSimpleBtn" data-mode="simple">
+        <b>Simple Split</b><span>One flat sheet per branch, every column from your file as-is, plus address.</span>
+      </button>
+      <button type="button" class="mode-btn active" id="modeFullBtn" data-mode="full">
+        <b>Full NPA Split</b><span>NPA_LIST + SUMMARY + category sheets + KCC + ₹5–10L / ₹10L+ slabs, per branch.</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel" id="fileStep">
+    <div class="step-head"><div class="step-badge">02</div><div><div class="step-title">Master file</div><div class="step-sub">The Excel export you want split branch-wise.</div></div></div>
+    <div class="drop" id="fileDrop">
+      <div class="main" id="fileDropLabel">Tap to choose the master file</div>
+      <div class="sub">.xlsx / .xlsb / .xls / .csv</div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xlsb,.xls,.csv" hidden>
+    <div id="fileStatus"></div>
+  </div>
+
+  <div class="panel" id="sheetStep" hidden>
+    <div class="step-head"><div class="step-badge">03</div><div><div class="step-title">Worksheet</div><div class="step-sub">Pick the sheet that has the account data.</div></div></div>
+    <select id="sheetSelect"></select>
+    <div id="sheetStatus" class="note"></div>
+  </div>
+
+  <div class="panel" id="regionStep" hidden>
+    <div class="step-head"><div class="step-badge">04</div><div><div class="step-title">Region</div><div class="step-sub">This file has a Region column — pick one to narrow the branch list.</div></div></div>
+    <div class="row">
+      <select id="regionSelect"></select>
+      <span class="badge"><span id="regionBranchCount">0</span> branch(es)</span>
+    </div>
+  </div>
+
+  <div class="panel" id="branchStep" hidden>
+    <div class="step-head"><div class="step-badge">05</div><div><div class="step-title">Branches</div><div class="step-sub">Every checked branch gets its own file.</div></div></div>
+    <div class="row">
+      <button type="button" class="btn small" id="selectAllBtn">Select all</button>
+      <button type="button" class="btn small" id="selectNoneBtn">Select none</button>
+    </div>
+    <div class="branch-list" id="branchList"></div>
+  </div>
+
+  <div class="panel" id="addressStep" hidden>
+    <div class="step-head"><div class="step-badge">06</div><div><div class="step-title">Address</div><div class="step-sub">Used in both modes — filled in by Account No. wherever the master file doesn't already have one.</div></div></div>
+    <div class="row">
+      <span id="addressSourceLabel" class="note">Checking for a shared Address List…</span>
+      <button type="button" class="btn small" id="addressChangeBtn">CHANGE (OPTIONAL)</button>
+    </div>
+    <input type="file" id="addressFileInput" accept=".xlsx,.xlsb,.xls,.csv" hidden>
+  </div>
+
+  <div class="panel" id="outputStep" hidden>
+    <div class="step-head"><div class="step-badge">07</div><div><div class="step-title">Output</div><div class="step-sub" id="outputSub">Choose where the branch-wise files should be saved.</div></div></div>
+    <div class="row">
+      <button type="button" class="btn" id="pickFolderBtn">Choose output folder</button>
+      <span class="note" id="outputChosenLabel"></span>
+    </div>
+    <div class="note" id="outputFallbackNote" hidden>Your browser can't write directly to a folder — all files will be bundled into one ZIP to download instead.</div>
+  </div>
+
+  <div class="panel" id="runPanel" hidden>
+    <div class="step-head"><div class="step-badge">08</div><div><div class="step-title">Run</div><div class="step-sub">One click builds every selected branch's file.</div></div></div>
+    <div class="row">
+      <button type="button" class="btn primary" id="runBtn">▶ Split Files</button>
+      <button type="button" class="btn" id="pauseBtn" disabled>⏸ Pause</button>
+      <button type="button" class="btn danger" id="cancelBtn" disabled>✕ Cancel</button>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="status-line" id="statusLine">● Ready to run</div>
+    <div class="log" id="activityLog"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------------- shared small helpers (mirrors js/app.js's own,
+   copied rather than imported since this tool is standalone) ---------------- */
+function normHeader(h){ return String(h||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+function cellStr(row, i){ return i>=0 ? String(row[i]==null?'':row[i]).trim() : ''; }
+function looksScientific(s){ return /^[0-9]+(\.[0-9]+)?e\+?\d+$/i.test(String(s).trim()); }
+function expandSci(s){ var n = Number(s); if(!isFinite(n)) return String(s).trim(); return BigInt(Math.round(n)).toString(); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+function properCase(s){
+  return String(s||'').trim().split(/\s+/).map(function(p){
+    return p.length ? p.charAt(0).toUpperCase()+p.slice(1).toLowerCase() : p;
+  }).join(' ');
+}
+function sanitizeFilename(s){ return String(s||'').replace(/[\\/:*?"<>|]/g,'-').trim(); }
+function sanitizeSheetName(s, used){
+  var name = String(s).replace(/[\[\]\*\/\\\?:]/g,'').slice(0,31) || 'Sheet';
+  var base = name.slice(0,28), n = 2;
+  while(used[name]){ name = base + ' (' + n + ')'; n++; }
+  used[name] = true;
+  return name;
+}
+// Same normalization the main app's Interest Reversal / Address List
+// uploads use for Account No. matching -- absorbs float/scientific-
+// notation quirks so "151635110000123" and "1.51635110000123E+14" (or a
+// literal JS number) all resolve to the same lookup key.
+function normAcct(v){
+  if(v==null || v==='') return '';
+  var s = String(v).trim();
+  if(looksScientific(s)) return expandSci(s);
+  var n = Number(s);
+  if(isFinite(n) && /^[0-9.]+$/.test(s)) return String(Math.round(n));
+  return s;
+}
+function todayFilenameDate(){
+  var d = new Date();
+  function p2(n){ return (n<10?'0':'')+n; }
+  return p2(d.getDate())+'-'+p2(d.getMonth()+1)+'-'+d.getFullYear();
+}
+// Reads a date embedded in the selected worksheet's own tab name
+// (dd.mm.yyyy or dd-mm-yyyy), falling back to today -- same convention
+// BranchSplitConsole.ps1 uses (Extract-DateToken).
+function extractDateToken(sheetName){
+  var m = /(\d{2})[.\-](\d{2})[.\-](\d{4})/.exec(String(sheetName||''));
+  if(m) return m[1]+'-'+m[2]+'-'+m[3];
+  return todayFilenameDate();
+}
+function thinBorder(){
+  return { top:{style:'thin',color:{argb:'FFD7DED9'}}, left:{style:'thin',color:{argb:'FFD7DED9'}},
+           bottom:{style:'thin',color:{argb:'FFD7DED9'}}, right:{style:'thin',color:{argb:'FFD7DED9'}} };
+}
+function styleHeaderRow(row, colCount){
+  for(var c=1;c<=colCount;c++){
+    var cell = row.getCell(c);
+    cell.font = { bold:true, color:{argb:'FFFFFFFF'} };
+    cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF2F527D'} };
+    cell.alignment = { vertical:'middle', horizontal:'center' };
+    cell.border = thinBorder();
+  }
+  row.height = 20;
+}
+function anchorDownload(blob, filename){
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+}
+
+/* ---------------- shared address map bridge ---------------- */
+// Deliberate one-off exception to "every Utility Hub tool is fully
+// independent" -- the Address List is genuinely app-wide reference data
+// (see DATA.addressList's own comment in js/app.js), so this tool reads
+// it live off the parent app rather than keeping a private copy. Same-
+// origin, so a plain window.parent property read, no postMessage.
+// Degrades to null (no shared list) if the parent isn't ready, e.g. this
+// tool opened directly/standalone rather than inside the app's iframe.
+function getSharedAddressList(){
+  try{
+    if(window.parent && window.parent!==window && typeof window.parent.UPGB_getAddressList==='function'){
+      return window.parent.UPGB_getAddressList();
+    }
+  }catch(e){ /* cross-origin or parent not ready */ }
+  return null;
+}
+
+/* ---------------- state ---------------- */
+var state = {
+  mode: 'full',
+  wb: null,
+  sheetName: '',
+  rows: [],          // raw rows (array-of-arrays, row 0 = header) for the selected sheet
+  headerIdx: {},      // normalized header -> column index
+  hasRegion: false,
+  regionBranches: {}, // REGION -> [branch,...] (sorted)
+  allBranches: [],    // used when no Region column
+  selectedRegion: '',
+  branchCounts: {},   // branch -> row count (within current region scope)
+  selectedBranches: {}, // branch -> true
+  sharedAddressMap: null,   // from getSharedAddressList()
+  overrideAddressMap: null, // one-off upload for this run only
+  embeddedAddressMap: null, // an "ADDRESS" sheet inside the master workbook itself
+  dirHandle: null,
+  cancelRequested: false,
+  pauseRequested: false,
+  running: false,
+};
+
+function idx(name){ return state.headerIdx.hasOwnProperty(name) ? state.headerIdx[name] : -1; }
+
+/* ---------------- DOM refs ---------------- */
+var el = {};
+['modeSimpleBtn','modeFullBtn','fileDrop','fileInput','fileDropLabel','fileStatus',
+ 'sheetStep','sheetSelect','sheetStatus','regionStep','regionSelect','regionBranchCount',
+ 'branchStep','branchList','selectAllBtn','selectNoneBtn',
+ 'addressStep','addressSourceLabel','addressChangeBtn','addressFileInput',
+ 'outputStep','outputSub','pickFolderBtn','outputChosenLabel','outputFallbackNote',
+ 'runPanel','runBtn','pauseBtn','cancelBtn','progressFill','statusLine','activityLog'
+].forEach(function(id){ el[id] = document.getElementById(id); });
+
+function log(msg){
+  var stamp = new Date().toTimeString().slice(0,8);
+  el.activityLog.textContent += stamp+'  '+msg+'\n';
+  el.activityLog.scrollTop = el.activityLog.scrollHeight;
+}
+function setStatus(msg, isErr){
+  el.statusLine.textContent = '● '+msg;
+  el.statusLine.className = 'status-line'+(isErr?' err':'');
+}
+function setProgress(pct){ el.progressFill.style.width = Math.max(0,Math.min(100,pct*100))+'%'; }
+
+/* ---------------- 01: mode ---------------- */
+function setMode(m){
+  state.mode = m;
+  el.modeSimpleBtn.classList.toggle('active', m==='simple');
+  el.modeFullBtn.classList.toggle('active', m==='full');
+}
+el.modeSimpleBtn.addEventListener('click', function(){ setMode('simple'); });
+el.modeFullBtn.addEventListener('click', function(){ setMode('full'); });
+
+/* ---------------- 02: master file upload ---------------- */
+el.fileDrop.addEventListener('click', function(){ el.fileInput.click(); });
+el.fileInput.addEventListener('change', function(e){ if(e.target.files[0]) handleMasterFile(e.target.files[0]); });
+
+function handleMasterFile(file){
+  el.fileDropLabel.textContent = file.name;
+  el.fileStatus.innerHTML = '<div class="note">Reading '+esc(file.name)+'…</div>';
+  var isCsv = /\.csv$/i.test(file.name);
+  var reader = new FileReader();
+  reader.onerror = function(){ el.fileStatus.innerHTML = '<div class="note warn">⚠ Failed to read the file.</div>'; };
+  reader.onload = function(e){
+    try{
+      var wb;
+      if(isCsv){ wb = XLSX.read(String(e.target.result), {type:'string'}); }
+      else { wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'}); }
+      state.wb = wb;
+      // Opportunistic embedded ADDRESS sheet (lowest-priority address source)
+      state.embeddedAddressMap = null;
+      var addrSheet = wb.SheetNames.find(function(n){ return n==='ADDRESS'; });
+      if(addrSheet){
+        var addrRows = XLSX.utils.sheet_to_json(wb.Sheets[addrSheet], {header:1, raw:true, defval:''});
+        state.embeddedAddressMap = buildAddressMapFromRows(addrRows);
+      }
+      el.sheetSelect.innerHTML = wb.SheetNames.map(function(n){ return '<option>'+esc(n)+'</option>'; }).join('');
+      el.sheetStep.hidden = false;
+      el.fileStatus.innerHTML = '<div class="note">✔ '+wb.SheetNames.length+' worksheet(s) found.</div>';
+      loadSheet(wb.SheetNames[0]);
+    }catch(err){
+      el.fileStatus.innerHTML = '<div class="note warn">⚠ Could not read this file: '+esc(err.message||err)+'</div>';
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
+function buildAddressMapFromRows(allRows){
+  var header = (allRows[0]||[]).map(normHeader);
+  var acctCol = -1, addrCol = -1;
+  for(var c=0;c<header.length;c++){
+    if(acctCol<0 && /^(accountnumber|accountno|acctno|account)$/.test(header[c])) acctCol = c;
+    if(addrCol<0 && header[c].indexOf('address')>=0) addrCol = c;
+  }
+  if(acctCol<0) acctCol = 0;
+  if(addrCol<0) addrCol = 1;
+  var map = {};
+  for(var i=1;i<allRows.length;i++){
+    var row = allRows[i];
+    var acct = normAcct(cellStr(row, acctCol));
+    if(!acct) continue;
+    var addr = cellStr(row, addrCol);
+    if(addr && !map[acct]) map[acct] = addr;
+  }
+  return map;
+}
+
+/* ---------------- 03: worksheet ---------------- */
+el.sheetSelect.addEventListener('change', function(){ loadSheet(el.sheetSelect.value); });
+
+var REQUIRED_FULL = ['sol','branch','accountno','customerid','schemecode','accountname',
+  'balanceamount','accountnpadate','custnpadate','sbaaccbalance','category','provamt',
+  'sanctiondate','limit','mobileno'];
+
+function loadSheet(name){
+  state.sheetName = name;
+  var raw = XLSX.utils.sheet_to_json(state.wb.Sheets[name], {header:1, raw:true, defval:''});
+  var header = (raw[0]||[]).map(normHeader);
+  var hMap = {};
+  header.forEach(function(h,i){ if(h && !(h in hMap)) hMap[h] = i; });
+  state.headerIdx = hMap;
+  state.rows = raw.slice(1).filter(function(r){ return r && r.some(function(v){ return v!==''; }); });
+
+  if(!('branch' in hMap)){
+    el.sheetStatus.innerHTML = '<span class="warn">⚠ This sheet has no "Branch" column -- pick a different sheet.</span>';
+    el.regionStep.hidden = true; el.branchStep.hidden = true; el.addressStep.hidden = true;
+    el.outputStep.hidden = true; el.runPanel.hidden = true;
+    return;
+  }
+  if(state.mode==='full'){
+    var missing = REQUIRED_FULL.filter(function(rq){ return !(rq in hMap); });
+    if(missing.length){
+      el.sheetStatus.innerHTML = '<span class="warn">⚠ Missing column(s) for Full NPA Split: '+esc(missing.join(', '))+'. Switch to Simple Split, or pick a sheet with these columns.</span>';
+    } else {
+      el.sheetStatus.innerHTML = '<span>✔ '+state.rows.length.toLocaleString('en-IN')+' row(s) loaded.</span>';
+    }
+  } else {
+    el.sheetStatus.innerHTML = '<span>✔ '+state.rows.length.toLocaleString('en-IN')+' row(s) loaded.</span>';
+  }
+
+  loadRegionsAndBranches();
+  loadAddressSource();
+  el.addressStep.hidden = false;
+  el.outputStep.hidden = false;
+  el.runPanel.hidden = false;
+}
+
+/* ---------------- 04: region (conditional) ---------------- */
+function loadRegionsAndBranches(){
+  var branchCol = idx('branch'), regionCol = idx('region');
+  state.hasRegion = regionCol>=0;
+  state.regionBranches = {};
+  state.allBranches = [];
+  state.branchCounts = {};
+
+  if(state.hasRegion){
+    var rb = {};
+    state.rows.forEach(function(r){
+      var region = cellStr(r, regionCol).toUpperCase();
+      var branch = cellStr(r, branchCol);
+      if(!region || !branch) return;
+      if(!rb[region]) rb[region] = {};
+      rb[region][branch] = (rb[region][branch]||0) + 1;
+    });
+    var regionBranches = {};
+    Object.keys(rb).forEach(function(region){
+      regionBranches[region] = Object.keys(rb[region]).sort();
+    });
+    state.regionBranches = regionBranches;
+    state.regionCountsRaw = rb;
+
+    var regionKeys = Object.keys(regionBranches).sort();
+    el.regionSelect.innerHTML = regionKeys.map(function(r){ return '<option>'+esc(r)+'</option>'; }).join('');
+    var def = regionBranches.hasOwnProperty('HATHRAS') ? 'HATHRAS' : regionKeys[0];
+    el.regionSelect.value = def;
+    state.selectedRegion = def;
+    el.regionStep.hidden = false;
+    applyRegionSelection();
+  } else {
+    el.regionStep.hidden = true;
+    var counts = {};
+    state.rows.forEach(function(r){
+      var branch = cellStr(r, branchCol);
+      if(!branch) return;
+      counts[branch] = (counts[branch]||0) + 1;
+    });
+    state.allBranches = Object.keys(counts).sort();
+    state.branchCounts = counts;
+    state.selectedRegion = '';
+    renderBranchList();
+  }
+  el.branchStep.hidden = false;
+}
+el.regionSelect.addEventListener('change', function(){
+  state.selectedRegion = el.regionSelect.value;
+  applyRegionSelection();
+});
+function applyRegionSelection(){
+  var branches = state.regionBranches[state.selectedRegion] || [];
+  state.branchCounts = state.regionCountsRaw[state.selectedRegion] || {};
+  el.regionBranchCount.textContent = branches.length;
+  renderBranchList(branches);
+}
+
+/* ---------------- 05: branch selection ---------------- */
+function renderBranchList(branches){
+  var list = branches || state.allBranches;
+  state.selectedBranches = {};
+  el.branchList.innerHTML = list.map(function(b){
+    state.selectedBranches[b] = true;
+    var cnt = state.branchCounts[b] || 0;
+    var id = 'br_'+b.replace(/[^a-z0-9]/gi,'_');
+    return '<label class="branch-row" for="'+id+'"><input type="checkbox" id="'+id+'" checked data-branch="'+esc(b)+'"><span class="name">'+esc(b)+'</span><span class="cnt num">'+cnt.toLocaleString('en-IN')+' row(s)</span></label>';
+  }).join('') || '<div class="branch-row"><span class="name">No branches found.</span></div>';
+  el.branchList.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+    cb.addEventListener('change', function(){ state.selectedBranches[cb.dataset.branch] = cb.checked; });
+  });
+}
+el.selectAllBtn.addEventListener('click', function(){
+  el.branchList.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked = true; state.selectedBranches[cb.dataset.branch] = true; });
+});
+el.selectNoneBtn.addEventListener('click', function(){
+  el.branchList.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked = false; state.selectedBranches[cb.dataset.branch] = false; });
+});
+
+/* ---------------- 06: address source ---------------- */
+function loadAddressSource(){
+  state.sharedAddressMap = getSharedAddressList();
+  updateAddressLabel();
+}
+function updateAddressLabel(){
+  if(state.overrideAddressMap){
+    el.addressSourceLabel.textContent = 'Using a one-off uploaded list for this run (' + Object.keys(state.overrideAddressMap).length.toLocaleString('en-IN') + ' accounts).';
+  } else if(state.sharedAddressMap && Object.keys(state.sharedAddressMap).length){
+    el.addressSourceLabel.textContent = 'Using the shared Address List — ' + Object.keys(state.sharedAddressMap).length.toLocaleString('en-IN') + ' accounts.';
+  } else if(state.embeddedAddressMap){
+    el.addressSourceLabel.textContent = 'No shared Address List found — using the "ADDRESS" sheet inside your master file (' + Object.keys(state.embeddedAddressMap).length.toLocaleString('en-IN') + ' accounts).';
+  } else {
+    el.addressSourceLabel.textContent = 'No Address List available — output will have a blank Address column. Upload one under Settings → Update Data → "Address List" in the main app, or use CHANGE below for just this run.';
+  }
+}
+el.addressChangeBtn.addEventListener('click', function(){ el.addressFileInput.click(); });
+el.addressFileInput.addEventListener('change', function(e){
+  var file = e.target.files[0];
+  if(!file) return;
+  var isCsv = /\.csv$/i.test(file.name);
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      var wb = isCsv ? XLSX.read(String(ev.target.result), {type:'string'}) : XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+      var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+      state.overrideAddressMap = buildAddressMapFromRows(rows);
+      updateAddressLabel();
+    }catch(err){ setStatus('Could not read address file: '+(err.message||err), true); }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+});
+function resolveAddress(acctNo){
+  var key = normAcct(acctNo);
+  if(!key) return '';
+  if(state.overrideAddressMap && state.overrideAddressMap[key]) return state.overrideAddressMap[key];
+  if(state.sharedAddressMap && state.sharedAddressMap[key]) return state.sharedAddressMap[key];
+  if(state.embeddedAddressMap && state.embeddedAddressMap[key]) return state.embeddedAddressMap[key];
+  return '';
+}
+
+/* ---------------- 07: output destination ---------------- */
+var fsaSupported = 'showDirectoryPicker' in window;
+if(!fsaSupported){
+  el.pickFolderBtn.hidden = true;
+  el.outputFallbackNote.hidden = false;
+  el.outputSub.textContent = 'Your browser will bundle every file into one ZIP to download.';
+  el.runBtn.textContent = '▶ Build ZIP';
+}
+el.pickFolderBtn.addEventListener('click', function(){
+  (window.showDirectoryPicker ? window.showDirectoryPicker() : Promise.reject())
+    .then(function(handle){
+      state.dirHandle = handle;
+      el.outputChosenLabel.textContent = 'Saving to: ' + handle.name;
+    })
+    .catch(function(){ /* user cancelled the picker -- leave prior selection, if any */ });
+});
+
+/* ---------------- 08: run ---------------- */
+el.runBtn.addEventListener('click', runSplit);
+el.pauseBtn.addEventListener('click', function(){
+  state.pauseRequested = !state.pauseRequested;
+  el.pauseBtn.textContent = state.pauseRequested ? '▶ Resume' : '⏸ Pause';
+});
+el.cancelBtn.addEventListener('click', function(){ state.cancelRequested = true; state.pauseRequested = false; });
+
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+async function runSplit(){
+  if(state.running) return;
+  if(fsaSupported && !state.dirHandle){ setStatus('Pick an output folder first (Step 07).', true); return; }
+  var branches = Object.keys(state.selectedBranches).filter(function(b){ return state.selectedBranches[b]; });
+  if(!branches.length){ setStatus('Select at least one branch (Step 05).', true); return; }
+
+  state.running = true; state.cancelRequested = false; state.pauseRequested = false;
+  el.runBtn.disabled = true; el.pauseBtn.disabled = false; el.cancelBtn.disabled = false;
+  el.pauseBtn.textContent = '⏸ Pause';
+  el.activityLog.textContent = '';
+
+  var zip = fsaSupported ? null : new JSZip();
+  var dateToken = extractDateToken(state.sheetName);
+  var filesWritten = 0, skipped = 0, cancelled = false;
+  var branchCol = idx('branch');
+
+  for(var bi=0; bi<branches.length; bi++){
+    if(state.cancelRequested){ cancelled = true; break; }
+    if(state.pauseRequested){
+      setStatus('Paused after '+filesWritten+' of '+branches.length+' file(s). Click Resume to continue.');
+      while(state.pauseRequested && !state.cancelRequested){ await sleep(150); }
+      if(state.cancelRequested){ cancelled = true; break; }
+      setStatus('Resumed.');
+    }
+    var branch = branches[bi];
+    var branchRows = state.rows.filter(function(r){ return cellStr(r, branchCol)===branch; });
+
+    try{
+      var built = state.mode==='full'
+        ? buildFullSplitWorkbook(branch, branchRows, dateToken)
+        : buildSimpleSplitWorkbook(branch, branchRows, dateToken);
+
+      if(!built){
+        skipped++;
+        log(branch + ' : no qualifying rows -- skipped.');
+      } else {
+        var buffer = await built.wb.xlsx.writeBuffer();
+        if(fsaSupported){
+          var fh = await state.dirHandle.getFileHandle(built.filename, {create:true});
+          var w = await fh.createWritable();
+          await w.write(buffer);
+          await w.close();
+        } else {
+          zip.file(built.filename, buffer);
+        }
+        filesWritten++;
+        log(branch + ' : ' + built.rowCount + ' row(s) -> ' + built.filename);
+      }
+    }catch(err){
+      log('⚠ ' + branch + ' : ' + (err.message||err));
+    }
+    setProgress((bi+1)/branches.length);
+    await sleep(0);
+  }
+
+  if(!fsaSupported && !cancelled && filesWritten>0){
+    setStatus('Building ZIP…');
+    var zipBlob = await zip.generateAsync({type:'blob'});
+    anchorDownload(zipBlob, 'Branch_Split_'+dateToken+'.zip');
+  }
+
+  el.runBtn.disabled = false; el.pauseBtn.disabled = true; el.cancelBtn.disabled = true;
+  state.running = false;
+  if(cancelled){
+    setStatus('Cancelled. '+filesWritten+' file(s) written before stopping.', true);
+  } else {
+    setStatus('Done. '+filesWritten+' file(s) written, '+skipped+' branch(es) skipped (no qualifying rows).');
+  }
+}
+
+/* ---------------- Simple Split engine ---------------- */
+function buildSimpleSplitWorkbook(branch, rows, dateToken){
+  if(!rows.length) return null;
+  var rawHeader = XLSX.utils.sheet_to_json(state.wb.Sheets[state.sheetName], {header:1, raw:true, defval:''})[0] || [];
+  var acctCol = idx('accountno');
+  var hasAddrCol = idx('address')>=0;
+
+  var wb = new ExcelJS.Workbook();
+  var usedNames = {};
+  var ws = wb.addWorksheet(sanitizeSheetName(branch, usedNames), { views:[{state:'frozen', ySplit:1}] });
+
+  var headers = rawHeader.slice();
+  if(!hasAddrCol) headers.push('Address');
+  var hRow = ws.getRow(1);
+  headers.forEach(function(h,i){ hRow.getCell(i+1).value = String(h||''); });
+  styleHeaderRow(hRow, headers.length);
+
+  rows.forEach(function(r, ri){
+    var row = ws.getRow(ri+2);
+    for(var c=0;c<rawHeader.length;c++){ row.getCell(c+1).value = r[c]==null? '' : r[c]; }
+    if(!hasAddrCol){
+      row.getCell(rawHeader.length+1).value = resolveAddress(cellStr(r, acctCol));
+    }
+    if(ri % 2 === 1){
+      for(var fc=1;fc<=headers.length;fc++){ row.getCell(fc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F5F3'}}; }
+    }
+  });
+  ws.columns.forEach(function(col){ col.width = 16; });
+  ws.autoFilter = { from:{row:1,column:1}, to:{row:1,column:headers.length} };
+
+  return { wb: wb, rowCount: rows.length,
+    filename: sanitizeFilename(properCase(branch)) + ' as on ' + dateToken + '.xlsx' };
+}
+
+/* ---------------- Full NPA Split engine (port of Run-NPASplit) ---------------- */
+var OUT_HEADERS = ['Sol','Branch','Account No','Customer ID','Scheme Code','Account Name',
+  'ADDRESS','Balance Amount','Account NPA Date','Cust NPA Date','SBA Account','SBA Balance',
+  'Category','Prov Amt','Sanction Date','Limit','Mobile No'];
+var OUT_WIDTHS = [8,15,16,15,14,40,40,16,16,16,18,14,12,12,14,10,14];
+var CATEGORIES = ['SUB_STD','DA1','DA2','DA3','LOSS'];
+var KCC_SCHEME = 'CC004';
+var BRACKET_5L = 500000, BRACKET_10L = 1000000;
+
+function buildNpaRows(rows){
+  var c = {
+    sol: idx('sol'), branch: idx('branch'), acct: idx('accountno'), cust: idx('customerid'),
+    scheme: idx('schemecode'), name: idx('accountname'), bal: idx('balanceamount'),
+    npaDate: idx('accountnpadate'), custNpaDate: idx('custnpadate'), sba: idx('sbaaccbalance'),
+    cat: idx('category'), prov: idx('provamt'), sanct: idx('sanctiondate'), limit: idx('limit'),
+    mobile: idx('mobileno')
+  };
+  var out = [];
+  rows.forEach(function(r){
+    var bal = parseFloat(r[c.bal]);
+    if(!(bal>0)) return;
+    var sbaRaw = cellStr(r, c.sba);
+    var sbaAcct = '', sbaBal = '';
+    if(sbaRaw && sbaRaw!=='-'){
+      var p = sbaRaw.indexOf('->');
+      if(p>=0){ sbaAcct = sbaRaw.slice(0,p).trim(); sbaBal = sbaRaw.slice(p+2).trim(); }
+      else { sbaAcct = sbaRaw; }
+    }
+    // A CBS export sometimes truncates a large Account No. into scientific
+    // notation text (e.g. "1.51E+14") -- expand it the same way the main
+    // app's own daily upload does, so it never lands in the output half-
+    // mangled and unusable for lookups elsewhere.
+    var acctRaw = cellStr(r, c.acct);
+    var acctNo = looksScientific(acctRaw) ? expandSci(acctRaw) : r[c.acct];
+    out.push({
+      sol: r[c.sol], branch: r[c.branch], acctNo: acctNo, custId: r[c.cust],
+      scheme: r[c.scheme], name: r[c.name], address: resolveAddress(cellStr(r,c.acct)),
+      balance: bal, npaDate: r[c.npaDate], custNpaDate: r[c.custNpaDate],
+      sbaAcct: sbaAcct, sbaBal: sbaBal, category: cellStr(r,c.cat), prov: r[c.prov],
+      sanctDate: r[c.sanct], limit: r[c.limit], mobile: r[c.mobile]
+    });
+  });
+  return out;
+}
+function setDateCell(cell, rawVal){
+  if(typeof rawVal === 'number' && rawVal>0){ cell.value = rawVal; cell.numFmt = 'dd-mm-yyyy'; }
+  else { cell.value = rawVal==null? '' : rawVal; }
+}
+function writeNpaSheetBody(ws, npaRows){
+  var hRow = ws.getRow(1);
+  OUT_HEADERS.forEach(function(h,i){ hRow.getCell(i+1).value = h; });
+  styleHeaderRow(hRow, OUT_HEADERS.length);
+  npaRows.forEach(function(nr, ri){
+    var row = ws.getRow(ri+2);
+    row.getCell(1).value = nr.sol; row.getCell(2).value = nr.branch;
+    row.getCell(3).value = nr.acctNo; row.getCell(3).numFmt = '0';
+    row.getCell(4).value = nr.custId; row.getCell(5).value = nr.scheme;
+    row.getCell(6).value = nr.name; row.getCell(7).value = nr.address;
+    row.getCell(8).value = nr.balance; row.getCell(8).numFmt = '0.00';
+    setDateCell(row.getCell(9), nr.npaDate);
+    setDateCell(row.getCell(10), nr.custNpaDate);
+    row.getCell(11).value = nr.sbaAcct; if(nr.sbaAcct) row.getCell(11).numFmt = '0';
+    row.getCell(12).value = nr.sbaBal;
+    row.getCell(13).value = nr.category; row.getCell(14).value = nr.prov;
+    setDateCell(row.getCell(15), nr.sanctDate);
+    row.getCell(16).value = nr.limit; row.getCell(17).value = nr.mobile;
+    if(ri % 2 === 1){
+      for(var fc=1;fc<=OUT_HEADERS.length;fc++){ row.getCell(fc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F5F3'}}; }
+    }
+  });
+  ws.columns.forEach(function(col,i){ col.width = OUT_WIDTHS[i]; });
+  if(npaRows.length){ ws.autoFilter = { from:{row:1,column:1}, to:{row:npaRows.length+1,column:OUT_HEADERS.length} }; }
+}
+function buildSummarySheet(ws, npaRows){
+  ws.getCell('B1').value = 'NPA SUMMARY - Category wise'; ws.getCell('B1').font = {bold:true, size:14};
+  ws.getCell('B2').value = 'Category'; ws.getCell('C2').value = 'A/C'; ws.getCell('D2').value = 'Amt.(in Lakhs)';
+  ['B2','C2','D2'].forEach(function(a){ ws.getCell(a).font = {bold:true}; ws.getCell(a).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFDCEEE8'}}; });
+  ws.getCell('F1').value = 'SB BALANCE IN NPA ACCOUNTS'; ws.getCell('F1').font = {bold:true};
+  ws.getCell('F2').value = 'A/C'; ws.getCell('F2').font = {bold:true}; ws.getCell('F2').fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF3E7CE'}};
+
+  var r = 3, totalCount = 0, totalAmt = 0, totalSba = 0;
+  CATEGORIES.forEach(function(cat){
+    var cnt = 0, amt = 0, sbaCnt = 0;
+    npaRows.forEach(function(nr){
+      if(nr.category===cat){ cnt++; amt += nr.balance||0; if(nr.sbaAcct) sbaCnt++; }
+    });
+    ws.getCell('B'+r).value = cat; ws.getCell('C'+r).value = cnt;
+    ws.getCell('D'+r).value = Math.round(amt/100000*100)/100; ws.getCell('D'+r).numFmt = '0.00';
+    ws.getCell('F'+r).value = sbaCnt;
+    totalCount += cnt; totalAmt += amt; totalSba += sbaCnt;
+    r++;
+  });
+  ws.getCell('B'+r).value = 'Grand Total'; ws.getCell('C'+r).value = totalCount;
+  ws.getCell('D'+r).value = Math.round(totalAmt/100000*100)/100; ws.getCell('D'+r).numFmt = '0.00';
+  ws.getCell('F'+r).value = totalSba;
+  ['B'+r,'C'+r,'D'+r,'F'+r].forEach(function(a){ ws.getCell(a).font = {bold:true}; ws.getCell(a).border = {top:{style:'thin'}}; });
+  ws.getColumn('B').width = 16; ws.getColumn('C').width = 8; ws.getColumn('D').width = 15; ws.getColumn('F').width = 8;
+}
+function buildNpaBrackets(npaRows){
+  var custTotals = {};
+  npaRows.forEach(function(nr){
+    var cust = String(nr.custId||'').trim();
+    if(!cust) return;
+    custTotals[cust] = (custTotals[cust]||0) + (nr.balance||0);
+  });
+  var mid = [], high = [];
+  npaRows.forEach(function(nr){
+    var cust = String(nr.custId||'').trim();
+    if(!cust || !(cust in custTotals)) return;
+    var t = custTotals[cust];
+    if(t>=BRACKET_5L && t<BRACKET_10L) mid.push(nr);
+    else if(t>=BRACKET_10L) high.push(nr);
+  });
+  return { mid: mid, high: high };
+}
+function buildFullSplitWorkbook(branch, rows, dateToken){
+  var npaRows = buildNpaRows(rows);
+  if(!npaRows.length) return null;
+
+  var wb = new ExcelJS.Workbook();
+  var wsList = wb.addWorksheet('NPA_LIST', { views:[{state:'frozen', ySplit:1}] });
+  writeNpaSheetBody(wsList, npaRows);
+
+  var wsSummary = wb.addWorksheet('SUMMARY');
+  buildSummarySheet(wsSummary, npaRows);
+
+  CATEGORIES.forEach(function(cat){
+    var catRows = npaRows.filter(function(nr){ return nr.category===cat; });
+    if(catRows.length){
+      var wsCat = wb.addWorksheet(cat, { views:[{state:'frozen', ySplit:1}] });
+      writeNpaSheetBody(wsCat, catRows);
+    }
+  });
+
+  var kccRows = npaRows.filter(function(nr){ return nr.scheme===KCC_SCHEME; });
+  if(kccRows.length){
+    var wsKcc = wb.addWorksheet('KCC', { views:[{state:'frozen', ySplit:1}] });
+    writeNpaSheetBody(wsKcc, kccRows);
+  }
+
+  var brackets = buildNpaBrackets(npaRows);
+  if(brackets.mid.length){
+    var ws5 = wb.addWorksheet('NPA_5L_to_10L', { views:[{state:'frozen', ySplit:1}] });
+    writeNpaSheetBody(ws5, brackets.mid);
+  }
+  if(brackets.high.length){
+    var ws10 = wb.addWorksheet('NPA_Above_10L', { views:[{state:'frozen', ySplit:1}] });
+    writeNpaSheetBody(ws10, brackets.high);
+  }
+
+  return { wb: wb, rowCount: npaRows.length,
+    filename: sanitizeFilename(properCase(branch)) + ' NPA as on ' + dateToken + '.xlsx' };
+}
+
+/* This tool's content height varies a lot as steps appear/disappear
+   (mode toggle -> file upload -> conditional Region step -> branch list
+   -> run log growing during a split), same as NPA SOL Summary/Region
+   Summary/PNPA Summary/HBR Report/Telephone Directory -- same fix:
+   the iframe sets its own inline height directly (safe, same-origin via
+   window.frameElement), and the parent's #viewBranchSplit .tool-frame-wrap
+   CSS override just gets out of the way and lets it show through. A
+   MutationObserver on the whole body covers every state change here
+   (many small handlers touch the DOM) without needing a resizeFrame()
+   call sprinkled into each one individually. */
+function resizeFrame(){
+  if(!window.frameElement) return;
+  requestAnimationFrame(function(){
+    window.frameElement.style.height = document.documentElement.scrollHeight + 'px';
+  });
+}
+window.addEventListener('resize', resizeFrame);
+window.addEventListener('load', resizeFrame);
+new MutationObserver(resizeFrame).observe(document.body, {childList:true, subtree:true, attributes:true});
+resizeFrame();
+
+})();
+</script>
+</body>
+</html>
