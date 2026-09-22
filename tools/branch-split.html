@@ -51,6 +51,7 @@
     --danger:#A5432B;
     --danger-soft:#F6E2DC;
     --shadow: 0 1px 2px rgba(20,40,32,.06), 0 6px 20px -8px rgba(20,40,32,.18);
+    --shadow-lg: 0 1px 2px rgba(20,40,32,.06), 0 14px 34px -12px rgba(20,40,32,.26);
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
@@ -59,6 +60,7 @@
       --accent:#52C09B; --accent-ink:#08150F; --accent-soft:#1E362C;
       --warn:#E2B85B; --warn-soft:#3A3020; --danger:#E28A6F; --danger-soft:#3A241D;
       --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+      --shadow-lg: 0 1px 2px rgba(0,0,0,.3), 0 18px 40px -14px rgba(0,0,0,.6);
     }
   }
   :root[data-theme="dark"]{
@@ -67,6 +69,7 @@
     --accent:#52C09B; --accent-ink:#08150F; --accent-soft:#1E362C;
     --warn:#E2B85B; --warn-soft:#3A3020; --danger:#E28A6F; --danger-soft:#3A241D;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+    --shadow-lg: 0 1px 2px rgba(0,0,0,.3), 0 18px 40px -14px rgba(0,0,0,.6);
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg)}
@@ -74,35 +77,55 @@
   .num{font-variant-numeric:tabular-nums;font-family:'IBM Plex Mono',ui-monospace,monospace}
   .wrap{max-width:900px;margin:0 auto;padding-block:20px 60px}
   h1{font-family:'Spectral', Georgia, serif;font-weight:700;font-size:22px;margin:0 0 2px}
-  .subtitle{color:var(--ink-muted);font-size:13px;margin-bottom:20px}
+  .subtitle{color:var(--ink-muted);font-size:13px;margin-bottom:22px}
 
-  .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:18px 20px;margin-bottom:14px}
+  /* ---------- panel shell: every step is either "open" (the step being
+     worked on right now) or "done" (collapsed to a compact summary row
+     with a Change link) -- see the "Step sequencing" comment further
+     down for the mechanics. A step not yet reached keeps the plain
+     [hidden] attribute, same as before. ---------- */
+  .panel{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
   .panel[hidden]{display:none}
-  .step-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-  .step-badge{flex:none;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
-  .step-title{font-weight:700;font-size:14.5px}
+  .panel-open{padding:22px 24px}
+  .panel.done .panel-open{display:none}
+  .panel-collapsed-row{all:unset;box-sizing:border-box;display:none;align-items:center;gap:14px;width:100%;padding:14px 20px;cursor:pointer;transition:background .12s}
+  .panel.done .panel-collapsed-row{display:flex}
+  .panel-collapsed-row:hover{background:var(--surface-muted)}
+  .check-ic{flex:none;width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:flex;align-items:center;justify-content:center}
+  .collapsed-text{flex:1;text-align:left;min-width:0}
+  .collapsed-label{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted)}
+  .collapsed-value{font-size:13px;font-weight:600;color:var(--ink);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .change-link{flex:none;font-size:11.5px;font-weight:700;color:var(--accent)}
+
+  .step-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .step-icon{flex:none;width:32px;height:32px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center}
+  .step-title{font-weight:700;font-size:15px}
   .step-sub{color:var(--ink-muted);font-size:12px;margin-top:1px}
 
-  .mode-row{display:flex;gap:10px;flex-wrap:wrap}
-  .mode-btn{flex:1;min-width:180px;border:1.5px solid var(--line);background:var(--surface-muted);color:var(--ink);border-radius:10px;padding:12px 14px;cursor:pointer;text-align:left;font-family:inherit}
-  .mode-btn b{display:block;font-size:13.5px;margin-bottom:3px}
-  .mode-btn span{color:var(--ink-muted);font-size:11.5px}
+  .mode-row{display:flex;gap:12px;flex-wrap:wrap}
+  .mode-btn{all:unset;box-sizing:border-box;flex:1;min-width:200px;border:1.5px solid var(--line);background:var(--surface-muted);border-radius:12px;padding:16px 18px;cursor:pointer;display:flex;flex-direction:column;gap:8px;font-family:inherit;transition:border-color .12s,background .12s}
+  .mode-btn:hover{border-color:var(--accent)}
+  .mode-icon{width:30px;height:30px;border-radius:8px;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-muted)}
+  .mode-btn b{display:block;font-size:14px}
+  .mode-btn .desc{display:block;color:var(--ink-muted);font-size:12px;line-height:1.5}
   .mode-btn.active{border-color:var(--accent);background:var(--accent-soft)}
   .mode-btn.active b{color:var(--accent)}
+  .mode-btn.active .mode-icon{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 
-  .drop{border:1.5px dashed var(--line);border-radius:10px;padding:20px;text-align:center;cursor:pointer;background:var(--surface-muted)}
+  .drop{border:1.5px dashed var(--line);border-radius:12px;padding:22px;text-align:center;cursor:pointer;background:var(--surface-muted);transition:border-color .12s}
   .drop:hover{border-color:var(--accent)}
   .drop .main{font-weight:600;font-size:13.5px}
   .drop .sub{color:var(--ink-muted);font-size:11.5px;margin-top:3px}
 
   select, .btn{font-family:inherit;font-size:13px}
-  select{padding:8px 10px;border-radius:8px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
-  .btn{border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9px;padding:9px 16px;cursor:pointer;font-weight:600}
+  select{padding:9px 12px;border-radius:9px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:10px 18px;cursor:pointer;font-weight:700}
   .btn:hover{border-color:var(--accent)}
-  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-  .btn.danger{background:var(--danger-soft);color:var(--danger);border-color:var(--danger-soft)}
-  .btn:disabled{opacity:.45;cursor:not-allowed}
-  .btn.small{padding:5px 10px;font-size:11.5px;font-weight:600}
+  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);box-shadow:0 6px 16px -6px rgba(14,107,87,.4)}
+  .btn.danger{color:var(--danger)}
+  .btn.danger:hover{border-color:var(--danger)}
+  .btn:disabled{opacity:.42;cursor:not-allowed;box-shadow:none}
+  .btn.small{padding:6px 12px;font-size:11.5px}
 
   .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .badge{background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:3px 11px;font-weight:700;font-size:12px}
@@ -110,15 +133,21 @@
   .note.warn{color:var(--warn)}
 
   .branch-list{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px}
-  .branch-row{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .branch-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
   .branch-row:last-child{border-bottom:0}
+  .branch-row:nth-child(even){background:var(--surface-muted)}
+  .branch-row input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
   .branch-row .name{flex:1;font-weight:600}
   .branch-row .cnt{color:var(--ink-muted)}
 
-  .progress-track{height:8px;border-radius:99px;background:var(--surface-muted);overflow:hidden;margin:10px 0}
+  .addr-note{display:flex;align-items:center;gap:9px;padding:11px 14px;background:var(--accent-soft);color:var(--accent);border-radius:9px;font-size:12.5px;font-weight:600;margin-bottom:16px}
+  .addr-note.warn{background:var(--warn-soft);color:var(--warn)}
+  .addr-note svg{flex:none}
+
+  .progress-track{height:8px;border-radius:99px;background:var(--surface-muted);overflow:hidden;margin:12px 0}
   .progress-fill{height:100%;background:var(--accent);width:0%;transition:width .2s}
   .log{background:var(--surface-muted);border:1px solid var(--line);border-radius:10px;padding:10px 12px;height:150px;overflow:auto;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11.5px;white-space:pre-wrap;line-height:1.6}
-  .status-line{font-weight:700;font-size:12.5px;padding:8px 12px;border-radius:8px;background:var(--accent-soft);color:var(--accent);margin-bottom:10px}
+  .status-line{font-weight:700;font-size:12.5px;padding:8px 12px;border-radius:8px;background:var(--accent-soft);color:var(--accent);margin-bottom:10px;display:inline-block}
   .status-line.err{background:var(--danger-soft);color:var(--danger)}
 
   @media (max-width:640px){ .mode-row{flex-direction:column} }
@@ -131,79 +160,157 @@
     <div class="subtitle">Daily NPA export → one workbook per branch, region-aware, address-enriched.</div>
   </header>
 
-  <div class="panel" id="modeStep">
-    <div class="step-head"><div class="step-badge">01</div><div><div class="step-title">Mode</div><div class="step-sub">Pick how much detail each branch's file should have.</div></div></div>
-    <div class="mode-row">
-      <button type="button" class="mode-btn" id="modeSimpleBtn" data-mode="simple">
-        <b>Simple Split</b><span>One flat sheet per branch, every column from your file as-is, plus address.</span>
-      </button>
-      <button type="button" class="mode-btn active" id="modeFullBtn" data-mode="full">
-        <b>Full NPA Split</b><span>NPA_LIST + SUMMARY + category sheets + KCC + ₹5–10L / ₹10L+ slabs, per branch.</span>
-      </button>
-    </div>
-  </div>
+  <!-- ---------- Step sequencing (2026-09-22 redesign) ----------
+       Alok asked for a genuine one-at-a-time flow: upload first, then
+       everything else revealed as each choice is made, not the old
+       "three chunks reveal together" behaviour. Each step below is a
+       .panel with two faces -- .panel-open (the real controls) and
+       .panel-collapsed-row (a compact "✓ value ... Change" summary) --
+       toggled by adding/removing a "done" class (see the JS "Step
+       sequencing" section). A step not yet reachable keeps the plain
+       [hidden] attribute exactly like before. STEP_ORDER in the script
+       is the single source of truth for what comes after what. -->
 
   <div class="panel" id="fileStep">
-    <div class="step-head"><div class="step-badge">02</div><div><div class="step-title">Master file</div><div class="step-sub">The Excel export you want split branch-wise.</div></div></div>
-    <div class="drop" id="fileDrop">
-      <div class="main" id="fileDropLabel">Tap to choose the master file</div>
-      <div class="sub">.xlsx / .xlsb / .xls / .csv</div>
+    <div class="panel-open">
+      <div class="step-head">
+        <span class="step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
+        <div><div class="step-title">Master file</div><div class="step-sub">The Excel export you want split branch-wise.</div></div>
+      </div>
+      <div class="drop" id="fileDrop">
+        <div class="main" id="fileDropLabel">Tap to choose the master file</div>
+        <div class="sub">.xlsx / .xlsb / .xls / .csv</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xlsb,.xls,.csv" hidden>
+      <div id="fileStatus"></div>
     </div>
-    <input type="file" id="fileInput" accept=".xlsx,.xlsb,.xls,.csv" hidden>
-    <div id="fileStatus"></div>
+    <button type="button" class="panel-collapsed-row">
+      <span class="check-ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5 11-11"/></svg></span>
+      <span class="collapsed-text"><div class="collapsed-label">Master file</div><div class="collapsed-value"></div></span>
+      <span class="change-link">Change</span>
+    </button>
   </div>
 
   <div class="panel" id="sheetStep" hidden>
-    <div class="step-head"><div class="step-badge">03</div><div><div class="step-title">Worksheet</div><div class="step-sub">Pick the sheet that has the account data.</div></div></div>
-    <select id="sheetSelect"></select>
-    <div id="sheetStatus" class="note"></div>
+    <div class="panel-open">
+      <div class="step-head">
+        <span class="step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></svg></span>
+        <div><div class="step-title">Worksheet</div><div class="step-sub">Pick the sheet that has the account data.</div></div>
+      </div>
+      <select id="sheetSelect"></select>
+      <div id="sheetStatus" class="note"></div>
+    </div>
+    <button type="button" class="panel-collapsed-row">
+      <span class="check-ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5 11-11"/></svg></span>
+      <span class="collapsed-text"><div class="collapsed-label">Worksheet</div><div class="collapsed-value"></div></span>
+      <span class="change-link">Change</span>
+    </button>
+  </div>
+
+  <div class="panel" id="modeStep" hidden>
+    <div class="panel-open">
+      <div class="step-head">
+        <span class="step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 4h16v4H4z"/><path d="M4 12h7v8H4z"/><path d="M13 12h7v8h-7z"/></svg></span>
+        <div><div class="step-title">Mode</div><div class="step-sub">Pick how much detail each branch's file should have.</div></div>
+      </div>
+      <div class="mode-row">
+        <button type="button" class="mode-btn" id="modeSimpleBtn" data-mode="simple">
+          <span class="mode-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+          <b>Simple Split</b><span class="desc">One flat sheet per branch, every column from your file as-is, plus address.</span>
+        </button>
+        <button type="button" class="mode-btn active" id="modeFullBtn" data-mode="full">
+          <span class="mode-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v4H4z"/><path d="M4 12h7v8H4z"/><path d="M13 12h7v8h-7z"/></svg></span>
+          <b>Full NPA Split</b><span class="desc">NPA_LIST + SUMMARY + category sheets + KCC + ₹5–10L / ₹10L+ slabs, per branch.</span>
+        </button>
+      </div>
+      <div id="modeStatus"></div>
+    </div>
+    <button type="button" class="panel-collapsed-row">
+      <span class="check-ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5 11-11"/></svg></span>
+      <span class="collapsed-text"><div class="collapsed-label">Mode</div><div class="collapsed-value"></div></span>
+      <span class="change-link">Change</span>
+    </button>
   </div>
 
   <div class="panel" id="regionStep" hidden>
-    <div class="step-head"><div class="step-badge">04</div><div><div class="step-title">Region</div><div class="step-sub">This file has a Region column — pick one to narrow the branch list.</div></div></div>
-    <div class="row">
-      <select id="regionSelect"></select>
-      <span class="badge"><span id="regionBranchCount">0</span> branch(es)</span>
+    <div class="panel-open">
+      <div class="step-head">
+        <span class="step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 21s-7-6.1-7-11.2A7 7 0 0 1 12 3a7 7 0 0 1 7 6.8C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.4"/></svg></span>
+        <div><div class="step-title">Region</div><div class="step-sub">This file has a Region column — pick one to narrow the branch list.</div></div>
+      </div>
+      <div class="row">
+        <select id="regionSelect"></select>
+        <span class="badge"><span id="regionBranchCount">0</span> branch(es)</span>
+      </div>
     </div>
+    <button type="button" class="panel-collapsed-row">
+      <span class="check-ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5 11-11"/></svg></span>
+      <span class="collapsed-text"><div class="collapsed-label">Region</div><div class="collapsed-value"></div></span>
+      <span class="change-link">Change</span>
+    </button>
   </div>
 
   <div class="panel" id="branchStep" hidden>
-    <div class="step-head"><div class="step-badge">05</div><div><div class="step-title">Branches</div><div class="step-sub">Every checked branch gets its own file.</div></div></div>
-    <div class="row">
-      <button type="button" class="btn small" id="selectAllBtn">Select all</button>
-      <button type="button" class="btn small" id="selectNoneBtn">Select none</button>
+    <div class="panel-open">
+      <div class="step-head">
+        <span class="step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="M4 6l1 1 2-2"/><path d="M4 12l1 1 2-2"/><path d="M4 18l1 1 2-2"/></svg></span>
+        <div><div class="step-title">Branches</div><div class="step-sub">Every checked branch gets its own file.</div></div>
+      </div>
+      <div class="row">
+        <button type="button" class="btn small" id="selectAllBtn">Select all</button>
+        <button type="button" class="btn small" id="selectNoneBtn">Select none</button>
+      </div>
+      <div class="branch-list" id="branchList"></div>
+      <div class="row" style="justify-content:flex-end;margin-top:14px;">
+        <button type="button" class="btn primary" id="branchContinueBtn">Continue →</button>
+      </div>
     </div>
-    <div class="branch-list" id="branchList"></div>
-  </div>
-
-  <div class="panel" id="addressStep" hidden>
-    <div class="step-head"><div class="step-badge">06</div><div><div class="step-title">Address</div><div class="step-sub">Used in both modes — filled in by Account No. wherever the master file doesn't already have one.</div></div></div>
-    <div class="row">
-      <span id="addressSourceLabel" class="note">Checking for a shared Address List…</span>
-      <button type="button" class="btn small" id="addressChangeBtn">CHANGE (OPTIONAL)</button>
-    </div>
-    <input type="file" id="addressFileInput" accept=".xlsx,.xlsb,.xls,.csv" hidden>
+    <button type="button" class="panel-collapsed-row">
+      <span class="check-ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5 11-11"/></svg></span>
+      <span class="collapsed-text"><div class="collapsed-label">Branches</div><div class="collapsed-value"></div></span>
+      <span class="change-link">Change</span>
+    </button>
   </div>
 
   <div class="panel" id="outputStep" hidden>
-    <div class="step-head"><div class="step-badge">07</div><div><div class="step-title">Output</div><div class="step-sub" id="outputSub">Choose where the branch-wise files should be saved.</div></div></div>
-    <div class="row">
-      <button type="button" class="btn" id="pickFolderBtn">Choose output folder</button>
-      <span class="note" id="outputChosenLabel"></span>
+    <div class="panel-open">
+      <div class="step-head">
+        <span class="step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+        <div><div class="step-title">Output</div><div class="step-sub" id="outputSub">Choose where the branch-wise files should be saved.</div></div>
+      </div>
+      <div class="row">
+        <button type="button" class="btn" id="pickFolderBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Choose output folder</button>
+        <span class="note" id="outputChosenLabel"></span>
+      </div>
+      <div class="note" id="outputFallbackNote" hidden>Your browser can't write directly to a folder — all files will be bundled into one ZIP to download instead.</div>
     </div>
-    <div class="note" id="outputFallbackNote" hidden>Your browser can't write directly to a folder — all files will be bundled into one ZIP to download instead.</div>
+    <button type="button" class="panel-collapsed-row">
+      <span class="check-ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5 11-11"/></svg></span>
+      <span class="collapsed-text"><div class="collapsed-label">Output</div><div class="collapsed-value"></div></span>
+      <span class="change-link">Change</span>
+    </button>
   </div>
 
   <div class="panel" id="runPanel" hidden>
-    <div class="step-head"><div class="step-badge">08</div><div><div class="step-title">Run</div><div class="step-sub">One click builds every selected branch's file.</div></div></div>
-    <div class="row">
-      <button type="button" class="btn primary" id="runBtn">▶ Split Files</button>
-      <button type="button" class="btn" id="pauseBtn" disabled>⏸ Pause</button>
-      <button type="button" class="btn danger" id="cancelBtn" disabled>✕ Cancel</button>
+    <div class="panel-open">
+      <div class="step-head">
+        <span class="step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 4 20 12 6 20"/></svg></span>
+        <div><div class="step-title">Run</div><div class="step-sub">One click builds every selected branch's file.</div></div>
+      </div>
+      <!-- No address step exists anymore -- Alok's explicit request: address
+           is always fetched silently from the shared Address List (or the
+           embedded "ADDRESS" sheet in the file itself) with zero action
+           required here. This line is purely informational. -->
+      <div class="addr-note" id="addressSourceLabel"></div>
+      <div class="row">
+        <button type="button" class="btn primary" id="runBtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 4 20 12 6 20"/></svg>Split Files</button>
+        <button type="button" class="btn" id="pauseBtn" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>Pause</button>
+        <button type="button" class="btn danger" id="cancelBtn" disabled><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg>Cancel</button>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="status-line" id="statusLine">● Ready to run</div>
+      <div class="log" id="activityLog"></div>
     </div>
-    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-    <div class="status-line" id="statusLine">● Ready to run</div>
-    <div class="log" id="activityLog"></div>
   </div>
 </div>
 
@@ -328,7 +435,6 @@ var state = {
   branchCounts: {},   // branch -> row count (within current region scope)
   selectedBranches: {}, // branch -> true
   sharedAddressMap: null,   // from getSharedAddressList()
-  overrideAddressMap: null, // one-off upload for this run only
   embeddedAddressMap: null, // an "ADDRESS" sheet inside the master workbook itself
   dirHandle: null,
   cancelRequested: false,
@@ -340,12 +446,13 @@ function idx(name){ return state.headerIdx.hasOwnProperty(name) ? state.headerId
 
 /* ---------------- DOM refs ---------------- */
 var el = {};
-['modeSimpleBtn','modeFullBtn','fileDrop','fileInput','fileDropLabel','fileStatus',
- 'sheetStep','sheetSelect','sheetStatus','regionStep','regionSelect','regionBranchCount',
- 'branchStep','branchList','selectAllBtn','selectNoneBtn',
- 'addressStep','addressSourceLabel','addressChangeBtn','addressFileInput',
+['fileStep','fileDrop','fileInput','fileDropLabel','fileStatus',
+ 'sheetStep','sheetSelect','sheetStatus',
+ 'modeStep','modeSimpleBtn','modeFullBtn','modeStatus',
+ 'regionStep','regionSelect','regionBranchCount',
+ 'branchStep','branchList','selectAllBtn','selectNoneBtn','branchContinueBtn',
  'outputStep','outputSub','pickFolderBtn','outputChosenLabel','outputFallbackNote',
- 'runPanel','runBtn','pauseBtn','cancelBtn','progressFill','statusLine','activityLog'
+ 'runPanel','addressSourceLabel','runBtn','pauseBtn','cancelBtn','progressFill','statusLine','activityLog'
 ].forEach(function(id){ el[id] = document.getElementById(id); });
 
 function log(msg){
@@ -359,20 +466,85 @@ function setStatus(msg, isErr){
 }
 function setProgress(pct){ el.progressFill.style.width = Math.max(0,Math.min(100,pct*100))+'%'; }
 
-/* ---------------- 01: mode ---------------- */
+/* ---------------- Step sequencing ----------------
+   STEP_ORDER is the single source of truth for what comes after what.
+   A step is in one of three visual states: not yet reached (plain
+   [hidden]), open (the user is working on it right now), or done
+   (collapsed to a "✓ value ... Change" row via the "done" class -- see
+   the .panel-open/.panel-collapsed-row CSS above). collapseAfter()
+   forcibly re-hides and un-marks everything after a given step, used
+   both when a step fails validation and when the user clicks "Change"
+   on an earlier, already-collapsed step (since altering an earlier
+   choice invalidates whatever was decided after it). Region and Branch
+   are the one place two steps complete together (via the Continue
+   button in Branches, not each on their own action) -- both already
+   have working defaults the moment they're computed, so gating them
+   one-at-a-time would just add clicks with no real decision behind
+   the gate. */
+var STEP_ORDER = ['fileStep','sheetStep','modeStep','regionStep','branchStep','outputStep','runPanel'];
+
+function stepIsApplicable(id){ return id!=='regionStep' || state.hasRegion; }
+
+function collapseAfter(fromId){
+  var i = STEP_ORDER.indexOf(fromId);
+  for(var j=i+1;j<STEP_ORDER.length;j++){
+    var sid = STEP_ORDER[j];
+    el[sid].hidden = true;
+    el[sid].classList.remove('done');
+  }
+  // Everything from Output onward hidden means any previously-chosen
+  // output folder is now stale (the branch/file set behind it changed).
+  if(i < STEP_ORDER.indexOf('outputStep')){
+    state.dirHandle = null;
+    el.outputChosenLabel.textContent = '';
+  }
+}
+function markDone(id, summaryHTML){
+  el[id].hidden = false;
+  el[id].classList.add('done');
+  var v = el[id].querySelector('.collapsed-value');
+  if(v) v.innerHTML = summaryHTML;
+}
+function reopen(id){
+  el[id].classList.remove('done');
+  collapseAfter(id);
+}
+['fileStep','sheetStep','modeStep','regionStep','branchStep','outputStep'].forEach(function(id){
+  var row = el[id].querySelector('.panel-collapsed-row');
+  row.addEventListener('click', function(){ reopen(id); });
+});
+
+/* ---------------- mode ---------------- */
 function setMode(m){
   state.mode = m;
   el.modeSimpleBtn.classList.toggle('active', m==='simple');
   el.modeFullBtn.classList.toggle('active', m==='full');
+  validateModeColumns();
 }
 el.modeSimpleBtn.addEventListener('click', function(){ setMode('simple'); });
 el.modeFullBtn.addEventListener('click', function(){ setMode('full'); });
 
-/* ---------------- 02: master file upload ---------------- */
+function validateModeColumns(){
+  if(state.mode==='full'){
+    var missing = REQUIRED_FULL.filter(function(rq){ return !(rq in state.headerIdx); });
+    if(missing.length){
+      el.modeStatus.innerHTML = '<div class="note warn">⚠ Missing column(s) for Full NPA Split: '+esc(missing.join(', '))+'. Switch to Simple Split, or pick a different sheet.</div>';
+      collapseAfter('modeStep');
+      return;
+    }
+  }
+  el.modeStatus.innerHTML = '';
+  markDone('modeStep', state.mode==='full' ? 'Full NPA Split' : 'Simple Split');
+  if(stepIsApplicable('regionStep')) el.regionStep.hidden = false;
+  el.branchStep.hidden = false;
+}
+
+/* ---------------- master file upload ---------------- */
 el.fileDrop.addEventListener('click', function(){ el.fileInput.click(); });
 el.fileInput.addEventListener('change', function(e){ if(e.target.files[0]) handleMasterFile(e.target.files[0]); });
 
 function handleMasterFile(file){
+  collapseAfter('fileStep');
   el.fileDropLabel.textContent = file.name;
   el.fileStatus.innerHTML = '<div class="note">Reading '+esc(file.name)+'…</div>';
   var isCsv = /\.csv$/i.test(file.name);
@@ -392,8 +564,9 @@ function handleMasterFile(file){
         state.embeddedAddressMap = buildAddressMapFromRows(addrRows);
       }
       el.sheetSelect.innerHTML = wb.SheetNames.map(function(n){ return '<option>'+esc(n)+'</option>'; }).join('');
-      el.sheetStep.hidden = false;
       el.fileStatus.innerHTML = '<div class="note">✔ '+wb.SheetNames.length+' worksheet(s) found.</div>';
+      markDone('fileStep', esc(file.name));
+      el.sheetStep.hidden = false;
       loadSheet(wb.SheetNames[0]);
     }catch(err){
       el.fileStatus.innerHTML = '<div class="note warn">⚠ Could not read this file: '+esc(err.message||err)+'</div>';
@@ -423,8 +596,8 @@ function buildAddressMapFromRows(allRows){
   return map;
 }
 
-/* ---------------- 03: worksheet ---------------- */
-el.sheetSelect.addEventListener('change', function(){ loadSheet(el.sheetSelect.value); });
+/* ---------------- worksheet ---------------- */
+el.sheetSelect.addEventListener('change', function(){ collapseAfter('sheetStep'); loadSheet(el.sheetSelect.value); });
 
 var REQUIRED_FULL = ['sol','branch','accountno','customerid','schemecode','accountname',
   'balanceamount','accountnpadate','custnpadate','sbaaccbalance','category','provamt',
@@ -443,8 +616,7 @@ function loadSheet(name){
     var row1 = (raw[0]||[]).filter(function(v){ return v!==''; }).slice(0,12);
     el.sheetStatus.innerHTML = '<span class="warn">⚠ Could not find a "Branch"/"Sol"/"Account No" column anywhere in this sheet\'s first 200 rows -- pick a different sheet. Row 1 as read: '+esc(JSON.stringify(row1))+'</span>';
     state.headerRowIdx = -1; state.headerIdx = {}; state.rows = [];
-    el.regionStep.hidden = true; el.branchStep.hidden = true; el.addressStep.hidden = true;
-    el.outputStep.hidden = true; el.runPanel.hidden = true;
+    collapseAfter('sheetStep');
     return;
   }
   state.headerRowIdx = hIdx;
@@ -457,29 +629,20 @@ function loadSheet(name){
   if(!('branch' in hMap)){
     var foundHeaders = header.filter(function(h){ return h; });
     el.sheetStatus.innerHTML = '<span class="warn">⚠ Found a header row (row '+(hIdx+1)+'), but no "Branch" column in it. Columns seen: '+esc(JSON.stringify(foundHeaders))+'</span>';
-    el.regionStep.hidden = true; el.branchStep.hidden = true; el.addressStep.hidden = true;
-    el.outputStep.hidden = true; el.runPanel.hidden = true;
+    collapseAfter('sheetStep');
     return;
   }
-  if(state.mode==='full'){
-    var missing = REQUIRED_FULL.filter(function(rq){ return !(rq in hMap); });
-    if(missing.length){
-      el.sheetStatus.innerHTML = '<span class="warn">⚠ Missing column(s) for Full NPA Split: '+esc(missing.join(', '))+'. Switch to Simple Split, or pick a sheet with these columns.</span>';
-    } else {
-      el.sheetStatus.innerHTML = '<span>✔ '+state.rows.length.toLocaleString('en-IN')+' row(s) loaded.</span>';
-    }
-  } else {
-    el.sheetStatus.innerHTML = '<span>✔ '+state.rows.length.toLocaleString('en-IN')+' row(s) loaded.</span>';
-  }
+  el.sheetStatus.innerHTML = '';
 
   loadRegionsAndBranches();
   loadAddressSource();
-  el.addressStep.hidden = false;
-  el.outputStep.hidden = false;
-  el.runPanel.hidden = false;
+  var sheetNote = state.rows.length.toLocaleString('en-IN') + ' row(s)' +
+    (state.wb.SheetNames.length>1 ? ' · '+state.wb.SheetNames.length+' sheets available' : '');
+  markDone('sheetStep', esc(state.sheetName) + ' · ' + sheetNote);
+  el.modeStep.hidden = false;
 }
 
-/* ---------------- 04: region (conditional) ---------------- */
+/* ---------------- region (conditional) + branches ---------------- */
 function loadRegionsAndBranches(){
   var branchCol = idx('branch'), regionCol = idx('region');
   state.hasRegion = regionCol>=0;
@@ -508,10 +671,8 @@ function loadRegionsAndBranches(){
     var def = regionBranches.hasOwnProperty('HATHRAS') ? 'HATHRAS' : regionKeys[0];
     el.regionSelect.value = def;
     state.selectedRegion = def;
-    el.regionStep.hidden = false;
     applyRegionSelection();
   } else {
-    el.regionStep.hidden = true;
     var counts = {};
     state.rows.forEach(function(r){
       var branch = cellStr(r, branchCol);
@@ -523,7 +684,6 @@ function loadRegionsAndBranches(){
     state.selectedRegion = '';
     renderBranchList();
   }
-  el.branchStep.hidden = false;
 }
 el.regionSelect.addEventListener('change', function(){
   state.selectedRegion = el.regionSelect.value;
@@ -536,7 +696,6 @@ function applyRegionSelection(){
   renderBranchList(branches);
 }
 
-/* ---------------- 05: branch selection ---------------- */
 function renderBranchList(branches){
   var list = branches || state.allBranches;
   state.selectedBranches = {};
@@ -556,70 +715,81 @@ el.selectAllBtn.addEventListener('click', function(){
 el.selectNoneBtn.addEventListener('click', function(){
   el.branchList.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked = false; state.selectedBranches[cb.dataset.branch] = false; });
 });
+el.branchContinueBtn.addEventListener('click', function(){
+  if(stepIsApplicable('regionStep')){
+    var count = (state.regionBranches[state.selectedRegion]||[]).length;
+    markDone('regionStep', esc(state.selectedRegion) + ' · ' + count + ' branch(es)');
+  }
+  var total = Object.keys(state.selectedBranches).length;
+  var checked = Object.keys(state.selectedBranches).filter(function(b){ return state.selectedBranches[b]; }).length;
+  markDone('branchStep', checked + ' of ' + total + ' selected');
+  el.outputStep.hidden = false;
+  if(!fsaSupported){
+    // No folder to pick in this browser -- nothing left for the user to
+    // decide here, so this step never needs to sit open.
+    markDone('outputStep', 'Will download as one ZIP file');
+    el.runPanel.hidden = false;
+  }
+});
 
-/* ---------------- 06: address source ---------------- */
+/* ---------------- address source (silent -- no user-facing control) ---------------- */
+// Alok's explicit request: never make the user handle the address list in
+// this tool -- shared list (fetched from the main app) first, then the
+// embedded "ADDRESS" sheet inside the uploaded file, then blank. No
+// override upload exists anymore; the only thing shown is the read-only
+// caption inside the Run step (addr-note in the HTML above).
 function loadAddressSource(){
   state.sharedAddressMap = getSharedAddressList();
   updateAddressLabel();
 }
 function updateAddressLabel(){
-  if(state.overrideAddressMap){
-    el.addressSourceLabel.textContent = 'Using a one-off uploaded list for this run (' + Object.keys(state.overrideAddressMap).length.toLocaleString('en-IN') + ' accounts).';
-  } else if(state.sharedAddressMap && Object.keys(state.sharedAddressMap).length){
-    el.addressSourceLabel.textContent = 'Using the shared Address List — ' + Object.keys(state.sharedAddressMap).length.toLocaleString('en-IN') + ' accounts.';
+  var hasSource = (state.sharedAddressMap && Object.keys(state.sharedAddressMap).length) || state.embeddedAddressMap;
+  var text;
+  if(state.sharedAddressMap && Object.keys(state.sharedAddressMap).length){
+    text = 'Using the shared Address List — ' + Object.keys(state.sharedAddressMap).length.toLocaleString('en-IN') + ' accounts. Fetched automatically, nothing to upload here.';
   } else if(state.embeddedAddressMap){
-    el.addressSourceLabel.textContent = 'No shared Address List found — using the "ADDRESS" sheet inside your master file (' + Object.keys(state.embeddedAddressMap).length.toLocaleString('en-IN') + ' accounts).';
+    text = 'No shared Address List found — using the "ADDRESS" sheet inside your master file (' + Object.keys(state.embeddedAddressMap).length.toLocaleString('en-IN') + ' accounts).';
   } else {
-    el.addressSourceLabel.textContent = 'No Address List available — output will have a blank Address column. Upload one under Settings → Update Data → "Address List" in the main app, or use CHANGE below for just this run.';
+    text = 'No Address List available — output will have a blank Address column. Upload one under Settings → Update Data → "Address List" in the main app.';
   }
+  el.addressSourceLabel.classList.toggle('warn', !hasSource);
+  var icon = hasSource
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12l5 5 11-11"/></svg>'
+    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+  el.addressSourceLabel.innerHTML = icon + '<span>' + esc(text) + '</span>';
 }
-el.addressChangeBtn.addEventListener('click', function(){ el.addressFileInput.click(); });
-el.addressFileInput.addEventListener('change', function(e){
-  var file = e.target.files[0];
-  if(!file) return;
-  var isCsv = /\.csv$/i.test(file.name);
-  var reader = new FileReader();
-  reader.onload = function(ev){
-    try{
-      var wb = isCsv ? XLSX.read(String(ev.target.result), {type:'string', dense:true}) : XLSX.read(new Uint8Array(ev.target.result), {type:'array', dense:true});
-      var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
-      state.overrideAddressMap = buildAddressMapFromRows(rows);
-      updateAddressLabel();
-    }catch(err){ setStatus('Could not read address file: '+(err.message||err), true); }
-  };
-  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
-});
 function resolveAddress(acctNo){
   var key = normAcct(acctNo);
   if(!key) return '';
-  if(state.overrideAddressMap && state.overrideAddressMap[key]) return state.overrideAddressMap[key];
   if(state.sharedAddressMap && state.sharedAddressMap[key]) return state.sharedAddressMap[key];
   if(state.embeddedAddressMap && state.embeddedAddressMap[key]) return state.embeddedAddressMap[key];
   return '';
 }
 
-/* ---------------- 07: output destination ---------------- */
+/* ---------------- output destination ---------------- */
 var fsaSupported = 'showDirectoryPicker' in window;
 if(!fsaSupported){
   el.pickFolderBtn.hidden = true;
   el.outputFallbackNote.hidden = false;
   el.outputSub.textContent = 'Your browser will bundle every file into one ZIP to download.';
-  el.runBtn.textContent = '▶ Build ZIP';
+  el.runBtn.lastChild.textContent = 'Build ZIP';
 }
 el.pickFolderBtn.addEventListener('click', function(){
   (window.showDirectoryPicker ? window.showDirectoryPicker() : Promise.reject())
     .then(function(handle){
       state.dirHandle = handle;
       el.outputChosenLabel.textContent = 'Saving to: ' + handle.name;
+      markDone('outputStep', 'Saving to: ' + esc(handle.name));
+      el.runPanel.hidden = false;
     })
     .catch(function(){ /* user cancelled the picker -- leave prior selection, if any */ });
 });
 
-/* ---------------- 08: run ---------------- */
+/* ---------------- run ---------------- */
 el.runBtn.addEventListener('click', runSplit);
 el.pauseBtn.addEventListener('click', function(){
   state.pauseRequested = !state.pauseRequested;
-  el.pauseBtn.textContent = state.pauseRequested ? '▶ Resume' : '⏸ Pause';
+  el.pauseBtn.lastChild.textContent = state.pauseRequested ? 'Resume' : 'Pause';
 });
 el.cancelBtn.addEventListener('click', function(){ state.cancelRequested = true; state.pauseRequested = false; });
 
@@ -627,13 +797,13 @@ function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 
 async function runSplit(){
   if(state.running) return;
-  if(fsaSupported && !state.dirHandle){ setStatus('Pick an output folder first (Step 07).', true); return; }
+  if(fsaSupported && !state.dirHandle){ setStatus('Pick an output folder first.', true); return; }
   var branches = Object.keys(state.selectedBranches).filter(function(b){ return state.selectedBranches[b]; });
-  if(!branches.length){ setStatus('Select at least one branch (Step 05).', true); return; }
+  if(!branches.length){ setStatus('Select at least one branch.', true); return; }
 
   state.running = true; state.cancelRequested = false; state.pauseRequested = false;
   el.runBtn.disabled = true; el.pauseBtn.disabled = false; el.cancelBtn.disabled = false;
-  el.pauseBtn.textContent = '⏸ Pause';
+  el.pauseBtn.lastChild.textContent = ' Pause';
   el.activityLog.textContent = '';
 
   var zip = fsaSupported ? null : new JSZip();
