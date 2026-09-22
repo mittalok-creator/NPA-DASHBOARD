@@ -809,6 +809,19 @@
       <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Upload the Head Office Daily NPA Projection workbook as-is, or the Branch Advance template filled in by hand — the Sol ID and Advance columns are read automatically (from the "Daily Follow-up Sheet" for the HO workbook). If the file also has "NPA MARCH 26"/"NPA JUNE 26" columns (₹ Lakhs), those power a Mar/Jun comparison shown in the Dashboard's Total Outstanding card. Branches are matched by Sol ID, not name, so this stays correct even where branch name spellings differ between reports. Uploading replaces the previous figures. Goes live the next time you hit Publish.</p>
     </details>
 
+    <details class="master-upload-details" id="intReversalMasterUploadDetails">
+      <summary>Interest Reversal (master list) — <span id="intReversalMasterStatusLabel">not loaded yet</span></summary>
+      <div class="upload-drop small" id="intReversalMasterUploadDrop">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <div class="main" id="intReversalMasterUploadDropLabel">Tap to choose the Interest Reversal file</div>
+        <div class="sub">.xlsx or .csv — Account_Number, Interest Reversal amount (₹)</div>
+      </div>
+      <input type="file" id="intReversalMasterFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
+      <button type="button" class="template-download-link" id="downloadIntReversalMasterTemplateBtn">⬇ Download blank template (Account Number + Interest Reversal)</button>
+      <div id="intReversalMasterUploadStatus"></div>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">This is now the permanent source for the Interest Reversal figure — every future daily NPA upload will automatically apply it by Account Number, overriding whatever (if anything) Head Office's own file carries that day, so it never silently resets to 0 again. Only re-upload this when you have an updated/corrected list; you do not need to upload it alongside every daily NPA file. Goes live the next time you hit Publish.</p>
+    </details>
+
     <details class="master-upload-details" id="branchContactsUploadDetails">
       <summary>Branch Contacts (Manager / Recovery Officer) — <span id="branchContactsStatusLabel">not loaded yet</span></summary>
       <div class="upload-drop small" id="branchContactsUploadDrop">
@@ -1161,7 +1174,7 @@
 <script src="js/publish.js?v=20260920f"></script>
 <script src="js/splash.js?v=20260917a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260920f"></script>
+<script src="js/app.js?v=20260922a"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
