@@ -381,8 +381,8 @@ function handleMasterFile(file){
   reader.onload = function(e){
     try{
       var wb;
-      if(isCsv){ wb = XLSX.read(String(e.target.result), {type:'string'}); }
-      else { wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'}); }
+      if(isCsv){ wb = XLSX.read(String(e.target.result), {type:'string', dense:true}); }
+      else { wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', dense:true}); }
       state.wb = wb;
       // Opportunistic embedded ADDRESS sheet (lowest-priority address source)
       state.embeddedAddressMap = null;
@@ -581,7 +581,7 @@ el.addressFileInput.addEventListener('change', function(e){
   var reader = new FileReader();
   reader.onload = function(ev){
     try{
-      var wb = isCsv ? XLSX.read(String(ev.target.result), {type:'string'}) : XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+      var wb = isCsv ? XLSX.read(String(ev.target.result), {type:'string', dense:true}) : XLSX.read(new Uint8Array(ev.target.result), {type:'array', dense:true});
       var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
       state.overrideAddressMap = buildAddressMapFromRows(rows);
       updateAddressLabel();
