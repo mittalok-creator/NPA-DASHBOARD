@@ -219,12 +219,19 @@ function normHeader(h){ return String(h||'').toLowerCase().replace(/[^a-z0-9]/g,
 // one that contains a recognizable header, same as the main app's own
 // findHeaderRowIndex() (used for Customer Master/Branch Advance/Address
 // List uploads), instead of assuming row 0 is always the header.
+// Widened to 200 rows (vs. the main app's own 10-row scan for Customer
+// Master/Branch Advance/Address List) -- this tool takes literally
+// whatever file a user hands it, including old, much-resaved workbooks
+// whose "used range" has ballooned with blank formatted rows far past
+// any reasonable title block (seen first-hand: a real 180MB daily export
+// that a 10-row scan couldn't find the header in). Still cheap -- this
+// only scans rows already parsed into memory, no extra file I/O.
 function findHeaderRowIndex(allRows, mustContainAnyNormalized){
-  for(var i=0;i<Math.min(10, allRows.length);i++){
+  for(var i=0;i<Math.min(200, allRows.length);i++){
     var normed = (allRows[i]||[]).map(normHeader);
     if(mustContainAnyNormalized.some(function(w){ return normed.indexOf(w)>=0; })) return i;
   }
-  return 0;
+  return -1;
 }
 function cellStr(row, i){ return i>=0 ? String(row[i]==null?'':row[i]).trim() : ''; }
 function looksScientific(s){ return /^[0-9]+(\.[0-9]+)?e\+?\d+$/i.test(String(s).trim()); }
@@ -427,6 +434,19 @@ function loadSheet(name){
   state.sheetName = name;
   var raw = XLSX.utils.sheet_to_json(state.wb.Sheets[name], {header:1, raw:true, defval:''});
   var hIdx = findHeaderRowIndex(raw, ['branch','sol','accountno']);
+
+  if(hIdx<0){
+    // Diagnostic, not just an error -- shows exactly what this tool read
+    // off row 1 (and row 1 alone; scanning 200 rows' worth of content
+    // into one message would be unreadable) so a screenshot of this is
+    // enough to debug a mismatch without needing the file itself.
+    var row1 = (raw[0]||[]).filter(function(v){ return v!==''; }).slice(0,12);
+    el.sheetStatus.innerHTML = '<span class="warn">⚠ Could not find a "Branch"/"Sol"/"Account No" column anywhere in this sheet\'s first 200 rows -- pick a different sheet. Row 1 as read: '+esc(JSON.stringify(row1))+'</span>';
+    state.headerRowIdx = -1; state.headerIdx = {}; state.rows = [];
+    el.regionStep.hidden = true; el.branchStep.hidden = true; el.addressStep.hidden = true;
+    el.outputStep.hidden = true; el.runPanel.hidden = true;
+    return;
+  }
   state.headerRowIdx = hIdx;
   var header = (raw[hIdx]||[]).map(normHeader);
   var hMap = {};
@@ -435,7 +455,8 @@ function loadSheet(name){
   state.rows = raw.slice(hIdx+1).filter(function(r){ return r && r.some(function(v){ return v!==''; }); });
 
   if(!('branch' in hMap)){
-    el.sheetStatus.innerHTML = '<span class="warn">⚠ Could not find a "Branch" column in this sheet\'s first 10 rows -- pick a different sheet.</span>';
+    var foundHeaders = header.filter(function(h){ return h; });
+    el.sheetStatus.innerHTML = '<span class="warn">⚠ Found a header row (row '+(hIdx+1)+'), but no "Branch" column in it. Columns seen: '+esc(JSON.stringify(foundHeaders))+'</span>';
     el.regionStep.hidden = true; el.branchStep.hidden = true; el.addressStep.hidden = true;
     el.outputStep.hidden = true; el.runPanel.hidden = true;
     return;
