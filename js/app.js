@@ -6349,6 +6349,37 @@ function switchView(view){
 }
 window.switchView = switchView;
 
+/* ---------- Utility Hub search (2026-09-22, part of the "elegant/
+   refreshing" redesign) ---------- */
+// Cards are static hand-authored HTML (unique icon SVGs, existing
+// switchView() onclick handlers) -- there's no data array behind them the
+// way OneDrive/Telephone Directory have, so this never rebuilds innerHTML;
+// it only toggles .is-hidden on the .utility-card/.utility-category
+// elements already in the DOM, keyed off each card's own title+desc text.
+function utilityFilterInput(value){
+  const q = value.trim().toLowerCase();
+  let anyVisible = false;
+  document.querySelectorAll('#viewUtility .utility-category').forEach(cat => {
+    let catHasVisible = false;
+    cat.querySelectorAll('.utility-card').forEach(card => {
+      const title = card.querySelector('.utility-card-title')?.textContent || '';
+      const desc = card.querySelector('.utility-card-desc')?.textContent || '';
+      const match = !q || (title + ' ' + desc).toLowerCase().includes(q);
+      card.classList.toggle('is-hidden', !match);
+      if (match) catHasVisible = true;
+    });
+    cat.classList.toggle('is-hidden', !catHasVisible);
+    if (catHasVisible) anyVisible = true;
+  });
+  const emptyState = document.getElementById('utilityEmptyState');
+  if (emptyState) {
+    emptyState.hidden = anyVisible;
+    const qSpan = document.getElementById('utilityEmptyQuery');
+    if (qSpan) qSpan.textContent = value.trim();
+  }
+}
+window.utilityFilterInput = utilityFilterInput;
+
 /* ---------- Light / dark theme toggle ---------- */
 /* `persist` defaults to true (an actual user click via toggleTheme should
    always be remembered). wireChrome's own startup call passes false --
