@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: Simple Split now splits a combined SBA Account/Balance column too, same as Full Split (2026-09-23, same day)
+
+Alok: "simple sheet main, agar sba account/ balance mile to use 2 column main split kar dena sba ac and sba amount like full conversion" -- if Simple Split's source file has an SBA Account/Balance column (the same combined "account -> balance" text cell Full Split already knows about, e.g. "151710101006588 -> 0"), split it into two columns the same way Full Split does, instead of copying the combined text straight through.
+
+New shared `splitSbaCell()` helper (the exact split-on-"->" logic Full Split's `buildNpaRows()` already had, extracted so both engines share one implementation instead of two copies drifting apart) is now called from both engines. Simple Split finds an SBA-like column the same header-guessing way as the zero-balance filter added earlier today (`findColByHeaderSubstring(rawHeader, 'sba')`, since Simple mode has no fixed schema and can't rely on `idx('sbaaccbalance')`'s exact-name match). When found, the single source column becomes two output columns -- "SBA Account" (whole number) and "SBA Balance" (2 decimals), both real numbers and right-aligned, matching Full Split's own column naming and formatting. This required restructuring `buildSimpleSplitWorkbook()` from a straight source-column-to-output-column loop into a small column *plan* (one entry per output column), since one source column now expands into two -- the same restructuring cleanly folds in where the appended "Address" column (when the source has none) already sat.
+
+Verified with a synthetic file carrying an "SBA Acc/Balance" column with a real combined value, a "-" (no SBA), and a blank -- inspected the generated `.xlsx` with `openpyxl`: the real value splits into "SBA Account"=151710101006588 (int) and "SBA Balance"=2500 (numeric, 2-decimal format), both other rows correctly land blank in both new columns. Full existing regression suite (7-case flow, SBA/Reset -- which also re-verified Full Split's own SBA columns still work correctly after the shared-helper refactor, address-fallback) re-run with no change in behavior. `node --check` on both extracted inline scripts clean.
+
 ### Fix: Customer Master refresh did nothing when uploaded on its own, without a fresh daily NPA file (2026-09-23, same day)
 
 Alok uploaded a fresh Customer Master file (74,815 records, Customer ID only -- no Account No. column, same shape it's always had) and reported it as an error, with a screenshot showing "✔ 74,815 customer record(s) parsed" but "Apply Update" staying greyed out. His own read was that the lookup needed Account No. and should use Customer ID everywhere instead.

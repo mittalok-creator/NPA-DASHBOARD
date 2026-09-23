@@ -1043,6 +1043,19 @@ function findColByHeaderSubstring(rawHeader, substr){
   }
   return -1;
 }
+// Splits one combined "account->balance" text cell (same source shape Full
+// Split's SBA Acc/Balance column carries -- e.g. "151710101006588 -> 0", or
+// "-"/blank for none) into its two parts. Shared by both engines so a
+// change to the source format only needs fixing in one place.
+function splitSbaCell(sbaRaw){
+  var acct = '', bal = '';
+  if(sbaRaw && sbaRaw!=='-'){
+    var p = sbaRaw.indexOf('->');
+    if(p>=0){ acct = sbaRaw.slice(0,p).trim(); bal = sbaRaw.slice(p+2).trim(); }
+    else { acct = sbaRaw; }
+  }
+  return { acct: acct, bal: bal };
+}
 function buildSimpleSplitWorkbook(branch, rows, fileSuffix){
   if(!rows.length) return null;
   var rawHeader = XLSX.utils.sheet_to_json(state.wb.Sheets[state.sheetName], {header:1, raw:true, defval:''})[state.headerRowIdx||0] || [];
@@ -1067,32 +1080,55 @@ function buildSimpleSplitWorkbook(branch, rows, fileSuffix){
   var usedNames = {};
   var ws = wb.addWorksheet(sanitizeSheetName(branch, usedNames), { views:[{state:'frozen', ySplit:1}] });
 
-  var headers = rawHeader.slice();
-  if(!hasAddrCol) headers.push('Address');
-  var kinds = headers.map(classifySimpleColumn);
+  // Alok's explicit request (2026-09-23): "sba account/balance mile to use
+  // 2 column main split kar dena sba ac and sba amount like full
+  // conversion" -- same combined "account->balance" column Full Split
+  // already splits, found here the same header-guessing way as the
+  // balance-skip filter above (idx('sbaaccbalance') only matches Full
+  // Split's exact known header). One source column becomes two output
+  // columns, so the rest of this function works off a column *plan*
+  // (one entry per output column) rather than assuming output columns
+  // line up 1:1 with source columns.
+  var sbaCol = findColByHeaderSubstring(rawHeader, 'sba');
+  var colPlan = [];
+  rawHeader.forEach(function(h, c){
+    if(c===sbaCol){
+      colPlan.push({ header: 'SBA Account', kind: 'sbaAcct', src: c });
+      colPlan.push({ header: 'SBA Balance', kind: 'sbaBal', src: c });
+    } else {
+      colPlan.push({ header: h, kind: classifySimpleColumn(h), src: c });
+    }
+  });
+  if(!hasAddrCol) colPlan.push({ header: 'Address', kind: 'address', src: -1 });
+
+  var headers = colPlan.map(function(p){ return p.header; });
+  var kinds = colPlan.map(function(p){ return p.kind; });
   var hRow = ws.getRow(1);
   headers.forEach(function(h,i){ hRow.getCell(i+1).value = String(h||''); });
   styleHeaderRow(hRow, headers.length);
 
   rows.forEach(function(r, ri){
     var row = ws.getRow(ri+2);
-    for(var c=0;c<rawHeader.length;c++){
-      var cell = row.getCell(c+1);
-      var raw = r[c]==null? '' : r[c];
-      var kind = kinds[c];
-      if(kind==='date'){
-        setDateCell(cell, raw);
-      } else if(kind==='id' || kind==='amount'){
+    colPlan.forEach(function(p, oi){
+      var cell = row.getCell(oi+1);
+      if(p.kind==='sbaAcct' || p.kind==='sbaBal'){
+        var sba = splitSbaCell(cellStr(r, p.src));
+        cell.value = toNumOrRaw(p.kind==='sbaAcct' ? sba.acct : sba.bal);
+        if(typeof cell.value==='number') cell.numFmt = p.kind==='sbaAcct' ? '0' : '0.00';
+        cell.alignment = {horizontal:'right'};
+      } else if(p.kind==='address' && p.src===-1){
+        cell.value = resolveAddress(cellStr(r, acctCol), custCol>=0 ? r[custCol] : null);
+      } else if(p.kind==='date'){
+        setDateCell(cell, r[p.src]==null? '' : r[p.src]);
+      } else if(p.kind==='id' || p.kind==='amount'){
+        var raw = r[p.src]==null? '' : r[p.src];
         cell.value = raw===''? '' : toNumOrRaw(raw);
-        if(typeof cell.value==='number') cell.numFmt = kind==='amount' ? '0.00' : '0';
+        if(typeof cell.value==='number') cell.numFmt = p.kind==='amount' ? '0.00' : '0';
         cell.alignment = {horizontal:'right'};
       } else {
-        cell.value = raw;
+        cell.value = r[p.src]==null? '' : r[p.src];
       }
-    }
-    if(!hasAddrCol){
-      row.getCell(rawHeader.length+1).value = resolveAddress(cellStr(r, acctCol), custCol>=0 ? r[custCol] : null);
-    }
+    });
     if(ri % 2 === 1){
       for(var fc=1;fc<=headers.length;fc++){ row.getCell(fc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F5F3'}}; }
     }
@@ -1125,20 +1161,14 @@ function buildNpaRows(rows){
   rows.forEach(function(r){
     var bal = parseFloat(r[c.bal]);
     if(!(bal>0)) return;
-    var sbaRaw = cellStr(r, c.sba);
-    var sbaAcct = '', sbaBal = '';
-    if(sbaRaw && sbaRaw!=='-'){
-      var p = sbaRaw.indexOf('->');
-      if(p>=0){ sbaAcct = sbaRaw.slice(0,p).trim(); sbaBal = sbaRaw.slice(p+2).trim(); }
-      else { sbaAcct = sbaRaw; }
-    }
+    var sba = splitSbaCell(cellStr(r, c.sba));
     // SBA Account/Balance start as text (split out of one "acct->balance"
     // cell above) -- convert each to a real number so Excel treats them as
     // numbers (right-aligned, usable in SUM/formulas) rather than text that
     // merely looks numeric. Falls back to the original text untouched if it
     // genuinely isn't numeric, rather than silently blanking it.
-    sbaAcct = toNumOrRaw(sbaAcct);
-    sbaBal = toNumOrRaw(sbaBal);
+    var sbaAcct = toNumOrRaw(sba.acct);
+    var sbaBal = toNumOrRaw(sba.bal);
     // A CBS export sometimes truncates a large Account No. into scientific
     // notation text (e.g. "1.51E+14") -- expand it the same way the main
     // app's own daily upload does, so it never lands in the output half-
