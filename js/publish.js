@@ -39,7 +39,10 @@
     if (!res.ok) {
       let detail = '';
       try { const j = await res.json(); detail = j.message || ''; } catch (e) {}
-      throw new Error(`GitHub API ${res.status} on ${path}${detail ? ': ' + detail : ''}`);
+      const err = new Error(`GitHub API ${res.status} on ${path}${detail ? ': ' + detail : ''}`);
+      err.status = res.status;
+      err.path = path;
+      throw err;
     }
     return res.json();
   }
@@ -216,7 +219,35 @@
      misleading "NPA data" commit line), and only the caller-labelled
      pieces that genuinely changed (meta.npaLabel + each extraFile's own
      .label) go into the commit message. */
+  // Alok hit this directly (2026-09-23): publishData() reads the live
+  // branch's current commit sha up front (below), builds blobs/a tree/a
+  // commit against it, then does a fast-forward-only ref update at the very
+  // end -- if *anything* else lands on main in between (another Admin
+  // publishing, or -- what actually happened here -- a code deploy being
+  // merged at the same moment), that final PATCH is rejected with a 422
+  // "Update is not a fast forward", even though nothing about his own data
+  // was wrong. The error message already said "safe to retry" (nothing had
+  // gone live yet at that point -- the commit object was created but never
+  // reachable from any ref), and retrying by hand did work, but a non-
+  // technical Admin shouldn't have to notice that distinction and retry a
+  // multi-step publish himself. Automatically re-runs the whole sequence
+  // (re-reading the now-current sha first) up to 3 attempts total, but only
+  // for this one specific, safe-to-retry failure -- an auth error, a wrong
+  // PIN, or a genuine network failure still surfaces immediately rather
+  // than being silently retried into a confusing repeated failure.
   async function publishData(dataObj, meta, onProgress, extraFiles) {
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        return await publishDataOnce(dataObj, meta, onProgress, extraFiles);
+      } catch (err) {
+        const isRefRace = err.status === 422 && /\/git\/refs\/heads\//.test(err.path || '');
+        if (!isRefRace || attempt === MAX_ATTEMPTS) throw err;
+        if (onProgress) onProgress(`Live site changed at the same moment -- retrying automatically (attempt ${attempt + 1} of ${MAX_ATTEMPTS})…`);
+      }
+    }
+  }
+  async function publishDataOnce(dataObj, meta, onProgress, extraFiles) {
     meta = meta || {};
     const progress = (msg) => { if (onProgress) onProgress(msg); };
     const pin = getStoredPin();
