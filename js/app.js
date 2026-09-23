@@ -2771,6 +2771,11 @@ function renderPrintView(){
   // shared sheet would mix "all accounts' dues" against "only some
   // accounts' OTS Amount" the same way the sidebar used to.
   const allOtsFilled = slots.length>0 && slots.every(s=>otsFor(s)!==null);
+  // Same aggregate Settlement % the on-screen sidebar chips already show
+  // (recalcAggregate()) -- see the "OTS Amount" row below for the per-
+  // account version of the same gap.
+  const aggPct = totalDues>0 ? (totalOtsSum/totalDues)*100 : 0;
+  const aggPctOs = totalOS>0 ? (totalOtsSum/totalOS)*100 : null;
 
   // Rows the sheet is actually read for -- bolded/enlarged in print (see
   // .pv-table tr.pv-strong in styles.css) so they stand out from the
@@ -2800,7 +2805,20 @@ function renderPrintView(){
     ['Provision', 'shield', s=>fmtINR2(s.provision)],
     ['Total P&L', 'trend', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'')],
     ['OTS Amt as per Lok Adalat', 'scale', s=>{const la=lokAdalatMin(s); if(!la) return '—'; if(!la.eligible) return 'Not Eligible'; return fmtINR2(la.amount)+` (${(la.pct*100).toFixed(0)}%)`;}],
-    ['OTS Amount', 'coin', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(v);}],
+    // Same Settlement Progress % the on-screen loan table already shows per
+    // account (recalcLoan()'s settlePct/settlePctOs) -- this print/PDF sheet
+    // never had it, so it read as "missing" even though the underlying
+    // figures were always live (Alok: "ots one pager print karte main ye %
+    // nahi aata"). Computed identically here rather than reading a DOM value,
+    // since this sheet is rebuilt straight from data, not a screen capture.
+    ['OTS Amount', 'coin', s=>{
+      const v=otsFor(s); if(v===null) return '—';
+      const td=totalDuesFor(s);
+      const pct = td>0 ? Math.max(0,Math.min(100,(v/td)*100)) : 0;
+      const pctOs = s.os>0 ? Math.max(0,(v/s.os)*100) : null;
+      const osPart = pctOs!==null ? ` · ${pctOs.toFixed(1)}% of O/S` : '';
+      return `${fmtINR2(v)} (${pct.toFixed(1)}% of dues${osPart})`;
+    }],
     ['Total Sacrifice', 'percent', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(totalDuesFor(s)-v);}],
     ['Ledger Sacrifice (BDWO Amount)', 'badge', s=>{const v=otsFor(s); return v===null?'—':fmtINR2(s.os-v);}],
     // Arrow mirrors the up/down icon-set convention from Excel's conditional
@@ -2846,7 +2864,7 @@ function renderPrintView(){
       <div class="pv-agg-title">Aggregate Totals</div>
       <div class="pv-agg-row"><span>Total O/S Balance</span><span>${fmtINR2(totalOS)}</span></div>
       <div class="pv-agg-row"><span>Total Dues</span><span>${fmtINR2(totalDues)}</span></div>
-      <div class="pv-agg-row pv-agg-hero"><span>Total OTS Amount</span><span>${allOtsFilled?fmtINR2(totalOtsSum):'—'}</span></div>
+      <div class="pv-agg-row pv-agg-hero"><span>Total OTS Amount</span><span>${allOtsFilled?`${fmtINR2(totalOtsSum)} (${aggPct.toFixed(1)}% of dues${aggPctOs!==null?` · ${aggPctOs.toFixed(1)}% of O/S`:''})`:'—'}</span></div>
       <div class="pv-agg-row"><span>Total Ledger Sacrifice</span><span>${allOtsFilled?fmtINR2(totalLedgerSac):'—'}</span></div>
       <div class="pv-agg-row pv-agg-hero"><span>Total Sacrifice</span><span>${allOtsFilled?fmtINR2(totalDues-totalOtsSum):'—'}</span></div>
     </div>
