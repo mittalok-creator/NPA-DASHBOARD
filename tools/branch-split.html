@@ -1254,7 +1254,21 @@ function buildSimpleSplitWorkbook(branch, rows, fileSuffix){
       colPlan.push({ header: h, kind: classifySimpleColumn(h), src: c });
     }
   });
-  if(!hasAddrCol) colPlan.push({ header: 'Address', kind: 'address', src: -1 });
+  if(!hasAddrCol){
+    // Alok's explicit request (2026-09-23): put the auto-added Address
+    // column right next to Customer Name/Name, not tacked onto the very
+    // end after every other column (including SBA Account/Balance, if
+    // present). Lands after the LAST name-kind column if a source file
+    // somehow has more than one (e.g. "Customer Name" and "Guarantor
+    // Name") rather than wedging between them; falls back to the old
+    // end-of-row placement when no name-like column exists at all, since
+    // there's nothing to place it "next to" in that case.
+    var addrEntry = { header: 'Address', kind: 'address', src: -1 };
+    var lastNameIdx = -1;
+    for(var ci=0; ci<colPlan.length; ci++){ if(colPlan[ci].kind==='name') lastNameIdx = ci; }
+    if(lastNameIdx>=0) colPlan.splice(lastNameIdx+1, 0, addrEntry);
+    else colPlan.push(addrEntry);
+  }
 
   var headers = colPlan.map(function(p){ return p.header; });
   var kinds = colPlan.map(function(p){ return p.kind; });

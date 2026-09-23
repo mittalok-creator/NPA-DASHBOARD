@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Follow-up: Simple Split's auto-added Address column now lands next to Name, not at the very end (2026-09-23, same day)
+
+Alok: "Simple split main address ka column customer name ya name k next column add kar k wahan laga do ek dam last ki jagah bas baki sab bhadiya hai" (put the Address column right after Customer Name/Name instead of at the very last position -- everything else is great). A layout tweak, not a bug -- explicit confirmation the rest of today's Simple Split work is landing well.
+
+`buildSimpleSplitWorkbook()`'s `colPlan` construction always `push()`ed the auto-added Address entry (when the source has no Address column of its own) onto the very end of the array, after every real column and after SBA Account/Balance too. Changed to find the last column already classified `'name'` kind (`classifySimpleColumn()`, a substring match on the header text -- defensive against a file with more than one name-like column, e.g. "Customer Name" and "Guarantor Name") and `splice()` the Address entry in right after it, instead of appending. Falls back to the old end-of-row placement only when no name-like column exists at all in the source. A file that already carries its own Address column is untouched either way, exactly as before.
+
+Verified with three synthetic files via Playwright + `openpyxl`: no Address column (Address correctly lands immediately after Customer Name in the output header row, not after Balance Amount/NPA Date); an existing Address column (output unchanged, stays wherever it was in the source); no name-like column at all (Address falls back to the end, the existing behavior). Full existing regression suite (7-case flow, SBA/Reset, lazy multi-sheet parsing) re-run with no change in behavior. `node --check` on both extracted inline scripts clean.
+
 ### Fix: Branch Split now parses only the sheet actually needed, not every sheet in the workbook eagerly (2026-09-23, same day)
 
 Alok: "Branch split main workbook upload karne k baad agar usmain 1 se jyada sheets hain to use bhi selection ka option aaye uske baad region and so on. meri ek file 186 mb ki hai jismain 4 sheets hain wo fail jo jati hai yahan upload nahi ho payegi because 30mb file size caping."
