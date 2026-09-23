@@ -704,7 +704,7 @@
           <span class="onedrive-page-sub">Daily NPA export → one workbook per branch, region-aware, address-enriched, read entirely in your browser</span>
         </header>
         <div class="tool-frame-wrap">
-          <iframe id="branchSplitFrame" class="tool-frame" data-src="tools/branch-split.html?v=20260922g" title="Branch Split"></iframe>
+          <iframe id="branchSplitFrame" class="tool-frame" data-src="tools/branch-split.html?v=20260923a" title="Branch Split"></iframe>
         </div>
       </div>
     </section>
@@ -877,16 +877,16 @@
     </details>
 
     <details class="master-upload-details" id="addressListUploadDetails">
-      <summary>Address List (Account No. → Address) — <span id="addressListStatusLabel">not loaded yet</span></summary>
+      <summary>Address List (Account No. or Customer ID → Address) — <span id="addressListStatusLabel">not loaded yet</span></summary>
       <div class="upload-drop small" id="addressListUploadDrop">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
         <div class="main" id="addressListUploadDropLabel">Tap to choose the Address List file</div>
-        <div class="sub">.xlsx or .csv — Account Number, Address</div>
+        <div class="sub">.xlsx or .csv — Account Number or Customer ID, Address</div>
       </div>
       <input type="file" id="addressListFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
-      <button type="button" class="template-download-link" id="downloadAddressListTemplateBtn">⬇ Download blank template (Account Number + Address)</button>
+      <button type="button" class="template-download-link" id="downloadAddressListTemplateBtn">⬇ Download blank template (Account Number or Customer ID + Address)</button>
       <div id="addressListUploadStatus"></div>
-      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">One list, uploaded once, used app-wide — whenever an account's address is still blank after Customer Master and carry-forward, this list fills it in by Account Number. Also used directly by the Branch Split utility tool (Utility Hub), in both Simple and Full NPA Split modes. Uploading replaces the previous list entirely and applies immediately, no separate Apply step. Goes live app-wide the next time you hit Publish.</p>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">One list, uploaded once, used app-wide — whenever an account's address is still blank after Customer Master and carry-forward, this list fills it in, by Account Number first and by Customer ID if that doesn't match (a row only needs one of the two, not both — useful if your source list is one address per customer rather than per account). Also used directly by the Branch Split utility tool (Utility Hub), in both Simple and Full NPA Split modes. Uploading replaces the previous list entirely and applies immediately, no separate Apply step. Goes live app-wide the next time you hit Publish.</p>
     </details>
 
     <details class="master-upload-details" id="branchContactsUploadDetails">
@@ -1241,7 +1241,7 @@
 <script src="js/publish.js?v=20260920f"></script>
 <script src="js/splash.js?v=20260917a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260922c"></script>
+<script src="js/app.js?v=20260923a"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
