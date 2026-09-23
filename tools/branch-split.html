@@ -423,10 +423,21 @@ function anchorDownload(blob, filename){
 // origin, so a plain window.parent property read, no postMessage.
 // Degrades to null (no shared list) if the parent isn't ready, e.g. this
 // tool opened directly/standalone rather than inside the app's iframe.
+// Two separate maps, same as the main app keeps them -- Account No. and
+// Customer ID (2026-09-23: Alok's real source list is Customer-ID-only,
+// one address per customer rather than re-typed per account).
 function getSharedAddressList(){
   try{
     if(window.parent && window.parent!==window && typeof window.parent.UPGB_getAddressList==='function'){
       return window.parent.UPGB_getAddressList();
+    }
+  }catch(e){ /* cross-origin or parent not ready */ }
+  return null;
+}
+function getSharedAddressListByCustomer(){
+  try{
+    if(window.parent && window.parent!==window && typeof window.parent.UPGB_getAddressListByCustomer==='function'){
+      return window.parent.UPGB_getAddressListByCustomer();
     }
   }catch(e){ /* cross-origin or parent not ready */ }
   return null;
@@ -445,7 +456,8 @@ var state = {
   selectedRegion: '',
   branchCounts: {},   // branch -> row count (within current region scope)
   selectedBranches: {}, // branch -> true
-  sharedAddressMap: null,   // from getSharedAddressList()
+  sharedAddressMap: null,   // from getSharedAddressList() -- Account No. -> Address
+  sharedAddressMapByCustomer: null, // from getSharedAddressListByCustomer() -- Customer ID -> Address
   embeddedAddressMap: null, // an "ADDRESS" sheet inside the master workbook itself
   dirHandle: null,
   cancelRequested: false,
@@ -751,13 +763,20 @@ el.branchContinueBtn.addEventListener('click', function(){
 // caption inside the Run step (addr-note in the HTML above).
 function loadAddressSource(){
   state.sharedAddressMap = getSharedAddressList();
+  state.sharedAddressMapByCustomer = getSharedAddressListByCustomer();
   updateAddressLabel();
 }
 function updateAddressLabel(){
-  var hasSource = (state.sharedAddressMap && Object.keys(state.sharedAddressMap).length) || state.embeddedAddressMap;
+  var acctCount = state.sharedAddressMap ? Object.keys(state.sharedAddressMap).length : 0;
+  var custCount = state.sharedAddressMapByCustomer ? Object.keys(state.sharedAddressMapByCustomer).length : 0;
+  var hasShared = acctCount>0 || custCount>0;
+  var hasSource = hasShared || !!state.embeddedAddressMap;
   var text;
-  if(state.sharedAddressMap && Object.keys(state.sharedAddressMap).length){
-    text = 'Using the shared Address List — ' + Object.keys(state.sharedAddressMap).length.toLocaleString('en-IN') + ' accounts. Fetched automatically, nothing to upload here.';
+  if(hasShared){
+    var parts = [];
+    if(acctCount) parts.push(acctCount.toLocaleString('en-IN') + ' by account');
+    if(custCount) parts.push(custCount.toLocaleString('en-IN') + ' by customer');
+    text = 'Using the shared Address List — ' + parts.join(', ') + '. Fetched automatically, nothing to upload here.';
   } else if(state.embeddedAddressMap){
     text = 'No shared Address List found — using the "ADDRESS" sheet inside your master file (' + Object.keys(state.embeddedAddressMap).length.toLocaleString('en-IN') + ' accounts).';
   } else {
@@ -769,11 +788,20 @@ function updateAddressLabel(){
     : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
   el.addressSourceLabel.innerHTML = icon + '<span>' + esc(text) + '</span>';
 }
-function resolveAddress(acctNo){
-  var key = normAcct(acctNo);
-  if(!key) return '';
-  if(state.sharedAddressMap && state.sharedAddressMap[key]) return state.sharedAddressMap[key];
-  if(state.embeddedAddressMap && state.embeddedAddressMap[key]) return state.embeddedAddressMap[key];
+// Account No. is checked first (more precise -- a customer's registered
+// address can differ from where a specific account was opened), then
+// Customer ID (2026-09-23: Alok's real source list is Customer-ID-only).
+// custId is optional -- Simple Split's source file may not carry one.
+function resolveAddress(acctNo, custId){
+  var acctKey = normAcct(acctNo);
+  if(acctKey){
+    if(state.sharedAddressMap && state.sharedAddressMap[acctKey]) return state.sharedAddressMap[acctKey];
+    if(state.embeddedAddressMap && state.embeddedAddressMap[acctKey]) return state.embeddedAddressMap[acctKey];
+  }
+  var custKey = custId==null ? '' : String(custId).trim();
+  if(custKey && state.sharedAddressMapByCustomer && state.sharedAddressMapByCustomer[custKey]){
+    return state.sharedAddressMapByCustomer[custKey];
+  }
   return '';
 }
 
@@ -886,6 +914,7 @@ function buildSimpleSplitWorkbook(branch, rows, dateToken){
   if(!rows.length) return null;
   var rawHeader = XLSX.utils.sheet_to_json(state.wb.Sheets[state.sheetName], {header:1, raw:true, defval:''})[state.headerRowIdx||0] || [];
   var acctCol = idx('accountno');
+  var custCol = idx('customerid'); // optional in Simple mode -- not a required column
   var hasAddrCol = idx('address')>=0;
 
   var wb = new ExcelJS.Workbook();
@@ -902,7 +931,7 @@ function buildSimpleSplitWorkbook(branch, rows, dateToken){
     var row = ws.getRow(ri+2);
     for(var c=0;c<rawHeader.length;c++){ row.getCell(c+1).value = r[c]==null? '' : r[c]; }
     if(!hasAddrCol){
-      row.getCell(rawHeader.length+1).value = resolveAddress(cellStr(r, acctCol));
+      row.getCell(rawHeader.length+1).value = resolveAddress(cellStr(r, acctCol), custCol>=0 ? r[custCol] : null);
     }
     if(ri % 2 === 1){
       for(var fc=1;fc<=headers.length;fc++){ row.getCell(fc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F5F3'}}; }
@@ -958,7 +987,7 @@ function buildNpaRows(rows){
     var acctNo = looksScientific(acctRaw) ? expandSci(acctRaw) : r[c.acct];
     out.push({
       sol: r[c.sol], branch: r[c.branch], acctNo: acctNo, custId: r[c.cust],
-      scheme: r[c.scheme], name: r[c.name], address: resolveAddress(cellStr(r,c.acct)),
+      scheme: r[c.scheme], name: r[c.name], address: resolveAddress(cellStr(r,c.acct), r[c.cust]),
       balance: bal, npaDate: r[c.npaDate], custNpaDate: r[c.custNpaDate],
       sbaAcct: sbaAcct, sbaBal: sbaBal, category: cellStr(r,c.cat), prov: r[c.prov],
       sanctDate: r[c.sanct], limit: r[c.limit], mobile: r[c.mobile]
