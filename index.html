@@ -967,6 +967,7 @@
     </div>
     <button style="margin-top:10px;width:100%;padding:13px;border-radius:var(--radius-md);border:1.5px solid var(--line);background:transparent;color:var(--ink);font-weight:700;font-size:13px;transition:border-color .15s,color .15s" id="downloadAppBtn" disabled="disabled" aria-label="Download a local backup copy of this data" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent-2)'" onmouseout="this.style.borderColor='var(--line)';this.style.color='var(--ink)'">⬇ Download Data Backup (.json)</button>
 
+    <div id="unpublishedRefDataBanner" class="upload-status err" style="display:none;margin-top:10px"></div>
     <button class="btn-primary" style="margin-top:10px;width:100%" id="publishBtn" disabled="disabled" aria-label="Publish to live site">⬆ Publish to Live Site</button>
     <div id="publishReviewPanel" class="publish-review-panel" style="display:none">
       <div id="publishReviewSummary" class="publish-review-summary"></div>
@@ -1241,7 +1242,7 @@
 <script src="js/publish.js?v=20260920f"></script>
 <script src="js/splash.js?v=20260917a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260923c"></script>
+<script src="js/app.js?v=20260923d"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {

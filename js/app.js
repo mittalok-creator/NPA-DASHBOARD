@@ -3197,6 +3197,20 @@ let __pendingMaster = null;
 let __masterFileName = null;
 let __pendingAsOnDate = null;
 let __lastValidation = null;
+// Address List, Customer Master (uploaded on its own), Branch Advance,
+// Interest Reversal, and Lok Adalat all apply straight into DATA in memory
+// with no separate "Apply" step -- but that's still only this browser
+// tab's memory until Publish actually commits it. Alok reported Branch
+// Split's Address column coming up completely blank even after uploading
+// a fresh Address List; the likely cause, found by re-reading every one of
+// these upload handlers, is that none of their success messages ever said
+// Publish was still needed -- "applied immediately" reads as "done" to a
+// non-technical user, so it's easy to close the tab (or just come back
+// another day) never having clicked Publish, silently losing the upload
+// exactly like the KCC Overdue bug this same beforeunload guard already
+// protects against below. This flag extends that same protection to these
+// five uploads too.
+let __hasUnpublishedRefData = false;
 
 function xlsxDateToDMY(d){
   return String(d.getUTCDate()).padStart(2,'0')+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+d.getUTCFullYear();
@@ -3685,7 +3699,8 @@ async function handleBranchContactsUpload(evt){
       DATA.branchContacts = map;
       const label = document.getElementById('branchContactsStatusLabel');
       if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es) loaded (${file.name})`;
-      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch contact record(s) parsed. Tap a branch in the Branch/Sol ID panel to see the full card.</div>`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch contact record(s) parsed. Tap a branch in the Branch/Sol ID panel to see the full card. Not live for anyone else until you hit Publish below.</div>`;
+      __hasUnpublishedRefData = true;
       clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
@@ -3726,7 +3741,8 @@ async function handleLokAdalatUpload(evt){
       DATA.lokAdalat = map;
       const label = document.getElementById('lokAdalatStatusLabel');
       if(label) label.textContent = `${count.toLocaleString('en-IN')} account(s) loaded (${file.name})`;
-      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} Lok Adalat account(s) parsed. Opening one of these accounts now shows the "already received" banner.</div>`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} Lok Adalat account(s) parsed. Opening one of these accounts now shows the "already received" banner. Not live for anyone else until you hit Publish below.</div>`;
+      __hasUnpublishedRefData = true;
       clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
@@ -3756,7 +3772,8 @@ function clearLokAdalat(){
   const fileInput = document.getElementById('lokAdalatFileInput');
   if(fileInput) fileInput.value = '';
   const statusEl = document.getElementById('lokAdalatUploadStatus');
-  if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Lok Adalat list cleared.</div>`;
+  if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Lok Adalat list cleared. Not live for anyone else until you hit Publish below.</div>`;
+  __hasUnpublishedRefData = true;
   clearStalePublishStatus();
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;
@@ -3825,6 +3842,7 @@ function saveSpecialNote(){
   DATA.specialNotes = DATA.specialNotes || {};
   DATA.specialNotes[acctNo] = { note, updatedAt: new Date().toISOString(), updatedBy: user.login || null };
   if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Note saved for A/c ${esc(acctNo)} — ${esc(row[C.NAME])||'—'}. Goes live for everyone on Publish.</div>`;
+  __hasUnpublishedRefData = true;
   clearStalePublishStatus();
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;
@@ -3841,6 +3859,7 @@ function removeSpecialNoteByAcct(acctNo){
   delete DATA.specialNotes[acctNo];
   const statusEl = document.getElementById('specialNoteStatus');
   if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Note removed for A/c ${esc(acctNo)}${row?(' — '+esc(row[C.NAME])):''}. Goes live for everyone on Publish.</div>`;
+  __hasUnpublishedRefData = true;
   clearStalePublishStatus();
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;
@@ -4153,10 +4172,11 @@ async function handleMasterFileUpload(evt){
         // refresh here had no way to ever take effect.
         const carryForward = carryForwardMapFromCurrentData();
         mergeCustomerDetails(DATA.npa.rows, __pendingMaster, carryForward);
+        __hasUnpublishedRefData = true;
         clearStalePublishStatus();
         const publishBtn = document.getElementById('publishBtn');
         if(publishBtn) publishBtn.disabled = false;
-        statusEl.innerHTML = `<div class="upload-status ok">✔ ${__pendingMaster.size.toLocaleString('en-IN')} customer record(s) parsed and applied to the current data immediately.</div>`;
+        statusEl.innerHTML = `<div class="upload-status ok">✔ ${__pendingMaster.size.toLocaleString('en-IN')} customer record(s) parsed and applied to this session's data. Not live for anyone else until you hit Publish below.</div>`;
       }
     } catch(err){
       statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
@@ -4204,7 +4224,8 @@ async function handleBranchAdvUpload(evt){
       DATA.branchAdvances = map;
       const label = document.getElementById('branchAdvStatusLabel');
       if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es) loaded (${file.name})`;
-      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch advance figure(s) parsed. NPA % is now shown on the Dashboard.</div>`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch advance figure(s) parsed. NPA % is now shown on the Dashboard. Not live for anyone else until you hit Publish below.</div>`;
+      __hasUnpublishedRefData = true;
       clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
@@ -4252,7 +4273,8 @@ async function handleInterestReversalMasterUpload(evt){
       DATA.interestReversalMaster = map;
       const label = document.getElementById('intReversalMasterStatusLabel');
       if(label) label.textContent = `${count.toLocaleString('en-IN')} account(s) loaded (${file.name})`;
-      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} Interest Reversal figure(s) parsed. Will apply to every future daily NPA upload automatically.</div>`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} Interest Reversal figure(s) parsed. Will apply to every future daily NPA upload automatically. Not live for anyone else until you hit Publish below.</div>`;
+      __hasUnpublishedRefData = true;
       clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
@@ -4312,8 +4334,9 @@ async function handleAddressListUpload(evt){
       if(acctCount) countParts.push(`${acctCount.toLocaleString('en-IN')} by account`);
       if(custCount) countParts.push(`${custCount.toLocaleString('en-IN')} by customer`);
       if(label) label.textContent = `${countParts.join(', ')} loaded (${file.name})`;
-      statusEl.innerHTML = `<div class="upload-status ok">✔ ${countParts.join(', ')} address(es) parsed. Applied to accounts with a missing address immediately, and available to Branch Split (Utility Hub).</div>`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${countParts.join(', ')} address(es) parsed and applied to this session (including Branch Split, right now). ⚠ Not saved yet — anyone opening the app fresh, on any device, still sees the OLD address list until you hit Publish below.</div>`;
       applyAddressListFallback(DATA.npa.rows);
+      __hasUnpublishedRefData = true;
       clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
@@ -4369,7 +4392,6 @@ function applyNewDataNow(){
   const addedMsg = newAddedCount>0 ? ` (${newAddedCount.toLocaleString('en-IN')} new account(s) added.)` : '';
   document.getElementById('uploadStatus').innerHTML = `<div class="upload-status ok">✔ Data updated — ${DATA.npa.rows.length.toLocaleString('en-IN')} NPA rows now active.${staleMsg}${addedMsg}</div>`;
   document.getElementById('downloadAppBtn').disabled = false;
-  clearStalePublishStatus();
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;
   __lastApplyMeta = {
@@ -4382,6 +4404,12 @@ function applyNewDataNow(){
   renderDashboard();
   __pendingData = null;
   __pendingAsOnDate = null;
+  // Runs after __pendingData is cleared above -- pendingUnpublishedLabel()
+  // reads that flag to mean "uploaded but not yet applied," which is no
+  // longer true the instant Apply Update finishes, so recomputing the
+  // banner here (rather than before the clear, like every other upload
+  // handler does) avoids it showing that stale, now-wrong wording.
+  clearStalePublishStatus();
 }
 let __lastApplyMeta = null;
 
@@ -4545,6 +4573,26 @@ let __lastHistoryList = []; // last-loaded version history, so rollback review c
 function clearStalePublishStatus(){
   const el = document.getElementById('publishStatus');
   if(el) el.innerHTML = '';
+  updateUnpublishedBanner();
+}
+// A persistent, hard-to-miss reminder that something is staged only in
+// this browser tab's memory and hasn't actually gone live yet -- the inline
+// "✔ ... parsed" message each upload shows scrolls out of view the moment
+// another panel is touched, and the beforeunload confirm() dialog below is
+// easy to dismiss without reading. This banner stays visible right above
+// the Publish button itself for as long as anything is unpublished, reusing
+// the exact same pendingUnpublishedLabel() list the beforeunload guard
+// already computes, so the two can never disagree about what's pending.
+function updateUnpublishedBanner(){
+  const el = document.getElementById('unpublishedRefDataBanner');
+  if(!el) return;
+  const parts = pendingUnpublishedLabel();
+  if(parts.length){
+    el.style.display = 'block';
+    el.textContent = '⚠ Not live yet — ' + parts.join('; ') + '. Click "Publish to Live Site" below to make it available everywhere.';
+  } else {
+    el.style.display = 'none';
+  }
 }
 
 /* Real bug this guards against: __pendingPnpaData/
@@ -4569,6 +4617,7 @@ function pendingUnpublishedLabel(){
   if(__pendingData) parts.push('the uploaded daily NPA file (not yet applied)');
   if(typeof __pendingPnpaData!=='undefined' && __pendingPnpaData) parts.push('the Daily PNPA upload');
   if(typeof __pendingKccOverdueData!=='undefined' && __pendingKccOverdueData) parts.push('the KCC Overdue upload');
+  if(__hasUnpublishedRefData) parts.push('a reference-data update (Address List, Customer Master, Branch Advance/Contacts, Interest Reversal, Lok Adalat, or a Special Note)');
   return parts;
 }
 window.addEventListener('beforeunload', (e) => {
@@ -4682,6 +4731,8 @@ async function confirmPublish(){
     document.getElementById('publishBtn').disabled = true;
     __pendingPnpaData = null;
     __pendingKccOverdueData = null;
+    __hasUnpublishedRefData = false;
+    updateUnpublishedBanner();
     closePublishReview();
     loadVersionHistory();
   } catch(err){
