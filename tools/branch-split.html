@@ -117,8 +117,10 @@
   .drop .main{font-weight:600;font-size:13.5px}
   .drop .sub{color:var(--ink-muted);font-size:11.5px;margin-top:3px}
 
-  select, .btn{font-family:inherit;font-size:13px}
-  select{padding:9px 12px;border-radius:9px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
+  select, .btn, .text-input{font-family:inherit;font-size:13px}
+  select, .text-input{padding:9px 12px;border-radius:9px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink)}
+  .text-input{width:100%;max-width:420px;box-sizing:border-box}
+  .text-input:focus{outline:none;border-color:var(--accent)}
   .btn{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:10px 18px;cursor:pointer;font-weight:700}
   .btn:hover{border-color:var(--accent)}
   .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);box-shadow:0 6px 16px -6px rgba(14,107,87,.4)}
@@ -268,6 +270,27 @@
     <button type="button" class="panel-collapsed-row">
       <span class="check-ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5 11-11"/></svg></span>
       <span class="collapsed-text"><div class="collapsed-label">Branches</div><div class="collapsed-value"></div></span>
+      <span class="change-link">Change</span>
+    </button>
+  </div>
+
+  <div class="panel" id="filenameStep" hidden>
+    <div class="panel-open">
+      <div class="step-head">
+        <span class="step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 3v5h5"/><path d="M6 21h12a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2z"/></svg></span>
+        <div><div class="step-title">File name</div><div class="step-sub">Type what goes after the branch name -- e.g. <b>NPA AS ON 30-08-2025</b>.</div></div>
+      </div>
+      <div class="row">
+        <input type="text" class="text-input" id="fileNameSuffixInput" placeholder="e.g. NPA AS ON 30-08-2025">
+      </div>
+      <div class="note" id="fileNamePreview"></div>
+      <div class="row" style="justify-content:flex-end;margin-top:14px;">
+        <button type="button" class="btn primary" id="filenameContinueBtn">Continue →</button>
+      </div>
+    </div>
+    <button type="button" class="panel-collapsed-row">
+      <span class="check-ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5 11-11"/></svg></span>
+      <span class="collapsed-text"><div class="collapsed-label">File name</div><div class="collapsed-value"></div></span>
       <span class="change-link">Change</span>
     </button>
   </div>
@@ -465,6 +488,7 @@ var state = {
   selectedRegion: '',
   branchCounts: {},   // branch -> row count (within current region scope)
   selectedBranches: {}, // branch -> true
+  fileNameSuffix: '', // user-typed, goes after "<Branch Name> " in every output filename
   sharedAddressMap: null,   // from getSharedAddressList() -- Account No. -> Address
   sharedAddressMapByCustomer: null, // from getSharedAddressListByCustomer() -- Customer ID -> Address
   embeddedAddressMap: null, // an "ADDRESS" sheet inside the master workbook itself
@@ -483,6 +507,7 @@ var el = {};
  'modeStep','modeSimpleBtn','modeFullBtn','modeStatus',
  'regionStep','regionSelect','regionBranchCount',
  'branchStep','branchList','selectAllBtn','selectNoneBtn','branchContinueBtn',
+ 'filenameStep','fileNameSuffixInput','fileNamePreview','filenameContinueBtn',
  'outputStep','outputSub','pickFolderBtn','outputChosenLabel','outputFallbackNote',
  'runPanel','addressSourceLabel','runBtn','pauseBtn','cancelBtn','resetBtn','progressFill','statusLine','activityLog'
 ].forEach(function(id){ el[id] = document.getElementById(id); });
@@ -513,7 +538,7 @@ function setProgress(pct){ el.progressFill.style.width = Math.max(0,Math.min(100
    have working defaults the moment they're computed, so gating them
    one-at-a-time would just add clicks with no real decision behind
    the gate. */
-var STEP_ORDER = ['fileStep','sheetStep','modeStep','regionStep','branchStep','outputStep','runPanel'];
+var STEP_ORDER = ['fileStep','sheetStep','modeStep','regionStep','branchStep','filenameStep','outputStep','runPanel'];
 
 function stepIsApplicable(id){ return id!=='regionStep' || state.hasRegion; }
 
@@ -530,6 +555,14 @@ function collapseAfter(fromId){
     state.dirHandle = null;
     el.outputChosenLabel.textContent = '';
   }
+  // Everything from File name onward hidden means a typed suffix is stale
+  // too (an earlier change -- new file, new branch selection -- means the
+  // filename step needs to be answered again, not silently reused).
+  if(i < STEP_ORDER.indexOf('filenameStep')){
+    state.fileNameSuffix = '';
+    el.fileNameSuffixInput.value = '';
+    el.fileNamePreview.textContent = '';
+  }
 }
 function markDone(id, summaryHTML){
   el[id].hidden = false;
@@ -541,7 +574,7 @@ function reopen(id){
   el[id].classList.remove('done');
   collapseAfter(id);
 }
-['fileStep','sheetStep','modeStep','regionStep','branchStep','outputStep'].forEach(function(id){
+['fileStep','sheetStep','modeStep','regionStep','branchStep','filenameStep','outputStep'].forEach(function(id){
   var row = el[id].querySelector('.panel-collapsed-row');
   row.addEventListener('click', function(){ reopen(id); });
 });
@@ -755,6 +788,33 @@ el.branchContinueBtn.addEventListener('click', function(){
   var total = Object.keys(state.selectedBranches).length;
   var checked = Object.keys(state.selectedBranches).filter(function(b){ return state.selectedBranches[b]; }).length;
   markDone('branchStep', checked + ' of ' + total + ' selected');
+  el.filenameStep.hidden = false;
+  updateFileNamePreview();
+  el.fileNameSuffixInput.focus();
+});
+
+/* ---------------- file name (branch name + user-typed suffix) ---------------- */
+// Alok's explicit request (2026-09-23): stop guessing a filename from the
+// sheet's date token -- ask once for what he'd type after the branch name
+// (e.g. "NPA AS ON 30-08-2025") and use it identically in both Simple and
+// Full Split, so "BAMNAI" + "NPA AS ON 30-08-2025" -> "BAMNAI NPA AS ON
+// 30-08-2025.xlsx" for every branch file in the run.
+function updateFileNamePreview(){
+  var suffix = el.fileNameSuffixInput.value.trim();
+  var sampleBranch = Object.keys(state.selectedBranches||{}).filter(function(b){ return state.selectedBranches[b]; })[0] || 'BRANCH';
+  var name = properCase(sampleBranch) + (suffix ? ' ' + suffix : '') + '.xlsx';
+  el.fileNamePreview.textContent = 'Example: ' + name;
+}
+el.fileNameSuffixInput.addEventListener('input', updateFileNamePreview);
+el.filenameContinueBtn.addEventListener('click', function(){
+  var suffix = el.fileNameSuffixInput.value.trim();
+  if(!suffix){
+    el.fileNamePreview.innerHTML = '<span class="warn">⚠ Type something to appear after the branch name, e.g. NPA AS ON 30-08-2025.</span>';
+    el.fileNameSuffixInput.focus();
+    return;
+  }
+  state.fileNameSuffix = suffix;
+  markDone('filenameStep', esc(suffix));
   el.outputStep.hidden = false;
   if(!fsaSupported){
     // No folder to pick in this browser -- nothing left for the user to
@@ -890,8 +950,8 @@ async function runSplit(){
 
     try{
       var built = state.mode==='full'
-        ? buildFullSplitWorkbook(branch, branchRows, dateToken)
-        : buildSimpleSplitWorkbook(branch, branchRows, dateToken);
+        ? buildFullSplitWorkbook(branch, branchRows, state.fileNameSuffix)
+        : buildSimpleSplitWorkbook(branch, branchRows, state.fileNameSuffix);
 
       if(!built){
         skipped++;
@@ -948,8 +1008,18 @@ function classifySimpleColumn(headerText){
   if(h.indexOf('date')>=0) return 'date';
   if(h.indexOf('address')>=0) return 'address';
   if(h.indexOf('name')>=0) return 'name';
-  if(h==='sol' || h.indexOf('solid')>=0 || h.indexOf('accountno')>=0 || h.indexOf('acctno')>=0 ||
-     h.indexOf('customerid')>=0 || h.indexOf('custid')>=0 || h.indexOf('mobileno')>=0 || h==='mobile'){
+  // "Account No" real-world header variants all reduce, once normHeader()
+  // strips spaces/punctuation, to some mix of "ac"/"acc"/"acct"/"account"
+  // followed by "no"/"num"/"number" -- e.g. "A/C No" -> "acno", "Acc No"
+  // -> "accno", "Account Number" -> "accountnumber". Matching only the
+  // exact "accountno"/"acctno" substrings (the old check) missed all of
+  // these, which is why Account No kept showing up unformatted even after
+  // the per-kind formatting below was added.
+  if(h==='sol' || h.indexOf('solid')>=0 ||
+     h.indexOf('customerid')>=0 || h.indexOf('custid')>=0 ||
+     h.indexOf('customerno')>=0 || h.indexOf('custno')>=0 ||
+     h.indexOf('mobileno')>=0 || h==='mobile' ||
+     (h.indexOf('ac')>=0 && (h.indexOf('no')>=0 || h.indexOf('num')>=0))){
     return 'id';
   }
   if(h.indexOf('amount')>=0 || h.indexOf('amt')>=0 || h.indexOf('balance')>=0 ||
@@ -964,12 +1034,34 @@ function simpleColumnWidth(kind){
   if(kind==='date') return 14;
   return 16;
 }
-function buildSimpleSplitWorkbook(branch, rows, dateToken){
+// Finds the first column whose normalized header contains the given
+// substring -- unlike idx(), which only matches Full Split's exact known
+// column names, this works against Simple Split's arbitrary source header.
+function findColByHeaderSubstring(rawHeader, substr){
+  for(var i=0;i<rawHeader.length;i++){
+    if(normHeader(rawHeader[i]).indexOf(substr)>=0) return i;
+  }
+  return -1;
+}
+function buildSimpleSplitWorkbook(branch, rows, fileSuffix){
   if(!rows.length) return null;
   var rawHeader = XLSX.utils.sheet_to_json(state.wb.Sheets[state.sheetName], {header:1, raw:true, defval:''})[state.headerRowIdx||0] || [];
   var acctCol = idx('accountno');
   var custCol = idx('customerid'); // optional in Simple mode -- not a required column
   var hasAddrCol = idx('address')>=0;
+
+  // Alok's explicit request (2026-09-23): skip accounts whose balance is 0,
+  // same as Full Split already does via buildNpaRows()'s "bal>0" check --
+  // but Simple mode has no fixed schema, so the balance column has to be
+  // found the same header-guessing way as classifySimpleColumn() rather
+  // than via idx('balanceamount'), which only matches Full Split's exact
+  // known header text. Only filters when a balance-like column is actually
+  // found; an arbitrary file with no such column is left untouched.
+  var balCol = findColByHeaderSubstring(rawHeader, 'balance');
+  if(balCol>=0){
+    rows = rows.filter(function(r){ var bal = parseFloat(r[balCol]); return bal>0; });
+  }
+  if(!rows.length) return null;
 
   var wb = new ExcelJS.Workbook();
   var usedNames = {};
@@ -1009,7 +1101,7 @@ function buildSimpleSplitWorkbook(branch, rows, dateToken){
   ws.autoFilter = { from:{row:1,column:1}, to:{row:1,column:headers.length} };
 
   return { wb: wb, rowCount: rows.length,
-    filename: sanitizeFilename(properCase(branch)) + ' as on ' + dateToken + '.xlsx' };
+    filename: sanitizeFilename(properCase(branch) + ' ' + fileSuffix) + '.xlsx' };
 }
 
 /* ---------------- Full NPA Split engine (port of Run-NPASplit) ---------------- */
@@ -1140,7 +1232,7 @@ function buildNpaBrackets(npaRows){
   });
   return { mid: mid, high: high };
 }
-function buildFullSplitWorkbook(branch, rows, dateToken){
+function buildFullSplitWorkbook(branch, rows, fileSuffix){
   var npaRows = buildNpaRows(rows);
   if(!npaRows.length) return null;
 
@@ -1176,7 +1268,7 @@ function buildFullSplitWorkbook(branch, rows, dateToken){
   }
 
   return { wb: wb, rowCount: npaRows.length,
-    filename: sanitizeFilename(properCase(branch)) + ' NPA as on ' + dateToken + '.xlsx' };
+    filename: sanitizeFilename(properCase(branch) + ' ' + fileSuffix) + '.xlsx' };
 }
 
 /* This tool's content height varies a lot as steps appear/disappear
