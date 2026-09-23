@@ -369,10 +369,19 @@ function sanitizeSheetName(s, used){
   return name;
 }
 // Same normalization the main app's Interest Reversal / Address List
-// uploads use for Account No. matching -- absorbs float/scientific-
-// notation quirks so "151635110000123" and "1.51635110000123E+14" (or a
-// literal JS number) all resolve to the same lookup key.
-function normAcct(v){
+// uploads use for Account No./Customer ID matching -- absorbs float/
+// scientific-notation quirks AND leading zeros (present when a cell was
+// kept as text but silently dropped when the same value was parsed as a
+// number elsewhere) so "151635110000123", "1.51635110000123E+14", and
+// "0151635110000123" (or a literal JS number) all resolve to the same
+// lookup key. Named generically (not normAcct) since it's now used for
+// Customer ID matching too, not just Account No. -- added 2026-09-23
+// after Alok reported addresses still not matching even with the
+// Customer ID fallback already in place; a leading-zero mismatch (typed
+// as text on one side, parsed as a number on the other) is a common,
+// plausible cause this closes off, though the exact source data couldn't
+// be inspected directly to confirm it as THE cause.
+function normId(v){
   if(v==null || v==='') return '';
   var s = String(v).trim();
   if(looksScientific(s)) return expandSci(s);
@@ -611,7 +620,7 @@ function buildAddressMapFromRows(allRows){
   var map = {};
   for(var i=hIdx+1;i<allRows.length;i++){
     var row = allRows[i];
-    var acct = normAcct(cellStr(row, acctCol));
+    var acct = normId(cellStr(row, acctCol));
     if(!acct) continue;
     var addr = cellStr(row, addrCol);
     if(addr && !map[acct]) map[acct] = addr;
@@ -761,9 +770,22 @@ el.branchContinueBtn.addEventListener('click', function(){
 // embedded "ADDRESS" sheet inside the uploaded file, then blank. No
 // override upload exists anymore; the only thing shown is the read-only
 // caption inside the Run step (addr-note in the HTML above).
+// Re-keys a fetched Account No./Customer ID -> Address map through
+// normId() -- kept independent of whatever normalization the parent app
+// already did (js/app.js has its own equivalent pass, see
+// renormalizeIdMap() there), so this tool's own matching is correct
+// regardless: a stale cached parent tab, or data published under an
+// older version of the app before this normalization existed, can't
+// silently break address matching here.
+function normalizeMapKeys(map){
+  if(!map) return map;
+  var out = {};
+  Object.keys(map).forEach(function(k){ var nk = normId(k); if(nk) out[nk] = map[k]; });
+  return out;
+}
 function loadAddressSource(){
-  state.sharedAddressMap = getSharedAddressList();
-  state.sharedAddressMapByCustomer = getSharedAddressListByCustomer();
+  state.sharedAddressMap = normalizeMapKeys(getSharedAddressList());
+  state.sharedAddressMapByCustomer = normalizeMapKeys(getSharedAddressListByCustomer());
   updateAddressLabel();
 }
 function updateAddressLabel(){
@@ -793,12 +815,12 @@ function updateAddressLabel(){
 // Customer ID (2026-09-23: Alok's real source list is Customer-ID-only).
 // custId is optional -- Simple Split's source file may not carry one.
 function resolveAddress(acctNo, custId){
-  var acctKey = normAcct(acctNo);
+  var acctKey = normId(acctNo);
   if(acctKey){
     if(state.sharedAddressMap && state.sharedAddressMap[acctKey]) return state.sharedAddressMap[acctKey];
     if(state.embeddedAddressMap && state.embeddedAddressMap[acctKey]) return state.embeddedAddressMap[acctKey];
   }
-  var custKey = custId==null ? '' : String(custId).trim();
+  var custKey = normId(custId);
   if(custKey && state.sharedAddressMapByCustomer && state.sharedAddressMapByCustomer[custKey]){
     return state.sharedAddressMapByCustomer[custKey];
   }

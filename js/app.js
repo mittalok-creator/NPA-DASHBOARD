@@ -150,6 +150,14 @@ DATA.interestReversalMaster = DATA.interestReversalMaster || {};
    are. */
 DATA.addressList = DATA.addressList || {};
 DATA.addressListByCustomer = DATA.addressListByCustomer || {};
+// Re-key both maps through normId() on every load, not only at upload
+// time -- self-heals a list already published under the old code (before
+// normId() existed, 2026-09-23) whose keys carry a leading zero or a
+// stray ".0" that would otherwise keep failing to match even after this
+// fix ships, until Alok happens to re-upload and re-publish the exact
+// same file again. Cheap (runs once per page load, not per lookup).
+DATA.addressList = renormalizeIdMap(DATA.addressList);
+DATA.addressListByCustomer = renormalizeIdMap(DATA.addressListByCustomer);
 /* Read-only accessors for same-origin Utility Hub iframe tools (currently
    just tools/branch-split.html) that need the live, already-decrypted
    address maps without re-implementing PIN decryption themselves. Each
@@ -3228,6 +3236,41 @@ function parseCSV(text){
 function normHeader(h){ return String(h||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
 function looksScientific(s){ return /^[0-9]+(\.[0-9]+)?e\+?\d+$/i.test(String(s).trim()); }
 function expandSci(s){ const n = Number(s); if(!isFinite(n)) return String(s).trim(); return BigInt(Math.round(n)).toString(); }
+// Canonical normalization for an ID used purely as a cross-file matching
+// key (Address List <-> daily NPA upload, by Account No. or Customer ID)
+// -- never for what's actually stored/displayed elsewhere in the app, so
+// a real leading zero someone deliberately typed still shows correctly
+// on screen. Absorbs the three real-world mismatches that otherwise
+// silently break an address match even though both sides plainly mean
+// the same account/customer: scientific notation (a large numeric cell
+// Excel sometimes displays as e.g. 1.51E+14), a leading zero present
+// when a cell was kept as text but dropped when the same value was
+// parsed as a number elsewhere, and a trailing ".0"/".00" a spreadsheet
+// sometimes adds to a whole number. Added 2026-09-23 after Alok reported
+// addresses still not matching even with the Customer ID fallback
+// already in place -- mirrors tools/branch-split.html's own normId()
+// (this app has no cross-file shared-module setup, so it's a second
+// copy, same as every other small helper this tool duplicates rather
+// than imports).
+function normId(v){
+  if(v==null || v==='') return '';
+  const s = String(v).trim();
+  if(!s) return '';
+  if(looksScientific(s)) return expandSci(s);
+  const n = Number(s);
+  if(isFinite(n) && /^[0-9.]+$/.test(s)) return String(Math.round(n));
+  return s;
+}
+// Re-keys an Account No./Customer ID -> Address map through normId() --
+// used right after DATA.addressList/addressListByCustomer are loaded
+// (see their own init comment) so a map published under an older version
+// of this code, before normId() existed, self-heals on the very next
+// load instead of silently staying broken until someone re-uploads.
+function renormalizeIdMap(map){
+  const out = {};
+  Object.keys(map||{}).forEach(k=>{ const nk = normId(k); if(nk) out[nk] = map[k]; });
+  return out;
+}
 
 /* ---------- Cleaning rules for mobile / PAN / Aadhar (confirmed against real HO data) ---------- */
 function cleanMobile(raw){
@@ -3490,16 +3533,17 @@ function buildInterestReversalMasterMap(allRows, hIdx){
    needs at least one of the two identifier columns; it's fine for the
    whole file to have only one or the other (Alok's real source list is
    Customer ID only -- one address per customer, not re-typed per
-   account), or a mix of both column types row to row. Scientific-notation
-   identifiers (a large numeric cell Excel sometimes displays as e.g.
-   1.51E+14) are expanded the same way the main daily upload handles them,
-   since address lists this size (tens of thousands of rows) are exactly
-   the kind of file where that has been seen before. A row with a blank
-   address is skipped rather than storing an empty string, so it can never
-   overwrite a real address a future upload of this same list omits by
-   mistake. Returns both maps separately (never merged into one) so a
-   caller can prefer the more precise Account No. match and only fall
-   back to Customer ID when that misses. */
+   account), or a mix of both column types row to row. Both key types go
+   through normId() (scientific notation, leading zeros, a trailing
+   ".0"/".00" -- see its own comment), since address lists this size (tens
+   of thousands of rows) are exactly the kind of file where those show up,
+   and a mismatched key format is enough to silently break an otherwise-
+   correct match. A row with a blank address is skipped rather than
+   storing an empty string, so it can never overwrite a real address a
+   future upload of this same list omits by mistake. Returns both maps
+   separately (never merged into one) so a caller can prefer the more
+   precise Account No. match and only fall back to Customer ID when that
+   misses. */
 function buildAddressListMap(allRows, hIdx){
   const header = (allRows[hIdx]||[]).map(normHeader);
   const idx = (...names) => { for(const n of names){ const i = header.indexOf(normHeader(n)); if(i>=0) return i; } return -1; };
@@ -3513,14 +3557,11 @@ function buildAddressListMap(allRows, hIdx){
     const addr = cellStr(row, iAddr);
     if(!addr) continue;
     if(iAcct>=0){
-      let acct = cellStr(row, iAcct);
-      if(acct){
-        if(looksScientific(acct)) acct = expandSci(acct);
-        byAccount[acct] = addr;
-      }
+      const acct = normId(cellStr(row, iAcct));
+      if(acct) byAccount[acct] = addr;
     }
     if(iCust>=0){
-      const cust = cellStr(row, iCust);
+      const cust = normId(cellStr(row, iCust));
       if(cust) byCustomer[cust] = addr;
     }
   }
@@ -3866,7 +3907,7 @@ function mergeCustomerDetails(npaRows, masterMap, carryForwardMap){
     // only ever fills a blank, never overwrites a real address the steps
     // above already supplied.
     if(!r[C.ADDR]){
-      const la = DATA.addressList[String(r[C.ACCT_NO])] || DATA.addressListByCustomer[String(r[C.CUST_ID])];
+      const la = DATA.addressList[normId(r[C.ACCT_NO])] || DATA.addressListByCustomer[normId(r[C.CUST_ID])];
       if(la) r[C.ADDR] = la;
     }
   });
@@ -3881,7 +3922,7 @@ function applyAddressListFallback(npaRows){
   if(!byAcct && !byCust) return;
   npaRows.forEach(r=>{
     if(r[C.ADDR]) return;
-    const addr = (byAcct && byAcct[String(r[C.ACCT_NO])]) || (byCust && byCust[String(r[C.CUST_ID])]);
+    const addr = (byAcct && byAcct[normId(r[C.ACCT_NO])]) || (byCust && byCust[normId(r[C.CUST_ID])]);
     if(addr) r[C.ADDR] = addr;
   });
 }
