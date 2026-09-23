@@ -274,6 +274,28 @@
     </button>
   </div>
 
+  <div class="panel" id="addressStep" hidden>
+    <div class="panel-open">
+      <div class="step-head">
+        <span class="step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 21s-7-6.13-7-11a7 7 0 0 1 14 0c0 4.87-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+        <div><div class="step-title">Address (optional)</div><div class="step-sub">Upload a quick Account No / Address file just for this run -- Account No in column A, Address in column B. Skip to use the shared Address List instead.</div></div>
+      </div>
+      <div class="row">
+        <input type="file" id="addressFileInput" accept=".xlsx,.xls,.csv" hidden>
+        <button type="button" class="btn" id="addressPickBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Choose Address file</button>
+        <span class="note" id="addressUploadStatus"></span>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:14px;">
+        <button type="button" class="btn primary" id="addressContinueBtn">Continue →</button>
+      </div>
+    </div>
+    <button type="button" class="panel-collapsed-row">
+      <span class="check-ic"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5 11-11"/></svg></span>
+      <span class="collapsed-text"><div class="collapsed-label">Address</div><div class="collapsed-value"></div></span>
+      <span class="change-link">Change</span>
+    </button>
+  </div>
+
   <div class="panel" id="filenameStep" hidden>
     <div class="panel-open">
       <div class="step-head">
@@ -488,6 +510,7 @@ var state = {
   selectedRegion: '',
   branchCounts: {},   // branch -> row count (within current region scope)
   selectedBranches: {}, // branch -> true
+  manualAddressMap: null, // this-run-only upload (addressStep) -- Account No. -> Address; wins over sharedAddressMap/embeddedAddressMap
   fileNameSuffix: '', // user-typed, goes after "<Branch Name> " in every output filename
   sharedAddressMap: null,   // from getSharedAddressList() -- Account No. -> Address
   sharedAddressMapByCustomer: null, // from getSharedAddressListByCustomer() -- Customer ID -> Address
@@ -507,6 +530,7 @@ var el = {};
  'modeStep','modeSimpleBtn','modeFullBtn','modeStatus',
  'regionStep','regionSelect','regionBranchCount',
  'branchStep','branchList','selectAllBtn','selectNoneBtn','branchContinueBtn',
+ 'addressStep','addressPickBtn','addressFileInput','addressUploadStatus','addressContinueBtn',
  'filenameStep','fileNameSuffixInput','fileNamePreview','filenameContinueBtn',
  'outputStep','outputSub','pickFolderBtn','outputChosenLabel','outputFallbackNote',
  'runPanel','addressSourceLabel','runBtn','pauseBtn','cancelBtn','resetBtn','progressFill','statusLine','activityLog'
@@ -538,7 +562,7 @@ function setProgress(pct){ el.progressFill.style.width = Math.max(0,Math.min(100
    have working defaults the moment they're computed, so gating them
    one-at-a-time would just add clicks with no real decision behind
    the gate. */
-var STEP_ORDER = ['fileStep','sheetStep','modeStep','regionStep','branchStep','filenameStep','outputStep','runPanel'];
+var STEP_ORDER = ['fileStep','sheetStep','modeStep','regionStep','branchStep','addressStep','filenameStep','outputStep','runPanel'];
 
 function stepIsApplicable(id){ return id!=='regionStep' || state.hasRegion; }
 
@@ -563,6 +587,15 @@ function collapseAfter(fromId){
     el.fileNameSuffixInput.value = '';
     el.fileNamePreview.textContent = '';
   }
+  // Same for a this-run address upload -- an earlier change (new file, new
+  // branch selection) means whatever was uploaded here no longer applies,
+  // so it's cleared rather than silently carried over into a different run.
+  if(i < STEP_ORDER.indexOf('addressStep')){
+    state.manualAddressMap = null;
+    el.addressUploadStatus.textContent = '';
+    el.addressFileInput.value = '';
+    updateAddressLabel();
+  }
 }
 function markDone(id, summaryHTML){
   el[id].hidden = false;
@@ -574,7 +607,7 @@ function reopen(id){
   el[id].classList.remove('done');
   collapseAfter(id);
 }
-['fileStep','sheetStep','modeStep','regionStep','branchStep','filenameStep','outputStep'].forEach(function(id){
+['fileStep','sheetStep','modeStep','regionStep','branchStep','addressStep','filenameStep','outputStep'].forEach(function(id){
   var row = el[id].querySelector('.panel-collapsed-row');
   row.addEventListener('click', function(){ reopen(id); });
 });
@@ -788,6 +821,56 @@ el.branchContinueBtn.addEventListener('click', function(){
   var total = Object.keys(state.selectedBranches).length;
   var checked = Object.keys(state.selectedBranches).filter(function(b){ return state.selectedBranches[b]; }).length;
   markDone('branchStep', checked + ' of ' + total + ' selected');
+  el.addressStep.hidden = false;
+});
+
+/* ---------------- address (optional, this-run-only override) ----------------
+   Reintroduced 2026-09-23 at Alok's explicit request, reversing one piece
+   of the original redesign (see the "silent -- no user-facing control"
+   comment further below, which used to be true): the app-wide shared
+   Address List has been through several rounds of fixes and still isn't
+   reliably reaching Branch Split for him, so this gives a direct, local
+   escape hatch that bypasses that whole pipeline for a single run -- a
+   quick Account No./Address file, parsed with the exact same
+   buildAddressMapFromRows() the embedded "ADDRESS" sheet feature already
+   uses (tolerant of header wording/order, defaults to columns A/B if no
+   recognizable header is found). Entirely optional -- Continue works
+   whether or not a file was chosen, same as Output's own optional
+   folder-pick when this browser can't show a folder picker. */
+el.addressPickBtn.addEventListener('click', function(){ el.addressFileInput.click(); });
+el.addressFileInput.addEventListener('change', function(e){
+  var file = e.target.files[0];
+  if(!file) return;
+  el.addressUploadStatus.innerHTML = '<span>Reading ' + esc(file.name) + '…</span>';
+  var isCsv = /\.csv$/i.test(file.name);
+  var reader = new FileReader();
+  reader.onerror = function(){ el.addressUploadStatus.innerHTML = '<span class="warn">⚠ Failed to read the file.</span>'; };
+  reader.onload = function(ev){
+    try{
+      var wb;
+      if(isCsv){ wb = XLSX.read(String(ev.target.result), {type:'string', dense:true}); }
+      else { wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array', dense:true}); }
+      var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+      var map = buildAddressMapFromRows(rows);
+      var count = Object.keys(map).length;
+      if(!count){
+        el.addressUploadStatus.innerHTML = '<span class="warn">⚠ No Account No./Address rows found in this file.</span>';
+        state.manualAddressMap = null;
+      } else {
+        state.manualAddressMap = map;
+        el.addressUploadStatus.innerHTML = '<span>✔ ' + count.toLocaleString('en-IN') + ' account(s) parsed from ' + esc(file.name) + '.</span>';
+      }
+    }catch(err){
+      el.addressUploadStatus.innerHTML = '<span class="warn">⚠ Could not read this file: ' + esc(err.message||err) + '</span>';
+      state.manualAddressMap = null;
+    }
+    updateAddressLabel();
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+});
+el.addressContinueBtn.addEventListener('click', function(){
+  var count = state.manualAddressMap ? Object.keys(state.manualAddressMap).length : 0;
+  markDone('addressStep', count ? (count.toLocaleString('en-IN') + ' account(s) uploaded') : 'Skipped -- using shared Address List');
   el.filenameStep.hidden = false;
   updateFileNamePreview();
   el.fileNameSuffixInput.focus();
@@ -824,12 +907,15 @@ el.filenameContinueBtn.addEventListener('click', function(){
   }
 });
 
-/* ---------------- address source (silent -- no user-facing control) ---------------- */
-// Alok's explicit request: never make the user handle the address list in
-// this tool -- shared list (fetched from the main app) first, then the
-// embedded "ADDRESS" sheet inside the uploaded file, then blank. No
-// override upload exists anymore; the only thing shown is the read-only
-// caption inside the Run step (addr-note in the HTML above).
+/* ---------------- address source ----------------
+   Was originally "silent -- no user-facing control" (Alok's own request
+   at the time: shared list first, then the embedded "ADDRESS" sheet, then
+   blank, with zero manual input). Reopened 2026-09-23: the shared list
+   still wasn't reliably reaching this tool after several rounds of fixes
+   to the app-wide publish pipeline, so a this-run-only manual upload
+   (addressStep, above) was added back as a direct override -- checked
+   first in resolveAddress() below, ahead of the shared list and the
+   embedded sheet. */
 // Re-keys a fetched Account No./Customer ID -> Address map through
 // normId() -- kept independent of whatever normalization the parent app
 // already did (js/app.js has its own equivalent pass, see
@@ -849,20 +935,23 @@ function loadAddressSource(){
   updateAddressLabel();
 }
 function updateAddressLabel(){
+  var manualCount = state.manualAddressMap ? Object.keys(state.manualAddressMap).length : 0;
   var acctCount = state.sharedAddressMap ? Object.keys(state.sharedAddressMap).length : 0;
   var custCount = state.sharedAddressMapByCustomer ? Object.keys(state.sharedAddressMapByCustomer).length : 0;
   var hasShared = acctCount>0 || custCount>0;
-  var hasSource = hasShared || !!state.embeddedAddressMap;
+  var hasSource = manualCount>0 || hasShared || !!state.embeddedAddressMap;
   var text;
-  if(hasShared){
+  if(manualCount){
+    text = 'Using the file you uploaded for this run — ' + manualCount.toLocaleString('en-IN') + ' account(s). Falls back to the shared Address List for anything not in it.';
+  } else if(hasShared){
     var parts = [];
     if(acctCount) parts.push(acctCount.toLocaleString('en-IN') + ' by account');
     if(custCount) parts.push(custCount.toLocaleString('en-IN') + ' by customer');
-    text = 'Using the shared Address List — ' + parts.join(', ') + '. Fetched automatically, nothing to upload here.';
+    text = 'Using the shared Address List — ' + parts.join(', ') + '. Fetched automatically, or upload your own at the Address step above.';
   } else if(state.embeddedAddressMap){
     text = 'No shared Address List found — using the "ADDRESS" sheet inside your master file (' + Object.keys(state.embeddedAddressMap).length.toLocaleString('en-IN') + ' accounts).';
   } else {
-    text = 'No Address List available — output will have a blank Address column. Upload one under Settings → Update Data → "Address List" in the main app.';
+    text = 'No Address List available — output will have a blank Address column. Upload one at the Address step above, or under Settings → Update Data → "Address List" in the main app.';
   }
   el.addressSourceLabel.classList.toggle('warn', !hasSource);
   var icon = hasSource
@@ -870,13 +959,17 @@ function updateAddressLabel(){
     : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
   el.addressSourceLabel.innerHTML = icon + '<span>' + esc(text) + '</span>';
 }
-// Account No. is checked first (more precise -- a customer's registered
-// address can differ from where a specific account was opened), then
-// Customer ID (2026-09-23: Alok's real source list is Customer-ID-only).
-// custId is optional -- Simple Split's source file may not carry one.
+// This-run-only manual upload (addressStep) wins first, since it's the
+// most direct/deliberate thing the user just handed this specific run.
+// Account No. is otherwise checked first (more precise -- a customer's
+// registered address can differ from where a specific account was
+// opened), then Customer ID (2026-09-23: Alok's real source list is
+// Customer-ID-only). custId is optional -- Simple Split's source file may
+// not carry one.
 function resolveAddress(acctNo, custId){
   var acctKey = normId(acctNo);
   if(acctKey){
+    if(state.manualAddressMap && state.manualAddressMap[acctKey]) return state.manualAddressMap[acctKey];
     if(state.sharedAddressMap && state.sharedAddressMap[acctKey]) return state.sharedAddressMap[acctKey];
     if(state.embeddedAddressMap && state.embeddedAddressMap[acctKey]) return state.embeddedAddressMap[acctKey];
   }
