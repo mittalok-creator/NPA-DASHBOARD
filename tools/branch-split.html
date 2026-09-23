@@ -501,6 +501,7 @@ function getSharedAddressListByCustomer(){
 var state = {
   mode: 'full',
   wb: null,
+  rawWorkbookBuffer: null, // uploaded .xlsx/.xls file's Uint8Array (XLSX only, null for CSV) -- kept so loadSheet() can re-parse just the chosen sheet on demand without re-reading from disk, since FileReader only ever runs once per upload
   sheetName: '',
   rows: [],          // raw rows (array-of-arrays, row 0 = header) for the selected sheet
   headerIdx: {},      // normalized header -> column index
@@ -650,22 +651,58 @@ function handleMasterFile(file){
   reader.onerror = function(){ el.fileStatus.innerHTML = '<div class="note warn">⚠ Failed to read the file.</div>'; };
   reader.onload = function(e){
     try{
-      var wb;
-      if(isCsv){ wb = XLSX.read(String(e.target.result), {type:'string', dense:true}); }
-      else { wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', dense:true}); }
-      state.wb = wb;
-      // Opportunistic embedded ADDRESS sheet (lowest-priority address source)
-      state.embeddedAddressMap = null;
-      var addrSheet = wb.SheetNames.find(function(n){ return n==='ADDRESS'; });
-      if(addrSheet){
-        var addrRows = XLSX.utils.sheet_to_json(wb.Sheets[addrSheet], {header:1, raw:true, defval:''});
-        state.embeddedAddressMap = buildAddressMapFromRows(addrRows);
+      var sheetNames;
+      if(isCsv){
+        // CSV is always exactly one implicit sheet -- no multi-sheet cost to
+        // avoid, so this stays a normal single read, unchanged.
+        var wb = XLSX.read(String(e.target.result), {type:'string', dense:true});
+        state.rawWorkbookBuffer = null;
+        state.wb = wb;
+        state.embeddedAddressMap = null; // CSV can't carry a second "ADDRESS" sheet
+        sheetNames = wb.SheetNames;
+      } else {
+        var buf = new Uint8Array(e.target.result);
+        // A large multi-sheet .xlsx used to get every sheet's cell data
+        // eagerly parsed here before the user ever picked which one they
+        // wanted -- for a 186MB/4-sheet file (Alok, 2026-09-23) that meant
+        // up to 4x the cell-parsing cost (SheetJS has a practical ~10M/~50M
+        // cell ceiling, see the "10-million-cell parsing ceiling" fix
+        // elsewhere in this file) before Run was even reachable. bookSheets:true
+        // reads only the sheet name list -- confirmed against the vendored
+        // SheetJS source that this returns before any per-sheet XML is even
+        // decompressed, regardless of file size -- so sheet names are known
+        // almost instantly. The real per-sheet parse only ever happens once,
+        // for whichever ONE sheet loadSheet() below is actually asked for.
+        var namesOnly = XLSX.read(buf, {type:'array', bookSheets:true});
+        sheetNames = namesOnly.SheetNames;
+        state.rawWorkbookBuffer = buf;
+        state.wb = {SheetNames: sheetNames, Sheets: {}}; // Sheets filled in per-sheet by loadSheet()
+
+        // Opportunistic embedded ADDRESS sheet (lowest-priority address
+        // source) -- its own small targeted parse, since the names-only
+        // pass above has no cell data for any sheet, this one included.
+        // Wrapped in its own try/catch so a problem with this optional
+        // fallback sheet can never block the main upload/sheet-selection
+        // flow the way it could before (a shared try/catch around the
+        // whole read used to turn an ADDRESS-sheet hiccup into a scary
+        // "could not read this file" error).
+        state.embeddedAddressMap = null;
+        var addrSheet = sheetNames.find(function(n){ return n==='ADDRESS'; });
+        if(addrSheet){
+          try{
+            var addrWb = XLSX.read(buf, {type:'array', dense:true, sheets:[addrSheet]});
+            if(addrWb.Sheets && addrWb.Sheets[addrSheet]){
+              var addrRows = XLSX.utils.sheet_to_json(addrWb.Sheets[addrSheet], {header:1, raw:true, defval:''});
+              state.embeddedAddressMap = buildAddressMapFromRows(addrRows);
+            }
+          }catch(addrErr){ /* optional fallback source -- a failure here is silently skipped */ }
+        }
       }
-      el.sheetSelect.innerHTML = wb.SheetNames.map(function(n){ return '<option>'+esc(n)+'</option>'; }).join('');
-      el.fileStatus.innerHTML = '<div class="note">✔ '+wb.SheetNames.length+' worksheet(s) found.</div>';
+      el.sheetSelect.innerHTML = sheetNames.map(function(n){ return '<option>'+esc(n)+'</option>'; }).join('');
+      el.fileStatus.innerHTML = '<div class="note">✔ '+sheetNames.length+' worksheet(s) found.</div>';
       markDone('fileStep', esc(file.name));
       el.sheetStep.hidden = false;
-      loadSheet(wb.SheetNames[0]);
+      loadSheet(sheetNames[0]); // this is where the one needed sheet's cell data actually gets parsed
     }catch(err){
       el.fileStatus.innerHTML = '<div class="note warn">⚠ Could not read this file: '+esc(err.message||err)+'</div>';
     }
@@ -703,6 +740,31 @@ var REQUIRED_FULL = ['sol','branch','accountno','customerid','schemecode','accou
 
 function loadSheet(name){
   state.sheetName = name;
+  if(state.rawWorkbookBuffer){
+    // Re-parse from the buffer already in memory, restricted to just this
+    // one sheet -- cheap regardless of how many other sheets/how large the
+    // file is, since bookSheets:true (handleMasterFile, above) never parsed
+    // any sheet's cell data in the first place. Runs every time the sheet
+    // dropdown changes too, not just on first upload -- a deliberate
+    // tradeoff (switching sheets is no longer a free in-memory lookup) in
+    // exchange for never parsing sheets nobody asked for.
+    try{
+      var freshWb = XLSX.read(state.rawWorkbookBuffer, {type:'array', dense:true, sheets:[name]});
+      if(!freshWb.Sheets || !freshWb.Sheets[name]){
+        el.sheetStatus.innerHTML = '<span class="warn">⚠ Could not load sheet "'+esc(name)+'" from this file. Try picking it again from the dropdown above, or re-upload the file.</span>';
+        state.headerRowIdx = -1; state.headerIdx = {}; state.rows = [];
+        collapseAfter('sheetStep');
+        return;
+      }
+      freshWb.SheetNames = state.wb.SheetNames; // keep the full, already-known sheet list, rather than relying on this restricted read to preserve it
+      state.wb = freshWb;
+    }catch(err){
+      el.sheetStatus.innerHTML = '<span class="warn">⚠ Could not read this sheet: '+esc(err.message||err)+'</span>';
+      state.headerRowIdx = -1; state.headerIdx = {}; state.rows = [];
+      collapseAfter('sheetStep');
+      return;
+    }
+  }
   var raw = XLSX.utils.sheet_to_json(state.wb.Sheets[name], {header:1, raw:true, defval:''});
   var hIdx = findHeaderRowIndex(raw, ['branch','sol','accountno']);
 
