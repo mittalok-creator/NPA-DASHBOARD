@@ -4131,14 +4131,32 @@ async function handleMasterFileUpload(evt){
       __masterFileName = file.name;
       const label = document.getElementById('masterStatusLabel');
       if(label) label.textContent = `${__pendingMaster.size.toLocaleString('en-IN')} customers loaded (${file.name})`;
-      statusEl.innerHTML = `<div class="upload-status ok">✔ ${__pendingMaster.size.toLocaleString('en-IN')} customer record(s) parsed.</div>`;
       if(__pendingData){
+        // A fresh daily NPA file is already staged this session -- merge into
+        // that pending row set, same as before, so Apply Update ships both
+        // together.
         const carryForward = carryForwardMapFromCurrentData();
         mergeCustomerDetails(__pendingData.npa.rows, __pendingMaster, carryForward);
         const validation = validateNpaRows(__pendingData.npa.rows);
         __lastValidation = validation;
         renderValidationReport(validation);
         document.getElementById('applyDataBtn').disabled = !validation.ok;
+        statusEl.innerHTML = `<div class="upload-status ok">✔ ${__pendingMaster.size.toLocaleString('en-IN')} customer record(s) parsed and merged into the pending daily upload.</div>`;
+      } else {
+        // No daily file pending -- a Customer Master refresh is its own
+        // periodic thing (Alok re-uploads it every 6-8 months, independent
+        // of any daily file), so it applies immediately against whatever
+        // NPA data is currently live, same as Branch Advance/Interest
+        // Reversal/Address List already do. Without this, uploading a
+        // Customer Master on its own did nothing -- Apply Update only ever
+        // enables from a fresh daily-file upload, so a Customer Master
+        // refresh here had no way to ever take effect.
+        const carryForward = carryForwardMapFromCurrentData();
+        mergeCustomerDetails(DATA.npa.rows, __pendingMaster, carryForward);
+        clearStalePublishStatus();
+        const publishBtn = document.getElementById('publishBtn');
+        if(publishBtn) publishBtn.disabled = false;
+        statusEl.innerHTML = `<div class="upload-status ok">✔ ${__pendingMaster.size.toLocaleString('en-IN')} customer record(s) parsed and applied to the current data immediately.</div>`;
       }
     } catch(err){
       statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
