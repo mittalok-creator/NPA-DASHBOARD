@@ -763,7 +763,7 @@ main{padding:20px 16px 40px}
   color:var(--head-ink);padding:18px 18px 22px;border-radius:0 0 22px 22px;position:sticky;top:0;z-index:40;
   box-shadow:0 16px 38px rgba(8,6,20,.36);border-bottom:1px solid var(--head-line);
 }
-.detail-headrow{display:flex;align-items:center;gap:10px}
+.detail-headrow{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px}
 .back-btn,.share-btn{background:rgba(255,255,255,.06);border:1px solid rgba(127,176,255,.28);width:36px;height:36px;border-radius:11px;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .18s var(--ease),border-color .18s var(--ease),transform .12s var(--ease)}
 .back-btn:hover,.share-btn:hover{background:rgba(58,123,255,.18);border-color:var(--gold-l)}
 .back-btn:active,.share-btn:active{transform:scale(.92)}
@@ -784,29 +784,47 @@ main{padding:20px 16px 40px}
 .detail-headtext h2{margin:0;font-size:14.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.2px}
 .detail-headtext p{margin:2px 0 0;font-size:11.5px;color:var(--gold-l)}
 /* Alok's own RM Scale-V designation + tenure, fixed text on every Loan
-   Detail screen (2026-09-24) -- same translucent-chip-on-head-grad recipe
-   already solved for .back-btn/.share-btn sitting on this same header
+   Detail screen (2026-09-24) -- sits inline in .detail-headrow itself,
+   between the name and the share icons (Alok's explicit follow-up: "next
+   row add nahi karo"), using the same translucent-chip-on-head-grad
+   recipe already solved for .back-btn/.share-btn on this same header
    background in both themes, plus an inset top-rim highlight + drop
-   shadow for the "embossed, showing separately" look he asked for. */
-.rm-scale-badge{margin-top:10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 10px;
-  padding:8px 12px;border-radius:11px;background:rgba(255,255,255,.06);border:1px solid rgba(127,176,255,.28);
+   shadow for the "embossed, showing separately" look. flex-shrink:0 so
+   it never gets squeezed by .detail-headtext's own flex:1 -- .detail-
+   headtext's h2 already truncates via ellipsis when the row is tight
+   (mobile below), so it's the one that gives up width first, not this. */
+.rm-scale-badge{flex-shrink:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;
+  padding:7px 13px;border-radius:11px;background:rgba(255,255,255,.06);border:1px solid rgba(127,176,255,.28);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 6px 14px rgba(8,6,20,.20)}
-.rm-scale-title{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--head-ink)}
-.rm-scale-tenure{font-size:11px;font-weight:600;color:var(--head-sub)}
+.rm-scale-title{font-size:13px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--head-ink)}
+/* Two separate spans (was one string joined by "&middot;") so a real gap
+   sits between the two tenure ranges instead of just a middle-dot glyph
+   (Alok: "dono dates k bich main bhi kuch gap dikho"). */
+.rm-scale-tenure-group{display:flex;flex-wrap:wrap;gap:4px 14px}
+.rm-scale-tenure{font-size:12.5px;font-weight:700;color:var(--head-sub)}
 /* Mobile: Alok's complaint -- the header was eating too much of the small
    screen, leaving too little room for the loan table below it. Trims
    padding and the icon-button size (36px -> 30px) so the same back-btn
    + name/branch + 3 share-btn row sits in a visibly shorter strip.
    Desktop/tablet (min-width:860px) keeps the roomier padding above via
-   its own override further down the stylesheet. */
+   its own override further down the stylesheet.
+   The RM Scale badge stays inline with everything else whenever there's
+   room, but there isn't on a phone -- order:5 (after the 3 .share-btn,
+   which stay unordered/0) plus flex-basis:100% is what reliably drops
+   ONLY the badge to its own line: a flex-basis:100% item can never share
+   a line with anything (it always claims the full row width), so putting
+   it last in order guarantees back-btn+name+icons stay together on the
+   row above it instead of being dragged down too. */
 @media (max-width:859px){
   .detail-head{padding:10px 14px 12px}
   .detail-headrow{gap:8px}
   .back-btn,.share-btn{width:30px;height:30px;border-radius:9px}
   .detail-headtext h2{font-size:13.5px}
   .detail-headtext p{font-size:10.5px;margin-top:1px}
-  .rm-scale-badge{margin-top:8px;padding:6px 10px;gap:3px 8px}
-  .rm-scale-title,.rm-scale-tenure{font-size:10px}
+  .rm-scale-badge{order:5;flex-basis:100%;margin-top:2px;padding:6px 11px;gap:3px 10px}
+  .rm-scale-title{font-size:11.5px}
+  .rm-scale-tenure{font-size:11px}
+  .rm-scale-tenure-group{gap:3px 10px}
 }
 /* Follow-up, same complaint: the sticky "Particulars" label column had no
    width cap anywhere, so it auto-sized to its single widest cell -- the

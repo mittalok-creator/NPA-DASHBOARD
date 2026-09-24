@@ -2095,6 +2095,13 @@ function openDetail(custId, jumpAcct){
           <h2>${esc(custRow[C.NAME])||'—'}</h2>
           <p>${esc(custRow[C.SOL_DESC])||''} · Cust ID ${esc(custRow[C.CUST_ID])}</p>
         </div>
+        <div class="rm-scale-badge">
+          <span class="rm-scale-title">RM SCALE - V</span>
+          <span class="rm-scale-tenure-group">
+            <span class="rm-scale-tenure">29-03-2021 to 31-03-2022</span>
+            <span class="rm-scale-tenure">23-09-2024 to 11-09-2026</span>
+          </span>
+        </div>
         <button class="share-btn" onclick="exportOtsExcel()" title="Export to Excel (live formulas — edit OTS Amount and everything else recalculates)" aria-label="Export to Excel with formulas">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v18M16 3v18M3 9h18M3 15h18"/></svg>
         </button>
@@ -2104,10 +2111,6 @@ function openDetail(custId, jumpAcct){
         <button class="share-btn" onclick="toggleShareOtsMenu(event)" title="Share on WhatsApp" aria-label="Share this report on WhatsApp">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
         </button>
-      </div>
-      <div class="rm-scale-badge">
-        <span class="rm-scale-title">RM SCALE - V</span>
-        <span class="rm-scale-tenure">29-03-2021 to 31-03-2022 &middot; 23-09-2024 to 11-09-2026</span>
       </div>
     </div>
     <div class="detail-inner${slots.length>=1?' has-agg':''}">
