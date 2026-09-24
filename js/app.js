@@ -6009,7 +6009,7 @@ function parseKccOverdueRows(headerCells, dataRows){
   if(iScheme<0) missing.push('Scheme Code');
   if(iBal<0) missing.push('Balance Amount');
   if(iCustNpa<0) missing.push('Cust NPA Date');
-  if(missing.length) throw new Error('Missing required column(s): '+missing.join(', ')+'. Check this file matches the "KCC Overdue" export layout.');
+  if(missing.length) throw new Error('Missing required column(s): '+missing.join(', ')+'. Check this file matches the daily KCC "Data" export layout.');
   const rows = [];
   for(const row of dataRows){
     if(!row || row.length<3) continue;
@@ -6045,7 +6045,7 @@ let kccovDateMode = 'month';
 let kccovMonthFilter = '';
 let kccovDateFrom = '';
 let kccovDateTo = '';
-let kccovView = 'summary'; // 'summary' | 'calendar'
+let kccovView = 'summary'; // 'summary' | 'calendar' | 'fymonth' | 'branchreport' | 'allbranches'
 // Datewise Calendar's own column sort -- {key:'sol'|'branch'|'total'|<date
 // string>, dir:'asc'|'desc'}. Starts null so renderKccOverdueCalendar()
 // can tell "never sorted yet" apart from "user explicitly re-sorted" and
@@ -6103,7 +6103,7 @@ async function handleKccOverdueUpload(evt){
         // Every date column below goes through toDate(), which already
         // converts the raw Excel serial number correctly on its own.
         const wb = XLSX.read(data, {type:'array'});
-        const sheetName = wb.SheetNames.find(n=>/kcc|overdue/i.test(n)) || wb.SheetNames[0];
+        const sheetName = wb.SheetNames.find(n=>/kcc|overdue|^data$/i.test(n)) || wb.SheetNames[0];
         const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
         header = raw[0]||[]; dataRows = raw.slice(1);
       }
@@ -6210,37 +6210,68 @@ function renderKccOverdueBody(){
     <div class="bank-filter-row">${dateInputsRow}</div>`;
 
   const filteredRows = kccovFilteredRows(d);
-  const bucketTotals = {};
-  KCC_OVERDUE_SCHEMES.forEach(s=>{ bucketTotals[s.key]={count:0,os:0,branches:new Set()}; });
-  for(const r of filteredRows){
-    const bk = kccOverdueBucketOf(r[KC.SCHEME]);
-    bucketTotals[bk].count++; bucketTotals[bk].os += r[KC.OS]; bucketTotals[bk].branches.add(r[KC.BRANCH]);
+  // The hero scheme-tab row and its bucketTotals are only meaningful for
+  // Branch Summary/Calendar -- the 3 bifurcation views (F.Y./Month
+  // Summary, Branch Report, All Branches Overview) exist specifically to
+  // show KCC/KCC-AH/OD-023 side by side, so a still-highlighted "active
+  // scheme" card above a table that visibly spans all 3 would read as
+  // contradictory. Skipped entirely (not just hidden) when one of those
+  // views is active, rather than computed and thrown away.
+  const showHero = kccovView==='summary' || kccovView==='calendar';
+  let heroRow = '';
+  if(showHero){
+    const bucketTotals = {};
+    KCC_OVERDUE_SCHEMES.forEach(s=>{ bucketTotals[s.key]={count:0,os:0,branches:new Set()}; });
+    for(const r of filteredRows){
+      const bk = kccOverdueBucketOf(r[KC.SCHEME]);
+      bucketTotals[bk].count++; bucketTotals[bk].os += r[KC.OS]; bucketTotals[bk].branches.add(r[KC.BRANCH]);
+    }
+    const bucketIcon = {kcc:ICON_TARGET, kccah:ICON_STAR, od023:ICON_ALERT_TRIANGLE};
+    heroRow = `<div class="hero-kpi-row bank-hero-row">${KCC_OVERDUE_SCHEMES.map(s=>{
+      const t = bucketTotals[s.key], isActive = kccovSchemeTab===s.key;
+      return heroKpiCard({
+        id:'kccovHero_'+s.key, icon: bucketIcon[s.key],
+        tint: isActive?'var(--accent-soft)':'rgba(120,120,140,.12)', color: isActive?'var(--accent)':'var(--ink-mute)',
+        onclick:`setKccovSchemeTab('${s.key}')`,
+        label: s.label,
+        fallback: fmtCr(t.os),
+        sub: `${t.count.toLocaleString('en-IN')} accounts · ${t.branches.size.toLocaleString('en-IN')} branches`,
+        badge: isActive ? `<div class="hero-kpi-badge" style="background:var(--accent-soft);color:var(--accent)">Viewing</div>` : '',
+      });
+    }).join('')}</div>`;
   }
-  const bucketIcon = {kcc:ICON_TARGET, kccah:ICON_STAR, od023:ICON_ALERT_TRIANGLE};
-  const heroRow = `<div class="hero-kpi-row bank-hero-row">${KCC_OVERDUE_SCHEMES.map(s=>{
-    const t = bucketTotals[s.key], isActive = kccovSchemeTab===s.key;
-    return heroKpiCard({
-      id:'kccovHero_'+s.key, icon: bucketIcon[s.key],
-      tint: isActive?'var(--accent-soft)':'rgba(120,120,140,.12)', color: isActive?'var(--accent)':'var(--ink-mute)',
-      onclick:`setKccovSchemeTab('${s.key}')`,
-      label: s.label,
-      fallback: fmtCr(t.os),
-      sub: `${t.count.toLocaleString('en-IN')} accounts · ${t.branches.size.toLocaleString('en-IN')} branches`,
-      badge: isActive ? `<div class="hero-kpi-badge" style="background:var(--accent-soft);color:var(--accent)">Viewing</div>` : '',
-    });
-  }).join('')}</div>`;
 
+  // 5 view modes in one row: the original 2 (Branch Summary/Calendar,
+  // scoped to one scheme via the hero row above) plus 3 new ones (F.Y./
+  // Month Summary/Branch Report/All Branches Overview, always showing
+  // KCC/KCC-AH/OD-023 side by side) -- a thin .bank-tab-sep divider marks
+  // the boundary between the two groups without a second tab row, same
+  // flex-wrap this row already relies on for narrow screens.
   const viewToggleRow = `<div class="bank-tab-row" style="margin-top:18px">
     <button type="button" class="bank-tab-btn${kccovView==='summary'?' active':''}" onclick="setKccovView('summary')">Branch Summary</button>
     <button type="button" class="bank-tab-btn${kccovView==='calendar'?' active':''}" onclick="setKccovView('calendar')">Datewise Calendar</button>
+    <span class="bank-tab-sep" aria-hidden="true"></span>
+    <button type="button" class="bank-tab-btn${kccovView==='fymonth'?' active':''}" onclick="setKccovView('fymonth')">F.Y./Month Summary</button>
+    <button type="button" class="bank-tab-btn${kccovView==='branchreport'?' active':''}" onclick="setKccovView('branchreport')">Branch Report</button>
+    <button type="button" class="bank-tab-btn${kccovView==='allbranches'?' active':''}" onclick="setKccovView('allbranches')">All Branches Overview</button>
   </div>`;
+
+  const isBifurcationView = kccovView==='fymonth' || kccovView==='branchreport' || kccovView==='allbranches';
+  const showPrintPdf = kccovView==='fymonth' || kccovView==='allbranches';
+  const actionButtons = kccovView==='summary'
+    ? `<button type="button" class="export-xl-btn" onclick="exportKccOverdueSummary()">${EXPORT_XL_ICON} Export to Excel</button>`
+    : isBifurcationView
+      ? `<button type="button" class="export-xl-btn" onclick="exportKccOverdueBifurcation()">${EXPORT_XL_ICON} Export to Excel</button>`
+        + (showPrintPdf ? `<button type="button" class="export-xl-btn" onclick="printKccOverdueBifurcation()">Print</button>
+           <button type="button" class="export-xl-btn" onclick="exportKccOverdueBifurcationPdf('${kccovView}')">Save as PDF</button>` : '')
+      : '';
 
   el.innerHTML = toolbar + heroRow + viewToggleRow +
     (kccovView==='calendar' ? `<div id="kccovInsightWrap"></div>` : '') +
     `<div class="chart-card" style="margin-top:16px">
       <div class="chart-card-head-row">
         <div class="section-label" id="kccovTableLabel"></div>
-        ${kccovView==='summary' ? `<button type="button" class="export-xl-btn" onclick="exportKccOverdueSummary()">${EXPORT_XL_ICON} Export to Excel</button>` : ''}
+        ${actionButtons}
       </div>
       ${kccovView==='calendar' ? `<div class="kccov-cal-legend" id="kccovCalLegend"></div>` : ''}
       <div id="kccovBranchTableCard"></div>
@@ -6258,6 +6289,9 @@ function renderKccOverdueBody(){
   if(toInput) toInput.onchange = () => { kccovDateTo = toInput.value; renderKccOverdueBody(); };
 
   if(kccovView==='calendar') renderKccOverdueCalendar(filteredRows);
+  else if(kccovView==='fymonth') renderKccOverdueFyMonth(filteredRows);
+  else if(kccovView==='branchreport') renderKccOverdueBranchReport(filteredRows);
+  else if(kccovView==='allbranches') renderKccOverdueAllBranches(filteredRows);
   else renderKccOverdueBranchTable(filteredRows);
 }
 
@@ -6300,6 +6334,333 @@ function exportKccOverdueSummary(){
   showToast(`✓ ${x.branchAgg.length} branch row${x.branchAgg.length>1?'s':''} exported`);
 }
 window.exportKccOverdueSummary = exportKccOverdueSummary;
+
+/* ---------- KCC Overdue Bifurcation: Excel export (Report/Data/Branch Report-with-
+   dropdown/All Branches, 4 sheets) -- ported from tools/kcc-overdue-summary.html,
+   using this app's own lazy ensureExcelJS() instead of that standalone tool's plain
+   <script> tag. Separate from exportKccOverdueSummary() above, which stays scoped
+   to the current on-screen Branch Summary table exactly as its own comment already
+   documents -- this is the F.Y./Month Summary/Branch Report/All Branches Overview
+   views' own export, always covering every branch (the Branch Report sheet's own
+   dropdown lets a viewer pick any branch inside Excel itself, no re-export needed). */
+function kccovRound2(n){ return Math.round(n*100)/100; }
+function kccovThinBorder(){ return { top:{style:'thin',color:{argb:'FFD7DED9'}}, left:{style:'thin',color:{argb:'FFD7DED9'}}, bottom:{style:'thin',color:{argb:'FFD7DED9'}}, right:{style:'thin',color:{argb:'FFD7DED9'}} }; }
+const KCCOV_FY_PALETTE_ARGB = ['FF2F527D','FF1F7A5C','FF8B5E1F','FF6F3D8E','FFA5432B','FF2F7D7D'];
+const KCCOV_FY_PALETTE_SOFT_ARGB = ['FFDCE6F1','FFDCEEE6','FFF3E7CE','FFEBDFF3','FFF6E2DC','FFDCF0F0'];
+
+function kccovWriteDataRow(ws, r, label, g, bold){
+  ws.getCell(r,1).value = label;
+  if(bold) ws.getCell(r,1).font = {bold:true};
+  KCCOV_BIFURCATION_GROUPS.forEach((gd,i)=>{
+    const col = 2+i*2, b = g[gd.key];
+    const cCnt = ws.getCell(r,col); cCnt.value = b.cnt; cCnt.numFmt = '0';
+    const cAmt = ws.getCell(r,col+1); cAmt.value = kccovRound2(b.amt/100000); cAmt.numFmt = '0.00';
+  });
+  if(bold){
+    for(let c=1;c<=13;c++){ const cell = ws.getCell(r,c); cell.font = {bold:true}; cell.border = {top:{style:'thin'}}; cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF3E7CE'}}; }
+  }
+  return r+1;
+}
+function kccovWriteFyBand(ws, r, fy, argb){
+  ws.mergeCells(r,1,r,13);
+  const c = ws.getCell(r,1);
+  c.value = 'F.Y. '+fy; c.font = {bold:true, color:{argb:'FFFFFFFF'}, size:12}; c.alignment = {horizontal:'center', vertical:'middle'};
+  for(let col=1; col<=13; col++) ws.getCell(r,col).fill = {type:'pattern',pattern:'solid',fgColor:{argb:argb}};
+  ws.getRow(r).height = 20;
+  return r+1;
+}
+function kccovWriteTwoRowHeader(ws, r, softArgb){
+  ws.mergeCells(r,1,r+1,1);
+  const mc = ws.getCell(r,1); mc.value = 'Month'; mc.font = {bold:true}; mc.alignment = {vertical:'middle',horizontal:'center'};
+  KCCOV_BIFURCATION_GROUPS.forEach((gd,i)=>{
+    const col = 2+i*2;
+    ws.mergeCells(r,col,r,col+1);
+    const gc = ws.getCell(r,col); gc.value = gd.label; gc.font = {bold:true}; gc.alignment = {horizontal:'center'};
+    ws.getCell(r,col).fill = {type:'pattern',pattern:'solid',fgColor:{argb:softArgb}};
+    ws.getCell(r,col+1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:softArgb}};
+    ws.getCell(r+1,col).value = 'A/C Count'; ws.getCell(r+1,col).font = {bold:true};
+    ws.getCell(r+1,col+1).value = 'Amount (₹ Lakh)'; ws.getCell(r+1,col+1).font = {bold:true};
+  });
+  for(let col2=1; col2<=13; col2++){ ws.getCell(r,col2).border = kccovThinBorder(); ws.getCell(r+1,col2).border = kccovThinBorder(); }
+  return r+2;
+}
+function kccovWriteBifurcationSheet(ws, title, rows){
+  ws.getColumn(1).width = 16;
+  for(let c=2;c<=13;c++) ws.getColumn(c).width = 15;
+  let r = 1;
+  ws.mergeCells(r,1,r,13);
+  ws.getCell(r,1).value = title; ws.getCell(r,1).font = {bold:true, size:14};
+  r += 2;
+  const byFy = kccovAggregateFyMonth(rows);
+  const fyKeys = kccovSortFyKeys(Array.from(byFy.keys()));
+  fyKeys.forEach((fy, fi)=>{
+    const argb = KCCOV_FY_PALETTE_ARGB[fi % KCCOV_FY_PALETTE_ARGB.length], soft = KCCOV_FY_PALETTE_SOFT_ARGB[fi % KCCOV_FY_PALETTE_SOFT_ARGB.length];
+    r = kccovWriteFyBand(ws, r, fy, argb);
+    r = kccovWriteTwoRowHeader(ws, r, soft);
+    const monthMap = byFy.get(fy), monthKeys = kccovSortMonthKeys(Array.from(monthMap.keys()));
+    const fyTotal = kccovEmptyGroupTotals();
+    monthKeys.forEach(mk=>{ const m = monthMap.get(mk); kccovAddGroupInto(fyTotal, m.g); r = kccovWriteDataRow(ws, r, m.label, m.g, false); });
+    r = kccovWriteDataRow(ws, r, 'F.Y. '+fy+' TOTAL', fyTotal, true);
+    r += 1;
+  });
+  if(!fyKeys.length){ ws.getCell(r,1).value = 'No qualifying rows.'; }
+}
+function kccovWriteFlatBranchSheet(ws, rows){
+  ws.getColumn(1).width = 10; ws.getColumn(2).width = 26;
+  for(let c=3;c<=14;c++) ws.getColumn(c).width = 15;
+  let r = 1;
+  ws.mergeCells(r,1,r,14);
+  ws.getCell(r,1).value = 'All Branches Overview'; ws.getCell(r,1).font = {bold:true, size:14};
+  r += 2;
+  const headerRow1 = r;
+  ws.mergeCells(r,1,r+1,1); ws.getCell(r,1).value = 'Sol'; ws.getCell(r,1).font = {bold:true};
+  ws.mergeCells(r,2,r+1,2); ws.getCell(r,2).value = 'Branch'; ws.getCell(r,2).font = {bold:true};
+  KCCOV_BIFURCATION_GROUPS.forEach((gd,i)=>{
+    const col = 3+i*2;
+    ws.mergeCells(r,col,r,col+1);
+    ws.getCell(r,col).value = gd.label; ws.getCell(r,col).font = {bold:true};
+    ws.getCell(r+1,col).value = 'A/C Count'; ws.getCell(r+1,col).font = {bold:true};
+    ws.getCell(r+1,col+1).value = 'Amount (₹ Lakh)'; ws.getCell(r+1,col+1).font = {bold:true};
+  });
+  for(let cc=1; cc<=14; cc++){
+    ws.getCell(r,cc).border = kccovThinBorder(); ws.getCell(r+1,cc).border = kccovThinBorder();
+    ws.getCell(r,cc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFDCEEE8'}};
+    ws.getCell(r+1,cc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFDCEEE8'}};
+  }
+  r += 2;
+  const byBranch = kccovAggregateBranches(rows), branchKeys = kccovSortBranchKeys(byBranch, Array.from(byBranch.keys()));
+  const grand = kccovEmptyGroupTotals();
+  branchKeys.forEach(bk=>{
+    const rec = byBranch.get(bk);
+    kccovAddGroupInto(grand, rec.g);
+    ws.getCell(r,1).value = rec.sol||''; ws.getCell(r,2).value = rec.branch;
+    KCCOV_BIFURCATION_GROUPS.forEach((gd,i)=>{
+      const col = 3+i*2, b = rec.g[gd.key];
+      ws.getCell(r,col).value = b.cnt; ws.getCell(r,col).numFmt = '0';
+      ws.getCell(r,col+1).value = kccovRound2(b.amt/100000); ws.getCell(r,col+1).numFmt = '0.00';
+    });
+    r += 1;
+  });
+  ws.mergeCells(r,1,r,2); ws.getCell(r,1).value = 'Grand Total'; ws.getCell(r,1).font = {bold:true};
+  KCCOV_BIFURCATION_GROUPS.forEach((gd,i)=>{
+    const col = 3+i*2, b = grand[gd.key];
+    ws.getCell(r,col).value = b.cnt; ws.getCell(r,col).font = {bold:true};
+    ws.getCell(r,col+1).value = kccovRound2(b.amt/100000); ws.getCell(r,col+1).font = {bold:true};
+  });
+  for(let cf=1; cf<=14; cf++){ ws.getCell(r,cf).border = {top:{style:'thin'}}; ws.getCell(r,cf).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF3E7CE'}}; }
+  ws.views = [{ state:'frozen', ySplit: headerRow1+1 }];
+}
+function kccovColLetter(n){
+  let s = '';
+  while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); }
+  return s;
+}
+function kccovWriteDataSheet(ws, rows){
+  ws.addRow(['Sol','Branch','Account No','Balance Amount','Scheme','Cust NPA Date','F.Y.','Month Label']);
+  ws.getRow(1).font = {bold:true};
+  ws.getRow(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFDCEEE8'}};
+  rows.forEach(r=>{
+    const groupLabel = (KCCOV_BIFURCATION_GROUPS.find(g=>g.key===r.bucket)||{}).label || r.bucket;
+    ws.addRow([r.sol, r.branch, r.acctNo, r.bal, groupLabel, r.npaDate, r.fy, r.monthLabel]);
+  });
+  ws.getColumn(6).numFmt = 'dd-mm-yyyy';
+  for(let c=1;c<=8;c++) ws.getColumn(c).width = (c===2?22:(c===3?16:14));
+  const branchNames = Array.from(new Set(rows.map(r=>r.branch))).sort();
+  ws.getCell(1,10).value = 'Branch List (for the dropdown)'; ws.getCell(1,10).font = {bold:true};
+  branchNames.forEach((name, i)=>{ ws.getCell(i+2, 10).value = name; });
+  ws.getColumn(10).width = 24;
+  ws.views = [{state:'frozen', ySplit:1}];
+  return branchNames;
+}
+function kccovBranchReportFormula(kind, fy, monthLabel, groupLabel, dropdownAddr){
+  const critBranch = 'Data!$B:$B,'+dropdownAddr;
+  const critFy = 'Data!$G:$G,"'+String(fy).replace(/"/g,'""')+'"';
+  const critMonth = 'Data!$H:$H,"'+String(monthLabel).replace(/"/g,'""')+'"';
+  const critGroup = groupLabel ? ',Data!$E:$E,"'+groupLabel+'"' : '';
+  if(kind==='cnt') return 'COUNTIFS('+critBranch+','+critFy+','+critMonth+critGroup+')';
+  if(kind==='amt') return 'SUMIFS(Data!$D:$D,'+critBranch+','+critFy+','+critMonth+critGroup+')/100000';
+  if(kind==='cnt5') return 'COUNTIFS('+critBranch+','+critFy+','+critMonth+',Data!$D:$D,">=500000")';
+  if(kind==='amt5') return 'SUMIFS(Data!$D:$D,'+critBranch+','+critFy+','+critMonth+',Data!$D:$D,">=500000")/100000';
+  if(kind==='cnt10') return 'COUNTIFS('+critBranch+','+critFy+','+critMonth+',Data!$D:$D,">=1000000")';
+  if(kind==='amt10') return 'SUMIFS(Data!$D:$D,'+critBranch+','+critFy+','+critMonth+',Data!$D:$D,">=1000000")/100000';
+}
+// Built dynamically off KCC_OVERDUE_SCHEMES (the same source of truth
+// kccovWriteDataSheet's own group-label column derives from), so these
+// formula criteria strings and the Data sheet's own written label text
+// can never drift apart from each other -- no separate manual mapping
+// to get backwards.
+const KCCOV_BRANCH_REPORT_SPECS = [
+  ...KCC_OVERDUE_SCHEMES.flatMap(s=>[{kind:'cnt', group:s.label}, {kind:'amt', group:s.label}]),
+  {kind:'cnt', group:null}, {kind:'amt', group:null},
+  {kind:'cnt5'}, {kind:'amt5'}, {kind:'cnt10'}, {kind:'amt10'},
+];
+function kccovWriteBranchReportDataRow(ws, r, label, fy, monthLabel, dropdownAddr){
+  ws.getCell(r,1).value = label;
+  KCCOV_BRANCH_REPORT_SPECS.forEach((spec, i)=>{
+    const col = 2+i;
+    const cell = ws.getCell(r, col);
+    cell.value = {formula: kccovBranchReportFormula(spec.kind, fy, monthLabel, spec.group, dropdownAddr)};
+    cell.numFmt = (i%2===0) ? '0' : '0.00';
+  });
+  return r+1;
+}
+function kccovWriteBranchReportTotalRow(ws, r, label, startRow, endRow){
+  ws.getCell(r,1).value = label; ws.getCell(r,1).font = {bold:true};
+  for(let col=2; col<=13; col++){
+    const letter = kccovColLetter(col);
+    const cell = ws.getCell(r, col);
+    cell.value = {formula: 'SUM('+letter+startRow+':'+letter+endRow+')'};
+    cell.font = {bold:true}; cell.numFmt = ((col-2)%2===0) ? '0' : '0.00';
+    cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF3E7CE'}};
+    cell.border = {top:{style:'thin'}};
+  }
+  return r+1;
+}
+function kccovWriteBranchReportSheet(ws, rows, defaultBranch, branchNames, branchCount){
+  ws.getColumn(1).width = 16;
+  for(let c=2;c<=13;c++) ws.getColumn(c).width = 15;
+  let r = 1;
+  ws.mergeCells(r,1,r,13);
+  ws.getCell(r,1).value = 'Branch Report'; ws.getCell(r,1).font = {bold:true, size:14};
+  r += 1;
+  ws.getCell(r,1).value = 'Select Branch:'; ws.getCell(r,1).font = {bold:true};
+  const dropdownAddr = '$'+kccovColLetter(2)+'$'+r;
+  ws.mergeCells(r,2,r,4);
+  const ddCell = ws.getCell(r,2);
+  ddCell.value = branchNames.indexOf(defaultBranch)>=0 ? defaultBranch : (branchNames[0]||'');
+  ddCell.font = {bold:true, size:12, color:{argb:'FF0E6B57'}};
+  ddCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFDCEEE8'}};
+  ddCell.border = kccovThinBorder();
+  ddCell.dataValidation = {
+    type: 'list', allowBlank: false,
+    formulae: ['Data!$J$2:$J$'+(branchCount+1)],
+    showErrorMessage: true, errorTitle: 'Invalid branch', error: 'Pick a branch from the dropdown list.'
+  };
+  r += 2;
+  const byFy = kccovAggregateFyMonth(rows);
+  const fyKeys = kccovSortFyKeys(Array.from(byFy.keys()));
+  fyKeys.forEach((fy, fi)=>{
+    r = kccovWriteFyBand(ws, r, fy, KCCOV_FY_PALETTE_ARGB[fi % KCCOV_FY_PALETTE_ARGB.length]);
+    r = kccovWriteTwoRowHeader(ws, r, KCCOV_FY_PALETTE_SOFT_ARGB[fi % KCCOV_FY_PALETTE_SOFT_ARGB.length]);
+    const monthMap = byFy.get(fy), monthKeys = kccovSortMonthKeys(Array.from(monthMap.keys()));
+    const sectionStart = r;
+    monthKeys.forEach(mk=>{ r = kccovWriteBranchReportDataRow(ws, r, monthMap.get(mk).label, fy, monthMap.get(mk).label, dropdownAddr); });
+    r = kccovWriteBranchReportTotalRow(ws, r, 'F.Y. '+fy+' TOTAL', sectionStart, r-1);
+    r += 1;
+  });
+  if(!fyKeys.length){ ws.getCell(r,1).value = 'No qualifying rows.'; }
+}
+async function exportKccOverdueBifurcation(){
+  await ensureExcelJS();
+  const {rows: mapped} = kccovMapBifurcationRows(kccovFilteredRows(KCC_OVERDUE_DATA));
+  if(!mapped.length) return;
+  const wb = new ExcelJS.Workbook();
+  wb.calcProperties = { fullCalcOnLoad: true };
+  kccovWriteBifurcationSheet(wb.addWorksheet('Report'), 'KCC Overdue — F.Y./Month Bifurcation', mapped);
+  const wsData = wb.addWorksheet('Data');
+  const branchNames = kccovWriteDataSheet(wsData, mapped);
+  const defaultBranch = kccovBranchFilter || branchNames[0] || '';
+  kccovWriteBranchReportSheet(wb.addWorksheet('Branch Report'), mapped, defaultBranch, branchNames, branchNames.length);
+  kccovWriteFlatBranchSheet(wb.addWorksheet('All Branches'), mapped);
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `KCC_Overdue_Bifurcation_${dateToInputValue(new Date())}.xlsx`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+  showToast('✓ Workbook exported');
+}
+window.exportKccOverdueBifurcation = exportKccOverdueBifurcation;
+
+/* ---------- KCC Overdue Bifurcation: Print + Save as PDF (F.Y./Month Summary and
+   All Branches Overview only, not Branch Report, matching the standalone tool's own
+   scope decision) ---------- */
+// Print reuses the app's own single existing print mechanism (#printArea +
+// the @media print rule in css/styles.css, already serving the OTS one-
+// pager) instead of porting the standalone tool's separate [data-printing]-
+// attribute mechanism -- introducing a second, parallel print-visibility
+// system in this same stylesheet for only this feature would have no
+// functional benefit over reusing the one that's already here. The
+// already-rendered table HTML is copied straight into #printArea (no
+// re-render needed -- it's already exactly what should print).
+function printKccOverdueBifurcation(){
+  const source = document.getElementById('kccovBranchTableCard');
+  const printArea = document.getElementById('printArea');
+  if(!source || !printArea) return;
+  printArea.innerHTML = `<div class="kccov-print-wrap">${source.innerHTML}</div>`;
+  printWithPageSize('size:A4 landscape;margin:10mm');
+}
+window.printKccOverdueBifurcation = printKccOverdueBifurcation;
+
+// Save as PDF needs the standalone tool's own row-aware, header-repeating,
+// per-page-capture technique ported in as new code -- the app's existing
+// OTS PDF pipeline (canvasToPdfBlob()) rasterizes one single flowing
+// element and blind-slices it by raw pixel height, which is the wrong
+// shape for a multi-table, multi-F.Y.-section landscape document (it
+// would never repeat a section's header past its first page, and could
+// cut a data row in half exactly where a slice boundary lands -- both
+// real bugs the standalone tool's own captureTablePages() was built to
+// fix earlier the same day). This measures each table's own real thead/
+// row heights, hides out-of-range tbody rows, captures with html2canvas,
+// un-hides, and repeats -- so a page break can only ever fall between two
+// rows, never through one.
+function kccovAddCanvasAsPdfPage(doc, canvas, margin, usableW){
+  const scale = usableW / canvas.width;
+  doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, usableW, canvas.height * scale);
+}
+async function kccovCaptureTablePages(table, doc, margin, usableW, usableH, isFirstPageOfDoc){
+  const thead = table.querySelector('thead');
+  const tbody = table.querySelector('tbody');
+  const rows = tbody ? Array.prototype.slice.call(tbody.rows) : [];
+  if(!rows.length){
+    if(!isFirstPageOfDoc) doc.addPage();
+    kccovAddCanvasAsPdfPage(doc, await html2canvas(table, {scale:2, backgroundColor:'#ffffff'}), margin, usableW);
+    return;
+  }
+  const tableWidthPx = table.getBoundingClientRect().width;
+  const theadHeightPx = thead ? thead.getBoundingClientRect().height : 0;
+  const rowHeightPx = rows[0].getBoundingClientRect().height || 24;
+  const scalePt = usableW / tableWidthPx;
+  const pageHeightPx = usableH / scalePt;
+  // -1 row of headroom: a measured row height is an average, not an exact
+  // bound (the F.Y. TOTAL row, bolder text, can render a hair taller) --
+  // safer to leave one row's worth of slack than let a page's image
+  // overflow past the printable margin.
+  const rowsPerPage = Math.max(1, Math.floor((pageHeightPx - theadHeightPx) / rowHeightPx) - 1);
+  let pageStarted = isFirstPageOfDoc;
+  for(let start=0; start<rows.length; start+=rowsPerPage){
+    const end = Math.min(start+rowsPerPage, rows.length);
+    rows.forEach((r, i)=>{ r.style.display = (i>=start && i<end) ? '' : 'none'; });
+    if(!pageStarted) doc.addPage();
+    pageStarted = false;
+    kccovAddCanvasAsPdfPage(doc, await html2canvas(table, {scale:2, backgroundColor:'#ffffff'}), margin, usableW);
+  }
+  rows.forEach(r=>{ r.style.display = ''; });
+}
+async function exportKccOverdueBifurcationPdf(which){
+  const container = document.getElementById('kccovBranchTableCard');
+  if(!container) return;
+  const tables = container.querySelectorAll('table.bifurcation-table');
+  if(!tables.length) return;
+  await Promise.all([ensureHtml2Canvas(), ensureJsPDF()]);
+  if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4', orientation:'landscape', compress:true });
+  const margin = 24;
+  const usableW = doc.internal.pageSize.getWidth() - margin*2;
+  const usableH = doc.internal.pageSize.getHeight() - margin*2;
+  for(let t=0; t<tables.length; t++){
+    await kccovCaptureTablePages(tables[t], doc, margin, usableW, usableH, t===0);
+  }
+  const blob = doc.output('blob');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `KCC_Overdue_${which}_${dateToInputValue(new Date())}.pdf`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+window.exportKccOverdueBifurcationPdf = exportKccOverdueBifurcationPdf;
 
 /* Datewise NPA Slippage Calendar: Branch x Cust-NPA-Date heatmap, inspired
    by Head Office's own "Datewise Calendar of KCC PNPA" MIS sheet. Built
@@ -6468,6 +6829,234 @@ function kccovShowBranchAccounts(bucket, branch, custNpaDate){
   showKccovListModal(`${branch} — ${sLabel}`, subLabel, list);
 }
 window.kccovShowBranchAccounts = kccovShowBranchAccounts;
+
+/* ---------- KCC Overdue: F.Y./Month Bifurcation, Branch Report, All Branches Overview ----------
+   Ported from tools/kcc-overdue-summary.html (a standalone, no-login Utility
+   Hub tool that stays live as a fallback per Alok's own choice) now that he
+   wants these 3 report views blended into this tab. Confirmed via direct
+   data analysis that the 3 scheme-code buckets here (KCC/KCC-AH/OD-023) and
+   that tool's 3 reason-code buckets are the exact same 3-way split of the
+   exact same rows (CC004<->KCC-Disbrsmnt-36, CC043<->KCC-Disbrsmnt-15,
+   OD023<->KCC-Disbrsmnt-24, zero exceptions across Alok's real reference
+   file) -- so this reuses the already-proven kccOverdueBucketOf() for
+   grouping and never looks at the Reasons column at all, which is what
+   makes a 15/24/36-backwards mixup structurally impossible here, not just
+   unlikely (2026-09-25). */
+const KCCOV_BIFURCATION_GROUPS = [
+  ...KCC_OVERDUE_SCHEMES.map(s=>({key:s.key, label:s.label})),
+  {key:'all', label:'All Data'},
+  {key:'l5', label:'5 Lakh+ A/C'},
+  {key:'l10', label:'10 Lakh+ A/C'},
+];
+const KCCOV_MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function kccovMonthLabelFor(monthKey){ const y = Math.floor(monthKey/100), m = monthKey%100; return KCCOV_MONTH_ABBR[m]+'-'+String(y).slice(-2); }
+function kccovFmtLakh(v){ return (v/1e5).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function kccovFmtCnt(n){ return (n||0).toLocaleString('en-IN'); }
+
+// Maps kccov's KC-indexed rows (already Branch/F.Y./date-filtered via
+// kccovFilteredRows) into the lightweight shape the ported aggregation
+// functions below consume. A row with an unparseable/missing Cust NPA Date
+// can't be placed into any month bucket -- skipped, with a count returned
+// so callers can surface it rather than silently under-reporting on a
+// banking dashboard. A blank F.Y. is NOT skipped (unlike the standalone
+// tool) -- bucketed under 'Unspecified' (sorted last) instead, so no row
+// a user can already see in Branch Summary silently vanishes from these
+// views just because F.Y. happens to be blank.
+function kccovMapBifurcationRows(rows){
+  const mapped = []; let skippedNoDate = 0;
+  for(const r of rows){
+    const bucket = kccOverdueBucketOf(r[KC.SCHEME]);
+    if(!bucket) continue; // defensive; parseKccOverdueRows already restricts to the 3 schemes
+    const npaDate = toDate(r[KC.CUSTNPADATE]);
+    if(!npaDate){ skippedNoDate++; continue; }
+    const fy = r[KC.FY] || 'Unspecified';
+    const monthKey = npaDate.getFullYear()*100 + npaDate.getMonth();
+    mapped.push({
+      sol: KCCOV_BRANCH_SOL[String(r[KC.BRANCH]).toUpperCase()] || '',
+      branch: r[KC.BRANCH], acctNo: r[KC.ACCT], bal: r[KC.OS], bucket, fy,
+      npaDate, monthKey, monthLabel: kccovMonthLabelFor(monthKey),
+    });
+  }
+  return { rows: mapped, skippedNoDate };
+}
+
+/* ---------- aggregation (ported from tools/kcc-overdue-summary.html) ---------- */
+function kccovEmptyGroupTotals(){
+  const g = {}; KCC_OVERDUE_SCHEMES.forEach(s=>{ g[s.key] = {cnt:0, amt:0}; });
+  g.all = {cnt:0, amt:0}; g.l5 = {cnt:0, amt:0}; g.l10 = {cnt:0, amt:0};
+  return g;
+}
+function kccovAddRowToGroup(g, row){
+  const b = g[row.bucket]; b.cnt++; b.amt += row.bal;
+  g.all.cnt++; g.all.amt += row.bal;
+  if(row.bal>=500000){ g.l5.cnt++; g.l5.amt += row.bal; }
+  if(row.bal>=1000000){ g.l10.cnt++; g.l10.amt += row.bal; }
+}
+function kccovAddGroupInto(target, src){ Object.keys(target).forEach(k=>{ target[k].cnt += src[k].cnt; target[k].amt += src[k].amt; }); }
+function kccovAggregateFyMonth(rows){
+  const byFy = new Map();
+  rows.forEach(r=>{
+    if(!byFy.has(r.fy)) byFy.set(r.fy, new Map());
+    const byMonth = byFy.get(r.fy);
+    if(!byMonth.has(r.monthKey)) byMonth.set(r.monthKey, { monthKey:r.monthKey, label:r.monthLabel, g:kccovEmptyGroupTotals() });
+    kccovAddRowToGroup(byMonth.get(r.monthKey).g, r);
+  });
+  return byFy;
+}
+function kccovAggregateBranches(rows){
+  const byBranch = new Map();
+  rows.forEach(r=>{
+    if(!byBranch.has(r.branch)) byBranch.set(r.branch, { sol:r.sol, branch:r.branch, g:kccovEmptyGroupTotals() });
+    kccovAddRowToGroup(byBranch.get(r.branch).g, r);
+  });
+  return byBranch;
+}
+// F.Y. labels are "MAR-YY" (fiscal year ending March 20YY) -- sorted
+// chronologically off the trailing 2-digit year; 'Unspecified' (blank F.Y.
+// rows) always sorts last rather than first.
+function kccovFyYear(fy){ if(fy==='Unspecified') return Infinity; const m = /-(\d{2})$/.exec(fy); return m ? 2000 + +m[1] : 0; }
+function kccovSortFyKeys(keys){ return keys.slice().sort((a,b)=>{ const ya=kccovFyYear(a), yb=kccovFyYear(b); return ya!==yb ? ya-yb : String(a).localeCompare(String(b)); }); }
+function kccovSortMonthKeys(keys){ return keys.slice().sort((a,b)=>a-b); }
+function kccovBranchSortKey(rec){ const n = parseInt(rec.sol,10); return isNaN(n) ? null : n; }
+function kccovSortBranchKeys(byBranch, keys){
+  return keys.slice().sort((a,b)=>{
+    const ra=byBranch.get(a), rb=byBranch.get(b), sa=kccovBranchSortKey(ra), sb=kccovBranchSortKey(rb);
+    if(sa!=null && sb!=null) return sa-sb;
+    return String(ra.branch).localeCompare(String(rb.branch));
+  });
+}
+
+/* ---------- drill-down: reuses the existing showKccovListModal/kccovAcctRows infra
+   (js/app.js above), filtering the RAW KC-indexed toolbar-filtered rows -- not the
+   mapped shape above, which drops name/CADU/limit/category/SMA the modal needs. ---------- */
+function kccovFilterByBucketKey(scoped, bucketKey){
+  if(bucketKey==='all') return scoped;
+  if(bucketKey==='l5') return scoped.filter(r=>r[KC.OS]>=500000);
+  if(bucketKey==='l10') return scoped.filter(r=>r[KC.OS]>=1000000);
+  return scoped.filter(r=>kccOverdueBucketOf(r[KC.SCHEME])===bucketKey); // kcc/kccah/od023
+}
+function kccovRowsToModalList(rows){
+  return rows.map(r=>({ acctNo:r[KC.ACCT], name:r[KC.NAME], os:r[KC.OS], cadu:r[KC.CADU], limit:r[KC.LIMIT], custNpaDate:r[KC.CUSTNPADATE], fy:r[KC.FY], category:r[KC.CATEGORY], sma:r[KC.SMA] }));
+}
+function kccovShowBifurcationAccounts(fy, monthKey, monthLabel, bucketKey){
+  const base = kccovFilteredRows(KCC_OVERDUE_DATA).filter(r=>{
+    const npaDate = toDate(r[KC.CUSTNPADATE]); if(!npaDate) return false;
+    if((r[KC.FY]||'Unspecified')!==fy) return false;
+    return (npaDate.getFullYear()*100+npaDate.getMonth())===monthKey;
+  });
+  const list = kccovRowsToModalList(kccovFilterByBucketKey(base, bucketKey));
+  const groupLabel = (KCCOV_BIFURCATION_GROUPS.find(g=>g.key===bucketKey)||{}).label || bucketKey;
+  showKccovListModal(`F.Y. ${fy} · ${monthLabel} · ${groupLabel}`, `${list.length.toLocaleString('en-IN')} account(s)`, list);
+}
+window.kccovShowBifurcationAccounts = kccovShowBifurcationAccounts;
+function kccovShowBranchBucketAccounts(branch, bucketKey){
+  const base = kccovFilteredRows(KCC_OVERDUE_DATA).filter(r=>r[KC.BRANCH]===branch);
+  const list = kccovRowsToModalList(kccovFilterByBucketKey(base, bucketKey));
+  const groupLabel = (KCCOV_BIFURCATION_GROUPS.find(g=>g.key===bucketKey)||{}).label || bucketKey;
+  showKccovListModal(`${branch} — ${groupLabel}`, `${list.length.toLocaleString('en-IN')} account(s)`, list);
+}
+window.kccovShowBranchBucketAccounts = kccovShowBranchBucketAccounts;
+
+/* ---------- rendering: F.Y./Month bifurcation table (reused for Branch Report) ----------
+   One real <table> PER F.Y. section (each with its own <thead>/<tbody>), not one
+   giant flat table -- lets both native print pagination and the PDF export
+   (below) repeat each section's own band+header wherever it breaks across a
+   page, and keeps a page break from ever landing mid-row. All tables share the
+   same .bifurcation-scroll scrolling ancestor, so the on-screen sticky-header
+   behavior (position:sticky computes off the nearest scrolling ancestor, not
+   the <table>) works the same as if it were one continuous table. */
+const KCCOV_FY_PALETTE = ['#2F527D','#1F7A5C','#8B5E1F','#6F3D8E','#A5432B','#2F7D7D'];
+function kccovBuildFySectionTable(fy, monthMap, color){
+  const monthKeys = kccovSortMonthKeys(Array.from(monthMap.keys()));
+  let html = '<table class="bifurcation-table fy-section-table"><thead>';
+  html += `<tr class="fy-band" style="background:${color}"><td colspan="13">F.Y. ${esc(fy)}</td></tr>`;
+  html += `<tr><th rowspan="2" class="month-head hdr-row1">Month</th>${KCCOV_BIFURCATION_GROUPS.map(gd=>`<th class="hdr-row1" colspan="2">${esc(gd.label)}</th>`).join('')}</tr>`;
+  html += `<tr>${KCCOV_BIFURCATION_GROUPS.map(()=>`<th class="hdr-row2">A/C Count</th><th class="hdr-row2">Amount (₹ Lakh)</th>`).join('')}</tr>`;
+  html += '</thead><tbody>';
+  const fyTotal = kccovEmptyGroupTotals();
+  monthKeys.forEach(mk=>{
+    const m = monthMap.get(mk);
+    kccovAddGroupInto(fyTotal, m.g);
+    html += `<tr class="data-row"><td class="month-cell">${esc(m.label)}</td>`;
+    KCCOV_BIFURCATION_GROUPS.forEach(gd=>{
+      const b = m.g[gd.key];
+      html += `<td class="num clickable" onclick="kccovShowBifurcationAccounts('${esc(fy)}',${mk},'${esc(m.label)}','${gd.key}')">${kccovFmtCnt(b.cnt)}</td>`;
+      html += `<td class="num clickable" onclick="kccovShowBifurcationAccounts('${esc(fy)}',${mk},'${esc(m.label)}','${gd.key}')">${kccovFmtLakh(b.amt)}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += `<tr class="fy-total-row"><td>F.Y. ${esc(fy)} TOTAL</td>`;
+  KCCOV_BIFURCATION_GROUPS.forEach(gd=>{ const b = fyTotal[gd.key]; html += `<td class="num">${kccovFmtCnt(b.cnt)}</td><td class="num">${kccovFmtLakh(b.amt)}</td>`; });
+  html += '</tr></tbody></table>';
+  return html;
+}
+function kccovRenderBifurcationTable(rows){
+  const byFy = kccovAggregateFyMonth(rows);
+  const fyKeys = kccovSortFyKeys(Array.from(byFy.keys()));
+  if(!fyKeys.length) return '<div class="empty-state"><p>No qualifying rows.</p></div>';
+  let html = '<div class="bifurcation-scroll">';
+  fyKeys.forEach((fy, fi)=>{ html += kccovBuildFySectionTable(fy, byFy.get(fy), KCCOV_FY_PALETTE[fi % KCCOV_FY_PALETTE.length]); });
+  html += '</div>';
+  return html;
+}
+function kccovRenderAllBranchesTable(rows){
+  const byBranch = kccovAggregateBranches(rows);
+  const branchKeys = kccovSortBranchKeys(byBranch, Array.from(byBranch.keys()));
+  if(!branchKeys.length) return '<div class="empty-state"><p>No qualifying rows.</p></div>';
+  let html = '<div class="bifurcation-scroll"><table class="bifurcation-table all-branches-table"><thead>';
+  html += `<tr><th rowspan="2" class="tal hdr-row1">Sol</th><th rowspan="2" class="tal hdr-row1">Branch</th>${KCCOV_BIFURCATION_GROUPS.map(gd=>`<th class="hdr-row1" colspan="2">${esc(gd.label)}</th>`).join('')}</tr>`;
+  html += `<tr>${KCCOV_BIFURCATION_GROUPS.map(()=>`<th class="hdr-row2">A/C Count</th><th class="hdr-row2">Amount (₹ Lakh)</th>`).join('')}</tr>`;
+  html += '</thead><tbody>';
+  const grand = kccovEmptyGroupTotals();
+  branchKeys.forEach(bk=>{
+    const rec = byBranch.get(bk);
+    kccovAddGroupInto(grand, rec.g);
+    html += `<tr class="data-row"><td class="tal">${esc(rec.sol||'—')}</td><td class="tal">${esc(rec.branch||'—')}</td>`;
+    KCCOV_BIFURCATION_GROUPS.forEach(gd=>{
+      const b = rec.g[gd.key];
+      html += `<td class="num clickable" onclick="kccovShowBranchBucketAccounts('${esc(bk)}','${gd.key}')">${kccovFmtCnt(b.cnt)}</td>`;
+      html += `<td class="num clickable" onclick="kccovShowBranchBucketAccounts('${esc(bk)}','${gd.key}')">${kccovFmtLakh(b.amt)}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += `<tr class="fy-total-row"><td colspan="2" class="tal">Grand Total</td>`;
+  KCCOV_BIFURCATION_GROUPS.forEach(gd=>{ const b = grand[gd.key]; html += `<td class="num">${kccovFmtCnt(b.cnt)}</td><td class="num">${kccovFmtLakh(b.amt)}</td>`; });
+  html += '</tr></tbody></table></div>';
+  return html;
+}
+
+/* ---------- 3 new dispatch targets, called from renderKccOverdueBody() ---------- */
+function renderKccOverdueFyMonth(filteredRows){
+  const wrap = document.getElementById('kccovBranchTableCard');
+  const labelEl = document.getElementById('kccovTableLabel');
+  if(!wrap) return;
+  const { rows: mapped, skippedNoDate } = kccovMapBifurcationRows(filteredRows);
+  const scopeLabel = kccovBranchFilter ? esc(kccovBranchFilter) : 'Regional Office (all branches)';
+  if(labelEl) labelEl.innerHTML = `F.Y./Month Bifurcation — KCC / KCC-AH / OD-023 side by side<span class="chart-sub">${scopeLabel} · tap any figure to see the account list${skippedNoDate?` · ${skippedNoDate} account(s) excluded (no Cust NPA Date)`:''}</span>`;
+  wrap.innerHTML = kccovRenderBifurcationTable(mapped);
+}
+function renderKccOverdueBranchReport(filteredRows){
+  const wrap = document.getElementById('kccovBranchTableCard');
+  const labelEl = document.getElementById('kccovTableLabel');
+  if(!wrap) return;
+  if(!kccovBranchFilter){
+    if(labelEl) labelEl.innerHTML = `Branch Report<span class="chart-sub">F.Y./Month bifurcation for one branch at a time — pick a branch above</span>`;
+    wrap.innerHTML = `<div class="empty-state"><p>Pick a branch from the Branch filter above to see its F.Y./Month bifurcation.</p></div>`;
+    return;
+  }
+  const { rows: mapped, skippedNoDate } = kccovMapBifurcationRows(filteredRows);
+  if(labelEl) labelEl.innerHTML = `Branch Report — ${esc(kccovBranchFilter)}<span class="chart-sub">tap any figure to see the account list${skippedNoDate?` · ${skippedNoDate} account(s) excluded (no Cust NPA Date)`:''}</span>`;
+  wrap.innerHTML = kccovRenderBifurcationTable(mapped);
+}
+function renderKccOverdueAllBranches(filteredRows){
+  const wrap = document.getElementById('kccovBranchTableCard');
+  const labelEl = document.getElementById('kccovTableLabel');
+  if(!wrap) return;
+  const { rows: mapped, skippedNoDate } = kccovMapBifurcationRows(filteredRows);
+  const scopeLabel = kccovBranchFilter ? esc(kccovBranchFilter) : 'all branches';
+  if(labelEl) labelEl.innerHTML = `All Branches Overview<span class="chart-sub">${scopeLabel} · tap any figure to see the account list${skippedNoDate?` · ${skippedNoDate} account(s) excluded (no Cust NPA Date)`:''}</span>`;
+  wrap.innerHTML = kccovRenderAllBranchesTable(mapped);
+}
 
 /* ---------- Nav / view switching ---------- */
 // OneDrive/PassSheet are reached only via the Utility hub now (2026-09-08),
