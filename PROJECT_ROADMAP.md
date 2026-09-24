@@ -123,6 +123,10 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Fix: All Branches Overview -- Sol/Branch columns were right-aligned, jammed against the numeric columns (2026-09-24, later same day)
+
+Alok, with a screenshot of the just-shipped All Branches Overview on his phone: the Sol and Branch columns sat right-aligned, hugging the first numeric column instead of reading as their own left-aligned label column. Root cause: `kccovRenderAllBranchesTable()`'s Sol/Branch cells already carry `class="tal"` (the same convention `.dash-table`'s own Name/Branch columns use for left-alignment elsewhere in this app), but the CSS block that ported the bifurcation-table styling from the standalone Utility Hub tool never carried over a `.tal{text-align:left}` rule for it -- the standalone tool has its own blanket `.tal{text-align:left!important}` rule that this app's stylesheet doesn't have, so the port silently dropped it and the cells fell through to the table's base `text-align:right`. Added `.bifurcation-table th.tal,.bifurcation-table td.tal{text-align:left}` to `css/styles.css`. `node --check`/CSS brace-balance clean; no JS changes.
+
 ### Feature: "KCC Overdue" dashboard and "KCC Overdue Summary" Utility tool blended into one screen (2026-09-24, later same day)
 
 Alok, once both KCC-Overdue-related features were shipped and working: "Ab chunki kcc overdue dashboard and ye utility same hi data se ban rahe hain to kya ye reports ko apan dashboard main blend kar sakte hain kya?" (since both are built from the same kind of data now, can we blend these reports into our dashboard?). Confirmed via AskUserQuestion he meant full unification: one upload driving every view in the main "KCC Overdue" nav tab, using the existing "KCC / KCC — Animal Husbandry / OD-023 (Tatkal)" labels throughout, and leaving the standalone Utility Hub tool untouched as a no-login fallback.
