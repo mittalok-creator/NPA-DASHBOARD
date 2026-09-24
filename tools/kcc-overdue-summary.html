@@ -153,11 +153,26 @@
      mirrors the main app's own #printArea-only-visible pattern
      (js/app.js), just keyed off which of the two printable tabs was
      asked for, via a data-printing attribute set on <body> right before
-     window.print() and cleared on afterprint. Sticky positioning is
-     neutralized for print -- it only makes sense inside the bounded
-     on-screen scroll box, which is itself un-clipped here, and leaving
-     it active risks the header repeating/overlapping oddly across a
-     page break. */
+     window.print() and cleared on afterprint. Each F.Y. section (and
+     All Branches) is now its own real <table><thead>/<tbody> (see
+     buildFySectionTable()/renderAllBranchesTable()) specifically so the
+     browser's native print pagination repeats that section's own header
+     on every page it spans and never breaks a page mid-row -- position:
+     sticky (an on-screen/scroll-context-only construct) is blanket-
+     killed for every descendant of .bifurcation-table during print, not
+     a hand-picked selector list: a first attempt at this list missed
+     .all-branches-table td.tal (the Sol/Branch column), which sticky
+     positioning tore out of its row and dumped after the numeric
+     columns instead of beside them -- confirmed via an actual rendered
+     print PDF, not just a computed-style check, after Alok reported
+     "bahut galtiyan milengi" and this shipped-but-broken behavior was
+     found (2026-09-24). The sticky-kill itself is applied unconditionally
+     below (not only inside @media print) so it also covers the
+     Save-as-PDF html2canvas capture, which never triggers an actual
+     print media context -- without this, capturing the table while the
+     on-screen view happened to be mid-scroll could rasterize a header
+     cell at its stuck/offset position instead of its natural one. */
+  body[data-printing] .bifurcation-table,body[data-printing] .bifurcation-table *{position:static!important}
   @media print{
     body[data-printing] *{visibility:hidden}
     body[data-printing="fymonth"] #fyMonthBody,body[data-printing="fymonth"] #fyMonthBody *{visibility:visible}
@@ -165,10 +180,24 @@
     body[data-printing="fymonth"] #fyMonthBody{display:block!important;position:absolute;top:0;left:0;width:100%}
     body[data-printing="allbranches"] #allBranchesBody{display:block!important;position:absolute;top:0;left:0;width:100%}
     body[data-printing]{background:#fff!important}
-    .bifurcation-scroll{max-height:none!important;overflow:visible!important}
-    .bifurcation-table th,.bifurcation-table tr.fy-band td,.bifurcation-table .month-cell,.bifurcation-table .month-head{position:static!important}
+    .bifurcation-scroll{max-height:none!important;overflow:visible!important;border:none!important}
     .bifurcation-table th,.bifurcation-table td{padding:4px 6px!important}
+    .bifurcation-table tr{break-inside:avoid}
+    .fy-section-table{break-after:page}
+    .fy-section-table:last-of-type{break-after:auto}
   }
+  /* Richer color for Print/PDF specifically -- the on-screen table stays
+     exactly as designed; this is keyed off the same [data-printing]
+     attribute (not wrapped in @media print) so the identical colors
+     apply both to an actual browser print AND to the html2canvas
+     capture behind "Save as PDF" (saveSectionAsPdf() sets/clears the
+     same attribute around that capture). Alok's own ask, "jara
+     colorful banao" -- the plain grayscale header/zebra that works fine
+     on screen read as flat/bland once actually printed. */
+  body[data-printing] .bifurcation-table th.hdr-row1,body[data-printing] .bifurcation-table th.hdr-row2{background:#0E6B57!important;color:#fff!important}
+  body[data-printing] .bifurcation-table.all-branches-table th.hdr-row1,body[data-printing] .bifurcation-table.all-branches-table th.hdr-row2{background:#0E6B57!important;color:#fff!important}
+  body[data-printing] .bifurcation-table tr.data-row:nth-child(even) td{background:#E3F3EC!important}
+  body[data-printing] .bifurcation-table tr.fy-total-row td{background:#F3E7CE!important;border-top:2px solid #9A6A0A!important;color:#5C3D06!important}
 </style>
 </head>
 <body>
@@ -443,51 +472,63 @@
     return scoped;
   }
 
-  /* ---------- rendering: F.Y./Month bifurcation table (reused for Branch Report) ---------- */
+  /* ---------- rendering: F.Y./Month bifurcation table (reused for Branch Report) ----------
+     One real <table> PER F.Y. section (each with its own <thead>/<tbody>), not one giant
+     flat table -- lets both the browser's native print pagination AND the PDF export
+     (below) repeat each section's own band+header wherever it happens to break across a
+     page, and keeps a stray page break from ever landing mid-row. All tables share the
+     same .bifurcation-scroll scrolling ancestor, so the on-screen sticky-header behavior
+     (position:sticky computes off the nearest scrolling ancestor, not the <table>) is
+     unaffected by this split. */
   var FY_PALETTE = ['#2F527D','#1F7A5C','#8B5E1F','#6F3D8E','#A5432B','#2F7D7D'];
+  function buildFySectionTable(fy, monthMap, color){
+    var monthKeys = sortMonthKeys(Array.from(monthMap.keys()));
+    var html = '<table class="bifurcation-table fy-section-table"><thead>';
+    html += '<tr class="fy-band" style="background:'+color+'"><td colspan="13">F.Y. '+esc(fy)+'</td></tr>';
+    html += '<tr><th rowspan="2" class="month-head hdr-row1">Month</th>' + GROUP_DEFS.map(function(gd){ return '<th class="hdr-row1" colspan="2">'+esc(gd.label)+'</th>'; }).join('') + '</tr>';
+    html += '<tr>' + GROUP_DEFS.map(function(){ return '<th class="hdr-row2">A/C Count</th><th class="hdr-row2">Amount (₹ Lakh)</th>'; }).join('') + '</tr>';
+    html += '</thead><tbody>';
+    var fyTotal = emptyGroupTotals();
+    monthKeys.forEach(function(mk){
+      var m = monthMap.get(mk);
+      addGroupInto(fyTotal, m.g);
+      html += '<tr class="data-row"><td class="month-cell">'+esc(m.label)+'</td>';
+      GROUP_DEFS.forEach(function(gd){
+        var b = m.g[gd.key];
+        html += '<td class="num clickable" data-fy="'+esc(fy)+'" data-month="'+mk+'" data-bucket="'+gd.key+'">'+fmtCnt(b.cnt)+'</td>';
+        html += '<td class="num clickable" data-fy="'+esc(fy)+'" data-month="'+mk+'" data-bucket="'+gd.key+'">'+fmtLakh(b.amt)+'</td>';
+      });
+      html += '</tr>';
+    });
+    html += '<tr class="fy-total-row"><td>F.Y. '+esc(fy)+' TOTAL</td>';
+    GROUP_DEFS.forEach(function(gd){ var b = fyTotal[gd.key]; html += '<td class="num">'+fmtCnt(b.cnt)+'</td><td class="num">'+fmtLakh(b.amt)+'</td>'; });
+    html += '</tr></tbody></table>';
+    return html;
+  }
   function renderBifurcationTable(rows){
     var byFy = aggregateFyMonth(rows);
     var fyKeys = sortFyKeys(Array.from(byFy.keys()));
     if(!fyKeys.length) return '<div class="empty-note">No qualifying rows.</div>';
-    var html = '<div class="bifurcation-scroll"><table class="bifurcation-table">';
+    var html = '<div class="bifurcation-scroll">';
     fyKeys.forEach(function(fy, fi){
-      var color = FY_PALETTE[fi % FY_PALETTE.length];
-      var monthMap = byFy.get(fy);
-      var monthKeys = sortMonthKeys(Array.from(monthMap.keys()));
-      html += '<tr class="fy-band" style="background:'+color+'"><td colspan="13">F.Y. '+esc(fy)+'</td></tr>';
-      html += '<tr><th rowspan="2" class="month-head hdr-row1">Month</th>' + GROUP_DEFS.map(function(gd){ return '<th class="hdr-row1" colspan="2">'+esc(gd.label)+'</th>'; }).join('') + '</tr>';
-      html += '<tr>' + GROUP_DEFS.map(function(){ return '<th class="hdr-row2">A/C Count</th><th class="hdr-row2">Amount (₹ Lakh)</th>'; }).join('') + '</tr>';
-      var fyTotal = emptyGroupTotals();
-      monthKeys.forEach(function(mk){
-        var m = monthMap.get(mk);
-        addGroupInto(fyTotal, m.g);
-        html += '<tr class="data-row"><td class="month-cell">'+esc(m.label)+'</td>';
-        GROUP_DEFS.forEach(function(gd){
-          var b = m.g[gd.key];
-          html += '<td class="num clickable" data-fy="'+esc(fy)+'" data-month="'+mk+'" data-bucket="'+gd.key+'">'+fmtCnt(b.cnt)+'</td>';
-          html += '<td class="num clickable" data-fy="'+esc(fy)+'" data-month="'+mk+'" data-bucket="'+gd.key+'">'+fmtLakh(b.amt)+'</td>';
-        });
-        html += '</tr>';
-      });
-      html += '<tr class="fy-total-row"><td>F.Y. '+esc(fy)+' TOTAL</td>';
-      GROUP_DEFS.forEach(function(gd){ var b = fyTotal[gd.key]; html += '<td class="num">'+fmtCnt(b.cnt)+'</td><td class="num">'+fmtLakh(b.amt)+'</td>'; });
-      html += '</tr>';
+      html += buildFySectionTable(fy, byFy.get(fy), FY_PALETTE[fi % FY_PALETTE.length]);
     });
-    html += '</table></div>';
+    html += '</div>';
     return html;
   }
   function renderAllBranchesTable(rows){
     var byBranch = aggregateBranches(rows);
     var branchKeys = sortBranchKeys(byBranch, Array.from(byBranch.keys()));
     if(!branchKeys.length) return '<div class="empty-note">No qualifying rows.</div>';
-    var html = '<div class="bifurcation-scroll"><table class="bifurcation-table all-branches-table">';
+    var html = '<div class="bifurcation-scroll"><table class="bifurcation-table all-branches-table"><thead>';
     html += '<tr><th rowspan="2" class="tal hdr-row1">Sol</th><th rowspan="2" class="tal hdr-row1">Branch</th>' + GROUP_DEFS.map(function(gd){ return '<th class="hdr-row1" colspan="2">'+esc(gd.label)+'</th>'; }).join('') + '</tr>';
     html += '<tr>' + GROUP_DEFS.map(function(){ return '<th class="hdr-row2">A/C Count</th><th class="hdr-row2">Amount (₹ Lakh)</th>'; }).join('') + '</tr>';
+    html += '</thead><tbody>';
     var grand = emptyGroupTotals();
     branchKeys.forEach(function(bk){
       var rec = byBranch.get(bk);
       addGroupInto(grand, rec.g);
-      html += '<tr class="data-row"><td class="tal">'+esc(rec.sol||'—')+'</td><td class="tal">'+esc(rec.branch)+'</td>';
+      html += '<tr class="data-row"><td class="tal">'+esc(rec.sol||'—')+'</td><td class="tal">'+esc(rec.branch||'—')+'</td>';
       GROUP_DEFS.forEach(function(gd){
         var b = rec.g[gd.key];
         html += '<td class="num clickable-branch" data-branch="'+esc(bk)+'" data-bucket="'+gd.key+'">'+fmtCnt(b.cnt)+'</td>';
@@ -497,7 +538,7 @@
     });
     html += '<tr class="fy-total-row"><td colspan="2" class="tal">Grand Total</td>';
     GROUP_DEFS.forEach(function(gd){ var b = grand[gd.key]; html += '<td class="num">'+fmtCnt(b.cnt)+'</td><td class="num">'+fmtLakh(b.amt)+'</td>'; });
-    html += '</tr></table></div>';
+    html += '</tr></tbody></table></div>';
     return html;
   }
 
@@ -635,53 +676,70 @@
       window.removeEventListener('afterprint', cleanup);
     });
   }
-  // Landscape adaptation of the same page-height-slicing technique the
-  // main app's OTS one-pager PDF share already uses (js/app.js) -- these
-  // tables are 13-14 columns wide, so landscape A4 fits far more of a
-  // real table per page than portrait would.
-  function canvasToPdfBlob(canvas){
-    var jsPDF = window.jspdf.jsPDF;
-    var doc = new jsPDF({ unit:'pt', format:'a4', orientation:'landscape', compress:true });
-    var margin = 24;
-    var usableW = doc.internal.pageSize.getWidth() - margin*2;
-    var usableH = doc.internal.pageSize.getHeight() - margin*2;
+  // Row-aware PDF export: each F.Y. section (or the single All Branches
+  // table) is captured page by page, repeating that table's own <thead>
+  // on every page it spans and choosing page breaks only between
+  // <tbody> rows -- never mid-row. Replaces an earlier version that
+  // rasterized the WHOLE table into one canvas and blind-sliced it by
+  // raw pixel height, which cut a row in half whenever a page boundary
+  // happened to land inside it and never repeated the header past page
+  // 1 (confirmed via an actual rendered PDF, not assumed).
+  function addCanvasAsPdfPage(doc, canvas, margin, usableW){
     var scale = usableW / canvas.width;
-    var pxPerPage = Math.floor(usableH / scale);
-    if(canvas.height * scale <= usableH){
-      doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, usableW, canvas.height * scale);
-    } else {
-      var renderedPx = 0, first = true;
-      while(renderedPx < canvas.height){
-        var sliceH = Math.min(pxPerPage, canvas.height - renderedPx);
-        var slice = document.createElement('canvas');
-        slice.width = canvas.width; slice.height = sliceH;
-        slice.getContext('2d').drawImage(canvas, 0, renderedPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-        if(!first) doc.addPage();
-        doc.addImage(slice.toDataURL('image/png'), 'PNG', margin, margin, usableW, sliceH * scale);
-        renderedPx += sliceH;
-        first = false;
-      }
-    }
-    return doc.output('blob');
+    doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, usableW, canvas.height * scale);
   }
-  // Captures the <table> itself, not the clipped .bifurcation-scroll
-  // wrapper -- html2canvas renders the full target element regardless of
-  // an ancestor's overflow/max-height, so there's nothing to temporarily
-  // un-clip/restore here (unlike the main app's shareOtsPdf(), which has
-  // to do that for a normally display:none #printArea).
-  async function saveSectionAsPdf(tableEl, filenamePrefix, btn){
-    if(!tableEl) return;
+  async function captureTablePages(table, doc, margin, usableW, usableH, isFirstPageOfDoc){
+    var thead = table.querySelector('thead');
+    var tbody = table.querySelector('tbody');
+    var rows = tbody ? Array.prototype.slice.call(tbody.rows) : [];
+    if(!rows.length){
+      if(!isFirstPageOfDoc) doc.addPage();
+      addCanvasAsPdfPage(doc, await html2canvas(table, {scale:2, backgroundColor:'#ffffff'}), margin, usableW);
+      return;
+    }
+    var tableWidthPx = table.getBoundingClientRect().width;
+    var theadHeightPx = thead ? thead.getBoundingClientRect().height : 0;
+    var rowHeightPx = rows[0].getBoundingClientRect().height || 24;
+    var scalePt = usableW / tableWidthPx;
+    var pageHeightPx = usableH / scalePt;
+    // -1 row of headroom: a real measured row height is an average, not
+    // an exact bound (the F.Y. TOTAL row, bolder text, can render a
+    // hair taller) -- safer to leave one row's worth of slack than to
+    // let a page's image overflow past the printable margin.
+    var rowsPerPage = Math.max(1, Math.floor((pageHeightPx - theadHeightPx) / rowHeightPx) - 1);
+    var pageStarted = isFirstPageOfDoc;
+    for(var start=0; start<rows.length; start+=rowsPerPage){
+      var end = Math.min(start+rowsPerPage, rows.length);
+      rows.forEach(function(r, i){ r.style.display = (i>=start && i<end) ? '' : 'none'; });
+      if(!pageStarted) doc.addPage();
+      pageStarted = false;
+      addCanvasAsPdfPage(doc, await html2canvas(table, {scale:2, backgroundColor:'#ffffff'}), margin, usableW);
+    }
+    rows.forEach(function(r){ r.style.display = ''; });
+  }
+  async function saveSectionAsPdf(containerEl, filenamePrefix, which, btn){
+    if(!containerEl) return;
+    var tables = containerEl.querySelectorAll('table.bifurcation-table');
+    if(!tables.length) return;
     var prevLabel = btn.textContent;
     btn.disabled = true; btn.textContent = 'Preparing…';
+    document.body.setAttribute('data-printing', which);
     try{
       if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
-      var canvas = await html2canvas(tableEl, { scale:2, backgroundColor:'#ffffff' });
-      var blob = canvasToPdfBlob(canvas);
-      anchorDownload(blob, filenamePrefix+'_'+dateStamp()+'.pdf');
+      var jsPDF = window.jspdf.jsPDF;
+      var doc = new jsPDF({ unit:'pt', format:'a4', orientation:'landscape', compress:true });
+      var margin = 24;
+      var usableW = doc.internal.pageSize.getWidth() - margin*2;
+      var usableH = doc.internal.pageSize.getHeight() - margin*2;
+      for(var t=0; t<tables.length; t++){
+        await captureTablePages(tables[t], doc, margin, usableW, usableH, t===0);
+      }
+      anchorDownload(doc.output('blob'), filenamePrefix+'_'+dateStamp()+'.pdf');
     }catch(err){
       console.error(err);
       alert('Could not prepare the PDF. Please try again.');
     }finally{
+      document.body.removeAttribute('data-printing');
       btn.disabled = false; btn.textContent = prevLabel;
     }
   }
@@ -777,7 +835,8 @@
       return String(a.branch).localeCompare(String(b.branch));
     });
     branchSelect.innerHTML = list.map(function(b){
-      var label = b.sol ? (b.sol+' - '+b.branch) : b.branch;
+      var branchLabel = b.branch || '(No Branch)';
+      var label = b.sol ? (b.sol+' - '+branchLabel) : branchLabel;
       return '<option value="'+esc(b.branch)+'">'+esc(label)+'</option>';
     }).join('');
     if(list.length) renderBranchReport(list[0].branch);
@@ -908,10 +967,10 @@
   fyMonthPrintBtn.addEventListener('click', function(){ printSection('fymonth'); });
   allBranchesPrintBtn.addEventListener('click', function(){ printSection('allbranches'); });
   fyMonthPdfBtn.addEventListener('click', function(){
-    saveSectionAsPdf(fyMonthBody.querySelector('table.bifurcation-table'), 'KCC_Overdue_FY_Month_Summary', fyMonthPdfBtn);
+    saveSectionAsPdf(fyMonthBody, 'KCC_Overdue_FY_Month_Summary', 'fymonth', fyMonthPdfBtn);
   });
   allBranchesPdfBtn.addEventListener('click', function(){
-    saveSectionAsPdf(allBranchesBody.querySelector('table.bifurcation-table'), 'KCC_Overdue_All_Branches', allBranchesPdfBtn);
+    saveSectionAsPdf(allBranchesBody, 'KCC_Overdue_All_Branches', 'allbranches', allBranchesPdfBtn);
   });
 
   /* ---------- same-origin iframe self-sizing as every other Utility tool ---------- */
