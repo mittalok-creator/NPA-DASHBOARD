@@ -649,13 +649,133 @@
     for(var cf=1; cf<=14; cf++){ ws.getCell(r,cf).border = {top:{style:'thin'}}; ws.getCell(r,cf).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF3E7CE'}}; }
     ws.views = [{ state:'frozen', ySplit: headerRow1+1 }];
   }
+
+  /* ---------- "Branch Report" sheet, all branches via a live dropdown ----------
+     Alok's ask: the exported Branch Report should hold every branch's data,
+     selectable from a real Excel dropdown, not a static snapshot of
+     whichever branch happened to be selected on-screen at export time
+     (the app's own drill-down already covers "look at one branch" without
+     needing a fresh export for each one). Mirrors the reference macro's
+     own "Branch Report" sheet design -- a dropdown-driven cell plus live
+     COUNTIFS/SUMIFS formulas -- rather than a plain value dump: a hidden
+     "Data" sheet carries every parsed row, and every data cell here is a
+     formula referencing it, filtered by whatever branch the dropdown cell
+     currently holds. Recalculates instantly in Excel on every dropdown
+     change, no re-export needed to see a different branch. */
+  function colLetter(n){
+    var s = '';
+    while(n>0){ var m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); }
+    return s;
+  }
+  // Writes every parsed row (Sol/Branch/Account No/Balance/Reason/Cust NPA
+  // Date/F.Y./Month Label) to its own sheet -- the source the Branch
+  // Report's formulas read from -- plus, in a spare column, the sorted
+  // list of distinct branch names the dropdown's data validation points
+  // at (a real Excel list-validation formula has a ~255-character inline
+  // limit, comfortably blown past by 55 real branch names, so it has to
+  // reference a range instead of an inline comma list). Returns that
+  // sorted branch list so the caller doesn't have to recompute it.
+  function writeDataSheet(ws, rows){
+    ws.addRow(['Sol','Branch','Account No','Balance Amount','Reason','Cust NPA Date','F.Y.','Month Label']);
+    ws.getRow(1).font = {bold:true};
+    ws.getRow(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFDCEEE8'}};
+    rows.forEach(function(r){
+      ws.addRow([r.sol, r.branch, r.acctNo, r.bal, GROUP_LABEL_BY_KEY[r.reason], r.npaDate, r.fy, r.monthLabel]);
+    });
+    ws.getColumn(6).numFmt = 'dd-mm-yyyy';
+    for(var c=1;c<=8;c++) ws.getColumn(c).width = (c===2?22:(c===3?16:14));
+    var branchNames = Array.from(new Set(rows.map(function(r){ return r.branch; }))).sort();
+    ws.getCell(1,10).value = 'Branch List (for the dropdown)'; ws.getCell(1,10).font = {bold:true};
+    branchNames.forEach(function(name, i){ ws.getCell(i+2, 10).value = name; });
+    ws.getColumn(10).width = 24;
+    ws.views = [{state:'frozen', ySplit:1}];
+    return branchNames;
+  }
+  function branchReportFormula(kind, fy, monthLabel, reasonLabel, dropdownAddr){
+    var critBranch = 'Data!$B:$B,'+dropdownAddr;
+    var critFy = 'Data!$G:$G,"'+String(fy).replace(/"/g,'""')+'"';
+    var critMonth = 'Data!$H:$H,"'+String(monthLabel).replace(/"/g,'""')+'"';
+    var critReason = reasonLabel ? ',Data!$E:$E,"'+reasonLabel+'"' : '';
+    if(kind==='cnt') return 'COUNTIFS('+critBranch+','+critFy+','+critMonth+critReason+')';
+    if(kind==='amt') return 'SUMIFS(Data!$D:$D,'+critBranch+','+critFy+','+critMonth+critReason+')/100000';
+    if(kind==='cnt5') return 'COUNTIFS('+critBranch+','+critFy+','+critMonth+',Data!$D:$D,">=500000")';
+    if(kind==='amt5') return 'SUMIFS(Data!$D:$D,'+critBranch+','+critFy+','+critMonth+',Data!$D:$D,">=500000")/100000';
+    if(kind==='cnt10') return 'COUNTIFS('+critBranch+','+critFy+','+critMonth+',Data!$D:$D,">=1000000")';
+    if(kind==='amt10') return 'SUMIFS(Data!$D:$D,'+critBranch+','+critFy+','+critMonth+',Data!$D:$D,">=1000000")/100000';
+  }
+  var BRANCH_REPORT_SPECS = [
+    {kind:'cnt', reason:'KCC-Disbrsmnt-15'}, {kind:'amt', reason:'KCC-Disbrsmnt-15'},
+    {kind:'cnt', reason:'KCC-Disbrsmnt-24'}, {kind:'amt', reason:'KCC-Disbrsmnt-24'},
+    {kind:'cnt', reason:'KCC-Disbrsmnt-36'}, {kind:'amt', reason:'KCC-Disbrsmnt-36'},
+    {kind:'cnt', reason:null}, {kind:'amt', reason:null},
+    {kind:'cnt5'}, {kind:'amt5'}, {kind:'cnt10'}, {kind:'amt10'}
+  ];
+  function writeBranchReportDataRow(ws, r, label, fy, monthLabel, dropdownAddr){
+    ws.getCell(r,1).value = label;
+    BRANCH_REPORT_SPECS.forEach(function(spec, i){
+      var col = 2+i;
+      var cell = ws.getCell(r, col);
+      cell.value = {formula: branchReportFormula(spec.kind, fy, monthLabel, spec.reason, dropdownAddr)};
+      cell.numFmt = (i%2===0) ? '0' : '0.00';
+    });
+    return r+1;
+  }
+  function writeBranchReportTotalRow(ws, r, label, startRow, endRow){
+    ws.getCell(r,1).value = label; ws.getCell(r,1).font = {bold:true};
+    for(var col=2; col<=13; col++){
+      var letter = colLetter(col);
+      var cell = ws.getCell(r, col);
+      cell.value = {formula: 'SUM('+letter+startRow+':'+letter+endRow+')'};
+      cell.font = {bold:true}; cell.numFmt = ((col-2)%2===0) ? '0' : '0.00';
+      cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF3E7CE'}};
+      cell.border = {top:{style:'thin'}};
+    }
+    return r+1;
+  }
+  function writeBranchReportSheet(ws, rows, defaultBranch, branchNames, branchCount){
+    ws.getColumn(1).width = 16;
+    for(var c=2;c<=13;c++) ws.getColumn(c).width = 15;
+    var r = 1;
+    ws.mergeCells(r,1,r,13);
+    ws.getCell(r,1).value = 'Branch Report'; ws.getCell(r,1).font = {bold:true, size:14};
+    r += 1;
+    ws.getCell(r,1).value = 'Select Branch:'; ws.getCell(r,1).font = {bold:true};
+    var dropdownAddr = '$'+colLetter(2)+'$'+r;
+    ws.mergeCells(r,2,r,4);
+    var ddCell = ws.getCell(r,2);
+    ddCell.value = branchNames.indexOf(defaultBranch)>=0 ? defaultBranch : (branchNames[0]||'');
+    ddCell.font = {bold:true, size:12, color:{argb:'FF0E6B57'}};
+    ddCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFDCEEE8'}};
+    ddCell.border = thinBorder();
+    ddCell.dataValidation = {
+      type: 'list', allowBlank: false,
+      formulae: ['Data!$J$2:$J$'+(branchCount+1)],
+      showErrorMessage: true, errorTitle: 'Invalid branch', error: 'Pick a branch from the dropdown list.'
+    };
+    r += 2;
+    var byFy = aggregateFyMonth(rows);
+    var fyKeys = sortFyKeys(Array.from(byFy.keys()));
+    fyKeys.forEach(function(fy, fi){
+      var argb = FY_PALETTE_ARGB[fi % FY_PALETTE_ARGB.length], soft = FY_PALETTE_SOFT_ARGB[fi % FY_PALETTE_SOFT_ARGB.length];
+      r = writeFyBand(ws, r, fy, argb);
+      r = writeTwoRowHeader(ws, r, soft);
+      var monthMap = byFy.get(fy), monthKeys = sortMonthKeys(Array.from(monthMap.keys()));
+      var sectionStart = r;
+      monthKeys.forEach(function(mk){ r = writeBranchReportDataRow(ws, r, monthMap.get(mk).label, fy, monthMap.get(mk).label, dropdownAddr); });
+      r = writeBranchReportTotalRow(ws, r, 'F.Y. '+fy+' TOTAL', sectionStart, r-1);
+      r += 1;
+    });
+    if(!fyKeys.length){ ws.getCell(r,1).value = 'No qualifying rows.'; }
+  }
+
   async function exportToExcel(){
     if(!state.rows || !state.rows.length) return;
     var wb = new ExcelJS.Workbook();
+    wb.calcProperties = { fullCalcOnLoad: true };
     writeBifurcationSheet(wb.addWorksheet('Report'), 'KCC Overdue Summary — F.Y./Month Bifurcation', state.rows);
-    var selBranch = branchSelect.value;
-    var branchRows = state.rows.filter(function(r){ return r.branch===selBranch; });
-    writeBifurcationSheet(wb.addWorksheet('Branch Report'), 'Branch Report — '+(selBranch||''), branchRows);
+    var wsData = wb.addWorksheet('Data');
+    var branchNames = writeDataSheet(wsData, state.rows);
+    writeBranchReportSheet(wb.addWorksheet('Branch Report'), state.rows, branchSelect.value, branchNames, branchNames.length);
     writeFlatBranchSheet(wb.addWorksheet('All Branches'), state.rows);
     var buffer = await wb.xlsx.writeBuffer();
     anchorDownload(new Blob([buffer], {type:'application/octet-stream'}), 'KCC_Overdue_Summary_'+dateStamp()+'.xlsx');
