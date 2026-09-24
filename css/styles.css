@@ -2594,6 +2594,15 @@ table.bifurcation-table{border-collapse:collapse;width:100%;font-size:12px;backg
 .bifurcation-table tr.fy-total-row td{font-weight:700;background:var(--amber-soft);border-top:2px solid var(--amber)}
 .bifurcation-table td.clickable,.bifurcation-table td.clickable-branch{cursor:pointer}
 .bifurcation-table td.clickable:hover,.bifurcation-table td.clickable-branch:hover{background:var(--accent-soft);color:var(--accent);font-weight:700}
+/* Sol/Branch columns (All Branches Overview) carry class="tal" same as
+   .dash-table's own Name/Branch columns elsewhere in this app -- this
+   rule was missing on first ship, so they fell through to the table's
+   base text-align:right and rendered jammed against the numeric columns
+   instead of left-aligned (Alok, 2026-09-24, screenshot). The standalone
+   tool this was ported from has its own blanket .tal{text-align:left}
+   rule that this app's stylesheet doesn't carry, which is why the port
+   silently lost it. */
+.bifurcation-table th.tal,.bifurcation-table td.tal{text-align:left}
 .bifurcation-table.all-branches-table td.tal{position:sticky;left:0;background:var(--card)}
 .kccov-bifurcation-empty{color:var(--sub);font-size:13px;padding:20px;text-align:center}
 
