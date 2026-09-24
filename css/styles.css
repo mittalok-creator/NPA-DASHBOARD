@@ -1598,6 +1598,16 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
   #printArea{overflow:visible}
   .pv-table,.pv-agg{page-break-inside:avoid}
   .pv-table thead{display:table-header-group}
+  /* KCC Overdue bifurcation print job (printKccOverdueBifurcation() in
+     js/app.js) reuses this same #printArea, wrapped in its own
+     .kccov-print-wrap so these rules can't leak into the OTS one-pager's
+     print job above. Each F.Y. section is a real <table><thead>/<tbody>
+     (kccovBuildFySectionTable()), so table-header-group is what makes
+     the browser's native pagination repeat that section's own header row
+     on every page it spans. */
+  .kccov-print-wrap .bifurcation-table thead{display:table-header-group}
+  .kccov-print-wrap .bifurcation-table tr{page-break-inside:avoid}
+  .kccov-print-wrap .bifurcation-scroll{max-height:none;overflow:visible}
 }
 
 /* ==================================================================
@@ -1996,6 +2006,11 @@ html,body{overscroll-behavior:none}
 .bank-tab-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .bank-tab-btn{background:var(--card);border:1.5px solid var(--line);color:var(--sub);padding:9px 16px;border-radius:20px;font-size:12.5px;font-weight:700;white-space:nowrap;transition:background .15s var(--ease),color .15s var(--ease),border-color .15s var(--ease)}
 .bank-tab-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+/* Thin vertical divider between the original 2 KCC Overdue view buttons
+   (Branch Summary/Datewise Calendar) and the 3 new bifurcation views
+   (F.Y./Month Summary/Branch Report/All Branches Overview) sharing one
+   .bank-tab-row -- groups them visually without a second row. */
+.bank-tab-sep{width:1px;align-self:stretch;background:var(--line);margin:2px 2px}
 
 /* ---------- Dashboard: insight / attention strip ---------- */
 .insight-strip{
@@ -2552,6 +2567,35 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
 @media (max-width:819px){
   .kccov-cal-table thead th.kccov-cal-branch,.kccov-cal-table tbody td.kccov-cal-branch,.kccov-cal-table tfoot td.kccov-cal-branch{max-width:110px;overflow:hidden;text-overflow:ellipsis}
 }
+
+/* ---------- KCC Overdue: F.Y./Month Bifurcation, Branch Report,
+   All Branches Overview -- ported from tools/kcc-overdue-summary.html's
+   own .bifurcation-table, remapped onto this app's real design tokens
+   (--surface-muted->--table-head, --ink-muted->--sub, --warn-soft/--warn
+   ->--amber-soft/--amber, etc.) so both themes pick it up automatically,
+   instead of duplicating that standalone tool's own separate :root set. */
+.bifurcation-scroll{overflow:auto;border:1px solid var(--line);border-radius:var(--radius-md);max-height:560px}
+table.bifurcation-table{border-collapse:collapse;width:100%;font-size:12px;background:var(--card)}
+.bifurcation-table th,.bifurcation-table td{padding:6px 9px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);text-align:right;white-space:nowrap}
+.bifurcation-table th{position:sticky;background:var(--table-head);color:var(--sub);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em}
+/* Two header-row tiers (group labels, then A/C Count/Amount sub-labels)
+   need distinct sticky top offsets or row 2 renders hidden behind row 1
+   instead of stacking below it -- same fix already applied in the
+   standalone tool this was ported from. All-Branches has no F.Y. band
+   row above it, hence its own 0/29 offsets instead of 32/61. */
+.bifurcation-table th.hdr-row1{top:32px;z-index:3}
+.bifurcation-table th.hdr-row2{top:61px;z-index:2}
+.bifurcation-table.all-branches-table th.hdr-row1{top:0}
+.bifurcation-table.all-branches-table th.hdr-row2{top:29px}
+.bifurcation-table .month-head{text-align:left;position:sticky;left:0;background:var(--table-head)}
+.bifurcation-table .month-cell{text-align:left;font-weight:600;position:sticky;left:0;background:var(--card);z-index:1}
+.bifurcation-table tr.fy-band td{color:#fff;font-weight:700;text-align:center;font-size:12.5px;letter-spacing:.03em;position:sticky;left:0;top:0;z-index:4}
+.bifurcation-table tr.data-row:nth-child(even) td{background:var(--stripe)}
+.bifurcation-table tr.fy-total-row td{font-weight:700;background:var(--amber-soft);border-top:2px solid var(--amber)}
+.bifurcation-table td.clickable,.bifurcation-table td.clickable-branch{cursor:pointer}
+.bifurcation-table td.clickable:hover,.bifurcation-table td.clickable-branch:hover{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.bifurcation-table.all-branches-table td.tal{position:sticky;left:0;background:var(--card)}
+.kccov-bifurcation-empty{color:var(--sub);font-size:13px;padding:20px;text-align:center}
 
 
 /* ---------- Login: split access panel ----------
