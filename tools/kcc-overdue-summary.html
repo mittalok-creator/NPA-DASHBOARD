@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KCC Overdue Summary</title>
+<!-- Synced with the main app's own theme toggle (same technique as every
+     other Utility tool): embedded via iframe on the same origin as the
+     main app, so it can read the exact localStorage key the main app's
+     own theme toggle writes (see setTheme() in js/app.js) directly, no
+     postMessage needed. -->
+<script>
+(function(){
+  function syncTheme(){
+    try{
+      var t = localStorage.getItem('upgb-theme');
+      if(t==='dark'||t==='light') document.documentElement.dataset.theme = t;
+      else delete document.documentElement.dataset.theme;
+    }catch(e){}
+  }
+  syncTheme();
+  window.addEventListener('storage', function(e){ if(e.key==='upgb-theme') syncTheme(); });
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<!-- Self-hosted, not CDN-linked, matching every other tool in this app
+     (a bank office network is exactly the kind of place likely to block
+     an arbitrary CDN domain). ExcelJS is needed (not plain SheetJS write)
+     because the Excel export needs merged cells + fill colors to
+     reproduce the reference macro's colored F.Y. bands and two-row
+     headers -- the same reason Branch Split already carries it. -->
+<script src="../js/vendor/xlsx.full.min.js"></script>
+<script src="../js/vendor/exceljs.min.js"></script>
+<style>
+  /* Same design system as the other Utility tools. */
+  :root{
+    --bg:#F2F5F3; --surface:#FFFFFF; --surface-muted:#EAEFEC;
+    --ink:#16211C; --ink-muted:#5C6D64; --line:#D7DED9;
+    --accent:#0E6B57; --accent-ink:#FFFFFF; --accent-soft:#DCEEE8;
+    --warn:#9A6A0A; --warn-soft:#F3E7CE; --danger:#A5432B; --danger-soft:#F6E2DC;
+    --shadow: 0 1px 2px rgba(20,40,32,.06), 0 6px 20px -8px rgba(20,40,32,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0F1C17; --surface:#15251F; --surface-muted:#1B2C25;
+      --ink:#E7F1EC; --ink-muted:#93AA9F; --line:#28392F;
+      --accent:#52C09B; --accent-ink:#08150F; --accent-soft:#1E362C;
+      --warn:#E2B85B; --warn-soft:#3A3020; --danger:#E28A6F; --danger-soft:#3A241D;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0F1C17; --surface:#15251F; --surface-muted:#1B2C25;
+    --ink:#E7F1EC; --ink-muted:#93AA9F; --line:#28392F;
+    --accent:#52C09B; --accent-ink:#08150F; --accent-soft:#1E362C;
+    --warn:#E2B85B; --warn-soft:#3A3020; --danger:#E28A6F; --danger-soft:#3A241D;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -10px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg)}
+  body{color:var(--ink);font-family:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;font-size:14px;line-height:1.5}
+  .num{font-variant-numeric:tabular-nums;font-family:'IBM Plex Mono',ui-monospace,monospace}
+  .tal{text-align:left !important}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px 56px}
+
+  .topbar{display:flex;align-items:center;gap:12px;padding:18px 22px 4px}
+  .brand-mark{width:26px;height:26px;color:var(--accent);flex:none}
+  .brand-name{font-family:'Spectral', Georgia, serif;font-weight:700;font-size:21px;letter-spacing:.2px}
+  .brand-tag{font-size:12px;color:var(--ink-muted);margin-top:1px}
+
+  .btn{font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;font-weight:600;padding:9px 16px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+  .btn:hover{border-color:var(--accent)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  .btn-ghost{background:transparent}
+
+  .hero{display:grid;grid-template-columns:1fr 1.35fr;gap:18px;margin:18px 0 20px}
+  @media (max-width:760px){.hero{grid-template-columns:1fr}}
+  .dropzone{background:var(--surface);border:1.5px dashed var(--line);border-radius:14px;padding:26px 22px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:border-color .15s,background .15s;box-shadow:var(--shadow);min-height:150px}
+  .dropzone.drag{border-color:var(--accent);background:var(--accent-soft)}
+  .dropzone-icon{color:var(--ink-muted);margin-bottom:8px}
+  .dropzone-title{font-weight:600;font-size:14.5px;word-break:break-all}
+  .dropzone-sub{color:var(--ink-muted);font-size:12px;margin-top:6px;max-width:34ch}
+
+  .status-panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:20px 22px;display:flex;flex-direction:column;justify-content:center;gap:12px}
+  .status-empty{color:var(--ink-muted);font-size:13.5px;line-height:1.5;max-width:38ch}
+  .status-stats{display:flex;gap:24px;flex-wrap:wrap}
+  .status-stat{display:flex;flex-direction:column}
+  .status-num{font-family:'Spectral', Georgia, serif;font-weight:700;font-size:26px;color:var(--accent);line-height:1;font-variant-numeric:tabular-nums}
+  .status-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-top:5px}
+  #status{font-size:12.5px;color:var(--ink-muted);min-height:18px;font-weight:600}
+  #status.err{color:var(--danger)}
+  #status.ok{color:var(--accent)}
+  .status-actions{display:flex;gap:10px;margin-top:auto}
+
+  .sheet-row{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .sheet-row select{font-family:inherit;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+  [hidden]{display:none !important}
+
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .tab-row{display:flex;gap:6px;flex-wrap:wrap}
+  .tab-btn{all:unset;box-sizing:border-box;font-family:inherit;font-size:12.5px;font-weight:700;padding:8px 14px;border-radius:999px;border:1.5px solid var(--line);cursor:pointer;color:var(--ink-muted)}
+  .tab-btn.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+  .branch-select-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .branch-select-row select{font-family:inherit;font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);min-width:240px}
+
+  .bifurcation-scroll{overflow:auto;border:1px solid var(--line);border-radius:10px;max-height:560px}
+  table.bifurcation-table{border-collapse:collapse;width:100%;font-size:12px;background:var(--surface)}
+  .bifurcation-table th,.bifurcation-table td{padding:6px 9px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);text-align:right;white-space:nowrap}
+  .bifurcation-table th{position:sticky;top:0;background:var(--surface-muted);color:var(--ink-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;z-index:2}
+  .bifurcation-table .month-head{text-align:left;position:sticky;left:0;z-index:3;background:var(--surface-muted)}
+  .bifurcation-table .month-cell{text-align:left;font-weight:600;position:sticky;left:0;background:var(--surface);z-index:1}
+  .bifurcation-table tr.fy-band td{color:#fff;font-weight:700;text-align:center;font-size:12.5px;letter-spacing:.03em;position:sticky;left:0;top:0}
+  .bifurcation-table tr.data-row:nth-child(even){background:var(--surface-muted)}
+  .bifurcation-table tr.fy-total-row td{font-weight:700;background:var(--warn-soft);border-top:2px solid var(--warn)}
+  .bifurcation-table td.clickable,.bifurcation-table td.clickable-branch{cursor:pointer}
+  .bifurcation-table td.clickable:hover,.bifurcation-table td.clickable-branch:hover{background:var(--accent-soft);color:var(--accent);font-weight:700}
+  .all-branches-table td.tal{position:sticky;left:0;background:var(--surface)}
+  .empty-note{color:var(--ink-muted);font-size:13px;padding:20px;text-align:center}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(10,16,13,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal-box{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);max-width:720px;width:100%;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+  .modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 20px;border-bottom:1px solid var(--line)}
+  .modal-title{font-weight:700;font-size:15px}
+  .modal-sub{color:var(--ink-muted);font-size:12px;margin-top:2px}
+  .modal-close{all:unset;cursor:pointer;color:var(--ink-muted);font-size:20px;line-height:1;padding:2px 6px}
+  .modal-body-wrap{overflow:auto;padding:0 20px 20px}
+  table.modal-table{border-collapse:collapse;width:100%;font-size:12.5px}
+  .modal-table th{position:sticky;top:0;background:var(--surface-muted);text-align:left;padding:7px 9px;font-size:10.5px;text-transform:uppercase;color:var(--ink-muted)}
+  .modal-table td{padding:6px 9px;border-bottom:1px solid var(--line)}
+  .modal-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+
+  .site-foot{text-align:center;padding:28px 22px 34px;margin-top:8px;border-top:1px solid var(--line);font-family:'Spectral', Georgia, serif;font-size:12.5px;letter-spacing:.02em;color:var(--ink-muted)}
+  .site-foot span{color:var(--accent);font-weight:600}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <svg class="brand-mark" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+  <div>
+    <div class="brand-name">KCC Overdue Summary</div>
+    <div class="brand-tag" id="brandTag">Daily KCC "Data" export → F.Y./Month bifurcation, branch drill-down, all-branch overview</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload the daily KCC Data export">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsb,.csv" hidden>
+      <svg class="dropzone-icon" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="11" x2="12" y2="17"/><polyline points="9 14 12 11 15 14"/></svg>
+      <div class="dropzone-title" id="dropzoneTitle">Drop the daily KCC "Data" export here</div>
+      <div class="dropzone-sub">or click to browse — .xlsx/.xls/.xlsb/.csv, read entirely in your browser</div>
+    </div>
+    <div class="status-panel">
+      <div class="status-empty" id="statusEmpty">Select the raw daily KCC "Data" export (Sol, Branch, Account No, Balance Amount, Reasons, Cust NPA Date, F.Y. …) to build the F.Y./Month bifurcation, a branch drill-down, and an all-branch overview.</div>
+      <div id="statsBox" class="status-stats" hidden>
+        <div class="status-stat"><span class="status-num" id="statRows">0</span><span class="status-lbl">Rows Used</span></div>
+        <div class="status-stat"><span class="status-num" id="statSkipped">0</span><span class="status-lbl">Rows Skipped</span></div>
+        <div class="status-stat"><span class="status-num" id="statFy">0</span><span class="status-lbl">F.Y.'s</span></div>
+        <div class="status-stat"><span class="status-num" id="statBranches">0</span><span class="status-lbl">Branches</span></div>
+      </div>
+      <div id="status"></div>
+      <div class="status-actions">
+        <button type="button" class="btn btn-ghost" id="clearBtn">Clear</button>
+        <button type="button" class="btn btn-primary" id="exportBtn" disabled>Export to Excel</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="sheet-row" id="sheetPickerRow" hidden>
+    <label for="sheetSelect" style="font-size:12.5px;color:var(--ink-muted);font-weight:600">Worksheet:</label>
+    <select id="sheetSelect"></select>
+  </div>
+
+  <div id="viewPanel" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <div class="tab-row">
+          <button type="button" class="tab-btn active" data-tab="fymonth">F.Y./Month Summary</button>
+          <button type="button" class="tab-btn" data-tab="branch">Branch Report</button>
+          <button type="button" class="tab-btn" data-tab="allbranches">All Branches Overview</button>
+        </div>
+      </div>
+
+      <div class="tab-body" data-tab-body="fymonth">
+        <div id="fyMonthBody"></div>
+      </div>
+
+      <div class="tab-body" data-tab-body="branch" hidden>
+        <div class="branch-select-row">
+          <label for="branchSelect" style="font-size:12.5px;color:var(--ink-muted);font-weight:600">Branch:</label>
+          <select id="branchSelect"></select>
+        </div>
+        <div id="branchReportBody"></div>
+      </div>
+
+      <div class="tab-body" data-tab-body="allbranches" hidden>
+        <div id="allBranchesBody"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="modal-overlay" id="modalOverlay" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modalTitle"></div>
+        <div class="modal-sub" id="modalSub"></div>
+      </div>
+      <button type="button" class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body-wrap">
+      <table class="modal-table">
+        <thead><tr><th>Account No</th><th>Name</th><th>Branch</th><th style="text-align:right">Balance (₹ Lakh)</th><th>F.Y.</th><th>Month</th><th>Reason</th></tr></thead>
+        <tbody id="modalBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<footer class="site-foot">Designed &amp; developed by <span>Alok Mittal</span></footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- shared small helpers (self-contained -- no shared imports across tools) ---------- */
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function normHeader(h){ return String(h||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+  function cellStr(row, i){ return i>=0 ? String(row[i]==null?'':row[i]).trim() : ''; }
+  function looksScientific(s){ return /^[0-9]+(\.[0-9]+)?e\+?\d+$/i.test(String(s).trim()); }
+  function expandSci(s){ var n = Number(s); if(!isFinite(n)) return String(s).trim(); return BigInt(Math.round(n)).toString(); }
+  function stripQuoteChars(s){ return String(s||'').replace(/^"+|"+$/g,'').trim(); }
+  // Excel serial -> Date. No cellDates:true anywhere in this tool -- the
+  // main app found it silently rolls a date back a full day in IST (see
+  // parseHoDate()'s comment in js/app.js) -- every date cell is read raw
+  // and converted through this instead.
+  var XL_EPOCH = new Date(1899,11,30);
+  function excelSerialToDate(n){ return new Date(XL_EPOCH.getTime() + n*86400000); }
+  function toDate(v){
+    if(v===''||v===null||v===undefined) return null;
+    if(v instanceof Date) return isNaN(v.getTime()) ? null : v;
+    if(typeof v==='number') return isFinite(v) ? excelSerialToDate(v) : null;
+    if(typeof v==='string'){
+      var s = v.trim();
+      var m = /^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(s);
+      if(m){
+        var day=+m[1], month=+m[2], year=+m[3];
+        if(month<1||month>12||day<1||day>31) return null;
+        var d = new Date(year, month-1, day);
+        return (d.getFullYear()===year && d.getMonth()===month-1 && d.getDate()===day) ? d : null;
+      }
+      if(/^-?\d+(\.\d+)?$/.test(s)){ var n = parseFloat(s); return isFinite(n) ? excelSerialToDate(n) : null; }
+    }
+    return null;
+  }
+  function parseCSV(text){
+    var rows = [], row = [], field = '', inQuotes = false;
+    for(var i=0;i<text.length;i++){
+      var c = text[i];
+      if(inQuotes){
+        if(c==='"'){ if(text[i+1]==='"'){ field+='"'; i++; } else inQuotes=false; }
+        else field += c;
+      } else {
+        if(c==='"') inQuotes = true;
+        else if(c===','){ row.push(field); field=''; }
+        else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+        else if(c==='\r'){ /* skip */ }
+        else field += c;
+      }
+    }
+    if(field!=='' || row.length){ row.push(field); rows.push(row); }
+    return rows;
+  }
+  function round2(n){ return Math.round(n*100)/100; }
+  function fmtLakh(n){ return (n/100000).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function fmtCnt(n){ return (n||0).toLocaleString('en-IN'); }
+  function dateStamp(){
+    var d = new Date();
+    function p(n){ return n<10 ? '0'+n : ''+n; }
+    return d.getFullYear()+''+p(d.getMonth()+1)+p(d.getDate());
+  }
+  function anchorDownload(blob, filename){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+  }
+
+  /* ---------- KCC "Data" parsing ---------- */
+  var KCC_REASON_MAP = { 'kccdisbrsmnt15':'d15', 'kccdisbrsmnt24':'d24', 'kccdisbrsmnt36':'d36' };
+  var GROUP_LABEL_BY_KEY = { d15:'KCC-Disbrsmnt-15', d24:'KCC-Disbrsmnt-24', d36:'KCC-Disbrsmnt-36', all:'All Data', l5:'5 Lakh+ A/C', l10:'10 Lakh+ A/C' };
+  var GROUP_DEFS = [
+    {key:'d15', label:'KCC-Disbrsmnt-15'}, {key:'d24', label:'KCC-Disbrsmnt-24'}, {key:'d36', label:'KCC-Disbrsmnt-36'},
+    {key:'all', label:'All Data'}, {key:'l5', label:'5 Lakh+ A/C'}, {key:'l10', label:'10 Lakh+ A/C'}
+  ];
+  var MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function classifyReason(raw){ return KCC_REASON_MAP[normHeader(raw)] || null; }
+  function monthLabelFor(monthKey){ var y=Math.floor(monthKey/100), m=monthKey%100; return MONTH_ABBR[m]+'-'+String(y).slice(-2); }
+
+  function parseKccDataRows(headerCells, dataRows){
+    var header = headerCells.map(normHeader);
+    function idx(name){ return header.indexOf(normHeader(name)); }
+    function idxPrefix(name){ var nn = normHeader(name); for(var i=0;i<header.length;i++){ if(header[i].indexOf(nn)===0) return i; } return -1; }
+    var iSol=idx('sol'), iRegion=idx('region'), iBranch=idx('branch'), iAcct=idx('accountno'),
+        iCustId=idx('customerid'), iName=idx('accountname'), iBal=idxPrefix('balanceamount'),
+        iReason=idx('reasons'), iCustNpa=idx('custnpadate'), iFy=idx('fy');
+    var missing = [];
+    if(iBranch<0) missing.push('Branch');
+    if(iAcct<0) missing.push('Account No');
+    if(iBal<0) missing.push('Balance Amount');
+    if(iReason<0) missing.push('Reasons');
+    if(iCustNpa<0) missing.push('Cust NPA Date');
+    if(iFy<0) missing.push('F.Y.');
+    if(missing.length) throw new Error('Missing required column(s): '+missing.join(', ')+'. Check this file matches the KCC "Data" export layout.');
+
+    var rows = [], skippedUnknownReason=0, skippedNoDate=0, skippedNoFy=0;
+    dataRows.forEach(function(row){
+      if(!row || row.length<3) return;
+      var bucket = classifyReason(cellStr(row, iReason));
+      if(!bucket){ skippedUnknownReason++; return; }
+      var npaDate = toDate(row[iCustNpa]);
+      if(!npaDate){ skippedNoDate++; return; }
+      var fy = stripQuoteChars(cellStr(row, iFy));
+      if(!fy){ skippedNoFy++; return; }
+      var acctRaw = cellStr(row, iAcct);
+      var acctNo = looksScientific(acctRaw) ? expandSci(acctRaw) : acctRaw;
+      var monthKey = npaDate.getFullYear()*100 + npaDate.getMonth();
+      rows.push({
+        sol: iSol>=0?cellStr(row,iSol):'', region: iRegion>=0?cellStr(row,iRegion):'',
+        branch: cellStr(row, iBranch), acctNo: acctNo,
+        custId: iCustId>=0?cellStr(row,iCustId):'', name: iName>=0?cellStr(row,iName):'',
+        bal: parseFloat(row[iBal])||0, reason: bucket, fy: fy, npaDate: npaDate,
+        monthKey: monthKey, monthLabel: monthLabelFor(monthKey)
+      });
+    });
+    return { rows: rows, skippedUnknownReason: skippedUnknownReason, skippedNoDate: skippedNoDate, skippedNoFy: skippedNoFy };
+  }
+
+  /* ---------- aggregation ---------- */
+  function emptyGroupTotals(){
+    return { d15:{cnt:0,amt:0}, d24:{cnt:0,amt:0}, d36:{cnt:0,amt:0}, all:{cnt:0,amt:0}, l5:{cnt:0,amt:0}, l10:{cnt:0,amt:0} };
+  }
+  function addRowToGroup(g, row){
+    var b = g[row.reason]; b.cnt++; b.amt += row.bal;
+    g.all.cnt++; g.all.amt += row.bal;
+    if(row.bal>=500000){ g.l5.cnt++; g.l5.amt += row.bal; }
+    if(row.bal>=1000000){ g.l10.cnt++; g.l10.amt += row.bal; }
+  }
+  function addGroupInto(target, src){ Object.keys(target).forEach(function(k){ target[k].cnt += src[k].cnt; target[k].amt += src[k].amt; }); }
+  function aggregateFyMonth(rows){
+    var byFy = new Map();
+    rows.forEach(function(r){
+      if(!byFy.has(r.fy)) byFy.set(r.fy, new Map());
+      var byMonth = byFy.get(r.fy);
+      if(!byMonth.has(r.monthKey)) byMonth.set(r.monthKey, { monthKey:r.monthKey, label:r.monthLabel, g:emptyGroupTotals() });
+      addRowToGroup(byMonth.get(r.monthKey).g, r);
+    });
+    return byFy;
+  }
+  function aggregateBranches(rows){
+    var byBranch = new Map();
+    rows.forEach(function(r){
+      if(!byBranch.has(r.branch)) byBranch.set(r.branch, { sol:r.sol, branch:r.branch, g:emptyGroupTotals() });
+      addRowToGroup(byBranch.get(r.branch).g, r);
+    });
+    return byBranch;
+  }
+  // F.Y. labels here are "MAR-YY" (a fiscal year ending in March 20YY) --
+  // sorted chronologically off the trailing 2-digit year, not hardcoded
+  // to "MAR" specifically so a differently-labelled F.Y. string still
+  // sorts sanely rather than throwing.
+  function fyYear(fy){ var m = /-(\d{2})$/.exec(fy); return m ? 2000+ +m[1] : 0; }
+  function sortFyKeys(keys){ return keys.slice().sort(function(a,b){ var ya=fyYear(a), yb=fyYear(b); return ya!==yb ? ya-yb : String(a).localeCompare(String(b)); }); }
+  function sortMonthKeys(keys){ return keys.slice().sort(function(a,b){ return a-b; }); }
+  function branchSortKey(rec){ var n = parseInt(rec.sol,10); return isNaN(n) ? null : n; }
+  function sortBranchKeys(byBranch, keys){
+    return keys.slice().sort(function(a,b){
+      var ra=byBranch.get(a), rb=byBranch.get(b), sa=branchSortKey(ra), sb=branchSortKey(rb);
+      if(sa!=null && sb!=null) return sa-sb;
+      return String(ra.branch).localeCompare(String(rb.branch));
+    });
+  }
+  function rowsForCell(rows, fy, monthKey, bucket){
+    var scoped = rows.filter(function(r){ return r.fy===fy && r.monthKey===monthKey; });
+    if(bucket==='d15'||bucket==='d24'||bucket==='d36') return scoped.filter(function(r){ return r.reason===bucket; });
+    if(bucket==='l5') return scoped.filter(function(r){ return r.bal>=500000; });
+    if(bucket==='l10') return scoped.filter(function(r){ return r.bal>=1000000; });
+    return scoped; // 'all'
+  }
+  function rowsForBranchBucket(rows, branch, bucket){
+    var scoped = rows.filter(function(r){ return r.branch===branch; });
+    if(bucket==='d15'||bucket==='d24'||bucket==='d36') return scoped.filter(function(r){ return r.reason===bucket; });
+    if(bucket==='l5') return scoped.filter(function(r){ return r.bal>=500000; });
+    if(bucket==='l10') return scoped.filter(function(r){ return r.bal>=1000000; });
+    return scoped;
+  }
+
+  /* ---------- rendering: F.Y./Month bifurcation table (reused for Branch Report) ---------- */
+  var FY_PALETTE = ['#2F527D','#1F7A5C','#8B5E1F','#6F3D8E','#A5432B','#2F7D7D'];
+  function renderBifurcationTable(rows){
+    var byFy = aggregateFyMonth(rows);
+    var fyKeys = sortFyKeys(Array.from(byFy.keys()));
+    if(!fyKeys.length) return '<div class="empty-note">No qualifying rows.</div>';
+    var html = '<div class="bifurcation-scroll"><table class="bifurcation-table">';
+    fyKeys.forEach(function(fy, fi){
+      var color = FY_PALETTE[fi % FY_PALETTE.length];
+      var monthMap = byFy.get(fy);
+      var monthKeys = sortMonthKeys(Array.from(monthMap.keys()));
+      html += '<tr class="fy-band" style="background:'+color+'"><td colspan="13">F.Y. '+esc(fy)+'</td></tr>';
+      html += '<tr><th rowspan="2" class="month-head">Month</th>' + GROUP_DEFS.map(function(gd){ return '<th colspan="2">'+esc(gd.label)+'</th>'; }).join('') + '</tr>';
+      html += '<tr>' + GROUP_DEFS.map(function(){ return '<th>A/C Count</th><th>Amount (₹ Lakh)</th>'; }).join('') + '</tr>';
+      var fyTotal = emptyGroupTotals();
+      monthKeys.forEach(function(mk){
+        var m = monthMap.get(mk);
+        addGroupInto(fyTotal, m.g);
+        html += '<tr class="data-row"><td class="month-cell">'+esc(m.label)+'</td>';
+        GROUP_DEFS.forEach(function(gd){
+          var b = m.g[gd.key];
+          html += '<td class="num clickable" data-fy="'+esc(fy)+'" data-month="'+mk+'" data-bucket="'+gd.key+'">'+fmtCnt(b.cnt)+'</td>';
+          html += '<td class="num clickable" data-fy="'+esc(fy)+'" data-month="'+mk+'" data-bucket="'+gd.key+'">'+fmtLakh(b.amt)+'</td>';
+        });
+        html += '</tr>';
+      });
+      html += '<tr class="fy-total-row"><td>F.Y. '+esc(fy)+' TOTAL</td>';
+      GROUP_DEFS.forEach(function(gd){ var b = fyTotal[gd.key]; html += '<td class="num">'+fmtCnt(b.cnt)+'</td><td class="num">'+fmtLakh(b.amt)+'</td>'; });
+      html += '</tr>';
+    });
+    html += '</table></div>';
+    return html;
+  }
+  function renderAllBranchesTable(rows){
+    var byBranch = aggregateBranches(rows);
+    var branchKeys = sortBranchKeys(byBranch, Array.from(byBranch.keys()));
+    if(!branchKeys.length) return '<div class="empty-note">No qualifying rows.</div>';
+    var html = '<div class="bifurcation-scroll"><table class="bifurcation-table all-branches-table">';
+    html += '<tr><th rowspan="2" class="tal">Sol</th><th rowspan="2" class="tal">Branch</th>' + GROUP_DEFS.map(function(gd){ return '<th colspan="2">'+esc(gd.label)+'</th>'; }).join('') + '</tr>';
+    html += '<tr>' + GROUP_DEFS.map(function(){ return '<th>A/C Count</th><th>Amount (₹ Lakh)</th>'; }).join('') + '</tr>';
+    var grand = emptyGroupTotals();
+    branchKeys.forEach(function(bk){
+      var rec = byBranch.get(bk);
+      addGroupInto(grand, rec.g);
+      html += '<tr class="data-row"><td class="tal">'+esc(rec.sol||'—')+'</td><td class="tal">'+esc(rec.branch)+'</td>';
+      GROUP_DEFS.forEach(function(gd){
+        var b = rec.g[gd.key];
+        html += '<td class="num clickable-branch" data-branch="'+esc(bk)+'" data-bucket="'+gd.key+'">'+fmtCnt(b.cnt)+'</td>';
+        html += '<td class="num clickable-branch" data-branch="'+esc(bk)+'" data-bucket="'+gd.key+'">'+fmtLakh(b.amt)+'</td>';
+      });
+      html += '</tr>';
+    });
+    html += '<tr class="fy-total-row"><td colspan="2" class="tal">Grand Total</td>';
+    GROUP_DEFS.forEach(function(gd){ var b = grand[gd.key]; html += '<td class="num">'+fmtCnt(b.cnt)+'</td><td class="num">'+fmtLakh(b.amt)+'</td>'; });
+    html += '</tr></table></div>';
+    return html;
+  }
+
+  /* ---------- Excel export (ExcelJS -- needed for merges/fills a plain XLSX write can't do) ---------- */
+  function thinBorder(){ return { top:{style:'thin',color:{argb:'FFD7DED9'}}, left:{style:'thin',color:{argb:'FFD7DED9'}}, bottom:{style:'thin',color:{argb:'FFD7DED9'}}, right:{style:'thin',color:{argb:'FFD7DED9'}} }; }
+  var FY_PALETTE_ARGB = ['FF2F527D','FF1F7A5C','FF8B5E1F','FF6F3D8E','FFA5432B','FF2F7D7D'];
+  var FY_PALETTE_SOFT_ARGB = ['FFDCE6F1','FFDCEEE6','FFF3E7CE','FFEBDFF3','FFF6E2DC','FFDCF0F0'];
+
+  function writeDataRow(ws, r, label, g, bold){
+    ws.getCell(r,1).value = label;
+    if(bold) ws.getCell(r,1).font = {bold:true};
+    GROUP_DEFS.forEach(function(gd,i){
+      var col = 2+i*2, b = g[gd.key];
+      var cCnt = ws.getCell(r,col); cCnt.value = b.cnt; cCnt.numFmt = '0';
+      var cAmt = ws.getCell(r,col+1); cAmt.value = round2(b.amt/100000); cAmt.numFmt = '0.00';
+    });
+    if(bold){
+      for(var c=1;c<=13;c++){ var cell = ws.getCell(r,c); cell.font = {bold:true}; cell.border = {top:{style:'thin'}}; cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF3E7CE'}}; }
+    }
+    return r+1;
+  }
+  function writeFyBand(ws, r, fy, argb){
+    ws.mergeCells(r,1,r,13);
+    var c = ws.getCell(r,1);
+    c.value = 'F.Y. '+fy; c.font = {bold:true, color:{argb:'FFFFFFFF'}, size:12}; c.alignment = {horizontal:'center', vertical:'middle'};
+    for(var col=1; col<=13; col++) ws.getCell(r,col).fill = {type:'pattern',pattern:'solid',fgColor:{argb:argb}};
+    ws.getRow(r).height = 20;
+    return r+1;
+  }
+  function writeTwoRowHeader(ws, r, softArgb){
+    ws.mergeCells(r,1,r+1,1);
+    var mc = ws.getCell(r,1); mc.value = 'Month'; mc.font = {bold:true}; mc.alignment = {vertical:'middle',horizontal:'center'};
+    GROUP_DEFS.forEach(function(gd,i){
+      var col = 2+i*2;
+      ws.mergeCells(r,col,r,col+1);
+      var gc = ws.getCell(r,col); gc.value = gd.label; gc.font = {bold:true}; gc.alignment = {horizontal:'center'};
+      ws.getCell(r,col).fill = {type:'pattern',pattern:'solid',fgColor:{argb:softArgb}};
+      ws.getCell(r,col+1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:softArgb}};
+      ws.getCell(r+1,col).value = 'A/C Count'; ws.getCell(r+1,col).font = {bold:true};
+      ws.getCell(r+1,col+1).value = 'Amount (₹ Lakh)'; ws.getCell(r+1,col+1).font = {bold:true};
+    });
+    for(var col2=1; col2<=13; col2++){ ws.getCell(r,col2).border = thinBorder(); ws.getCell(r+1,col2).border = thinBorder(); }
+    return r+2;
+  }
+  function writeBifurcationSheet(ws, title, rows){
+    ws.getColumn(1).width = 16;
+    for(var c=2;c<=13;c++) ws.getColumn(c).width = 15;
+    var r = 1;
+    ws.mergeCells(r,1,r,13);
+    ws.getCell(r,1).value = title; ws.getCell(r,1).font = {bold:true, size:14};
+    r += 2;
+    var byFy = aggregateFyMonth(rows);
+    var fyKeys = sortFyKeys(Array.from(byFy.keys()));
+    fyKeys.forEach(function(fy, fi){
+      var argb = FY_PALETTE_ARGB[fi % FY_PALETTE_ARGB.length], soft = FY_PALETTE_SOFT_ARGB[fi % FY_PALETTE_SOFT_ARGB.length];
+      r = writeFyBand(ws, r, fy, argb);
+      r = writeTwoRowHeader(ws, r, soft);
+      var monthMap = byFy.get(fy), monthKeys = sortMonthKeys(Array.from(monthMap.keys()));
+      var fyTotal = emptyGroupTotals();
+      monthKeys.forEach(function(mk){ var m = monthMap.get(mk); addGroupInto(fyTotal, m.g); r = writeDataRow(ws, r, m.label, m.g, false); });
+      r = writeDataRow(ws, r, 'F.Y. '+fy+' TOTAL', fyTotal, true);
+      r += 1;
+    });
+    if(!fyKeys.length){ ws.getCell(r,1).value = 'No qualifying rows.'; }
+  }
+  function writeFlatBranchSheet(ws, rows){
+    ws.getColumn(1).width = 10; ws.getColumn(2).width = 26;
+    for(var c=3;c<=14;c++) ws.getColumn(c).width = 15;
+    var r = 1;
+    ws.mergeCells(r,1,r,14);
+    ws.getCell(r,1).value = 'All Branches Overview'; ws.getCell(r,1).font = {bold:true, size:14};
+    r += 2;
+    var headerRow1 = r;
+    ws.mergeCells(r,1,r+1,1); ws.getCell(r,1).value = 'Sol'; ws.getCell(r,1).font = {bold:true};
+    ws.mergeCells(r,2,r+1,2); ws.getCell(r,2).value = 'Branch'; ws.getCell(r,2).font = {bold:true};
+    GROUP_DEFS.forEach(function(gd,i){
+      var col = 3+i*2;
+      ws.mergeCells(r,col,r,col+1);
+      ws.getCell(r,col).value = gd.label; ws.getCell(r,col).font = {bold:true};
+      ws.getCell(r+1,col).value = 'A/C Count'; ws.getCell(r+1,col).font = {bold:true};
+      ws.getCell(r+1,col+1).value = 'Amount (₹ Lakh)'; ws.getCell(r+1,col+1).font = {bold:true};
+    });
+    for(var cc=1; cc<=14; cc++){
+      ws.getCell(r,cc).border = thinBorder(); ws.getCell(r+1,cc).border = thinBorder();
+      ws.getCell(r,cc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFDCEEE8'}};
+      ws.getCell(r+1,cc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFDCEEE8'}};
+    }
+    r += 2;
+    var byBranch = aggregateBranches(rows), branchKeys = sortBranchKeys(byBranch, Array.from(byBranch.keys()));
+    var grand = emptyGroupTotals();
+    branchKeys.forEach(function(bk){
+      var rec = byBranch.get(bk);
+      addGroupInto(grand, rec.g);
+      ws.getCell(r,1).value = rec.sol||''; ws.getCell(r,2).value = rec.branch;
+      GROUP_DEFS.forEach(function(gd,i){
+        var col = 3+i*2, b = rec.g[gd.key];
+        ws.getCell(r,col).value = b.cnt; ws.getCell(r,col).numFmt = '0';
+        ws.getCell(r,col+1).value = round2(b.amt/100000); ws.getCell(r,col+1).numFmt = '0.00';
+      });
+      r += 1;
+    });
+    ws.mergeCells(r,1,r,2); ws.getCell(r,1).value = 'Grand Total'; ws.getCell(r,1).font = {bold:true};
+    GROUP_DEFS.forEach(function(gd,i){
+      var col = 3+i*2, b = grand[gd.key];
+      ws.getCell(r,col).value = b.cnt; ws.getCell(r,col).font = {bold:true};
+      ws.getCell(r,col+1).value = round2(b.amt/100000); ws.getCell(r,col+1).font = {bold:true};
+    });
+    for(var cf=1; cf<=14; cf++){ ws.getCell(r,cf).border = {top:{style:'thin'}}; ws.getCell(r,cf).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF3E7CE'}}; }
+    ws.views = [{ state:'frozen', ySplit: headerRow1+1 }];
+  }
+  async function exportToExcel(){
+    if(!state.rows || !state.rows.length) return;
+    var wb = new ExcelJS.Workbook();
+    writeBifurcationSheet(wb.addWorksheet('Report'), 'KCC Overdue Summary — F.Y./Month Bifurcation', state.rows);
+    var selBranch = branchSelect.value;
+    var branchRows = state.rows.filter(function(r){ return r.branch===selBranch; });
+    writeBifurcationSheet(wb.addWorksheet('Branch Report'), 'Branch Report — '+(selBranch||''), branchRows);
+    writeFlatBranchSheet(wb.addWorksheet('All Branches'), state.rows);
+    var buffer = await wb.xlsx.writeBuffer();
+    anchorDownload(new Blob([buffer], {type:'application/octet-stream'}), 'KCC_Overdue_Summary_'+dateStamp()+'.xlsx');
+  }
+
+  /* ---------- state + DOM wiring ---------- */
+  var state = { rows: null, rawBuffer: null, sheetNames: null };
+
+  var dropzone = document.getElementById('dropzone');
+  var fileInput = document.getElementById('fileInput');
+  var dropzoneTitle = document.getElementById('dropzoneTitle');
+  var statusEmpty = document.getElementById('statusEmpty');
+  var statsBox = document.getElementById('statsBox');
+  var statRows = document.getElementById('statRows');
+  var statSkipped = document.getElementById('statSkipped');
+  var statFy = document.getElementById('statFy');
+  var statBranches = document.getElementById('statBranches');
+  var statusEl = document.getElementById('status');
+  var clearBtn = document.getElementById('clearBtn');
+  var exportBtn = document.getElementById('exportBtn');
+  var sheetPickerRow = document.getElementById('sheetPickerRow');
+  var sheetSelect = document.getElementById('sheetSelect');
+  var viewPanel = document.getElementById('viewPanel');
+  var fyMonthBody = document.getElementById('fyMonthBody');
+  var branchReportBody = document.getElementById('branchReportBody');
+  var allBranchesBody = document.getElementById('allBranchesBody');
+  var branchSelect = document.getElementById('branchSelect');
+  var modalOverlay = document.getElementById('modalOverlay');
+  var modalTitle = document.getElementById('modalTitle');
+  var modalSub = document.getElementById('modalSub');
+  var modalBody = document.getElementById('modalBody');
+  var modalClose = document.getElementById('modalClose');
+
+  function setStatus(msg, cls){ statusEl.textContent = msg||''; statusEl.className = cls||''; }
+  function updateDropzoneTitle(name){ dropzoneTitle.textContent = name || 'Drop the daily KCC "Data" export here'; }
+
+  function openAccountsModal(title, sub, rows){
+    modalTitle.textContent = title;
+    modalSub.textContent = sub;
+    modalBody.innerHTML = rows.map(function(r){
+      return '<tr><td>'+esc(r.acctNo)+'</td><td>'+esc(r.name||'—')+'</td><td>'+esc(r.branch)+'</td><td class="num">'+fmtLakh(r.bal)+'</td><td>'+esc(r.fy)+'</td><td>'+esc(r.monthLabel)+'</td><td>'+esc(GROUP_LABEL_BY_KEY[r.reason])+'</td></tr>';
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--ink-muted)">No accounts.</td></tr>';
+    modalOverlay.hidden = false;
+    resizeFrame();
+  }
+  function closeModal(){ modalOverlay.hidden = true; resizeFrame(); }
+  modalClose.addEventListener('click', closeModal);
+  modalOverlay.addEventListener('click', function(e){ if(e.target===modalOverlay) closeModal(); });
+
+  fyMonthBody.addEventListener('click', function(e){
+    var td = e.target.closest ? e.target.closest('.clickable') : null;
+    if(!td) return;
+    var fy = td.getAttribute('data-fy'), month = +td.getAttribute('data-month'), bucket = td.getAttribute('data-bucket');
+    var scoped = rowsForCell(state.rows, fy, month, bucket);
+    openAccountsModal('F.Y. '+fy+' · '+monthLabelFor(month)+' · '+GROUP_LABEL_BY_KEY[bucket], scoped.length+' account(s)', scoped);
+  });
+  branchReportBody.addEventListener('click', function(e){
+    var td = e.target.closest ? e.target.closest('.clickable') : null;
+    if(!td) return;
+    var fy = td.getAttribute('data-fy'), month = +td.getAttribute('data-month'), bucket = td.getAttribute('data-bucket');
+    var branchRows = state.rows.filter(function(r){ return r.branch===branchSelect.value; });
+    var scoped = rowsForCell(branchRows, fy, month, bucket);
+    openAccountsModal(branchSelect.value+' · F.Y. '+fy+' · '+monthLabelFor(month)+' · '+GROUP_LABEL_BY_KEY[bucket], scoped.length+' account(s)', scoped);
+  });
+  allBranchesBody.addEventListener('click', function(e){
+    var td = e.target.closest ? e.target.closest('.clickable-branch') : null;
+    if(!td) return;
+    var branch = td.getAttribute('data-branch'), bucket = td.getAttribute('data-bucket');
+    var scoped = rowsForBranchBucket(state.rows, branch, bucket);
+    openAccountsModal(branch+' · '+GROUP_LABEL_BY_KEY[bucket], scoped.length+' account(s)', scoped);
+  });
+
+  /* ---------- tabs ---------- */
+  document.querySelectorAll('.tab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var tab = btn.getAttribute('data-tab');
+      document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b===btn); });
+      document.querySelectorAll('.tab-body').forEach(function(b){ b.hidden = b.getAttribute('data-tab-body')!==tab; });
+      resizeFrame();
+    });
+  });
+
+  /* ---------- branch dropdown ---------- */
+  function populateBranchSelect(rows){
+    var seen = {}, list = [];
+    rows.forEach(function(r){ if(!seen[r.branch]){ seen[r.branch]=true; list.push({sol:r.sol, branch:r.branch}); } });
+    list.sort(function(a,b){
+      var sa = parseInt(a.sol,10), sb = parseInt(b.sol,10);
+      if(!isNaN(sa) && !isNaN(sb)) return sa-sb;
+      return String(a.branch).localeCompare(String(b.branch));
+    });
+    branchSelect.innerHTML = list.map(function(b){
+      var label = b.sol ? (b.sol+' - '+b.branch) : b.branch;
+      return '<option value="'+esc(b.branch)+'">'+esc(label)+'</option>';
+    }).join('');
+    if(list.length) renderBranchReport(list[0].branch);
+  }
+  function renderBranchReport(branch){
+    branchSelect.value = branch;
+    var branchRows = state.rows.filter(function(r){ return r.branch===branch; });
+    branchReportBody.innerHTML = renderBifurcationTable(branchRows);
+  }
+  branchSelect.addEventListener('change', function(){ renderBranchReport(branchSelect.value); });
+
+  /* ---------- render everything after a successful parse ---------- */
+  function renderAll(){
+    fyMonthBody.innerHTML = renderBifurcationTable(state.rows);
+    populateBranchSelect(state.rows);
+    allBranchesBody.innerHTML = renderAllBranchesTable(state.rows);
+    resizeFrame();
+  }
+
+  function finishParse(header, dataRows){
+    var result;
+    try{ result = parseKccDataRows(header, dataRows); }
+    catch(err){
+      statusEmpty.hidden = false; statsBox.hidden = true; viewPanel.hidden = true;
+      setStatus(err.message || 'Could not read this file.', 'err');
+      exportBtn.disabled = true;
+      resizeFrame();
+      return;
+    }
+    if(!result.rows.length){
+      statusEmpty.hidden = false; statsBox.hidden = true; viewPanel.hidden = true;
+      setStatus('No qualifying rows found — every row was either an unrecognized Reasons value, a missing/unparseable Cust NPA Date, or a blank F.Y.', 'err');
+      exportBtn.disabled = true;
+      resizeFrame();
+      return;
+    }
+    state.rows = result.rows;
+    var skippedTotal = result.skippedUnknownReason + result.skippedNoDate + result.skippedNoFy;
+    var fySet = {}, branchSet = {};
+    state.rows.forEach(function(r){ fySet[r.fy]=1; branchSet[r.branch]=1; });
+    statRows.textContent = state.rows.length.toLocaleString('en-IN');
+    statSkipped.textContent = skippedTotal.toLocaleString('en-IN');
+    statFy.textContent = Object.keys(fySet).length;
+    statBranches.textContent = Object.keys(branchSet).length;
+    statusEmpty.hidden = true; statsBox.hidden = false; viewPanel.hidden = false;
+    var skipBits = [];
+    if(result.skippedUnknownReason) skipBits.push(result.skippedUnknownReason.toLocaleString('en-IN')+' unrecognized Reasons');
+    if(result.skippedNoDate) skipBits.push(result.skippedNoDate.toLocaleString('en-IN')+' missing/bad Cust NPA Date');
+    if(result.skippedNoFy) skipBits.push(result.skippedNoFy.toLocaleString('en-IN')+' blank F.Y.');
+    setStatus('Loaded '+state.rows.length.toLocaleString('en-IN')+' row(s).'+(skipBits.length ? ' Skipped: '+skipBits.join(', ')+'.' : ''), 'ok');
+    exportBtn.disabled = false;
+    renderAll();
+  }
+
+  function loadSheetAndParse(sheetName){
+    try{
+      var wb2 = XLSX.read(state.rawBuffer, {type:'array', raw:true, sheets:[sheetName]});
+      var ws = wb2.Sheets[sheetName];
+      if(!ws) throw new Error('Could not find sheet "'+sheetName+'" in this file.');
+      var raw = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
+      finishParse(raw[0]||[], raw.slice(1));
+    }catch(err){
+      statusEmpty.hidden = false; statsBox.hidden = true; viewPanel.hidden = true;
+      setStatus('Could not read this sheet: '+(err.message||err), 'err');
+      resizeFrame();
+    }
+  }
+  sheetSelect.addEventListener('change', function(){ loadSheetAndParse(sheetSelect.value); });
+
+  function handleFile(file){
+    updateDropzoneTitle(file.name);
+    setStatus('Reading file…');
+    statusEmpty.hidden = true; statsBox.hidden = true; viewPanel.hidden = true; exportBtn.disabled = true;
+    var isCsv = /\.csv$/i.test(file.name);
+    var reader = new FileReader();
+    reader.onerror = function(){ setStatus('Failed to read the file from disk.', 'err'); statusEmpty.hidden = false; };
+    reader.onload = function(e){
+      try{
+        if(isCsv){
+          sheetPickerRow.hidden = true;
+          var allRows = parseCSV(String(e.target.result));
+          finishParse(allRows[0]||[], allRows.slice(1));
+        } else {
+          var data = new Uint8Array(e.target.result);
+          state.rawBuffer = data;
+          var wbNames = XLSX.read(data, {type:'array', bookSheets:true});
+          var names = wbNames.SheetNames || [];
+          if(!names.length) throw new Error('No worksheets found in this file.');
+          if(names.length > 1){
+            sheetPickerRow.hidden = false;
+            sheetSelect.innerHTML = names.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join('');
+            var guess = names.filter(function(n){ return /data/i.test(n); })[0] || names[0];
+            sheetSelect.value = guess;
+            loadSheetAndParse(guess);
+          } else {
+            sheetPickerRow.hidden = true;
+            loadSheetAndParse(names[0]);
+          }
+        }
+      }catch(err){
+        statusEmpty.hidden = false;
+        setStatus('Could not read this file: '+(err.message||err), 'err');
+      }
+    };
+    if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+  }
+
+  fileInput.addEventListener('change', function(e){ if(e.target.files && e.target.files[0]) handleFile(e.target.files[0]); });
+  dropzone.addEventListener('click', function(){ fileInput.click(); });
+  dropzone.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fileInput.click(); } });
+  dropzone.addEventListener('dragover', function(e){ e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', function(){ dropzone.classList.remove('drag'); });
+  dropzone.addEventListener('drop', function(e){
+    e.preventDefault(); dropzone.classList.remove('drag');
+    if(e.dataTransfer.files && e.dataTransfer.files.length){ fileInput.files = e.dataTransfer.files; handleFile(e.dataTransfer.files[0]); }
+  });
+
+  clearBtn.addEventListener('click', function(){
+    state = { rows:null, rawBuffer:null, sheetNames:null };
+    fileInput.value = '';
+    updateDropzoneTitle('');
+    statusEmpty.hidden = false; statsBox.hidden = true; viewPanel.hidden = true; sheetPickerRow.hidden = true;
+    exportBtn.disabled = true;
+    setStatus('');
+    resizeFrame();
+  });
+  exportBtn.addEventListener('click', function(){ exportToExcel(); });
+
+  /* ---------- same-origin iframe self-sizing as every other Utility tool ---------- */
+  function resizeFrame(){
+    if(!window.frameElement) return;
+    requestAnimationFrame(function(){ window.frameElement.style.height = document.documentElement.scrollHeight + 'px'; });
+  }
+  window.addEventListener('resize', resizeFrame);
+  window.addEventListener('load', resizeFrame);
+  resizeFrame();
+})();
+</script>
+</body>
+</html>
