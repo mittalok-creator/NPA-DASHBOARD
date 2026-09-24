@@ -2995,6 +2995,17 @@ table.kccov-cal-table{border-collapse:separate;border-spacing:0;font-size:12.5px
    resizeFrame()) -- same override, same reasoning. */
 #viewBranchSplit .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
 #viewBranchSplit .tool-frame{height:520px;min-height:0}
+/* KCC Overdue Summary self-sizes the same way (see tools/kcc-overdue-
+   summary.html's own resizeFrame()) -- same override, same reasoning.
+   Missing this on first ship (PR #292) was the root cause behind three
+   of Alok's four bug reports at once: TOTAL rows / the Branch Report
+   tab's own branch dropdown sitting below the clipped fold, and no way
+   to reach the table's own horizontal scrollbar to left-right scroll --
+   the exact same failure mode already documented above for NPA SOL
+   Summary, just this override never having been added for this newer
+   view (2026-09-24). */
+#viewKccOverdueSummary .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
+#viewKccOverdueSummary .tool-frame{height:520px;min-height:0}
 .onedrive-page-head{display:flex;flex-direction:column;gap:4px}
 .onedrive-page-title{display:flex;align-items:center;gap:10px;color:var(--ink)}
 .onedrive-page-title svg{color:var(--accent);flex-shrink:0}
