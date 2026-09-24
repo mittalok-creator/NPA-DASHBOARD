@@ -33,6 +33,8 @@
      headers -- the same reason Branch Split already carries it. -->
 <script src="../js/vendor/xlsx.full.min.js"></script>
 <script src="../js/vendor/exceljs.min.js"></script>
+<script src="../js/vendor/html2canvas.min.js"></script>
+<script src="../js/vendor/jspdf.umd.min.js"></script>
 <style>
   /* Same design system as the other Utility tools. */
   :root{
@@ -102,6 +104,7 @@
   .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow)}
   .panel-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}
   .tab-row{display:flex;gap:6px;flex-wrap:wrap}
+  .tab-toolbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px}
   .tab-btn{all:unset;box-sizing:border-box;font-family:inherit;font-size:12.5px;font-weight:700;padding:8px 14px;border-radius:999px;border:1.5px solid var(--line);cursor:pointer;color:var(--ink-muted)}
   .tab-btn.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
   .branch-select-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
@@ -110,10 +113,20 @@
   .bifurcation-scroll{overflow:auto;border:1px solid var(--line);border-radius:10px;max-height:560px}
   table.bifurcation-table{border-collapse:collapse;width:100%;font-size:12px;background:var(--surface)}
   .bifurcation-table th,.bifurcation-table td{padding:6px 9px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);text-align:right;white-space:nowrap}
-  .bifurcation-table th{position:sticky;top:0;background:var(--surface-muted);color:var(--ink-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;z-index:2}
-  .bifurcation-table .month-head{text-align:left;position:sticky;left:0;z-index:3;background:var(--surface-muted)}
+  .bifurcation-table th{position:sticky;background:var(--surface-muted);color:var(--ink-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.03em}
+  /* Two header rows (group labels, then A/C Count/Amount sub-labels) used
+     to both stick to the same top:0, so row 2 rendered hidden behind row
+     1 instead of stacking below it -- distinct top offsets per tier,
+     measured against this table's own real row heights, fix that.
+     All-Branches has no F.Y. band row above it, hence its own 0/29
+     offsets instead of 32/61. */
+  .bifurcation-table th.hdr-row1{top:32px;z-index:3}
+  .bifurcation-table th.hdr-row2{top:61px;z-index:2}
+  .bifurcation-table.all-branches-table th.hdr-row1{top:0}
+  .bifurcation-table.all-branches-table th.hdr-row2{top:29px}
+  .bifurcation-table .month-head{text-align:left;position:sticky;left:0;background:var(--surface-muted)}
   .bifurcation-table .month-cell{text-align:left;font-weight:600;position:sticky;left:0;background:var(--surface);z-index:1}
-  .bifurcation-table tr.fy-band td{color:#fff;font-weight:700;text-align:center;font-size:12.5px;letter-spacing:.03em;position:sticky;left:0;top:0}
+  .bifurcation-table tr.fy-band td{color:#fff;font-weight:700;text-align:center;font-size:12.5px;letter-spacing:.03em;position:sticky;left:0;top:0;z-index:4}
   .bifurcation-table tr.data-row:nth-child(even){background:var(--surface-muted)}
   .bifurcation-table tr.fy-total-row td{font-weight:700;background:var(--warn-soft);border-top:2px solid var(--warn)}
   .bifurcation-table td.clickable,.bifurcation-table td.clickable-branch{cursor:pointer}
@@ -135,6 +148,27 @@
 
   .site-foot{text-align:center;padding:28px 22px 34px;margin-top:8px;border-top:1px solid var(--line);font-family:'Spectral', Georgia, serif;font-size:12.5px;letter-spacing:.02em;color:var(--ink-muted)}
   .site-foot span{color:var(--accent);font-weight:600}
+
+  /* Print goes to A4 landscape (these tables are 13-14 columns wide) --
+     mirrors the main app's own #printArea-only-visible pattern
+     (js/app.js), just keyed off which of the two printable tabs was
+     asked for, via a data-printing attribute set on <body> right before
+     window.print() and cleared on afterprint. Sticky positioning is
+     neutralized for print -- it only makes sense inside the bounded
+     on-screen scroll box, which is itself un-clipped here, and leaving
+     it active risks the header repeating/overlapping oddly across a
+     page break. */
+  @media print{
+    body[data-printing] *{visibility:hidden}
+    body[data-printing="fymonth"] #fyMonthBody,body[data-printing="fymonth"] #fyMonthBody *{visibility:visible}
+    body[data-printing="allbranches"] #allBranchesBody,body[data-printing="allbranches"] #allBranchesBody *{visibility:visible}
+    body[data-printing="fymonth"] #fyMonthBody{display:block!important;position:absolute;top:0;left:0;width:100%}
+    body[data-printing="allbranches"] #allBranchesBody{display:block!important;position:absolute;top:0;left:0;width:100%}
+    body[data-printing]{background:#fff!important}
+    .bifurcation-scroll{max-height:none!important;overflow:visible!important}
+    .bifurcation-table th,.bifurcation-table tr.fy-band td,.bifurcation-table .month-cell,.bifurcation-table .month-head{position:static!important}
+    .bifurcation-table th,.bifurcation-table td{padding:4px 6px!important}
+  }
 </style>
 </head>
 <body>
@@ -186,6 +220,10 @@
       </div>
 
       <div class="tab-body" data-tab-body="fymonth">
+        <div class="tab-toolbar">
+          <button type="button" class="btn btn-ghost" id="fyMonthPrintBtn">Print</button>
+          <button type="button" class="btn btn-ghost" id="fyMonthPdfBtn">Save as PDF</button>
+        </div>
         <div id="fyMonthBody"></div>
       </div>
 
@@ -198,6 +236,10 @@
       </div>
 
       <div class="tab-body" data-tab-body="allbranches" hidden>
+        <div class="tab-toolbar">
+          <button type="button" class="btn btn-ghost" id="allBranchesPrintBtn">Print</button>
+          <button type="button" class="btn btn-ghost" id="allBranchesPdfBtn">Save as PDF</button>
+        </div>
         <div id="allBranchesBody"></div>
       </div>
     </div>
@@ -413,8 +455,8 @@
       var monthMap = byFy.get(fy);
       var monthKeys = sortMonthKeys(Array.from(monthMap.keys()));
       html += '<tr class="fy-band" style="background:'+color+'"><td colspan="13">F.Y. '+esc(fy)+'</td></tr>';
-      html += '<tr><th rowspan="2" class="month-head">Month</th>' + GROUP_DEFS.map(function(gd){ return '<th colspan="2">'+esc(gd.label)+'</th>'; }).join('') + '</tr>';
-      html += '<tr>' + GROUP_DEFS.map(function(){ return '<th>A/C Count</th><th>Amount (₹ Lakh)</th>'; }).join('') + '</tr>';
+      html += '<tr><th rowspan="2" class="month-head hdr-row1">Month</th>' + GROUP_DEFS.map(function(gd){ return '<th class="hdr-row1" colspan="2">'+esc(gd.label)+'</th>'; }).join('') + '</tr>';
+      html += '<tr>' + GROUP_DEFS.map(function(){ return '<th class="hdr-row2">A/C Count</th><th class="hdr-row2">Amount (₹ Lakh)</th>'; }).join('') + '</tr>';
       var fyTotal = emptyGroupTotals();
       monthKeys.forEach(function(mk){
         var m = monthMap.get(mk);
@@ -439,8 +481,8 @@
     var branchKeys = sortBranchKeys(byBranch, Array.from(byBranch.keys()));
     if(!branchKeys.length) return '<div class="empty-note">No qualifying rows.</div>';
     var html = '<div class="bifurcation-scroll"><table class="bifurcation-table all-branches-table">';
-    html += '<tr><th rowspan="2" class="tal">Sol</th><th rowspan="2" class="tal">Branch</th>' + GROUP_DEFS.map(function(gd){ return '<th colspan="2">'+esc(gd.label)+'</th>'; }).join('') + '</tr>';
-    html += '<tr>' + GROUP_DEFS.map(function(){ return '<th>A/C Count</th><th>Amount (₹ Lakh)</th>'; }).join('') + '</tr>';
+    html += '<tr><th rowspan="2" class="tal hdr-row1">Sol</th><th rowspan="2" class="tal hdr-row1">Branch</th>' + GROUP_DEFS.map(function(gd){ return '<th class="hdr-row1" colspan="2">'+esc(gd.label)+'</th>'; }).join('') + '</tr>';
+    html += '<tr>' + GROUP_DEFS.map(function(){ return '<th class="hdr-row2">A/C Count</th><th class="hdr-row2">Amount (₹ Lakh)</th>'; }).join('') + '</tr>';
     var grand = emptyGroupTotals();
     branchKeys.forEach(function(bk){
       var rec = byBranch.get(bk);
@@ -578,6 +620,72 @@
     anchorDownload(new Blob([buffer], {type:'application/octet-stream'}), 'KCC_Overdue_Summary_'+dateStamp()+'.xlsx');
   }
 
+  /* ---------- print + PDF for F.Y./Month Summary and All Branches Overview only (not Branch Report, per Alok's own ask) ---------- */
+  function printWithPageSize(pageCss){
+    var el = document.getElementById('dynamicPrintPage');
+    if(!el){ el = document.createElement('style'); el.id = 'dynamicPrintPage'; document.head.appendChild(el); }
+    el.textContent = '@page{'+pageCss+'}';
+    window.print();
+  }
+  function printSection(which){
+    document.body.setAttribute('data-printing', which);
+    printWithPageSize('size:A4 landscape;margin:10mm');
+    window.addEventListener('afterprint', function cleanup(){
+      document.body.removeAttribute('data-printing');
+      window.removeEventListener('afterprint', cleanup);
+    });
+  }
+  // Landscape adaptation of the same page-height-slicing technique the
+  // main app's OTS one-pager PDF share already uses (js/app.js) -- these
+  // tables are 13-14 columns wide, so landscape A4 fits far more of a
+  // real table per page than portrait would.
+  function canvasToPdfBlob(canvas){
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({ unit:'pt', format:'a4', orientation:'landscape', compress:true });
+    var margin = 24;
+    var usableW = doc.internal.pageSize.getWidth() - margin*2;
+    var usableH = doc.internal.pageSize.getHeight() - margin*2;
+    var scale = usableW / canvas.width;
+    var pxPerPage = Math.floor(usableH / scale);
+    if(canvas.height * scale <= usableH){
+      doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, usableW, canvas.height * scale);
+    } else {
+      var renderedPx = 0, first = true;
+      while(renderedPx < canvas.height){
+        var sliceH = Math.min(pxPerPage, canvas.height - renderedPx);
+        var slice = document.createElement('canvas');
+        slice.width = canvas.width; slice.height = sliceH;
+        slice.getContext('2d').drawImage(canvas, 0, renderedPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        if(!first) doc.addPage();
+        doc.addImage(slice.toDataURL('image/png'), 'PNG', margin, margin, usableW, sliceH * scale);
+        renderedPx += sliceH;
+        first = false;
+      }
+    }
+    return doc.output('blob');
+  }
+  // Captures the <table> itself, not the clipped .bifurcation-scroll
+  // wrapper -- html2canvas renders the full target element regardless of
+  // an ancestor's overflow/max-height, so there's nothing to temporarily
+  // un-clip/restore here (unlike the main app's shareOtsPdf(), which has
+  // to do that for a normally display:none #printArea).
+  async function saveSectionAsPdf(tableEl, filenamePrefix, btn){
+    if(!tableEl) return;
+    var prevLabel = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Preparing…';
+    try{
+      if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+      var canvas = await html2canvas(tableEl, { scale:2, backgroundColor:'#ffffff' });
+      var blob = canvasToPdfBlob(canvas);
+      anchorDownload(blob, filenamePrefix+'_'+dateStamp()+'.pdf');
+    }catch(err){
+      console.error(err);
+      alert('Could not prepare the PDF. Please try again.');
+    }finally{
+      btn.disabled = false; btn.textContent = prevLabel;
+    }
+  }
+
   /* ---------- state + DOM wiring ---------- */
   var state = { rows: null, rawBuffer: null, sheetNames: null };
 
@@ -605,6 +713,10 @@
   var modalSub = document.getElementById('modalSub');
   var modalBody = document.getElementById('modalBody');
   var modalClose = document.getElementById('modalClose');
+  var fyMonthPrintBtn = document.getElementById('fyMonthPrintBtn');
+  var fyMonthPdfBtn = document.getElementById('fyMonthPdfBtn');
+  var allBranchesPrintBtn = document.getElementById('allBranchesPrintBtn');
+  var allBranchesPdfBtn = document.getElementById('allBranchesPdfBtn');
 
   function setStatus(msg, cls){ statusEl.textContent = msg||''; statusEl.className = cls||''; }
   function updateDropzoneTitle(name){ dropzoneTitle.textContent = name || 'Drop the daily KCC "Data" export here'; }
@@ -793,6 +905,14 @@
     resizeFrame();
   });
   exportBtn.addEventListener('click', function(){ exportToExcel(); });
+  fyMonthPrintBtn.addEventListener('click', function(){ printSection('fymonth'); });
+  allBranchesPrintBtn.addEventListener('click', function(){ printSection('allbranches'); });
+  fyMonthPdfBtn.addEventListener('click', function(){
+    saveSectionAsPdf(fyMonthBody.querySelector('table.bifurcation-table'), 'KCC_Overdue_FY_Month_Summary', fyMonthPdfBtn);
+  });
+  allBranchesPdfBtn.addEventListener('click', function(){
+    saveSectionAsPdf(allBranchesBody.querySelector('table.bifurcation-table'), 'KCC_Overdue_All_Branches', allBranchesPdfBtn);
+  });
 
   /* ---------- same-origin iframe self-sizing as every other Utility tool ---------- */
   function resizeFrame(){
