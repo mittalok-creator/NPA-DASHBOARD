@@ -5717,7 +5717,7 @@ function renderDashboard(){
    actionable). Rows are stored as compact arrays (see PC below) instead
    of the full 35-column HO layout -- only the fields this tab actually
    uses are kept. */
-const PC = {REGION:0, BRANCH:1, SCHEME:2, ACCT:3, NAME:4, OS:5, CADU:6, LIMIT:7, REVIEW:8, REASON:9};
+const PC = {REGION:0, BRANCH:1, SCHEME:2, ACCT:3, NAME:4, OS:5, CADU:6, LIMIT:7, REVIEW:8, REASON:9, CUSTNPADATE:10};
 /* "Limit Review" is its own bucket, pulled out ahead of the scheme-based
    split -- an account flagged Limit Review is routed there regardless of
    scheme code, so KCC/KCC-AH/Other only ever show accounts NOT already
@@ -5749,7 +5749,7 @@ function parsePnpaRows(headerCells, dataRows){
   const idx = (name) => header.indexOf(normHeader(name));
   const iRegion=idx('region'), iBranch=idx('branch'), iAcct=idx('accountno'), iScheme=idx('schemecode'),
     iName=idx('accountname'), iBal=idx('balanceamount'), iCadu=idx('cadu'), iLimit=idx('limit'),
-    iReview=idx('reviewdate'), iReasons=idx('reasons');
+    iReview=idx('reviewdate'), iReasons=idx('reasons'), iCustNpa=idx('custnpadate');
   const missing = [];
   if(iAcct<0) missing.push('Account No');
   if(iBranch<0) missing.push('Branch');
@@ -5770,12 +5770,21 @@ function parsePnpaRows(headerCells, dataRows){
     let acctNo = acctRaw;
     if(looksScientific(acctRaw)) acctNo = expandSci(acctRaw);
     const reviewDt = toDate(iReview>=0?row[iReview]:'');
+    // "Cust NPA Date" is only ever populated once an account HAS ALREADY
+    // been classified NPA (confirmed against the real "Daily PNPA" export,
+    // 2026-09-25: every row with a Balance Amount also has this date set,
+    // and every row without it has Balance Amount 0) -- it is a record of
+    // when the account slipped, not a forward prediction. Recovery
+    // Dashboard's slippage tracker buckets "recently slipped" (Today/This
+    // Week/This Month) off this date, per Alok's own explicit confirmation.
+    const custNpaDt = toDate(iCustNpa>=0?row[iCustNpa]:'');
     rows.push([
       region, cellStr(row, iBranch), cellStr(row, iScheme), acctNo, cellStr(row, iName),
       bal, parseFloat(row[iCadu])||0,
       iLimit>=0 ? (parseFloat(row[iLimit])||0) : 0,
       reviewDt ? fmtDate(reviewDt) : '',
       iReasons>=0 ? formatPnpaReasons(cellStr(row, iReasons)) : '',
+      custNpaDt ? fmtDate(custNpaDt) : '',
     ]);
   }
   return rows;

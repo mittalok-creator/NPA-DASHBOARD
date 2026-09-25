@@ -936,7 +936,7 @@
       </div>
       <input type="file" id="pnpaFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
       <div id="pnpaUploadStatus"></div>
-      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser. Even though the file covers the whole bank, only Hathras region's rows are kept, and zero-balance accounts are dropped automatically. Powers the separate "Daily PNPA" tab — branch-wise summary split into KCC (CC004), KCC Animal Husbandry (CC043), Limit Review (any scheme flagged for a limit review) and all other schemes, sorted highest first, with a tap-through account list per branch (Account No, Name, O/S, CADU, Limit, Review Date, Reason). Uploading replaces the previous figures. Goes live the next time you hit Publish, same commit as the daily NPA data.</p>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser. Even though the file covers the whole bank, only Hathras region's rows are kept, and zero-balance accounts are dropped automatically. Powers the separate "Daily PNPA" tab — branch-wise summary split into KCC (CC004), KCC Animal Husbandry (CC043), Limit Review (any scheme flagged for a limit review) and all other schemes, sorted highest first, with a tap-through account list per branch (Account No, Name, O/S, CADU, Limit, Review Date, Reason). Also now captures each account's Cust NPA Date, powering the Recovery Dashboard portal's "PNPA Slippage" tracker (Today/This Week/This Month, KCC vs Non-KCC). Uploading replaces the previous figures. Goes live the next time you hit Publish, same commit as the daily NPA data.</p>
     </details>
 
     <details class="master-upload-details" id="kccOverdueUploadDetails">
@@ -1267,7 +1267,7 @@
 <script src="js/publish.js?v=20260923a"></script>
 <script src="js/splash.js?v=20260917a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260924d"></script>
+<script src="js/app.js?v=20260925a"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
