@@ -120,6 +120,24 @@ DATA.lokAdalat = DATA.lokAdalat || {};
    daily NPA file. */
 DATA.interestReversalMaster = DATA.interestReversalMaster || {};
 
+/* Full Customer Master address book (Customer ID, normId()-keyed -> Address),
+   independent of the NPA book -- kept alongside (not instead of) the merge
+   into DATA.npa.rows' own C.ADDR, since a customer can appear in KCC Overdue
+   or Daily/Weekly/Monthly PNPA without ever appearing in the NPA book at all
+   (confirmed: these are disjoint account universes, zero overlap). Those
+   datasets have no address column of their own from Head Office, so the only
+   way they can ever show an address is a Customer-ID-keyed lookup that isn't
+   scoped to "customers currently in the NPA book" -- this map is that lookup,
+   rebuilt in full every time Customer Master is (re-)uploaded (see
+   handleMasterFileUpload()) and carried forward untouched by an ordinary
+   daily NPA upload, same "own slow-moving schedule" treatment as
+   branchAdvances/specialNotes/etc. above, and part of the publish payload
+   like they are. Alok, 2026-09-25: "fir kcc overdue main kyun nahi aa raha"
+   (why isn't it showing in KCC Overdue) -- Recovery Dashboard's own
+   addressForAcctNo() could only ever resolve an address for an account that
+   also exists in the NPA book, which no KCC Overdue account does. */
+DATA.customerAddressMap = DATA.customerAddressMap || {};
+
 /* Address, app-wide, comes from exactly one place: Customer Master,
    merged into each NPA row's own C.ADDR by mergeCustomerDetails() and
    carried forward into every later daily upload for a customer who isn't
@@ -4113,6 +4131,16 @@ async function handleMasterFileUpload(evt){
       __masterFileName = file.name;
       const label = document.getElementById('masterStatusLabel');
       if(label) label.textContent = `${__pendingMaster.size.toLocaleString('en-IN')} customers loaded (${file.name})`;
+      // Full replace, independent of whether a daily NPA file is also
+      // pending this session -- see DATA.customerAddressMap's own init
+      // comment for why this exists alongside (not instead of) the
+      // NPA-row merge below: KCC Overdue/PNPA accounts need a Customer-ID
+      // lookup that isn't scoped to "currently in the NPA book."
+      DATA.customerAddressMap = {};
+      __pendingMaster.forEach((v, k) => { if(v.address) DATA.customerAddressMap[k] = v.address; });
+      __hasUnpublishedRefData = true;
+      clearStalePublishStatus();
+      { const publishBtn = document.getElementById('publishBtn'); if(publishBtn) publishBtn.disabled = false; }
       if(__pendingData){
         // A fresh daily NPA file is already staged this session -- merge into
         // that pending row set, same as before, so Apply Update ships both
@@ -4135,10 +4163,6 @@ async function handleMasterFileUpload(evt){
         // refresh here had no way to ever take effect.
         const carryForward = carryForwardMapFromCurrentData();
         mergeCustomerDetails(DATA.npa.rows, __pendingMaster, carryForward);
-        __hasUnpublishedRefData = true;
-        clearStalePublishStatus();
-        const publishBtn = document.getElementById('publishBtn');
-        if(publishBtn) publishBtn.disabled = false;
         statusEl.innerHTML = `<div class="upload-status ok">✔ ${__pendingMaster.size.toLocaleString('en-IN')} customer record(s) parsed and applied to this session's data. Not live for anyone else until you hit Publish below.</div>`;
       }
     } catch(err){
@@ -4587,7 +4611,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{}, customerAddressMap: DATA.customerAddressMap||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -5599,7 +5623,7 @@ function renderDashboard(){
    actionable). Rows are stored as compact arrays (see PC below) instead
    of the full 35-column HO layout -- only the fields this tab actually
    uses are kept. */
-const PC = {REGION:0, BRANCH:1, SCHEME:2, ACCT:3, NAME:4, OS:5, CADU:6, LIMIT:7, REVIEW:8, REASON:9, CUSTNPADATE:10};
+const PC = {REGION:0, BRANCH:1, SCHEME:2, ACCT:3, NAME:4, OS:5, CADU:6, LIMIT:7, REVIEW:8, REASON:9, CUSTNPADATE:10, CUST_ID:11};
 /* "Limit Review" is its own bucket, pulled out ahead of the scheme-based
    split -- an account flagged Limit Review is routed there regardless of
    scheme code, so KCC/KCC-AH/Other only ever show accounts NOT already
@@ -5629,9 +5653,14 @@ function formatPnpaReasons(raw){
 function parsePnpaRows(headerCells, dataRows){
   const header = headerCells.map(normHeader);
   const idx = (name) => header.indexOf(normHeader(name));
+  const idxAny = (...names) => { for(const n of names){ const i = idx(n); if(i>=0) return i; } return -1; };
   const iRegion=idx('region'), iBranch=idx('branch'), iAcct=idx('accountno'), iScheme=idx('schemecode'),
     iName=idx('accountname'), iBal=idx('balanceamount'), iCadu=idx('cadu'), iLimit=idx('limit'),
-    iReview=idx('reviewdate'), iReasons=idx('reasons'), iCustNpa=idx('custnpadate');
+    iReview=idx('reviewdate'), iReasons=idx('reasons'), iCustNpa=idx('custnpadate'),
+    // Optional -- resolves Address by Customer ID for Recovery Dashboard's
+    // PNPA Slippage tab, whose accounts don't exist in the NPA book at all
+    // (see DATA.customerAddressMap's own comment).
+    iCustId=idxAny('customeridcif','customerid','cif');
   const missing = [];
   if(iAcct<0) missing.push('Account No');
   if(iBranch<0) missing.push('Branch');
@@ -5667,6 +5696,7 @@ function parsePnpaRows(headerCells, dataRows){
       reviewDt ? fmtDate(reviewDt) : '',
       iReasons>=0 ? formatPnpaReasons(cellStr(row, iReasons)) : '',
       custNpaDt ? fmtDate(custNpaDt) : '',
+      iCustId>=0 ? normId(cellStr(row, iCustId)) : '',
     ]);
   }
   return rows;
@@ -5970,7 +6000,7 @@ window.pnpaShowBranchAccounts = pnpaShowBranchAccounts;
    needed -- but the parser still defensively drops any stray non-Hathras row in
    case a future export widens scope. Only rows matching one of the 3 known scheme
    codes are kept; there is no "Other" catch-all bucket here (unlike PNPA). */
-const KC = {BRANCH:0, SCHEME:1, ACCT:2, NAME:3, OS:4, CADU:5, LIMIT:6, REVIEW:7, CUSTNPADATE:8, FY:9, CATEGORY:10, SMA:11, REASON:12};
+const KC = {BRANCH:0, SCHEME:1, ACCT:2, NAME:3, OS:4, CADU:5, LIMIT:6, REVIEW:7, CUSTNPADATE:8, FY:9, CATEGORY:10, SMA:11, REASON:12, CUST_ID:13};
 /* KCC Overdue rows carry only the branch name string (uppercase, e.g.
    "HATHRAS AGRA ROAD") -- match it back to the frozen BRANCH_LIST to show
    Sol ID alongside it in the Datewise Calendar view. */
@@ -5992,11 +6022,17 @@ function stripQuoteChars(s){ return String(s||'').replace(/^"+|"+$/g,'').trim();
 function parseKccOverdueRows(headerCells, dataRows){
   const header = headerCells.map(normHeader);
   const idx = (name) => header.indexOf(normHeader(name));
+  const idxAny = (...names) => { for(const n of names){ const i = idx(n); if(i>=0) return i; } return -1; };
   const idxPrefix = (name) => header.findIndex(h=>h.startsWith(normHeader(name)));
   const iRegion=idx('region'), iBranch=idx('branch'), iAcct=idx('accountno'), iScheme=idx('schemecode'),
     iName=idx('accountname'), iBal=idxPrefix('balanceamount'), iCadu=idx('cadu'), iLimit=idx('limit'),
     iReview=idx('reviewdate'), iCustNpa=idx('custnpadate'), iFy=idx('fy'), iCategory=idx('category'),
-    iSma=idx('smastatus'), iReason=idx('reasons');
+    iSma=idx('smastatus'), iReason=idx('reasons'),
+    // Optional -- not in every historical export, and not required (only
+    // used to resolve Address by Customer ID for reports, like KCC
+    // Overdue, whose accounts don't exist in the NPA book at all -- see
+    // DATA.customerAddressMap's own comment).
+    iCustId=idxAny('customeridcif','customerid','cif');
   const missing = [];
   if(iAcct<0) missing.push('Account No');
   if(iBranch<0) missing.push('Branch');
@@ -6026,6 +6062,7 @@ function parseKccOverdueRows(headerCells, dataRows){
       iCategory>=0 ? cellStr(row, iCategory) : '',
       iSma>=0 ? cellStr(row, iSma) : '',
       iReason>=0 ? cellStr(row, iReason) : '',
+      iCustId>=0 ? normId(cellStr(row, iCustId)) : '',
     ]);
   }
   return rows;
