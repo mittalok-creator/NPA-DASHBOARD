@@ -4493,6 +4493,8 @@ function pendingUnpublishedLabel(){
   const parts = [];
   if(__pendingData) parts.push('the uploaded daily NPA file (not yet applied)');
   if(typeof __pendingPnpaData!=='undefined' && __pendingPnpaData) parts.push('the Daily PNPA upload');
+  if(typeof __pendingPnpaWeeklyData!=='undefined' && __pendingPnpaWeeklyData) parts.push('the Weekly PNPA upload');
+  if(typeof __pendingPnpaMonthlyData!=='undefined' && __pendingPnpaMonthlyData) parts.push('the Monthly PNPA upload');
   if(typeof __pendingKccOverdueData!=='undefined' && __pendingKccOverdueData) parts.push('the KCC Overdue upload');
   if(__hasUnpublishedRefData) parts.push('a reference-data update (Customer Master, Branch Advance/Contacts, Interest Reversal, Lok Adalat, or a Special Note)');
   return parts;
@@ -4540,10 +4542,18 @@ function openPublishReview(){
     icon: ICON_BANKNOTE, title: 'NPA Book', maybe: true,
     sub: `${summary.rowCount.toLocaleString('en-IN')} accounts · as on ${fmtAsOnDisplay()}`,
   })];
-  let pnpaLabel = null, kccovLabel = null;
+  let pnpaLabel = null, weeklyPnpaLabel = null, monthlyPnpaLabel = null, kccovLabel = null;
   if(__pendingPnpaData){
     pnpaLabel = `Daily PNPA (${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingPnpaData.asOnDate||''})`;
     items.push(publishReviewItemRow({ icon: ICON_ALERT_CIRCLE, title: 'Daily PNPA', sub: `${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingPnpaData.asOnDate||'')}` }));
+  }
+  if(__pendingPnpaWeeklyData){
+    weeklyPnpaLabel = `Weekly PNPA (${__pendingPnpaWeeklyData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingPnpaWeeklyData.asOnDate||''})`;
+    items.push(publishReviewItemRow({ icon: ICON_ALERT_CIRCLE, title: 'Weekly PNPA', sub: `${__pendingPnpaWeeklyData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingPnpaWeeklyData.asOnDate||'')}` }));
+  }
+  if(__pendingPnpaMonthlyData){
+    monthlyPnpaLabel = `Monthly PNPA (${__pendingPnpaMonthlyData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingPnpaMonthlyData.asOnDate||''})`;
+    items.push(publishReviewItemRow({ icon: ICON_ALERT_CIRCLE, title: 'Monthly PNPA', sub: `${__pendingPnpaMonthlyData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingPnpaMonthlyData.asOnDate||'')}` }));
   }
   if(__pendingKccOverdueData){
     kccovLabel = `KCC Overdue (${__pendingKccOverdueData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingKccOverdueData.asOnDate||''})`;
@@ -4573,7 +4583,7 @@ function openPublishReview(){
       publishedBy: user.login || null,
       isRollback: false,
     },
-    labels: { pnpaLabel, kccovLabel },
+    labels: { pnpaLabel, weeklyPnpaLabel, monthlyPnpaLabel, kccovLabel },
   };
   document.getElementById('publishConfirmBtn').textContent = 'Confirm & Publish';
   document.getElementById('publishReviewPanel').style.display = 'block';
@@ -4598,6 +4608,12 @@ async function confirmPublish(){
     if(__pendingPublish.type!=='rollback' && __pendingPnpaData){
       extraFiles = (extraFiles||[]).concat([{ path:'data/pnpa.json', content: __pendingPnpaData, label: labels.pnpaLabel }]);
     }
+    if(__pendingPublish.type!=='rollback' && __pendingPnpaWeeklyData){
+      extraFiles = (extraFiles||[]).concat([{ path:'data/pnpa-weekly.json', content: __pendingPnpaWeeklyData, label: labels.weeklyPnpaLabel }]);
+    }
+    if(__pendingPublish.type!=='rollback' && __pendingPnpaMonthlyData){
+      extraFiles = (extraFiles||[]).concat([{ path:'data/pnpa-monthly.json', content: __pendingPnpaMonthlyData, label: labels.monthlyPnpaLabel }]);
+    }
     if(__pendingPublish.type!=='rollback' && __pendingKccOverdueData){
       extraFiles = (extraFiles||[]).concat([{ path:'data/kcc-overdue.json', content: __pendingKccOverdueData, label: labels.kccovLabel }]);
     }
@@ -4607,6 +4623,8 @@ async function confirmPublish(){
     statusEl.innerHTML = `<div class="upload-status ok">✔ ${esc(result.commitMessage||'Published')} — live at npadashboard.alokmittal.net within ~30-60s (commit ${esc(result.commitSha.slice(0,7))}).</div>`;
     document.getElementById('publishBtn').disabled = true;
     __pendingPnpaData = null;
+    __pendingPnpaWeeklyData = null;
+    __pendingPnpaMonthlyData = null;
     __pendingKccOverdueData = null;
     __hasUnpublishedRefData = false;
     updateUnpublishedBanner();
@@ -5685,6 +5703,109 @@ async function handlePnpaUpload(evt){
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
       if(document.querySelector('.view.active')?.dataset.view==='pnpa') renderPnpaDashboardBody();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
+// Weekly/Monthly PNPA (Alok, 2026-09-25: "daily pnpa to already hai
+// weekly and monthly bhi add karo... treat and fetch karne ka method
+// daily wale ki tarah hi rahega") -- same parsePnpaRows() parser, same
+// Hathras/zero-balance filtering, published as their own separate files
+// (data/pnpa-weekly.json/data/pnpa-monthly.json) rather than merged into
+// the daily one. Confirmed with Alok directly: these files already
+// arrive scoped to their own period by Head Office (a genuine "this
+// week's slippage" / "this month's slippage" report, not a whole-book
+// snapshot needing a date-window filter applied on this end) -- so
+// Recovery Dashboard's Week/Month tabs show these rows as-is, unlike
+// "Today" which still buckets off Daily PNPA's own Cust NPA Date (see
+// pnpaSlipBucketOf() there). No dashboard view in this app reads these --
+// unlike Daily PNPA, whose old "Daily PNPA" tab is hidden from nav but
+// still technically wired -- so there's no render call to make here.
+let PNPA_WEEKLY_DATA = null;
+let __pendingPnpaWeeklyData = null;
+async function handleWeeklyPnpaUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  await ensureXLSX();
+  const labelEl = document.getElementById('weeklyPnpaUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('weeklyPnpaUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Weekly PNPA file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      let header, dataRows;
+      if(isCsv){
+        const allRows = parseCSV(String(e.target.result));
+        header = allRows[0]||[]; dataRows = allRows.slice(1);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        const sheetName = wb.SheetNames.find(n=>/pnpa/i.test(n)) || wb.SheetNames[0];
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+        header = raw[0]||[]; dataRows = raw.slice(1);
+      }
+      const rows = parsePnpaRows(header, dataRows);
+      if(!rows.length) throw new Error('No account rows found in this file.');
+      const guessed = parseAsOnDateFromFilename(file.name);
+      const asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
+      __pendingPnpaWeeklyData = { asOnDate, rows };
+      PNPA_WEEKLY_DATA = __pendingPnpaWeeklyData;
+      const label = document.getElementById('weeklyPnpaStatusLabel');
+      if(label) label.textContent = `${rows.length.toLocaleString('en-IN')} accounts loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${rows.length.toLocaleString('en-IN')} accounts, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.</div>`;
+      clearStalePublishStatus();
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+let PNPA_MONTHLY_DATA = null;
+let __pendingPnpaMonthlyData = null;
+async function handleMonthlyPnpaUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  await ensureXLSX();
+  const labelEl = document.getElementById('monthlyPnpaUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('monthlyPnpaUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Monthly PNPA file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      let header, dataRows;
+      if(isCsv){
+        const allRows = parseCSV(String(e.target.result));
+        header = allRows[0]||[]; dataRows = allRows.slice(1);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        const sheetName = wb.SheetNames.find(n=>/pnpa/i.test(n)) || wb.SheetNames[0];
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+        header = raw[0]||[]; dataRows = raw.slice(1);
+      }
+      const rows = parsePnpaRows(header, dataRows);
+      if(!rows.length) throw new Error('No account rows found in this file.');
+      const guessed = parseAsOnDateFromFilename(file.name);
+      const asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
+      __pendingPnpaMonthlyData = { asOnDate, rows };
+      PNPA_MONTHLY_DATA = __pendingPnpaMonthlyData;
+      const label = document.getElementById('monthlyPnpaStatusLabel');
+      if(label) label.textContent = `${rows.length.toLocaleString('en-IN')} accounts loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${rows.length.toLocaleString('en-IN')} accounts, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.</div>`;
+      clearStalePublishStatus();
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
     } catch(err){
       statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
     }
@@ -7162,7 +7283,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   // touching any of the ~10 existing call sites that already set the
   // panel label's text -- a MutationObserver keeps the tile's copy in
   // sync automatically, however/wherever the source text changes.
-  ['masterStatusLabel','branchAdvStatusLabel','intReversalMasterStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel'].forEach(id=>{
+  ['masterStatusLabel','branchAdvStatusLabel','intReversalMasterStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','weeklyPnpaStatusLabel','monthlyPnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel'].forEach(id=>{
     const src = document.getElementById(id), dst = document.getElementById(id+'Tile');
     if(!src || !dst) return;
     dst.textContent = src.textContent;
@@ -7205,6 +7326,10 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('downloadLokAdalatTemplateBtn','click',()=>downloadLokAdalatTemplate());
   on('pnpaUploadDrop','click',()=>document.getElementById('pnpaFileInput').click());
   on('pnpaFileInput','change',(e)=>handlePnpaUpload(e));
+  on('weeklyPnpaUploadDrop','click',()=>document.getElementById('weeklyPnpaFileInput').click());
+  on('weeklyPnpaFileInput','change',(e)=>handleWeeklyPnpaUpload(e));
+  on('monthlyPnpaUploadDrop','click',()=>document.getElementById('monthlyPnpaFileInput').click());
+  on('monthlyPnpaFileInput','change',(e)=>handleMonthlyPnpaUpload(e));
   on('kccOverdueUploadDrop','click',()=>document.getElementById('kccOverdueFileInput').click());
   on('kccOverdueFileInput','change',(e)=>handleKccOverdueUpload(e));
   on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
