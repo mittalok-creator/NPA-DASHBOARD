@@ -325,9 +325,10 @@
     if (extraFiles && extraFiles.length) {
       progress('Uploading additional data…');
       for (const f of extraFiles) {
-        // Currently always data/pnpa.json or data/kcc-overdue.json -- both
-        // carry borrower-identifying data same as data/latest.json, so both
-        // get the same encryption treatment, unconditionally.
+        // Currently data/pnpa.json, data/pnpa-weekly.json,
+        // data/pnpa-monthly.json, or data/kcc-overdue.json -- all carry
+        // borrower-identifying data same as data/latest.json, so all get
+        // the same encryption treatment, unconditionally.
         const plainString = typeof f.content === 'string' ? f.content : JSON.stringify(f.content);
         const envelope = await encryptToEnvelope(plainString, pin);
         const content = JSON.stringify(envelope);

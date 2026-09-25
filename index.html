@@ -875,13 +875,25 @@
     <div id="updateDataHub">
       <div class="utility-grid">
         <div class="utility-category">
-          <div class="utility-category-heading utility-cat-teal"><span>Daily Files</span><i></i><b>2 files</b></div>
+          <div class="utility-category-heading utility-cat-teal"><span>Daily Files</span><i></i><b>4 files</b></div>
           <div class="utility-category-cards">
             <button type="button" class="utility-card tool-teal" onclick="openUpdateDataPanel('pnpaUploadDetails')">
               <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
               <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
               <span class="utility-card-title">Daily PNPA</span>
               <span class="utility-card-desc">Potential NPA (Hathras) — <span id="pnpaStatusLabelTile">not loaded yet</span></span>
+            </button>
+            <button type="button" class="utility-card tool-terracotta" onclick="openUpdateDataPanel('weeklyPnpaUploadDetails')">
+              <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+              <span class="utility-card-title">Weekly PNPA</span>
+              <span class="utility-card-desc">Potential NPA, this week (Hathras) — <span id="weeklyPnpaStatusLabelTile">not loaded yet</span></span>
+            </button>
+            <button type="button" class="utility-card tool-gold" onclick="openUpdateDataPanel('monthlyPnpaUploadDetails')">
+              <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+              <span class="utility-card-title">Monthly PNPA</span>
+              <span class="utility-card-desc">Potential NPA, this month (Hathras) — <span id="monthlyPnpaStatusLabelTile">not loaded yet</span></span>
             </button>
             <button type="button" class="utility-card tool-jade" onclick="openUpdateDataPanel('kccOverdueUploadDetails')">
               <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -1001,7 +1013,33 @@
       </div>
       <input type="file" id="pnpaFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
       <div id="pnpaUploadStatus"></div>
-      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser. Even though the file covers the whole bank, only Hathras region's rows are kept, and zero-balance accounts are dropped automatically. Powers the separate "Daily PNPA" tab — branch-wise summary split into KCC (CC004), KCC Animal Husbandry (CC043), Limit Review (any scheme flagged for a limit review) and all other schemes, sorted highest first, with a tap-through account list per branch (Account No, Name, O/S, CADU, Limit, Review Date, Reason). Also now captures each account's Cust NPA Date, powering the Recovery Dashboard portal's "PNPA Slippage" tracker (Today/This Week/This Month, KCC vs Non-KCC). Uploading replaces the previous figures. Goes live the next time you hit Publish, same commit as the daily NPA data.</p>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser. Even though the file covers the whole bank, only Hathras region's rows are kept, and zero-balance accounts are dropped automatically. Powers the separate "Daily PNPA" tab — branch-wise summary split into KCC (CC004), KCC Animal Husbandry (CC043), Limit Review (any scheme flagged for a limit review) and all other schemes, sorted highest first, with a tap-through account list per branch (Account No, Name, O/S, CADU, Limit, Review Date, Reason). Also now captures each account's Cust NPA Date, powering the Recovery Dashboard portal's "PNPA Slippage" tracker's "Today" tab. Uploading replaces the previous figures. Goes live the next time you hit Publish, same commit as the daily NPA data.</p>
+    </div>
+
+    <div class="update-data-panel" id="weeklyPnpaUploadDetails" hidden>
+      <button type="button" class="update-data-back-btn" onclick="closeUpdateDataPanel()">← Back to Update Data</button>
+      <h4>Weekly PNPA — Potential NPA, this week (Hathras) — <span id="weeklyPnpaStatusLabel">not loaded yet</span></h4>
+      <div class="upload-drop small" id="weeklyPnpaUploadDrop">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <div class="main" id="weeklyPnpaUploadDropLabel">Tap to choose the Weekly PNPA file</div>
+        <div class="sub">.xlsb/.xlsx/.csv — same layout as Daily PNPA, already scoped by Head Office to this week's slippage; Hathras rows are picked out automatically</div>
+      </div>
+      <input type="file" id="weeklyPnpaFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
+      <div id="weeklyPnpaUploadStatus"></div>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser, parsed exactly like Daily PNPA (same columns, same Hathras/zero-balance filtering) but published as its own separate file. Powers the Recovery Dashboard portal's "PNPA Slippage" tracker's "This Week" tab -- shown as-is (already scoped to this week by Head Office, no extra date filtering applied on this end). Uploading replaces the previous figures. Goes live the next time you hit Publish, same commit as the daily NPA data.</p>
+    </div>
+
+    <div class="update-data-panel" id="monthlyPnpaUploadDetails" hidden>
+      <button type="button" class="update-data-back-btn" onclick="closeUpdateDataPanel()">← Back to Update Data</button>
+      <h4>Monthly PNPA — Potential NPA, this month (Hathras) — <span id="monthlyPnpaStatusLabel">not loaded yet</span></h4>
+      <div class="upload-drop small" id="monthlyPnpaUploadDrop">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <div class="main" id="monthlyPnpaUploadDropLabel">Tap to choose the Monthly PNPA file</div>
+        <div class="sub">.xlsb/.xlsx/.csv — same layout as Daily PNPA, already scoped by Head Office to this month's slippage; Hathras rows are picked out automatically</div>
+      </div>
+      <input type="file" id="monthlyPnpaFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
+      <div id="monthlyPnpaUploadStatus"></div>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser, parsed exactly like Daily PNPA (same columns, same Hathras/zero-balance filtering) but published as its own separate file. Powers the Recovery Dashboard portal's "PNPA Slippage" tracker's "This Month" tab -- shown as-is (already scoped to this month by Head Office, no extra date filtering applied on this end). Uploading replaces the previous figures. Goes live the next time you hit Publish, same commit as the daily NPA data.</p>
     </div>
 
     <div class="update-data-panel" id="kccOverdueUploadDetails" hidden>
@@ -1335,7 +1373,7 @@
 <script src="js/publish.js?v=20260923a"></script>
 <script src="js/splash.js?v=20260917a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260925c"></script>
+<script src="js/app.js?v=20260925d"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
