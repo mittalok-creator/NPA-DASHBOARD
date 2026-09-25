@@ -7653,3 +7653,23 @@ if(getStoredPin()){
 } else {
   window.addEventListener('upgb-pin-unlocked', () => loadNpaData(false), { once: true });
 }
+
+/* Alok, 2026-09-25: "dono app har 1 ghante par auto refresh ho jayen jisse
+   jo bhi main kuch naya push karun wo apne aap live ho jaye" -- a tab left
+   open all day should never drift more than an hour behind a fresh
+   Publish/deploy, without Alok having to remember to hard-refresh it
+   himself. Also a real mitigation for the stale-app-shell-cache class of
+   bug seen today (sw.js's own stale-while-revalidate for index.html/the JS
+   bundle can otherwise leave a long-lived tab running yesterday's code
+   until it's manually reloaded). Skips a cycle rather than firing mid-
+   upload -- reloading out from under an Admin who's mid-Customer-Master-
+   parse (or any other pending, not-yet-applied/published upload) would
+   silently discard real unsaved work; it's simply retried on the next
+   hourly tick instead. */
+setInterval(() => {
+  const busy = __pendingData || __pendingMaster || __hasUnpublishedRefData
+    || __pendingPnpaData || __pendingPnpaWeeklyData || __pendingPnpaMonthlyData
+    || __pendingKccOverdueData || __pendingPublish;
+  if(busy) return;
+  location.reload();
+}, 60 * 60 * 1000);
