@@ -278,7 +278,7 @@
     <div class="panel-open">
       <div class="step-head">
         <span class="step-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 21s-7-6.13-7-11a7 7 0 0 1 14 0c0 4.87-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
-        <div><div class="step-title">Address (optional)</div><div class="step-sub">Upload a quick Account No / Address file just for this run -- Account No in column A, Address in column B. Skip to use the shared Address List instead.</div></div>
+        <div><div class="step-title">Address (optional)</div><div class="step-sub">Upload a quick Account No / Address file just for this run -- Account No in column A, Address in column B. Skip to use Customer Master's addresses instead.</div></div>
       </div>
       <div class="row">
         <input type="file" id="addressFileInput" accept=".xlsx,.xls,.csv" hidden>
@@ -932,7 +932,7 @@ el.addressFileInput.addEventListener('change', function(e){
 });
 el.addressContinueBtn.addEventListener('click', function(){
   var count = state.manualAddressMap ? Object.keys(state.manualAddressMap).length : 0;
-  markDone('addressStep', count ? (count.toLocaleString('en-IN') + ' account(s) uploaded') : 'Skipped -- using shared Address List');
+  markDone('addressStep', count ? (count.toLocaleString('en-IN') + ' account(s) uploaded') : 'Skipped -- using Customer Master');
   el.filenameStep.hidden = false;
   updateFileNamePreview();
   el.fileNameSuffixInput.focus();
@@ -1004,16 +1004,16 @@ function updateAddressLabel(){
   var hasSource = manualCount>0 || hasShared || !!state.embeddedAddressMap;
   var text;
   if(manualCount){
-    text = 'Using the file you uploaded for this run — ' + manualCount.toLocaleString('en-IN') + ' account(s). Falls back to the shared Address List for anything not in it.';
+    text = 'Using the file you uploaded for this run — ' + manualCount.toLocaleString('en-IN') + ' account(s). Falls back to Customer Master\'s addresses for anything not in it.';
   } else if(hasShared){
     var parts = [];
     if(acctCount) parts.push(acctCount.toLocaleString('en-IN') + ' by account');
     if(custCount) parts.push(custCount.toLocaleString('en-IN') + ' by customer');
-    text = 'Using the shared Address List — ' + parts.join(', ') + '. Fetched automatically, or upload your own at the Address step above.';
+    text = 'Using Customer Master\'s addresses — ' + parts.join(', ') + '. Fetched automatically, or upload your own at the Address step above.';
   } else if(state.embeddedAddressMap){
-    text = 'No shared Address List found — using the "ADDRESS" sheet inside your master file (' + Object.keys(state.embeddedAddressMap).length.toLocaleString('en-IN') + ' accounts).';
+    text = 'No Customer Master address data found — using the "ADDRESS" sheet inside your master file (' + Object.keys(state.embeddedAddressMap).length.toLocaleString('en-IN') + ' accounts).';
   } else {
-    text = 'No Address List available — output will have a blank Address column. Upload one at the Address step above, or under Settings → Update Data → "Address List" in the main app.';
+    text = 'No address data available — output will have a blank Address column. Upload one at the Address step above, or under Settings → Update Data → "Customer Master" in the main app.';
   }
   el.addressSourceLabel.classList.toggle('warn', !hasSource);
   var icon = hasSource

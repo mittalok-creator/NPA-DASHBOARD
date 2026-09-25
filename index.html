@@ -710,7 +710,7 @@
           <span class="onedrive-page-sub">Daily NPA export → one workbook per branch, region-aware, address-enriched, read entirely in your browser</span>
         </header>
         <div class="tool-frame-wrap">
-          <iframe id="branchSplitFrame" class="tool-frame" data-src="tools/branch-split.html?v=20260923h" title="Branch Split"></iframe>
+          <iframe id="branchSplitFrame" class="tool-frame" data-src="tools/branch-split.html?v=20260925a" title="Branch Split"></iframe>
         </div>
       </div>
     </section>
@@ -892,7 +892,7 @@
           </div>
         </div>
         <div class="utility-category">
-          <div class="utility-category-heading utility-cat-gold"><span>Reference Data</span><i></i><b>7 files</b></div>
+          <div class="utility-category-heading utility-cat-gold"><span>Reference Data</span><i></i><b>6 files</b></div>
           <div class="utility-category-cards">
             <button type="button" class="utility-card tool-blue" onclick="openUpdateDataPanel('masterUploadDetails')">
               <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -911,12 +911,6 @@
               <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
               <span class="utility-card-title">Interest Reversal</span>
               <span class="utility-card-desc">Master list — <span id="intReversalMasterStatusLabelTile">not loaded yet</span></span>
-            </button>
-            <button type="button" class="utility-card tool-terracotta" onclick="openUpdateDataPanel('addressListUploadDetails')">
-              <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-              <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
-              <span class="utility-card-title">Address List</span>
-              <span class="utility-card-desc">Account No./Customer ID → Address — <span id="addressListStatusLabelTile">not loaded yet</span></span>
             </button>
             <button type="button" class="utility-card tool-cyan" onclick="openUpdateDataPanel('branchContactsUploadDetails')">
               <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -952,6 +946,7 @@
       <input type="file" id="masterFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
       <button type="button" class="template-download-link" id="downloadMasterTemplateBtn">⬇ Download blank template (Customer Master)</button>
       <div id="masterUploadStatus"></div>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">This is the single source for every account's address, app-wide — matched by Customer ID, merged straight into the daily NPA book, and carried forward automatically into every later day's upload for a customer not present in that day's fresh file, so an address captured once keeps showing everywhere (Dashboard, KCC Overdue, Branch Split and every other Utility Hub tool, the Recovery Dashboard portal) without needing re-uploaded alongside every daily file. Uploading replaces the previous list entirely. Goes live the next time you hit Publish.</p>
     </div>
 
     <div class="update-data-panel" id="branchAdvUploadDetails" hidden>
@@ -980,20 +975,6 @@
       <button type="button" class="template-download-link" id="downloadIntReversalMasterTemplateBtn">⬇ Download blank template (Account Number + Interest Reversal)</button>
       <div id="intReversalMasterUploadStatus"></div>
       <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">This is now the permanent source for the Interest Reversal figure — every future daily NPA upload will automatically apply it by Account Number, overriding whatever (if anything) Head Office's own file carries that day, so it never silently resets to 0 again. Only re-upload this when you have an updated/corrected list; you do not need to upload it alongside every daily NPA file. Goes live the next time you hit Publish.</p>
-    </div>
-
-    <div class="update-data-panel" id="addressListUploadDetails" hidden>
-      <button type="button" class="update-data-back-btn" onclick="closeUpdateDataPanel()">← Back to Update Data</button>
-      <h4>Address List (Account No. or Customer ID → Address) — <span id="addressListStatusLabel">not loaded yet</span></h4>
-      <div class="upload-drop small" id="addressListUploadDrop">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-        <div class="main" id="addressListUploadDropLabel">Tap to choose the Address List file</div>
-        <div class="sub">.xlsx or .csv — Account Number or Customer ID, Address</div>
-      </div>
-      <input type="file" id="addressListFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
-      <button type="button" class="template-download-link" id="downloadAddressListTemplateBtn">⬇ Download blank template (Account Number or Customer ID + Address)</button>
-      <div id="addressListUploadStatus"></div>
-      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">One list, uploaded once, used app-wide — whenever an account's address is still blank after Customer Master and carry-forward, this list fills it in, by Account Number first and by Customer ID if that doesn't match (a row only needs one of the two, not both — useful if your source list is one address per customer rather than per account). Also used directly by the Branch Split utility tool (Utility Hub), in both Simple and Full NPA Split modes. Uploading replaces the previous list entirely and applies immediately, no separate Apply step. Goes live app-wide the next time you hit Publish.</p>
     </div>
 
     <div class="update-data-panel" id="branchContactsUploadDetails" hidden>
@@ -1354,7 +1335,7 @@
 <script src="js/publish.js?v=20260923a"></script>
 <script src="js/splash.js?v=20260917a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260925b"></script>
+<script src="js/app.js?v=20260925c"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {

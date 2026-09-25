@@ -120,55 +120,33 @@ DATA.lokAdalat = DATA.lokAdalat || {};
    daily NPA file. */
 DATA.interestReversalMaster = DATA.interestReversalMaster || {};
 
-/* Address list -- two maps built from the SAME upload (see
-   handleAddressListUpload/buildAddressListMap): DATA.addressList keyed by
-   Account No. (string) -> address, and DATA.addressListByCustomer keyed by
-   Customer ID (string) -> address. Uploaded via Settings -> Update Data ->
-   "Address List". Both are app-wide rather than scoped to one tool: (1) a
-   final fallback inside mergeCustomerDetails() -- if an account's address
-   is still blank after Customer Master + carry-forward, Account No. is
-   checked first, then Customer ID; (2) exposed read-only to same-origin
-   Utility Hub iframe tools via window.UPGB_getAddressList()/
-   window.UPGB_getAddressListByCustomer() (see below) so tools/branch-
-   split.html can enrich its own output without re-implementing PIN
-   decryption. Alok's own request (2026-09-22): "1 list main upload karun
-   and entire app main wo use ho jahan bhi address available nahi hai" --
-   one list, used everywhere, not just one utility.
-   Customer ID support added 2026-09-23: Alok's real source list is
-   naturally keyed by Customer ID, not Account No. -- one address per
-   customer, not re-typed per account -- and buildAddressListMap() used to
-   flatly REJECT a file with no Account Number column at all ("Could not
-   find an Account Number column"), so his upload never succeeded, which
-   is why Branch Split had nothing to fetch AND Publish stayed disabled
-   (its own enabling only happens inside a successful upload handler).
-   Both key types are now accepted, together or separately, with Account
-   No. taking priority wherever a row supplies both (more precise: a
-   customer's registered address can differ from where a specific account
-   was opened). Same "own slow-moving schedule, not reset on a daily NPA
-   update" treatment as branchAdvances/branchContacts/
-   interestReversalMaster above, and part of the publish payload like they
-   are. */
-DATA.addressList = DATA.addressList || {};
-DATA.addressListByCustomer = DATA.addressListByCustomer || {};
-// Re-key both maps through normId() on every load, not only at upload
-// time -- self-heals a list already published under the old code (before
-// normId() existed, 2026-09-23) whose keys carry a leading zero or a
-// stray ".0" that would otherwise keep failing to match even after this
-// fix ships, until Alok happens to re-upload and re-publish the exact
-// same file again. Cheap (runs once per page load, not per lookup).
-DATA.addressList = renormalizeIdMap(DATA.addressList);
-DATA.addressListByCustomer = renormalizeIdMap(DATA.addressListByCustomer);
-/* Read-only accessors for same-origin Utility Hub iframe tools (currently
-   just tools/branch-split.html) that need the live, already-decrypted
-   address maps without re-implementing PIN decryption themselves. Each
-   returns a fresh shallow copy so a tool can't mutate the parent's live
-   DATA by reference. Deliberately NOT the general pattern for tool <-> app
-   data sharing -- every other Utility Hub tool stays fully self-contained/
-   independent; these exist only because address data must be genuinely
-   single-sourced per Alok's own "1 list ... entire app main" requirement
-   (2026-09-22). */
-window.UPGB_getAddressList = function(){ return Object.assign({}, DATA.addressList||{}); };
-window.UPGB_getAddressListByCustomer = function(){ return Object.assign({}, DATA.addressListByCustomer||{}); };
+/* Address, app-wide, comes from exactly one place: Customer Master,
+   merged into each NPA row's own C.ADDR by mergeCustomerDetails() and
+   carried forward into every later daily upload for a customer who isn't
+   in that day's freshly-uploaded Customer Master (carryForwardMapFromCurrentData()) --
+   so a customer's address, once captured, survives indefinitely without
+   needing Customer Master re-uploaded alongside every daily file. Alok,
+   2026-09-25: "address list hata kar customer master hi rahne do... har
+   utility jahan address chahiye wahi se link hoga" -- the separate
+   "Address List" upload (its own independent Account No./Customer ID ->
+   Address file) is removed entirely; exposed read-only to same-origin
+   Utility Hub iframe tools (currently just tools/branch-split.html) via
+   window.UPGB_getAddressList()/window.UPGB_getAddressListByCustomer(),
+   built fresh from DATA.npa.rows' own already-merged C.ADDR field each
+   call -- whatever address the main NPA book itself already carries for
+   an account, with nothing separate to keep in sync or forget to
+   re-upload. Each accessor returns a plain object, never a live
+   reference, so a tool can't mutate the parent's DATA by holding onto it. */
+window.UPGB_getAddressList = function(){
+  const map = {};
+  (DATA.npa && DATA.npa.rows || []).forEach(r=>{ if(r[C.ADDR]) map[normId(r[C.ACCT_NO])] = r[C.ADDR]; });
+  return map;
+};
+window.UPGB_getAddressListByCustomer = function(){
+  const map = {};
+  (DATA.npa && DATA.npa.rows || []).forEach(r=>{ if(r[C.ADDR] && !map[normId(r[C.CUST_ID])]) map[normId(r[C.CUST_ID])] = r[C.ADDR]; });
+  return map;
+};
 
 /* ---------- Date helpers (NPA dates are raw Excel serials) ---------- */
 const XL_EPOCH = new Date(1899,11,30);
@@ -3322,17 +3300,6 @@ function normId(v){
   if(isFinite(n) && /^[0-9.]+$/.test(s)) return String(Math.round(n));
   return s;
 }
-// Re-keys an Account No./Customer ID -> Address map through normId() --
-// used right after DATA.addressList/addressListByCustomer are loaded
-// (see their own init comment) so a map published under an older version
-// of this code, before normId() existed, self-heals on the very next
-// load instead of silently staying broken until someone re-uploads.
-function renormalizeIdMap(map){
-  const out = {};
-  Object.keys(map||{}).forEach(k=>{ const nk = normId(k); if(nk) out[nk] = map[k]; });
-  return out;
-}
-
 /* ---------- Cleaning rules for mobile / PAN / Aadhar (confirmed against real HO data) ---------- */
 function cleanMobile(raw){
   const digits = String(raw==null?'':raw).replace(/\D/g,'');
@@ -3589,44 +3556,6 @@ function buildInterestReversalMasterMap(allRows, hIdx){
     map[acct] = amt;
   }
   return map;
-}
-/* Address list -- Account No. and/or Customer ID, plus Address. A row
-   needs at least one of the two identifier columns; it's fine for the
-   whole file to have only one or the other (Alok's real source list is
-   Customer ID only -- one address per customer, not re-typed per
-   account), or a mix of both column types row to row. Both key types go
-   through normId() (scientific notation, leading zeros, a trailing
-   ".0"/".00" -- see its own comment), since address lists this size (tens
-   of thousands of rows) are exactly the kind of file where those show up,
-   and a mismatched key format is enough to silently break an otherwise-
-   correct match. A row with a blank address is skipped rather than
-   storing an empty string, so it can never overwrite a real address a
-   future upload of this same list omits by mistake. Returns both maps
-   separately (never merged into one) so a caller can prefer the more
-   precise Account No. match and only fall back to Customer ID when that
-   misses. */
-function buildAddressListMap(allRows, hIdx){
-  const header = (allRows[hIdx]||[]).map(normHeader);
-  const idx = (...names) => { for(const n of names){ const i = header.indexOf(normHeader(n)); if(i>=0) return i; } return -1; };
-  const iAcct = idx('accountnumber','accountno','acctno','account');
-  const iCust = idx('customerid','custid','customerno','custno');
-  if(iAcct<0 && iCust<0) throw new Error('Could not find an "Account Number" or "Customer ID" column.');
-  const iAddr = idx('address');
-  if(iAddr<0) throw new Error('Could not find an "Address" column.');
-  const byAccount = {}, byCustomer = {};
-  for(const row of allRows.slice(hIdx+1)){
-    const addr = cellStr(row, iAddr);
-    if(!addr) continue;
-    if(iAcct>=0){
-      const acct = normId(cellStr(row, iAcct));
-      if(acct) byAccount[acct] = addr;
-    }
-    if(iCust>=0){
-      const cust = normId(cellStr(row, iCust));
-      if(cust) byCustomer[cust] = addr;
-    }
-  }
-  return { byAccount, byCustomer };
 }
 /* Branch Contacts (Manager + Recovery Officer) template/upload -- matches
    branches by Sol ID same as buildBranchAdvanceMap above, not by name.
@@ -3965,31 +3894,6 @@ function mergeCustomerDetails(npaRows, masterMap, carryForwardMap){
     r[C.PAN] = src ? src.pan : 'N/A';
     const dailyMobileClean = cleanMobile(r[C.PHONE]);
     r[C.PHONE] = dailyMobileClean!=='N/A' ? dailyMobileClean : ((src && src.mobile && src.mobile!=='N/A') ? src.mobile : 'N/A');
-    // Final fallback: Customer Master and carry-forward both come up empty
-    // for a genuinely new/never-seen account -- the app-wide, admin-
-    // uploaded Address List (see its own comment near DATA.addressList) is
-    // checked last: by Account No. first (more precise), then by Customer
-    // ID if that misses (Alok's real source list is Customer-ID-only), and
-    // only ever fills a blank, never overwrites a real address the steps
-    // above already supplied.
-    if(!r[C.ADDR]){
-      const la = DATA.addressList[normId(r[C.ACCT_NO])] || DATA.addressListByCustomer[normId(r[C.CUST_ID])];
-      if(la) r[C.ADDR] = la;
-    }
-  });
-}
-/* Re-applies the same DATA.addressList fallback mergeCustomerDetails()
-   already does going forward, but as its own pass over whatever's already
-   loaded -- called right after a fresh Address List upload so accounts
-   already on screen get fixed immediately instead of waiting for the next
-   daily NPA upload to pick it up. */
-function applyAddressListFallback(npaRows){
-  const byAcct = DATA.addressList, byCust = DATA.addressListByCustomer;
-  if(!byAcct && !byCust) return;
-  npaRows.forEach(r=>{
-    if(r[C.ADDR]) return;
-    const addr = (byAcct && byAcct[normId(r[C.ACCT_NO])]) || (byCust && byCust[normId(r[C.CUST_ID])]);
-    if(addr) r[C.ADDR] = addr;
   });
 }
 
@@ -4332,68 +4236,6 @@ async function handleInterestReversalMasterUpload(evt){
   if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
 }
 
-/* Address List is app-wide reference data (see DATA.addressList's own
-   comment), not scoped to one upload flow -- so, same as Branch Advance
-   and Interest Reversal above, this applies immediately and always fully
-   replaces the previous list (both the Account No. and Customer ID maps
-   together, even if this particular file only has one of the two column
-   types -- re-uploading is a full replace, not a merge, same as every
-   other reference-data upload in this app). Also retroactively re-applies
-   the fallback to whatever's already loaded in DATA.npa.rows right now,
-   so uploading fixes already-visible blank addresses immediately rather
-   than only affecting the next daily NPA upload. */
-async function handleAddressListUpload(evt){
-  const file = evt.target.files[0];
-  if(!file) return;
-  await ensureXLSX();
-  const labelEl = document.getElementById('addressListUploadDropLabel');
-  if(labelEl) labelEl.textContent = file.name;
-  const statusEl = document.getElementById('addressListUploadStatus');
-  statusEl.innerHTML = `<div class="upload-status info">Reading Address List…</div>`;
-  const isCsv = /\.csv$/i.test(file.name);
-  const reader = new FileReader();
-  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
-  reader.onload = function(e){
-    try{
-      // Both identifier types are valid header rows -- a Customer-ID-only
-      // list (Alok's real source file, 2026-09-23) has no
-      // Account Number-like column at all, so the header-row scan has to
-      // recognize "Customer ID" too or it never finds row 1 in the first
-      // place and buildAddressListMap() below fails for the wrong reason.
-      const headerHints = ['accountnumber','accountno','customerid','custid'];
-      let allRows, hIdx;
-      if(isCsv){
-        allRows = parseCSV(String(e.target.result));
-        hIdx = findHeaderRowIndex(allRows, headerHints);
-      } else {
-        const data = new Uint8Array(e.target.result);
-        const wb = XLSX.read(data, {type:'array'});
-        allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
-        hIdx = findHeaderRowIndex(allRows, headerHints);
-      }
-      const { byAccount, byCustomer } = buildAddressListMap(allRows, hIdx);
-      const acctCount = Object.keys(byAccount).length, custCount = Object.keys(byCustomer).length;
-      if(!acctCount && !custCount) throw new Error('No valid Account Number/Customer ID + Address rows found.');
-      DATA.addressList = byAccount;
-      DATA.addressListByCustomer = byCustomer;
-      const label = document.getElementById('addressListStatusLabel');
-      const countParts = [];
-      if(acctCount) countParts.push(`${acctCount.toLocaleString('en-IN')} by account`);
-      if(custCount) countParts.push(`${custCount.toLocaleString('en-IN')} by customer`);
-      if(label) label.textContent = `${countParts.join(', ')} loaded (${file.name})`;
-      statusEl.innerHTML = `<div class="upload-status ok">✔ ${countParts.join(', ')} address(es) parsed and applied to this session (including Branch Split, right now). ⚠ Not saved yet — anyone opening the app fresh, on any device, still sees the OLD address list until you hit Publish below.</div>`;
-      applyAddressListFallback(DATA.npa.rows);
-      __hasUnpublishedRefData = true;
-      clearStalePublishStatus();
-      const publishBtn = document.getElementById('publishBtn');
-      if(publishBtn) publishBtn.disabled = false;
-    } catch(err){
-      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
-    }
-  };
-  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
-}
-
 function applyNewData(){
   if(!__pendingData || (__lastValidation && !__lastValidation.ok)) return;
   const applyBtn = document.getElementById('applyDataBtn');
@@ -4550,18 +4392,6 @@ function downloadInterestReversalMasterTemplate(){
   const example = ['151635110000123','5525'];
   downloadCsvTemplate('UPGB_Interest_Reversal_Template.csv', headers, example);
 }
-// Two example rows on purpose -- one Account Number-keyed, one Customer
-// ID-keyed -- so the template itself shows that either column works
-// (together or separately) rather than only documenting it in prose Alok
-// might not read. A row needs whichever one it has, plus Address.
-function downloadAddressListTemplate(){
-  const headers = ['Account Number','Customer ID','Address'];
-  const rows = [
-    ['151635110000123','','P.O. AGSAULI HATHRAS'],
-    ['','4521178','MAIN ROAD, HATHRAS'],
-  ];
-  downloadCsvRows('UPGB_Address_List_Template.csv', headers, rows);
-}
 /* Branch Contacts template -- unlike the other "blank + one example row"
    templates above, this one pre-fills Sol ID/Old Sol ID/Branch Name for
    every branch from BRANCH_LIST (the app's own reference list), and
@@ -4664,7 +4494,7 @@ function pendingUnpublishedLabel(){
   if(__pendingData) parts.push('the uploaded daily NPA file (not yet applied)');
   if(typeof __pendingPnpaData!=='undefined' && __pendingPnpaData) parts.push('the Daily PNPA upload');
   if(typeof __pendingKccOverdueData!=='undefined' && __pendingKccOverdueData) parts.push('the KCC Overdue upload');
-  if(__hasUnpublishedRefData) parts.push('a reference-data update (Address List, Customer Master, Branch Advance/Contacts, Interest Reversal, Lok Adalat, or a Special Note)');
+  if(__hasUnpublishedRefData) parts.push('a reference-data update (Customer Master, Branch Advance/Contacts, Interest Reversal, Lok Adalat, or a Special Note)');
   return parts;
 }
 window.addEventListener('beforeunload', (e) => {
@@ -4735,7 +4565,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{}, addressList: DATA.addressList||{}, addressListByCustomer: DATA.addressListByCustomer||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -7332,7 +7162,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   // touching any of the ~10 existing call sites that already set the
   // panel label's text -- a MutationObserver keeps the tile's copy in
   // sync automatically, however/wherever the source text changes.
-  ['masterStatusLabel','branchAdvStatusLabel','intReversalMasterStatusLabel','addressListStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel'].forEach(id=>{
+  ['masterStatusLabel','branchAdvStatusLabel','intReversalMasterStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel'].forEach(id=>{
     const src = document.getElementById(id), dst = document.getElementById(id+'Tile');
     if(!src || !dst) return;
     dst.textContent = src.textContent;
@@ -7366,8 +7196,6 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('branchAdvFileInput','change',(e)=>handleBranchAdvUpload(e));
   on('intReversalMasterUploadDrop','click',()=>document.getElementById('intReversalMasterFileInput').click());
   on('intReversalMasterFileInput','change',(e)=>handleInterestReversalMasterUpload(e));
-  on('addressListUploadDrop','click',()=>document.getElementById('addressListFileInput').click());
-  on('addressListFileInput','change',(e)=>handleAddressListUpload(e));
   on('branchContactsUploadDrop','click',()=>document.getElementById('branchContactsFileInput').click());
   on('branchContactsFileInput','change',(e)=>handleBranchContactsUpload(e));
   on('downloadBranchContactsTemplateBtn','click',()=>downloadBranchContactsTemplate());
@@ -7383,7 +7211,6 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
   on('downloadIntReversalMasterTemplateBtn','click',()=>downloadInterestReversalMasterTemplate());
-  on('downloadAddressListTemplateBtn','click',()=>downloadAddressListTemplate());
   on('asOnDateInput','change',(e)=>{ __pendingAsOnDate = e.target.value; });
   on('updateCancelBtn','click',()=>toggleUpdateModal(false));
   on('applyDataBtn','click',()=>applyNewData());
