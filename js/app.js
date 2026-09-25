@@ -3470,7 +3470,7 @@ function buildCustomerMasterMap(headerCells, dataRows){
   if(iCust<0) throw new Error('Customer Master file needs a "Customer ID" column.');
   const map = new Map();
   for(const row of dataRows){
-    const cid = cellStr(row, iCust);
+    const cid = normId(cellStr(row, iCust));
     if(!cid || map.has(cid)) continue;
     map.set(cid, {
       address: cellStr(row, iAddr),
@@ -3877,15 +3877,27 @@ window.removeSpecialNoteByAcct = removeSpecialNoteByAcct;
 function carryForwardMapFromCurrentData(){
   const map = new Map();
   DATA.npa.rows.forEach(r=>{
-    const cid = String(r[C.CUST_ID]||'');
+    const cid = normId(r[C.CUST_ID]);
     if(!cid || map.has(cid)) return;
     map.set(cid, { address:r[C.ADDR]||'', mobile:r[C.PHONE]||'', aadhar:r[C.AADHAR]||'', pan:r[C.PAN]||'' });
   });
   return map;
 }
+/* Customer ID is matched through normId() on both sides (the master
+   file's own key, above, and here) -- confirmed missing in this exact
+   spot (2026-09-25): Alok's real Customer Master file stores Customer ID
+   as text with leading zeros preserved, while the daily NPA book's own
+   Customer ID often comes through Excel-parsed as a plain number (leading
+   zero dropped) or in scientific notation -- either mismatch silently
+   failed to match here, so Publish "succeeded" (a real new commit went
+   out) but a large share of accounts kept showing no/stale address, since
+   this merge is the only place addresses ever get set. Same normalization
+   normId() already applies for Branch Split's own bridge functions
+   (UPGB_getAddressList/...ByCustomer above) -- this was the one spot in
+   the actual merge pipeline that never got it. */
 function mergeCustomerDetails(npaRows, masterMap, carryForwardMap){
   npaRows.forEach(r=>{
-    const cid = String(r[C.CUST_ID]||'');
+    const cid = normId(r[C.CUST_ID]);
     const fresh = masterMap ? masterMap.get(cid) : null;
     const prior = carryForwardMap ? carryForwardMap.get(cid) : null;
     const src = fresh || prior;
