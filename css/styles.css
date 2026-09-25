@@ -1056,6 +1056,23 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .master-upload-details summary::before{content:'▸ ';color:var(--accent)}
 .master-upload-details[open] summary::before{content:'▾ '}
 .master-upload-details summary span{color:var(--sub);font-weight:600}
+/* Update Data hub (Alok, 2026-09-25): the 9 optional/reference upload
+   panels used to be <details> accordions styled by .master-upload-details
+   above (still used for Version History) -- now each opens full-screen
+   from its own Utility-Hub-style card instead, so it needs none of that
+   bordered-accordion chrome, just a heading and a way back. #updateDataHub
+   sits directly inside the same 720px .modal-sheet.wide the old accordion
+   list did, reusing the exact same .utility-grid/.utility-category/
+   .utility-card classes Utility Hub's own full-width page uses -- the
+   fixed 296px card width simply wraps to 2 per row here instead of 3-4. */
+#updateDataHub[hidden]{display:none}
+.update-data-panel[hidden]{display:none}
+.update-data-panel{margin-bottom:4px}
+.update-data-panel h4{font-size:13px;font-weight:800;color:var(--ink);margin:0 0 14px;line-height:1.4}
+.update-data-panel h4 span{color:var(--sub);font-weight:600}
+.update-data-back-btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  font-size:12.5px;font-weight:700;color:var(--accent-2);margin-bottom:16px;padding:4px 2px}
+.update-data-back-btn:hover{text-decoration:underline}
 .validation-report{border-radius:14px;padding:14px;margin-bottom:12px;border:1.5px solid var(--line)}
 .validation-report.ok{border-color:var(--green);background:var(--green-soft)}
 .validation-report.err{border-color:var(--red);background:var(--red-soft)}

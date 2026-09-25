@@ -3193,10 +3193,32 @@ async function exportOtsExcel(){
 }
 window.exportOtsExcel = exportOtsExcel;
 
+// Update Data hub: Utility-Hub-style card grid in place of the old flat
+// stack of <details> accordions (Alok, 2026-09-25: "update data page ko
+// kuch utility hub ki tarah redesign karna"). Each card opens its own
+// upload panel full-screen (occupying the whole modal body);
+// closeUpdateDataPanel() returns to the grid. Every panel keeps the exact
+// id it always had, so none of the existing upload/parsing handlers
+// elsewhere in this file needed to change -- this is new navigation only.
+function openUpdateDataPanel(panelId){
+  const hub = document.getElementById('updateDataHub');
+  if(hub) hub.hidden = true;
+  document.querySelectorAll('.update-data-panel').forEach(p=>{ p.hidden = (p.id !== panelId); });
+  const sheet = document.querySelector('#updateModalOverlay .modal-sheet');
+  if(sheet) sheet.scrollTop = 0;
+}
+window.openUpdateDataPanel = openUpdateDataPanel;
+function closeUpdateDataPanel(){
+  document.querySelectorAll('.update-data-panel').forEach(p=>{ p.hidden = true; });
+  const hub = document.getElementById('updateDataHub');
+  if(hub) hub.hidden = false;
+}
+window.closeUpdateDataPanel = closeUpdateDataPanel;
+
 function toggleUpdateModal(show){
   document.getElementById('updateModalOverlay').classList.toggle('show', show);
   closePublishReview();
-  if(show){ loadVersionHistory(); renderSpecialNoteList(); updateLokAdalatClearBtn(); }
+  if(show){ loadVersionHistory(); renderSpecialNoteList(); updateLokAdalatClearBtn(); closeUpdateDataPanel(); }
   if(!show){
     document.getElementById('uploadStatus').innerHTML='';
     document.getElementById('uploadSummary').innerHTML='';
@@ -7305,6 +7327,17 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
     if(window.UPGBAuth) UPGBAuth.requireAdmin(openUpdateModal); else openUpdateModal();
   };
   on('updateDataBtn','click',openUpdateModalAsAdmin);
+  // Each tile's own status line mirrors its panel's live status label
+  // (e.g. "not loaded yet" -> "✔ 1,234 record(s) loaded") without
+  // touching any of the ~10 existing call sites that already set the
+  // panel label's text -- a MutationObserver keeps the tile's copy in
+  // sync automatically, however/wherever the source text changes.
+  ['masterStatusLabel','branchAdvStatusLabel','intReversalMasterStatusLabel','addressListStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel'].forEach(id=>{
+    const src = document.getElementById(id), dst = document.getElementById(id+'Tile');
+    if(!src || !dst) return;
+    dst.textContent = src.textContent;
+    new MutationObserver(()=>{ dst.textContent = src.textContent; }).observe(src, {childList:true, characterData:true, subtree:true});
+  });
   on('settingsBtn','click',openUpdateModalAsAdmin);
   // settingsBtnNav (sidebar) no longer opens Update Data directly (Alok's
   // request, 2026-09-08) -- it now toggles the settings flyout, which
