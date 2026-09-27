@@ -1,4 +1,4 @@
-const CACHE_NAME = 'upgb-ots-shell-v281';
+const CACHE_NAME = 'upgb-ots-shell-v282';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
@@ -16,9 +16,9 @@ const SHELL_ASSETS = [
   './',
   './index.html',
   './css/styles.css?v=20260925a',
-  './js/app.js?v=20260925g',
-  './js/auth.js?v=20260912a',
-  './js/publish.js?v=20260923a',
+  './js/app.js?v=20260927a',
+  './js/auth.js?v=20260927a',
+  './js/publish.js?v=20260927a',
   './js/splash.js?v=20260917a',
   './manifest.webmanifest',
 ];
@@ -62,14 +62,34 @@ self.addEventListener('activate', (event) => {
 // The list and its fetch branch stay because they are the guard rail that
 // stops the next polled endpoint from reintroducing that bug.
 const POLLED_ENDPOINTS = [];
-// data/latest.json is fetched with a `?t=<timestamp>` cache-buster that's a
-// different URL on every single load (see loadNpaData() in js/app.js) --
-// exactly the "polled endpoint" shape the comment above warns about, so it
-// needs the same care POLLED_ENDPOINTS gets, but the opposite handling:
-// this one DOES need a cached fallback for offline use, just keyed on the
-// path alone (ignoring the ever-changing query) so every fetch overwrites
-// one entry instead of piling up a new one per load.
-const DATA_URL_PATTERN = /\/data\/latest\.json$/;
+// data/latest.json (and, since the 2026-09-27 NAS migration, the other 4
+// data files too -- data/pnpa.json, data/pnpa-weekly.json,
+// data/pnpa-monthly.json, data/kcc-overdue.json) are fetched with a
+// `?t=<timestamp>` cache-buster that's a different URL on every single
+// load (see fetchDataFile()/loadNpaData() in js/app.js) -- exactly the
+// "polled endpoint" shape the comment above warns about, so it needs the
+// same care POLLED_ENDPOINTS gets, but the opposite handling: this one
+// DOES need a cached fallback for offline use, just keyed on the path
+// alone (ignoring the ever-changing query) so every fetch overwrites one
+// entry instead of piling up a new one per load.
+//
+// Alok's own NAS backend (fetchDataFile()'s primary tier, once M3/M4 of
+// that migration are done) is a DIFFERENT origin, so this needs to match
+// on pathname regardless of origin -- NAS_API_ORIGIN below must be kept in
+// sync BY HAND with index.html's own window.UPGB_NAS_API_BASE (a service
+// worker has no access to that page-level global; this is the one place
+// this URL has to be duplicated, same as index.html/js/auth.js/
+// js/publish.js each already hold their own copy of it). Matching the NAS
+// origin here matters for more than just the offline-cache fallback: with
+// no match here, a NAS response would instead fall into the generic
+// stale-while-revalidate branch below, which would (a) silently pollute
+// the versioned app-shell cache with live data responses and (b) serve a
+// STALE cached copy of live banking data on a repeat visit while genuinely
+// online -- exactly what the comment on that branch, further down, says
+// this app must never do for data.
+const NAS_API_ORIGIN = 'https://api.alokmittal.net';
+const DATA_URL_PATTERN = /\/data\/(latest|pnpa|pnpa-weekly|pnpa-monthly|kcc-overdue)\.json$/;
+const NAS_DATA_URL_PATTERN = /^\/api\/data\/(latest|pnpa|pnpa-weekly|pnpa-monthly|kcc-overdue)\.json$/;
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
@@ -77,8 +97,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(event.request));
     return;
   }
-  if (DATA_URL_PATTERN.test(url.pathname)) {
-    const cacheKey = url.pathname;
+  const isNasData = url.origin === NAS_API_ORIGIN && NAS_DATA_URL_PATTERN.test(url.pathname);
+  if (DATA_URL_PATTERN.test(url.pathname) || isNasData) {
+    const cacheKey = url.origin + url.pathname;
     event.respondWith(
       fetch(event.request)
         .then((response) => {

@@ -1752,7 +1752,7 @@ html,body{overscroll-behavior:none}
    buttons; now they're one "Settings" trigger that opens this menu. It's a
    PERSISTENT element (display:none by default, shown via .show), not
    created/destroyed on each open like .share-ots-menu -- auth.js keeps
-   live references to #githubSignInBtn/#authUserInfo etc. and those must
+   live references to #adminSignInBtn/#authUserInfo etc. and those must
    never be recreated out from under it. Positioned via inline top/left set
    in toggleSettingsMenu() (js/app.js), flown out to the right of the
    narrow rail same as any sidebar-attached flyout would be. */

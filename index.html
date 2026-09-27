@@ -219,12 +219,12 @@
     </button>
     <div class="settings-menu-divider"></div>
     <div class="auth-widget" id="authWidget">
-      <button class="auth-signin-btn" id="githubSignInBtn" aria-label="Sign in with GitHub">
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        <span>Sign in with GitHub</span>
+      <button class="auth-signin-btn" id="adminSignInBtn" aria-label="Admin Sign In">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        <span>Admin Sign In</span>
       </button>
       <div class="auth-user-info" id="authUserInfo" style="display:none">
-        <img class="auth-avatar" id="authAvatar" alt="">
+        <img class="auth-avatar" id="authAvatar" alt="" style="display:none">
         <span class="auth-username" id="authUsername"></span>
         <button class="auth-signout-btn" id="authSignOutBtn" aria-label="Sign out">Sign out</button>
       </div>
@@ -1116,19 +1116,19 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="githubAuthModalOverlay">
+<div class="modal-overlay" id="adminAuthModalOverlay">
   <div class="modal-sheet">
-    <h3>Sign in with GitHub</h3>
-    <p>Open <b>github.com/login/device</b> in any tab (on this device or your phone) and enter the code below to sign in as Administrator.</p>
-    <div class="device-code-box">
-      <div class="device-code" id="deviceCodeDisplay">········</div>
-      <button class="btn-ghost" id="copyDeviceCodeBtn" aria-label="Copy code">Copy</button>
-    </div>
-    <p><a id="deviceVerificationLink" href="https://github.com/login/device" target="_blank" rel="noopener">github.com/login/device</a></p>
-    <div id="deviceFlowStatus" class="device-flow-status">Starting…</div>
-    <div class="modal-btn-row">
-      <button class="btn-ghost" id="cancelDeviceFlowBtn" aria-label="Cancel sign-in">Cancel</button>
-    </div>
+    <h3>Admin Sign In</h3>
+    <p>Sign in with your Admin username and password to Upload Data / Publish.</p>
+    <form id="adminLoginForm">
+      <input type="text" id="adminLoginUsername" class="dash-select" autocomplete="username" placeholder="Username" style="width:100%;cursor:text;margin-bottom:10px" required>
+      <input type="password" id="adminLoginPassword" class="dash-select" autocomplete="current-password" placeholder="Password" style="width:100%;cursor:text" required>
+      <div id="adminLoginStatus" class="device-flow-status"></div>
+      <div class="modal-btn-row">
+        <button type="button" class="btn-ghost" id="adminLoginCancelBtn" aria-label="Cancel sign-in">Cancel</button>
+        <button type="submit" class="btn-primary" id="adminLoginSubmitBtn" aria-label="Sign in">Sign In</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -1369,11 +1369,20 @@
      by ensureXLSX()/ensureExcelJS()/ensureHtml2Canvas()/ensureJsPDF()/
      ensureMsal() near the top of js/app.js -- see that file for the one
      place their version query strings now live. -->
-<script src="js/auth.js?v=20260912a"></script>
-<script src="js/publish.js?v=20260923a"></script>
+<script>
+  // The public HTTPS URL of Alok's own Synology-NAS-hosted backend (see
+  // js/auth.js/js/publish.js/js/app.js's fetchDataFile()) -- reachable
+  // once M3 (deploy the container) and M4 (Cloudflare Tunnel + DNS) of
+  // that migration are done. Until then, Admin login/publish have nowhere
+  // to reach and viewers keep working exactly as before via the
+  // GitHub-Pages-hosted data/ fallback (see fetchDataFile()'s own comment).
+  window.UPGB_NAS_API_BASE = 'https://api.alokmittal.net';
+</script>
+<script src="js/auth.js?v=20260927a"></script>
+<script src="js/publish.js?v=20260927a"></script>
 <script src="js/splash.js?v=20260917a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260925g"></script>
+<script src="js/app.js?v=20260927a"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {

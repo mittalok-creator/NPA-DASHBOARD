@@ -1,15 +1,16 @@
-/* GitHub OAuth Device Flow login, gating Admin-only features (Settings / Update Data / future Publish).
-   No client secret is used or needed — Device Flow is a public-client flow by design. */
-(function () {
-  const ADMIN_GITHUB_LOGIN = 'mittalok-creator';
-  const STORAGE_KEY = 'upgb-gh-auth';
-  // GitHub's login endpoints block direct cross-site fetch from a static
-  // site's JS (no CORS), so a tiny relay (see /relay in this repo, deployed
-  // on Vercel) forwards these two calls server-side. It holds no secret —
-  // client_id is public and lives in relay/api/*.js.
-  const RELAY_BASE_URL = 'https://npa-dashboard.vercel.app';
+/* Admin login, gating Admin-only features (Settings / Update Data / Publish).
+   Backed by Alok's own Synology-NAS-hosted backend (see npa-nas-backend
+   repo) instead of GitHub OAuth -- there is exactly one Admin account
+   (Alok's own), so "signed in with a valid, unexpired session token" IS
+   the authorization; no separate role/permission check is needed.
 
-  let pollTimer = null;
+   Storage key deliberately renamed from the old upgb-gh-auth (GitHub OAuth
+   era) to upgb-nas-auth, so a stale GitHub token left over from before
+   this cutover is never misread as a valid session. */
+(function () {
+  const STORAGE_KEY = 'upgb-nas-auth';
+
+  function apiBase() { return window.UPGB_NAS_API_BASE || ''; }
 
   function getStoredAuth() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (e) { return null; }
@@ -20,133 +21,127 @@
   }
   function getCurrentUser() {
     const auth = getStoredAuth();
-    return auth ? { login: auth.login, avatarUrl: auth.avatarUrl } : null;
+    return auth ? { login: auth.login } : null;
   }
+  // Exactly one admin account exists server-side -- any stored, non-empty
+  // token is treated as "is admin" client-side; the backend itself is the
+  // real gate (every Admin-only API call re-verifies the token there).
   function isAdmin() {
     const auth = getStoredAuth();
-    return !!(auth && auth.login && auth.login.toLowerCase() === ADMIN_GITHUB_LOGIN.toLowerCase());
+    return !!(auth && auth.token);
+  }
+  function getToken() {
+    const auth = getStoredAuth();
+    return auth ? auth.token : null;
   }
 
-  async function startDeviceFlow() {
-    const res = await fetch(RELAY_BASE_URL + '/api/device-start', { method: 'POST' });
-    if (!res.ok) throw new Error('start_failed_' + res.status);
-    return res.json();
+  function openAuthModal() {
+    document.getElementById('adminAuthModalOverlay')?.classList.add('show');
+    const statusEl = document.getElementById('adminLoginStatus');
+    if (statusEl) statusEl.textContent = '';
   }
-
-  function pollForToken(deviceCode, initialInterval, expiresAt) {
-    return new Promise((resolve, reject) => {
-      let interval = initialInterval;
-      async function tick() {
-        if (Date.now() > expiresAt) { reject(new Error('expired')); return; }
-        try {
-          const res = await fetch(RELAY_BASE_URL + '/api/device-poll', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_code: deviceCode })
-          });
-          const data = await res.json();
-          if (data.access_token) { resolve(data.access_token); return; }
-          if (data.error === 'authorization_pending') { pollTimer = setTimeout(tick, interval * 1000); return; }
-          if (data.error === 'slow_down') { interval = data.interval || interval + 5; pollTimer = setTimeout(tick, interval * 1000); return; }
-          if (data.error === 'expired_token') { reject(new Error('expired')); return; }
-          if (data.error === 'access_denied') { reject(new Error('denied')); return; }
-          reject(new Error(data.error || 'unknown_error'));
-        } catch (err) { reject(err); }
-      }
-      tick();
-    });
+  function closeAuthModal() {
+    document.getElementById('adminAuthModalOverlay')?.classList.remove('show');
   }
-
-  async function fetchGithubUser(token) {
-    const res = await fetch('https://api.github.com/user', {
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' }
-    });
-    if (!res.ok) throw new Error('profile_failed_' + res.status);
-    return res.json();
-  }
-
-  function cancelSignIn() {
-    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-  }
-  function signOut() {
-    cancelSignIn();
-    setStoredAuth(null);
-    renderAuthUI();
-  }
-
-  function openAuthModal() { document.getElementById('githubAuthModalOverlay')?.classList.add('show'); }
-  function closeAuthModal() { document.getElementById('githubAuthModalOverlay')?.classList.remove('show'); cancelSignIn(); }
 
   function renderAuthUI() {
     const user = getCurrentUser();
-    const signinBtn = document.getElementById('githubSignInBtn');
+    const signinBtn = document.getElementById('adminSignInBtn');
     const userInfo = document.getElementById('authUserInfo');
     if (!signinBtn || !userInfo) return;
     if (user) {
       signinBtn.style.display = 'none';
       userInfo.style.display = 'flex';
-      const avatar = document.getElementById('authAvatar');
-      if (avatar) avatar.src = user.avatarUrl || '';
       const nameEl = document.getElementById('authUsername');
-      if (nameEl) nameEl.textContent = user.login + (isAdmin() ? ' · Admin' : ' · not admin');
+      if (nameEl) nameEl.textContent = user.login + ' · Admin';
     } else {
       signinBtn.style.display = 'flex';
       userInfo.style.display = 'none';
     }
   }
 
-  async function beginSignIn() {
-    const statusEl = document.getElementById('deviceFlowStatus');
-    const codeEl = document.getElementById('deviceCodeDisplay');
-    const linkEl = document.getElementById('deviceVerificationLink');
-    if (!statusEl || !codeEl || !linkEl) return;
-    codeEl.textContent = '········';
-    statusEl.textContent = 'Starting…';
-    openAuthModal();
+  async function doLogin(username, password) {
+    const statusEl = document.getElementById('adminLoginStatus');
+    const submitBtn = document.getElementById('adminLoginSubmitBtn');
+    if (statusEl) statusEl.textContent = 'Signing in…';
+    if (submitBtn) submitBtn.disabled = true;
     try {
-      const dc = await startDeviceFlow();
-      codeEl.textContent = dc.user_code;
-      linkEl.href = dc.verification_uri;
-      linkEl.textContent = dc.verification_uri;
-      statusEl.textContent = 'Waiting for you to approve on GitHub…';
-      const expiresAt = Date.now() + dc.expires_in * 1000;
-      const token = await pollForToken(dc.device_code, dc.interval || 5, expiresAt);
-      const profile = await fetchGithubUser(token);
-      setStoredAuth({ token: token, login: profile.login, avatarUrl: profile.avatar_url, at: Date.now() });
+      const res = await fetch(apiBase() + '/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = data.error === 'invalid_credentials' ? 'Incorrect username or password.'
+          : res.status === 429 ? 'Too many attempts -- please wait a few minutes and try again.'
+          : data.error === 'admin_not_configured' ? 'Admin account not set up yet on the backend.'
+          : 'Sign-in failed (' + (data.error || res.status) + ').';
+        if (statusEl) statusEl.textContent = msg;
+        return false;
+      }
+      setStoredAuth({ token: data.token, login: data.login, at: Date.now() });
       closeAuthModal();
       renderAuthUI();
-      if (!isAdmin()) {
-        alert('Signed in as ' + profile.login + ', but this app\'s Admin features are restricted to a specific account. You are viewing as a regular user.');
-      }
       return true;
     } catch (err) {
-      statusEl.textContent =
-        err.message === 'expired' ? 'Code expired — please try again.' :
-        err.message === 'denied' ? 'Sign-in was declined.' :
-        'Something went wrong (' + err.message + '). Please try again.';
+      if (statusEl) statusEl.textContent = 'Could not reach the Admin backend. Check your connection and try again.';
       return false;
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  }
+
+  function beginSignIn() {
+    return new Promise((resolve) => {
+      openAuthModal();
+      const form = document.getElementById('adminLoginForm');
+      const cancelBtn = document.getElementById('adminLoginCancelBtn');
+      if (!form) { resolve(false); return; }
+      const onSubmit = async (e) => {
+        e.preventDefault();
+        const u = document.getElementById('adminLoginUsername')?.value || '';
+        const p = document.getElementById('adminLoginPassword')?.value || '';
+        const ok = await doLogin(u, p);
+        if (ok) { cleanup(); resolve(true); }
+      };
+      const onCancel = () => { cleanup(); closeAuthModal(); resolve(false); };
+      function cleanup() {
+        form.removeEventListener('submit', onSubmit);
+        cancelBtn?.removeEventListener('click', onCancel);
+      }
+      form.addEventListener('submit', onSubmit);
+      cancelBtn?.addEventListener('click', onCancel);
+    });
+  }
+
+  async function signOut() {
+    const token = getToken();
+    setStoredAuth(null);
+    renderAuthUI();
+    if (token) {
+      // Best-effort server-side revocation -- the local session is already
+      // cleared either way, so a network hiccup here shouldn't block
+      // signing out from the user's own point of view.
+      try {
+        await fetch(apiBase() + '/api/admin/logout', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token },
+        });
+      } catch (e) {}
     }
   }
 
   function requireAdmin(onGranted) {
     if (isAdmin()) { onGranted(); return; }
-    if (getCurrentUser()) {
-      alert('You are signed in as ' + getCurrentUser().login + ', which is not the Administrator account for this app.');
-      return;
-    }
     beginSignIn().then((ok) => { if (ok && isAdmin()) onGranted(); });
   }
 
-  window.UPGBAuth = { isAdmin, getCurrentUser, signOut, requireAdmin, beginSignIn };
+  window.UPGBAuth = { isAdmin, getCurrentUser, getToken, signOut, requireAdmin, beginSignIn };
 
   document.addEventListener('DOMContentLoaded', function () {
     renderAuthUI();
-    document.getElementById('githubSignInBtn')?.addEventListener('click', beginSignIn);
+    document.getElementById('adminSignInBtn')?.addEventListener('click', beginSignIn);
     document.getElementById('authSignOutBtn')?.addEventListener('click', signOut);
-    document.getElementById('cancelDeviceFlowBtn')?.addEventListener('click', closeAuthModal);
-    document.getElementById('copyDeviceCodeBtn')?.addEventListener('click', function () {
-      const code = document.getElementById('deviceCodeDisplay')?.textContent || '';
-      if (navigator.clipboard) navigator.clipboard.writeText(code);
-    });
   });
 })();

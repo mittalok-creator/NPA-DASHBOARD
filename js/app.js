@@ -4726,12 +4726,12 @@ function openCmdk(){
   if(!cmdkOverlay) return;
   cmdkOverlay.classList.add('show'); cmdkInput.value=''; renderCmdk(''); setTimeout(()=>cmdkInput.focus(),30);
   if(!KCC_OVERDUE_DATA){
-    fetchJson('data/kcc-overdue.json?t=' + Date.now())
+    fetchDataFile('kcc-overdue.json')
       .then(d=>{ KCC_OVERDUE_DATA=d; if(cmdkOverlay.classList.contains('show')) renderCmdk(cmdkInput.value); })
       .catch(()=>{});
   }
   if(!PNPA_DATA){
-    fetchJson('data/pnpa.json?t=' + Date.now())
+    fetchDataFile('pnpa.json')
       .then(d=>{ PNPA_DATA=d; if(cmdkOverlay.classList.contains('show')) renderCmdk(cmdkInput.value); })
       .catch(()=>{});
   }
@@ -5860,7 +5860,7 @@ function renderPnpaDashboard(){
   if(!el) return;
   if(PNPA_DATA){ renderPnpaDashboardBody(); return; }
   el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading Daily PNPA data…</p></div>`;
-  fetchJson('data/pnpa.json?t=' + Date.now())
+  fetchDataFile('pnpa.json')
     .then(d => { PNPA_DATA = d; renderPnpaDashboardBody(); })
     .catch(() => {
       el.innerHTML = `<div class="empty-state"><h2>Could not load Daily PNPA data</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
@@ -6163,7 +6163,7 @@ function renderKccOverdue(){
   if(!el) return;
   if(KCC_OVERDUE_DATA){ renderKccOverdueBody(); return; }
   el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading KCC Overdue data…</p></div>`;
-  fetchJson('data/kcc-overdue.json?t=' + Date.now())
+  fetchDataFile('kcc-overdue.json')
     .then(d => { KCC_OVERDUE_DATA = d; renderKccOverdueBody(); })
     .catch(() => {
       el.innerHTML = `<div class="empty-state"><h2>Could not load KCC Overdue data</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
@@ -7449,7 +7449,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
       return;
     }
     showToast('Saving data for offline use…');
-    fetchJson('data/latest.json?t=' + Date.now())
+    fetchDataFile('latest.json')
       .then(data => {
         const rowCount = (data.npa && data.npa.rows) ? data.npa.rows.length : 0;
         // DATA.asOnDate is stored as a plain YYYY-MM-DD string (not a
@@ -7629,8 +7629,37 @@ function fetchJson(url, timeoutMs){
     .then(parsed => isEncryptedEnvelope(parsed) ? decryptEnvelope(parsed) : parsed)
     .finally(() => clearTimeout(timer));
 }
+/* Alok, 2026-09-27: "ye app apne personal Synology NAS se link karna hai
+   for database and login" -- Alok's own NAS (once M3/M4 of that migration
+   are done: the backend deployed, Cloudflare Tunnel exposing it publicly)
+   becomes the primary source for every data/*.json file, with the
+   already-existing GitHub-Pages-hosted copy kept as a mandatory read-only
+   fallback tier (not retired) for two reasons: (1) the separate Recovery
+   Dashboard portal reads these same files only from
+   npadashboard.alokmittal.net and is explicitly not being touched by this
+   migration -- if the NAS stopped keeping that copy fresh (via a
+   server-side dual-write on every publish, see the new backend's own
+   lib/github.js), RD would silently start showing stale data; (2) the
+   service worker's own cached-fallback (sw.js's DATA_URL_PATTERN
+   handling) only protects a browser that has already loaded successfully
+   at least once -- a brand-new device's very first load, at the exact
+   moment the NAS/tunnel happens to be down, has nowhere else to fall back
+   to except GitHub Pages. A short timeout on the NAS attempt specifically
+   (not the full 30s) means a genuinely-down NAS degrades to the fallback
+   quickly rather than making every viewer wait out a long timeout first.
+   Until UPGB_NAS_API_BASE (index.html) actually points at a real,
+   reachable backend, this NAS attempt simply fails fast and every load
+   transparently uses the GitHub-relative path exactly as before this
+   function existed -- so this is safe to ship ahead of M3/M4 being done. */
+function fetchDataFile(name, timeoutMs){
+  const nasBase = window.UPGB_NAS_API_BASE;
+  const relativeFetch = () => fetchJson('data/' + name + '?t=' + Date.now(), timeoutMs);
+  if(!nasBase) return relativeFetch();
+  return fetchJson(nasBase + '/api/data/' + name, 10000)
+    .catch(() => relativeFetch());
+}
 function loadNpaData(isRetry){
-  fetchJson('data/latest.json?t=' + Date.now())
+  fetchDataFile('latest.json')
     .then(data => {
       const overlay = document.getElementById('dataLoadingOverlay');
       if(overlay) overlay.classList.add('hidden');
