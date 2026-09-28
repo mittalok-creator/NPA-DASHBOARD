@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### KCC Overdue: Balance Amount filter -- dynamic input + quick chips (2026-09-28, same day)
+
+Alok, right after the Application Form redesign: "Iske baad kcc overdue main amount wise filter ka option (filter) aur lagana dynamic and 1 quick filter like 2 lakh and above 5 lakh and above and 10 lakh and above" -- add a Balance-Amount filter to the KCC Overdue tab. Confirmed with Alok directly (AskUserQuestion): both apps' KCC Overdue nav tabs (not the standalone Utility Hub "KCC Overdue Summary" tool), and the filter applies to Balance Amount, shown as a dynamic Lakh-value input plus quick-filter chips, above the list/table.
+
+**Implementation**: new `kccovMinAmount` state (rupees), applied as the last step inside `kccovFilteredRows()` -- the single central filter function every KCC Overdue view (Branch Summary, Datewise Calendar, F.Y./Month Summary, Branch Report, All Branches Overview, plus the hero KPI row's own bucket totals) already reads from, so the new filter applies everywhere automatically with no per-view wiring. New toolbar row: a dynamic input (`kccovMinAmountInput`, typed in Lakh, parsed to rupees on change) plus 4 `.bank-tab-btn` quick chips (All / >=2L / >=5L / >=10L) reusing the same pill-style segmented-control CSS already used for the view toggle and date-mode toggle in this section.
+
+Verified against real production KCC Overdue data via Playwright: NPA-DASHBOARD's Branch Summary table goes from 55 to 50 branch rows on >=5L, chip/input stay in sync both directions (clicking a chip fills the input, typing a custom value clears the highlighted chip, "All" resets to empty); Recovery Dashboard (branch-locked to Ronchi Bangar) goes from 107 to 3 account rows on >=10L. Zero console errors in either app. Shipped: this app via a fresh branch off `origin/main` (the previous `claude/application-form-redesign` branch had already been squash-merged) -> PR -> squash-merge; Recovery Dashboard via direct push to `main`.
+
 ### Redesign: Application Form screen -- unique animated UI, output and input fields unchanged (2026-09-28, same day)
 
 Alok, once the Target Tracker work was done: "Application form ka output same rahega and input fields bhi same hi rahenge. Isko ui kuch achha unique animated design kar k do" -- redesign the Application Form screen's visual presentation, while the generated letter and every input field stay exactly as they are. Confirmed with Alok directly (AskUserQuestion): **both apps** (this app's Utility Hub tool and Recovery Dashboard both had an identical, plain, stacked-`.card` screen -- the only visual identity it had was the generic `riseIn` animation every `.card` app-wide already carries), and **polished/professional with subtle animation**, not a bold/playful redesign.
