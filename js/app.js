@@ -6783,6 +6783,13 @@ let kccovDateMode = 'month';
 let kccovMonthFilter = '';
 let kccovDateFrom = '';
 let kccovDateTo = '';
+// Balance Amount filter (Alok's request, 2026-09-28) -- rupees, 0 means
+// "no filter". Applies across every KCC Overdue view via
+// kccovFilteredRows(), same as Branch/F.Y./date above. Set either via the
+// dynamic Lakh-value input or one of the 3 quick chips (>=2L/5L/10L) --
+// both drive this one piece of state, so a custom typed value and a
+// quick-chip click are never out of sync with each other.
+let kccovMinAmount = 0;
 let kccovView = 'summary'; // 'summary' | 'calendar' | 'fymonth' | 'branchreport' | 'allbranches'
 // Datewise Calendar's own column sort -- {key:'sol'|'branch'|'total'|<date
 // string>, dir:'asc'|'desc'}. Starts null so renderKccOverdueCalendar()
@@ -6793,6 +6800,8 @@ function setKccovSchemeTab(tab){ kccovSchemeTab = tab; renderKccOverdueBody(); }
 window.setKccovSchemeTab = setKccovSchemeTab;
 function setKccovDateMode(mode){ kccovDateMode = mode; renderKccOverdueBody(); }
 window.setKccovDateMode = setKccovDateMode;
+function setKccovMinAmount(v){ kccovMinAmount = v; renderKccOverdueBody(); }
+window.setKccovMinAmount = setKccovMinAmount;
 function setKccovView(v){
   kccovView = v;
   /* Datewise Calendar renders one column per distinct Cust NPA Date --
@@ -6895,6 +6904,7 @@ function kccovFilteredRows(d){
       return true;
     });
   }
+  if(kccovMinAmount>0) rows = rows.filter(r=>r[KC.OS]>=kccovMinAmount);
   return rows;
 }
 function kccovBranchAgg(rows, bucket){
@@ -6937,6 +6947,27 @@ function renderKccOverdueBody(){
        <span style="color:var(--ink-mute);font-size:12px;align-self:center">to</span>
        <input type="date" id="kccovDateToInput" class="dash-select" value="${esc(kccovDateTo)}" style="max-width:170px">`;
 
+  // Balance Amount filter -- a dynamic Lakh-value input (any figure the
+  // user types) plus 3 quick chips for the common thresholds Alok asked
+  // for (>=2L/5L/10L). Both drive the same kccovMinAmount state, so the
+  // input always reflects whichever value is currently active (including
+  // one set by a chip click) and a chip only shows "active" when its own
+  // exact threshold is the current value -- a custom typed amount
+  // correctly leaves all 3 chips unhighlighted.
+  const amountChips = [
+    {label:'All', v:0}, {label:'₹2L & above', v:200000},
+    {label:'₹5L & above', v:500000}, {label:'₹10L & above', v:1000000},
+  ];
+  const amountFilterRow = `<div class="bank-filter-row" style="align-items:center;gap:8px;flex-wrap:wrap;">
+      <span class="dash-toolbar-label">Balance Amount</span>
+      <input type="number" id="kccovMinAmountInput" class="dash-select" style="max-width:150px" min="0" step="0.01"
+        placeholder="e.g. 3" value="${kccovMinAmount>0 ? (kccovMinAmount/1e5) : ''}">
+      <span style="color:var(--ink-mute);font-size:12px;">Lakh and above</span>
+    </div>
+    <div class="bank-tab-row" style="margin-top:2px">
+      ${amountChips.map(c=>`<button type="button" class="bank-tab-btn${kccovMinAmount===c.v?' active':''}" onclick="setKccovMinAmount(${c.v})">${c.label}</button>`).join('')}
+    </div>`;
+
   const toolbar = `<div class="dash-toolbar">
       <span class="dash-toolbar-label">Branch</span>
       <select id="kccovBranchFilterSelect" class="dash-select">${branchFilterOptions}</select>
@@ -6945,7 +6976,8 @@ function renderKccOverdueBody(){
       <select id="kccovFyFilterSelect" class="dash-select">${fyFilterOptions}</select>
     </div>
     ${dateModeRow}
-    <div class="bank-filter-row">${dateInputsRow}</div>`;
+    <div class="bank-filter-row">${dateInputsRow}</div>
+    ${amountFilterRow}`;
 
   const filteredRows = kccovFilteredRows(d);
   // The hero scheme-tab row and its bucketTotals are only meaningful for
@@ -7025,6 +7057,12 @@ function renderKccOverdueBody(){
   if(fromInput) fromInput.onchange = () => { kccovDateFrom = fromInput.value; renderKccOverdueBody(); };
   const toInput = document.getElementById('kccovDateToInput');
   if(toInput) toInput.onchange = () => { kccovDateTo = toInput.value; renderKccOverdueBody(); };
+  const minAmtInput = document.getElementById('kccovMinAmountInput');
+  if(minAmtInput) minAmtInput.onchange = () => {
+    const v = parseFloat(minAmtInput.value);
+    kccovMinAmount = (!isNaN(v) && v>0) ? Math.round(v*1e5) : 0;
+    renderKccOverdueBody();
+  };
 
   if(kccovView==='calendar') renderKccOverdueCalendar(filteredRows);
   else if(kccovView==='fymonth') renderKccOverdueFyMonth(filteredRows);
