@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### KCC Overdue: Average Ticket Size, every view/filter (2026-09-28, same day)
+
+Alok, right after the Balance Amount filter and Recovery Dashboard's new NPA Particulars view shipped: "aur fir in dono task k baad overdue main har jagah and har filter main us perticular data main average ticket size bhi show ho like in all overdue accounts and 5 lakh and above main uske accoring" -- show Average Ticket Size (avg Balance Amount) in KCC Overdue, in every view, reflecting whatever filter is currently active.
+
+**Implementation**: a new stat card (matching the Dashboard's own existing whole-book "Average Ticket Size" hero card -- same `ICON_TICKET`, amber tint), computed directly off `filteredRows` -- the shared, already-fully-filtered output of `kccovFilteredRows()` every KCC Overdue view already reads from (Branch Summary, Datewise Calendar, F.Y./Month Summary, Branch Report, All Branches Overview, and the hero scheme-tab totals). Rendered unconditionally (not gated behind the scheme-tab row's own `showHero` check), so it shows identically in all 5 views and updates automatically with every existing filter (Branch, F.Y., date, and the Balance Amount filter above) with zero extra wiring -- it's just another read of the same already-filtered array. Placed in its own single-column row above the scheme-tab cards.
+
+Verified against real production KCC Overdue data via Playwright, both apps, across every view: NPA-DASHBOARD shows ₹2,26,098.10 (6,840 accounts) with no filter, correctly jumping to ₹7,58,614.02 (583 accounts) once the >=5L chip is clicked, consistent across all 5 views; Recovery Dashboard (branch-locked to Ronchi Bangar) shows ₹2,85,325.30 (108 accounts) with no filter, ₹10,95,426.92 (3 accounts) with >=10L. Zero console errors either app.
+
 ### KCC Overdue: Balance Amount filter -- dynamic input + quick chips (2026-09-28, same day)
 
 Alok, right after the Application Form redesign: "Iske baad kcc overdue main amount wise filter ka option (filter) aur lagana dynamic and 1 quick filter like 2 lakh and above 5 lakh and above and 10 lakh and above" -- add a Balance-Amount filter to the KCC Overdue tab. Confirmed with Alok directly (AskUserQuestion): both apps' KCC Overdue nav tabs (not the standalone Utility Hub "KCC Overdue Summary" tool), and the filter applies to Balance Amount, shown as a dynamic Lakh-value input plus quick-filter chips, above the list/table.
