@@ -5959,7 +5959,46 @@ window.showHighValueCustList = showHighValueCustList;
    against THOSE branches' current O/S), same safeguard as the advance
    aggregation just above -- so a partial upload never produces a
    misleading gap by comparing against branches with no baseline. */
-function dashboardCornerStats(s){
+/* Redesigned 2026-09-28 (Alok's request, following the new Branch/Region
+   NPA Target upload): shows March'26 / the current month / March'27 --
+   Target and Gap for each -- instead of the old Mar/Jun-baseline-only
+   corner stat. Sourced from DATA.branchTargets, matching whatever's
+   currently in view: the whole book gets the REGION's own figure
+   (DATA.branchTargets.region -- never a sum of the branches, per Alok's
+   own explicit confirmation that Head Office's Region target is a
+   separate commitment, not a rollup), a single selected branch gets that
+   branch's own row. Falls back to the old branchAdvances-based Mar/Jun
+   comparison only when no Branch/Region Target has been uploaded at all,
+   so the corner stat never just disappears for someone who hasn't
+   uploaded the new file yet. "Current month" is whichever uploaded month
+   is nearest today (npaTargetDefaultMonth, shared with the NPA Target
+   Tracker view) -- skipped if it's the same as the final month, so a
+   March visit doesn't show the identical figure twice. */
+function dashboardCornerStats(s, branchFilter){
+  const gapLine = (v) => { const improved = v<=0; return `<span style="color:${improved?'var(--green)':'var(--red)'}">${improved?'▼':'▲'} ${fmtCr(Math.abs(v))}</span>`; };
+  const bt = DATA.branchTargets;
+  if(bt && bt.monthLabels && bt.monthLabels.length){
+    let rec = null;
+    if(branchFilter){
+      const solId = (s.branchMap.get(branchFilter)||{}).solId;
+      rec = solId ? (bt.branches[solId]||null) : null;
+    } else {
+      rec = bt.region || null;
+    }
+    if(rec && rec.targets && rec.targets.length){
+      const actualNow = s.totalOS;
+      const currentLabel = npaTargetDefaultMonth(bt.monthLabels);
+      const currentIdx = bt.monthLabels.indexOf(currentLabel);
+      const finalTarget = rec.targets[rec.targets.length-1];
+      const currentTarget = rec.targets[currentIdx];
+      let html = '<div class="hero-kpi-corner-stats">';
+      if(rec.marActual!=null) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>Mar'26</span><b>${fmtCr(rec.marActual)}</b></div><div class="hero-kpi-corner-gap">${gapLine(actualNow-rec.marActual)}</div></div>`;
+      if(currentTarget && currentTarget.rupees!=null && currentIdx!==rec.targets.length-1) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>${esc(currentLabel)}</span><b>${fmtCr(currentTarget.rupees)}</b></div><div class="hero-kpi-corner-gap">${gapLine(actualNow-currentTarget.rupees)}</div></div>`;
+      if(finalTarget && finalTarget.rupees!=null) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>${esc(finalTarget.label)}</span><b>${fmtCr(finalTarget.rupees)}</b></div><div class="hero-kpi-corner-gap">${gapLine(actualNow-finalTarget.rupees)}</div></div>`;
+      html += '</div>';
+      return html;
+    }
+  }
   let marOS=0, marBase=0, marN=0, junOS=0, junBase=0, junN=0;
   s.branchMap.forEach((v)=>{
     const rec = DATA.branchAdvances[v.solId];
@@ -5967,7 +6006,6 @@ function dashboardCornerStats(s){
     if(rec && rec.npaJun26!=null){ junOS+=v.os; junBase+=rec.npaJun26; junN++; }
   });
   if(!marN && !junN) return '';
-  const gapLine = (v) => { const improved = v<=0; return `<span style="color:${improved?'var(--green)':'var(--red)'}">${improved?'▼':'▲'} ${fmtCr(Math.abs(v))}</span>`; };
   let html = '<div class="hero-kpi-corner-stats">';
   if(marN) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>Mar</span><b>${fmtCr(marBase)}</b></div><div class="hero-kpi-corner-gap">${gapLine(marOS-marBase)}</div></div>`;
   if(junN) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>Jun</span><b>${fmtCr(junBase)}</b></div><div class="hero-kpi-corner-gap">${gapLine(junOS-junBase)}</div></div>`;
@@ -6075,7 +6113,7 @@ function renderDashboard(){
     if(rec && rec.adv>0){ advOsSum+=v.os; advSum+=rec.adv; advBranchCount++; }
   });
   const aggNpaPct = advSum>0 ? (advOsSum/advSum*100) : null;
-  const heroCorner = dashboardCornerStats(s);
+  const heroCorner = dashboardCornerStats(s, branchFilter);
   let heroNpaBadge = '';
   if(aggNpaPct!==null){
     const sev = npaPctSeverity(aggNpaPct);
