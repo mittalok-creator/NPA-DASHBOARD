@@ -2740,6 +2740,15 @@ function toggleAggWf(){
 }
 window.toggleAggWf = toggleAggWf;
 
+// Set only by showQuickAcctDetail() (KCC Overdue/PNPA full-screen
+// Particulars page, 2026-09-28) right before it calls switchView('search')
+// to make #detailPane paint -- captures whatever report tab (Dashboard,
+// KCC Overdue, PNPA, ...) was actually open, so closeDetail() below can
+// return there instead of stranding the user on the unrelated Search &
+// Settlement tab. Deliberately left null by the real NPA openDetail() path
+// (unchanged, pre-existing behavior for that flow -- not something this
+// round touches) -- closeDetail() only acts on it when it's actually set.
+let __quickDetailReturnView = null;
 function closeDetail(){
   const pane = document.getElementById('detailPane');
   pane.classList.remove('open');
@@ -2749,6 +2758,12 @@ function closeDetail(){
   document.getElementById('railRight').classList.remove('show');
   document.getElementById('eligibleBanner').classList.remove('show');
   document.getElementById('specialNoteBanner')?.classList.remove('show');
+  if(__quickDetailReturnView){
+    const rv = __quickDetailReturnView;
+    __quickDetailReturnView = null;
+    switchView(rv);
+    return;
+  }
   /* Coming back from a borrower, the start screen behind it is stale -- the
      visit just entered Recently Opened, and any OTS Amount typed changes
      both that row and the worksheet bar's totals. Only redrawn when the
@@ -5502,26 +5517,123 @@ function pickCmdk(idx){
   if(m.source==='npa') openDetail(String(m.row[C.CUST_ID]));
   else showQuickAcctDetail(m.source, m.row);
 }
+/* Read-only KCC Overdue / Daily PNPA account Particulars page -- Alok's
+   request, 2026-09-28: "usko bhi apan npa account details ki tarah hi
+   show kar sakte hain kya" -- same full-screen treatment as the NPA
+   account detail (openDetail), not the small #quickAcctModalOverlay
+   popup. Modeled on the NPA Particulars table's own icon-prefixed-row
+   visual language (loan-table-wrap/.lt-*), but a single flat column --
+   KCC Overdue/PNPA rows have no multi-account concept and no Sanction
+   Date/UCI/Provision data (that only exists in the full NPA loan book),
+   so this shows exactly the same fields the old popup already did (same
+   KC/PC column reads), just full-screen instead of a small modal. */
+function kccPnpaParticularsTableHTML(row, source){
+  const isKcc = source==='kccov';
+  const acctNo = isKcc ? row[KC.ACCT] : row[PC.ACCT];
+  const scheme = isKcc ? row[KC.SCHEME] : row[PC.SCHEME];
+  const cols = `<th scope="col"><div class="lt-acc">A/c · ${esc(acctNo)}</div><div class="lt-scheme">${esc(scheme)||''}</div></th>`;
+  const dataRow = (label, icon, val, cls='') => `<tr class="${cls}"><th scope="row" class="lt-label">${ltIconBadge(icon)}<span class="lt-label-text"><span class="lt-label-inner">${label}</span></span></th><td>${val!==null&&val!==undefined&&val!==''?esc(val):'—'}</td></tr>`;
+  const rows = (isKcc ? [
+    ['Outstanding','coin',fmtINR2(row[KC.OS]),'lt-strong'], ['CADU','bars',fmtINR2(row[KC.CADU])],
+    ['Limit','doc',fmtINR2(row[KC.LIMIT])], ['Cust NPA Date','calendar',row[KC.CUSTNPADATE]],
+    ['F.Y.','tag',row[KC.FY]], ['Category','badge',row[KC.CATEGORY]], ['SMA','gauge',row[KC.SMA]],
+    ['Reason','list',row[KC.REASON]],
+  ] : [
+    ['Outstanding','coin',fmtINR2(row[PC.OS]),'lt-strong'], ['CADU','bars',fmtINR2(row[PC.CADU])],
+    ['Limit','doc',fmtINR2(row[PC.LIMIT])], ['Review Date','calendar',row[PC.REVIEW]],
+    ['Reason','list',row[PC.REASON]],
+  ]).map(([label,icon,val,cls])=>dataRow(label,icon,val,cls)).join('');
+  return `
+  <div class="loan-table-wrap">
+  <table class="loan-table">
+    <thead><tr><th scope="col" class="lt-label">${ltIcon('list')}<span class="lt-label-text"><span class="lt-label-inner">Particulars</span></span></th>${cols}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  </div>`;
+}
+function drawKccPnpaDetailBody(row, source){
+  const isKcc = source==='kccov';
+  const body = document.getElementById('detailBody');
+  const name = isKcc ? row[KC.NAME] : row[PC.NAME];
+  const branch = isKcc ? row[KC.BRANCH] : row[PC.BRANCH];
+  const acctNo = isKcc ? row[KC.ACCT] : row[PC.ACCT];
+  const scheme = isKcc ? row[KC.SCHEME] : row[PC.SCHEME];
+  const custId = isKcc ? row[KC.CUST_ID] : row[PC.CUST_ID];
+  body.innerHTML = `
+    <div class="card borrower-card">
+      <div class="bcard-top">
+        <div class="bavatar" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.6-3.6 4.8-5.5 7.5-5.5s5.9 1.9 7.5 5.5"/></svg></div>
+        <div class="bcard-title-col">
+          <div class="bname">${esc(name)||'—'}</div>
+        </div>
+        <div class="bcard-branch">${esc(branch)||'—'}</div>
+      </div>
+      <div class="info-grid">
+        <div><div class="k">Account No</div><div class="v">${esc(acctNo)||'—'}</div></div>
+        ${custId?`<div><div class="k">Cust ID</div><div class="v">${esc(custId)}</div></div>`:''}
+        <div><div class="k">Scheme</div><div class="v">${esc(scheme)||'—'}</div></div>
+      </div>
+    </div>
+
+    <div class="loans-col">
+    <div class="section-label">${isKcc?'KCC Overdue':'Daily PNPA'} Particulars</div>
+    <div class="section-sub">${esc(branch)||'—'}</div>
+
+    ${kccPnpaParticularsTableHTML(row, source)}
+  </div>
+  `;
+}
 function showQuickAcctDetail(source, row){
   const isKcc = source==='kccov';
-  const title = isKcc ? row[KC.NAME] : row[PC.NAME];
+  const name = isKcc ? row[KC.NAME] : row[PC.NAME];
   const branch = isKcc ? row[KC.BRANCH] : row[PC.BRANCH];
-  const sub = `${esc(branch)||'—'} · ${isKcc?'KCC Overdue':'Daily PNPA'}`;
-  const fields = isKcc ? [
-    ['Account No', row[KC.ACCT]], ['Scheme', row[KC.SCHEME]], ['Outstanding', fmtINR2(row[KC.OS])],
-    ['CADU', fmtINR2(row[KC.CADU])], ['Limit', fmtINR2(row[KC.LIMIT])], ['Cust NPA Date', row[KC.CUSTNPADATE]],
-    ['F.Y.', row[KC.FY]], ['Category', row[KC.CATEGORY]], ['SMA', row[KC.SMA]], ['Reason', row[KC.REASON]],
-  ] : [
-    ['Account No', row[PC.ACCT]], ['Scheme', row[PC.SCHEME]], ['Outstanding', fmtINR2(row[PC.OS])],
-    ['CADU', fmtINR2(row[PC.CADU])], ['Limit', fmtINR2(row[PC.LIMIT])], ['Review Date', row[PC.REVIEW]],
-    ['Reason', row[PC.REASON]],
-  ];
-  document.getElementById('quickAcctTitle').textContent = title || '—';
-  document.getElementById('quickAcctSub').innerHTML = sub;
-  document.getElementById('quickAcctGrid').innerHTML = fields.map(([k,v])=>`<div><div class="k">${esc(k)}</div><div class="v">${esc(v!==null&&v!==undefined&&v!==''?v:'—')}</div></div>`).join('');
-  document.getElementById('quickAcctModalOverlay').classList.add('show');
+  const sourceLabel = isKcc ? 'KCC Overdue' : 'Daily PNPA';
+  // Same switchView('search') call openDetail() itself already makes for
+  // real NPA accounts -- "search" is a real, nav-reachable tab in this
+  // app, so no special workaround is needed (unlike Recovery Dashboard,
+  // where that tab is deliberately hidden and its own showNpaAccountDetail
+  // has to toggle .active directly instead -- see that repo's own comment).
+  // Unlike openDetail() though, this is nearly always opened as a quick
+  // drill-down FROM a report tab (Dashboard, KCC Overdue, PNPA) -- capture
+  // it so closeDetail() can return there, instead of stranding the user on
+  // Search (confirmed via testing: without this, closing landed on the
+  // real Search & Settlement screen no matter which tab the account was
+  // opened from).
+  __quickDetailReturnView = document.querySelector('.view.active')?.dataset.view || null;
+  // Most opens of this function come from inside the KCC Overdue/PNPA
+  // branch drill-down list modal -- that modal's z-index (100) sits above
+  // #detailPane's (95), so without closing it first the new full-screen
+  // page would silently render *behind* it, blocking every click (caught
+  // via testing: the back button was unclickable until this was added).
+  closeListModal();
+  switchView('search');
+  const pane = document.getElementById('detailPane');
+  document.getElementById('shell').classList.add('detail-active');
+  pane.classList.add('open');
+  pane.innerHTML = `
+    <div class="detail-head">
+      <div class="detail-headrow">
+        <button class="back-btn" onclick="closeDetail()" aria-label="Back to search results">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="detail-headtext">
+          <h2>${esc(name)||'—'}</h2>
+          <p>${esc(branch)||''} · ${sourceLabel}</p>
+        </div>
+      </div>
+    </div>
+    <div class="detail-inner">
+      <div id="detailBody" style="padding-top:14px"></div>
+    </div>
+  `;
+  drawKccPnpaDetailBody(row, source);
+  pane.scrollTop = 0;
 }
 window.showQuickAcctDetail = showQuickAcctDetail;
+// #quickAcctModalOverlay itself (index.html) is left in place, unreferenced
+// now that showQuickAcctDetail() above no longer populates it -- same
+// "don't do a risky deletion pass on a production codebase" precedent
+// already used for openDetail()'s own settlement code in Recovery Dashboard.
 /* Tapping a row inside the PNPA/KCC Overdue account-list modal opens the
    same Quick Account Detail card as a search result -- looked up by
    account no. against the raw dataset rather than threading the raw row
