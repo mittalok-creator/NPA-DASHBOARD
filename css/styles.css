@@ -212,6 +212,7 @@
   --tool-gold:#C99A3B; --tool-gold-soft:rgba(201,154,59,.16);
   --tool-jade:#3ECF7A; --tool-jade-soft:rgba(62,207,122,.16);
   --tool-coral:#E8563E; --tool-coral-soft:rgba(232,86,62,.16);
+  --tool-sky:#2E9BE0; --tool-sky-soft:rgba(46,155,224,.16);
   --emboss-rim:rgba(255,255,255,.05);
   --gold:#3A7BFF; --gold-l:#7FB0FF; --gold-d:#245BFF; --gold-soft:rgba(58,123,255,.12);
 
@@ -1848,6 +1849,7 @@ html,body{overscroll-behavior:none}
 .utility-card.tool-gold{--tool-color:var(--tool-gold);--tool-soft:var(--tool-gold-soft)}
 .utility-card.tool-jade{--tool-color:var(--tool-jade);--tool-soft:var(--tool-jade-soft)}
 .utility-card.tool-coral{--tool-color:var(--tool-coral);--tool-soft:var(--tool-coral-soft)}
+.utility-card.tool-sky{--tool-color:var(--tool-sky);--tool-soft:var(--tool-sky-soft)}
 .utility-card-icon{position:relative;display:flex;align-items:center;justify-content:center;width:52px;height:52px;flex-shrink:0;
   border-radius:50%;color:#fff;
   background:radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--tool-color, var(--accent-2)) 55%, white), var(--tool-color, var(--accent-2)) 78%);
@@ -2367,6 +2369,7 @@ header.app-head::before,.detail-head::before{
   --tool-gold:#8A6A1E; --tool-gold-soft:rgba(138,106,30,.10);
   --tool-jade:#1F8F58; --tool-jade-soft:rgba(31,143,88,.10);
   --tool-coral:#B33F2C; --tool-coral-soft:rgba(179,63,44,.10);
+  --tool-sky:#1E74B0; --tool-sky-soft:rgba(30,116,176,.10);
   --emboss-rim:rgba(255,255,255,.75);
   --gold:#1B4FE0; --gold-l:#3A7BFF; --gold-d:#123A9E; --gold-soft:rgba(27,79,224,.08);
   --stripe:rgba(62,50,30,.024); --stripe-label:rgba(62,50,30,.035);

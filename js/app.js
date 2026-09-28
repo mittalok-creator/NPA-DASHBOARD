@@ -76,6 +76,23 @@ DATA.oldots.rows.forEach(r=>{
    not reset/carried-forward on a daily NPA update since it changes on its
    own, much slower schedule. */
 DATA.branchAdvances = DATA.branchAdvances || {};
+/* Branch + Region NPA reduction targets for the fiscal year, uploaded via
+   Update Data -> "Branch/Region NPA Target" (see handleBranchTargetUpload).
+   Shape: { monthLabels:[...], branches:{solId:{branchName,marActual,
+   targets:[{label,rupees},...]}}, region:{label,marActual,targets:[...]}|
+   null }. The Region record is a SEPARATE figure Head Office gives the
+   Regional Office directly -- confirmed by Alok it is NOT the sum of the
+   57 branches' own targets (the branch rows are in Lakhs, the Region row
+   in Crores; even after unit conversion the two paths diverge further
+   every month, since it's a genuinely independent HO commitment, not a
+   rollup) -- so it is never computed from the branch rows, only read from
+   its own row in the uploaded file. Same "own slow-moving schedule, not
+   reset on a daily NPA update" treatment as branchAdvances above, and
+   part of the publish payload -- this is also how Recovery Dashboard's
+   own per-branch "Target for March 2027" tile gets a real figure, since
+   RD has no upload of its own and only ever reads the shared published
+   data. */
+DATA.branchTargets = DATA.branchTargets || {};
 /* Branch Manager / Recovery Officer contacts -- keyed by Sol ID (string),
    uploaded via Update Data -> Branch Contacts. Same "own slow-moving
    schedule, not reset on a daily NPA update" treatment as branchAdvances
@@ -657,6 +674,151 @@ function renderOtsApplicationView(){
   renderOtsApplicationDetail();
 }
 window.renderOtsApplicationView = renderOtsApplicationView;
+
+/* ==================================================================
+   NPA Target Tracker -- region-wide Branch/Region NPA Target vs live
+   Actual (Alok's uploaded Target_fy_26-27.xlsx, 2026-09-28). Native
+   Utility Hub view (not an iframe tool), since it needs live
+   DATA.npa.rows for each branch's current Outstanding -- same reason
+   the Application Form view above is native. Reuses computeDashboardStats()
+   for the live Actual figures (never re-implements branch/region
+   aggregation), barRows()/.bank-tab-row for the progress bars/toggles,
+   and fmtCr() for consistent currency formatting throughout. The Region
+   figure is READ from DATA.branchTargets.region, never computed as a
+   sum of the branch rows -- Alok confirmed directly that Head Office's
+   own Region target is a genuinely separate commitment, not a rollup
+   (see buildBranchTargetMap's own comment for the verified numbers). */
+const NPA_TARGET_MONTH_IDX = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,july:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
+function npaTargetLabelToDate(label){
+  const m = /^([a-z]+)'?(\d{2})$/i.exec(String(label||'').trim());
+  if(!m) return null;
+  const mi = NPA_TARGET_MONTH_IDX[m[1].toLowerCase()];
+  if(mi==null) return null;
+  return new Date(2000+Number(m[2]), mi, 1);
+}
+function npaTargetDefaultMonth(monthLabels){
+  const today = new Date();
+  const todayMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  let best = monthLabels[0], bestDiff = Infinity;
+  monthLabels.forEach(l=>{
+    const d = npaTargetLabelToDate(l);
+    if(!d) return;
+    const diff = Math.abs(d - todayMonth);
+    if(diff < bestDiff){ bestDiff = diff; best = l; }
+  });
+  return best;
+}
+let __npaTargetMonth = null;
+let __npaTargetFilter = 'all';
+function setNpaTargetMonth(label){ __npaTargetMonth = label; renderNpaTargetDetail(); }
+window.setNpaTargetMonth = setNpaTargetMonth;
+function setNpaTargetFilter(f){ __npaTargetFilter = f; renderNpaTargetDetail(); }
+window.setNpaTargetFilter = setNpaTargetFilter;
+// data-month attribute + event delegation, not an inline onclick with the
+// label embedded in a JS string literal -- month labels always contain an
+// apostrophe ("Apr'26"), which would otherwise break out of the onclick
+// attribute's own quoting (esc() only HTML-escapes for the attribute, it
+// doesn't also JS-escape for a string literal nested inside that same
+// attribute) -- confirmed this exact break via a real click during testing.
+function npaTargetMonthRowClick(e){
+  const btn = e.target.closest('.bank-tab-btn[data-month]');
+  if(btn) setNpaTargetMonth(btn.dataset.month);
+}
+window.npaTargetMonthRowClick = npaTargetMonthRowClick;
+function renderNpaTargetView(){
+  const el = document.getElementById('npaTargetArea');
+  if(!el || el.dataset.wired) return;
+  el.dataset.wired = '1';
+  renderNpaTargetDetail();
+}
+window.renderNpaTargetView = renderNpaTargetView;
+function renderNpaTargetDetail(){
+  const el = document.getElementById('npaTargetArea');
+  if(!el) return;
+  const bt = DATA.branchTargets;
+  if(!bt || !bt.monthLabels || !bt.monthLabels.length){
+    el.innerHTML = '<div class="card" style="text-align:center;color:var(--sub);padding:28px 16px;">No Branch/Region NPA Target has been uploaded yet. Go to Settings &rarr; Update Data &rarr; Branch/Region NPA Target to upload one.</div>';
+    return;
+  }
+  if(!__npaTargetMonth || bt.monthLabels.indexOf(__npaTargetMonth)<0) __npaTargetMonth = npaTargetDefaultMonth(bt.monthLabels);
+  const monthIdx = bt.monthLabels.indexOf(__npaTargetMonth);
+
+  const s = computeDashboardStats(null);
+  const bySol = {};
+  s.branchMap.forEach((v)=>{ if(v.solId) bySol[v.solId] = v.os; });
+
+  let regionHtml;
+  if(bt.region){
+    const regionTarget = bt.region.targets[monthIdx] ? bt.region.targets[monthIdx].rupees : null;
+    const gap = regionTarget==null ? null : s.totalOS - regionTarget;
+    const improved = gap!=null && gap<=0;
+    regionHtml = '<div class="card" style="margin-bottom:14px;">'
+      + '<div style="font-weight:800;margin-bottom:4px;">Region &mdash; ' + esc(bt.region.label) + '</div>'
+      + '<div style="font-size:12px;color:var(--sub);margin-bottom:12px;">A separate figure given directly by Head Office &mdash; not a sum of the branches below.</div>'
+      + '<div class="info-grid">'
+      +   '<div><div class="k">Target for ' + esc(__npaTargetMonth) + '</div><div class="v">' + fmtCr(regionTarget) + '</div></div>'
+      +   '<div><div class="k">Live Actual (whole book)</div><div class="v">' + fmtCr(s.totalOS) + '</div></div>'
+      +   '<div><div class="k">Gap</div><div class="v" style="color:' + (gap==null?'inherit':(improved?'var(--green)':'var(--red)')) + '">' + (gap==null?'&mdash;':((improved?'&#9660; ':'&#9650; ') + fmtCr(Math.abs(gap)))) + '</div></div>'
+      + '</div>'
+      + '</div>';
+  } else {
+    regionHtml = '<div class="card" style="margin-bottom:14px;color:var(--sub);">Region target not uploaded yet &mdash; the uploaded file had no separate Region row this time.</div>';
+  }
+
+  const monthRow = '<div class="bank-tab-row" onclick="npaTargetMonthRowClick(event)">' + bt.monthLabels.map(l=>'<button type="button" class="bank-tab-btn' + (l===__npaTargetMonth?' active':'') + '" data-month="' + esc(l) + '">' + esc(l) + '</button>').join('') + '</div>';
+  const filterRow = '<div class="bank-tab-row">'
+    + '<button type="button" class="bank-tab-btn' + (__npaTargetFilter==='all'?' active':'') + '" onclick="setNpaTargetFilter(\'all\')">All Branches</button>'
+    + '<button type="button" class="bank-tab-btn' + (__npaTargetFilter==='ahead'?' active':'') + '" onclick="setNpaTargetFilter(\'ahead\')">Ahead of Target</button>'
+    + '<button type="button" class="bank-tab-btn' + (__npaTargetFilter==='behind'?' active':'') + '" onclick="setNpaTargetFilter(\'behind\')">Behind Target</button>'
+    + '</div>';
+
+  let rows = Object.keys(bt.branches).map(solId=>{
+    const b = bt.branches[solId];
+    const target = b.targets[monthIdx] ? b.targets[monthIdx].rupees : null;
+    const actual = bySol[solId]!==undefined ? bySol[solId] : 0;
+    const gap = target==null ? null : actual - target;
+    const ahead = gap!=null && gap<=0;
+    let pct = null;
+    if(target!=null && b.marActual!=null && b.marActual!==target){
+      pct = ((b.marActual - actual) / (b.marActual - target)) * 100;
+    }
+    return { solId, branchName: b.branchName || solId, target, actual, gap, ahead, pct };
+  });
+  if(__npaTargetFilter==='ahead') rows = rows.filter(r=>r.ahead);
+  else if(__npaTargetFilter==='behind') rows = rows.filter(r=>r.gap!=null && !r.ahead);
+  rows.sort((a,b)=> (b.gap==null?-Infinity:b.gap) - (a.gap==null?-Infinity:a.gap));
+
+  const tableHtml = '<div style="overflow-x:auto;"><table class="dash-table">'
+    + '<thead><tr><th class="tal">Sol ID</th><th class="tal">Branch</th><th>Target (' + esc(__npaTargetMonth) + ')</th><th>Live Actual</th><th>Gap</th></tr></thead>'
+    + '<tbody>' + rows.map(r=>'<tr>'
+      + '<td class="tal">' + esc(r.solId) + '</td>'
+      + '<td class="tal">' + esc(r.branchName) + '</td>'
+      + '<td>' + fmtCr(r.target) + '</td>'
+      + '<td>' + fmtCr(r.actual) + '</td>'
+      + '<td style="color:' + (r.gap==null?'inherit':(r.ahead?'var(--green)':'var(--red)')) + '">' + (r.gap==null?'&mdash;':((r.ahead?'&#9660; ':'&#9650; ') + fmtCr(Math.abs(r.gap)))) + '</td>'
+      + '</tr>').join('')
+    + '</tbody></table></div>';
+
+  const barItems = rows.filter(r=>r.pct!=null).map(r=>({
+    label: r.branchName,
+    value: Math.max(2, Math.min(150, r.pct)),
+    valueLabel: r.pct.toFixed(0) + '% of glide-path',
+    color: r.ahead ? 'var(--green)' : 'var(--red)',
+  }));
+  const barsHtml = barItems.length ? ('<div style="margin-top:14px;">' + barRows(barItems) + '</div>') : '';
+
+  el.innerHTML = '<div class="card" style="margin-bottom:14px;">'
+    + '<div style="font-weight:800;margin-bottom:10px;">Month</div>'
+    + monthRow
+    + '</div>'
+    + regionHtml
+    + '<div class="card">'
+    + '<div style="font-weight:800;margin-bottom:10px;">Branch-wise Target vs Actual</div>'
+    + filterRow
+    + tableHtml
+    + barsHtml
+    + '</div>';
+}
 
 /* The compact, mobile-shaped summary card -- Total O/S as the headline,
    each linked account's own Dues/P&L/Asset Code, Total Dues closing it
@@ -3855,6 +4017,63 @@ function buildBranchAdvanceMap(allRows, hIdx){
   }
   return map;
 }
+/* Branch + Region NPA Target (FY) -- matches Alok's real uploaded layout:
+   SN, Letter no, SOL ID, Branch Name, "March -26 Actual", then 12
+   "Target <Mon>'<YY>" columns. Month-target columns are discovered by
+   PATTERN, not hardcoded to Apr..Mar, so next fiscal year's re-upload
+   (different month/year labels) still parses without a code change. A row
+   with no valid Sol ID but a non-empty label cell somewhere before the
+   target columns is the Region/HO row (Alok's real file: a merged label
+   "TARGET GIVEN BY HO to Regional office" spanning the Sol ID/Branch Name
+   columns) -- captured separately, converted Crore->rupees rather than
+   Lakh->rupees like every branch row, per Alok's own confirmation that
+   this one row uses a different unit than the rest of the sheet. Verified
+   against the real file: matches every real branch figure exactly, and
+   the region row's Crore conversion reproduces the real HO figures to the
+   rupee. Only the first such labelled row is taken as the region record,
+   so a stray blank/decorative row elsewhere in the sheet can't silently
+   overwrite it. */
+function buildBranchTargetMap(allRows, hIdx){
+  const header = (allRows[hIdx]||[]).map(normHeader);
+  const idx = (...names) => { for(const n of names){ const i = header.indexOf(normHeader(n)); if(i>=0) return i; } return -1; };
+  const iSol = idx('solid','sol');
+  if(iSol<0) throw new Error('Could not find a "Sol ID" column -- branches are matched by Sol ID, not name.');
+  const iBranchName = idx('branchname','branch');
+  const iMarActual = header.findIndex(h=>h.startsWith('march') && h.endsWith('actual'));
+  const monthCols = [];
+  header.forEach((h, i) => {
+    const m = /^target([a-z]{3,9})(\d{2})$/.exec(h);
+    if(m) monthCols.push({ idx: i, label: m[1].charAt(0).toUpperCase()+m[1].slice(1)+"'"+m[2] });
+  });
+  if(!monthCols.length) throw new Error('Could not find any "Target <Month>\'<YY>" columns.');
+  const toRupeesLakh = (v) => { const n = parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')); return isNaN(n) ? null : n*100000; };
+  const toRupeesCrore = (v) => { const n = parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')); return isNaN(n) ? null : n*10000000; };
+  const branches = {};
+  let region = null;
+  for(const row of allRows.slice(hIdx+1)){
+    const solDigits = cellStr(row, iSol).replace(/[^0-9]/g,'');
+    if(solDigits){
+      branches[solDigits] = {
+        branchName: iBranchName>=0 ? cellStr(row, iBranchName) : '',
+        marActual: iMarActual>=0 ? toRupeesLakh(row[iMarActual]) : null,
+        targets: monthCols.map(mc => ({ label: mc.label, rupees: toRupeesLakh(row[mc.idx]) })),
+      };
+    } else {
+      const scanEnd = monthCols[0].idx;
+      let label = '';
+      for(let c=0;c<scanEnd;c++){ const s = cellStr(row,c); if(s){ label = s; break; } }
+      if(!label) continue;
+      if(!region){
+        region = {
+          label,
+          marActual: iMarActual>=0 ? toRupeesCrore(row[iMarActual]) : null,
+          targets: monthCols.map(mc => ({ label: mc.label, rupees: toRupeesCrore(row[mc.idx]) })),
+        };
+      }
+    }
+  }
+  return { monthLabels: monthCols.map(m=>m.label), branches, region };
+}
 /* Interest Reversal master list -- Account No. + amount, matched by exact
    Account No. (not Customer ID/Sol ID, since Interest Reversal is an
    account-level figure). A row with an unparseable amount is skipped
@@ -4527,6 +4746,55 @@ async function handleBranchAdvUpload(evt){
   if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
 }
 
+/* Branch/Region NPA Target -- like Branch Advance above, its own
+   slow-moving upload (re-uploaded once a fiscal year, not alongside a
+   daily NPA file), applies immediately, always fully replaces the
+   previous figures. Single-sheet real-world file, so no multi-sheet
+   name-matching needed like Branch Advance's HO workbook has. */
+async function handleBranchTargetUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  await ensureXLSX();
+  const labelEl = document.getElementById('branchTargetUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('branchTargetUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Branch/Region NPA Target file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      const headerHints = ['solid','sol'];
+      let allRows, hIdx;
+      if(isCsv){
+        allRows = parseCSV(String(e.target.result));
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      }
+      const result = buildBranchTargetMap(allRows, hIdx);
+      const count = Object.keys(result.branches).length;
+      if(!count) throw new Error('No valid Sol ID/Target rows found.');
+      DATA.branchTargets = result;
+      const label = document.getElementById('branchTargetStatusLabel');
+      if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es), ${result.monthLabels.length} month(s) loaded (${file.name})`;
+      const regionNote = result.region ? '' : ' No separate Region row was found -- the Region hero card will show as not-yet-uploaded.';
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch(es) × ${result.monthLabels.length} month(s) parsed.${regionNote} Not live for anyone else until you hit Publish below.</div>`;
+      __hasUnpublishedRefData = true;
+      clearStalePublishStatus();
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.querySelector('.view.active')?.dataset.view==='npatarget') renderNpaTargetDetail();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
 /* Interest Reversal is Alok's own list, not HO's daily file -- so, same as
    Branch Advance above, this applies immediately (no separate Apply step)
    and always fully replaces the previous list. Once loaded, it's applied
@@ -4726,6 +4994,11 @@ function downloadBranchAdvTemplate(){
   const example = ['9282','M.G.Hathras','1877.53','71.53','75.45'];
   downloadCsvTemplate('UPGB_Branch_Advance_Template.csv', headers, example);
 }
+function downloadBranchTargetTemplate(){
+  const headers = ['SN','Letter no','SOL ID','Branch Name',"March -26 Actual","Target Apr'26","Target May'26","Target Jun'26","Target July'26","Target Aug'26","Target Sep'26","Target Oct'26","Target Nov'26","Target Dec'26","Target Jan'27","Target Feb'27","Target Mar'27"];
+  const example = ['1','131','9270','Agsauli','374.03','368','360','350','358','350','344','338','330','323','315','308','300'];
+  downloadCsvTemplate('UPGB_Branch_Target_Template.csv', headers, example);
+}
 function downloadInterestReversalMasterTemplate(){
   const headers = ['Account_Number','Interest Reversal'];
   const example = ['151635110000123','5525'];
@@ -4835,7 +5108,7 @@ function pendingUnpublishedLabel(){
   if(typeof __pendingPnpaWeeklyData!=='undefined' && __pendingPnpaWeeklyData) parts.push('the Weekly PNPA upload');
   if(typeof __pendingPnpaMonthlyData!=='undefined' && __pendingPnpaMonthlyData) parts.push('the Monthly PNPA upload');
   if(typeof __pendingKccOverdueData!=='undefined' && __pendingKccOverdueData) parts.push('the KCC Overdue upload');
-  if(__hasUnpublishedRefData) parts.push('a reference-data update (Customer Master, Branch Advance/Contacts, Interest Reversal, Lok Adalat, or a Special Note)');
+  if(__hasUnpublishedRefData) parts.push('a reference-data update (Customer Master, Branch Advance/Contacts, Branch/Region NPA Target, Interest Reversal, Lok Adalat, or a Special Note)');
   return parts;
 }
 window.addEventListener('beforeunload', (e) => {
@@ -4914,7 +5187,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{}, customerAddressMap: DATA.customerAddressMap||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchTargets: DATA.branchTargets||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{}, customerAddressMap: DATA.customerAddressMap||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -7397,7 +7670,7 @@ function renderKccOverdueAllBranches(filteredRows){
 // not their own nav-rail items -- the "Utility" nav-item stays highlighted
 // as their parent while viewing either, so the rail never shows nothing
 // active at all.
-const UTILITY_CHILD_VIEWS = ['onedrive','passsheet','regionsummary','pnpasummary','telephonedirectory','hbrreport','npasolsummary','branchmap','branchsplit','kccoverduesummary','otsapplicationform'];
+const UTILITY_CHILD_VIEWS = ['onedrive','passsheet','regionsummary','pnpasummary','telephonedirectory','hbrreport','npasolsummary','branchmap','branchsplit','kccoverduesummary','otsapplicationform','npatarget'];
 /* Screen switches used to be an instant cut -- .view{display:none} has no
    transition of its own, so the outgoing screen just vanished the moment a
    nav item was clicked, then the incoming one popped in a beat later (its
@@ -7439,6 +7712,7 @@ function switchView(view){
     if(view==='pnpa') renderPnpaDashboard();
     if(view==='kccov') renderKccOverdue();
     if(view==='otsapplicationform') renderOtsApplicationView();
+    if(view==='npatarget') renderNpaTargetView();
     // Resume a still-valid OneDrive sign-in silently (no popup) whenever
     // this tab is opened while it's still showing the Connect screen --
     // once signed in, coming back to the tab should go straight into the
@@ -7636,7 +7910,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   // touching any of the ~10 existing call sites that already set the
   // panel label's text -- a MutationObserver keeps the tile's copy in
   // sync automatically, however/wherever the source text changes.
-  ['masterStatusLabel','branchAdvStatusLabel','intReversalMasterStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','weeklyPnpaStatusLabel','monthlyPnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel'].forEach(id=>{
+  ['masterStatusLabel','branchAdvStatusLabel','branchTargetStatusLabel','intReversalMasterStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','weeklyPnpaStatusLabel','monthlyPnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel'].forEach(id=>{
     const src = document.getElementById(id), dst = document.getElementById(id+'Tile');
     if(!src || !dst) return;
     dst.textContent = src.textContent;
@@ -7668,6 +7942,8 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('masterFileInput','change',(e)=>handleMasterFileUpload(e));
   on('branchAdvUploadDrop','click',()=>document.getElementById('branchAdvFileInput').click());
   on('branchAdvFileInput','change',(e)=>handleBranchAdvUpload(e));
+  on('branchTargetUploadDrop','click',()=>document.getElementById('branchTargetFileInput').click());
+  on('branchTargetFileInput','change',(e)=>handleBranchTargetUpload(e));
   on('intReversalMasterUploadDrop','click',()=>document.getElementById('intReversalMasterFileInput').click());
   on('intReversalMasterFileInput','change',(e)=>handleInterestReversalMasterUpload(e));
   on('branchContactsUploadDrop','click',()=>document.getElementById('branchContactsFileInput').click());
@@ -7688,6 +7964,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
+  on('downloadBranchTargetTemplateBtn','click',()=>downloadBranchTargetTemplate());
   on('downloadIntReversalMasterTemplateBtn','click',()=>downloadInterestReversalMasterTemplate());
   on('asOnDateInput','change',(e)=>{ __pendingAsOnDate = e.target.value; });
   on('updateCancelBtn','click',()=>toggleUpdateModal(false));
