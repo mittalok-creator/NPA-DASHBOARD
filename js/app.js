@@ -3792,11 +3792,23 @@ async function exportOtsExcel(){
           style: { fill:{type:'pattern', pattern:'solid', bgColor:{argb}} } }],
       });
     });
+    // A 3-color scale, not a data bar: ExcelJS writes a data-bar rule as a
+    // core cfRule PLUS a worksheet-level x14 extLst (needed for the bar's
+    // gradient/axis details) -- and always appends that extLst after
+    // legacyDrawing (the VML anchor the OTS Amount/Lok Adalat cell notes
+    // above already need), violating the strict child-element order
+    // CT_Worksheet requires (extLst must be the very last element). Real
+    // Excel treats that as corruption and silently strips the sheet on
+    // open -- exactly the "blank sheet" Alok reported -- while lenient
+    // readers like openpyxl/LibreOffice tolerate it, which is why this
+    // wasn't caught in this round's own verification. A color scale needs
+    // no extLst at all (confirmed by inspecting the raw XML both ways), so
+    // it coexists safely with the existing cell notes.
     ws.addConditionalFormatting({
       ref: dataRange(R.settleProgress),
-      rules: [{ type:'dataBar', minLength:0, maxLength:100, priority: 1,
-        cfvo: [{type:'num', value:0},{type:'num', value:1}],
-        color: {argb:'FF2F7D7D'} }],
+      rules: [{ type:'colorScale', priority: 1,
+        cfvo: [{type:'num', value:0},{type:'num', value:0.5},{type:'num', value:1}],
+        color: [{argb:'FFFAD2CF'},{argb:'FFFCE7BE'},{argb:'FFD7F2E3'}] }],
     });
     ws.addConditionalFormatting({
       ref: dataRange(R.impact),
