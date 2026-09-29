@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### KCC Overdue account page: Cust NPA Date called out big and red, with a running day-count (2026-09-29)
+
+Alok, with a screenshot of the just-shipped full-screen KCC Overdue account page: "yahan cust npa date upar pannel par big font main red color main likho and aaj se remaining days bhi show karo" -- show the Cust NPA Date prominently at the top of the page, in large red text, with the number of days remaining (or overdue) counted from today.
+
+**Implementation**: new `.kccov-npa-alert` block in the borrower-card, right below the Name/Branch header row and above the Account No/Cust ID/Scheme grid -- large bold `--red` date, small `--red` day-count label underneath, on a `--red-soft` tinted background (same tokens `.eligibility-warn` already uses, so both themes work with zero new colors). New `kccNpaDaysRemainingLabel()` helper (`toDate()` + the existing `daysBetween()`), handling both directions since real data isn't always a future date: positive days show "N days remaining", zero shows "Due today", negative shows "N days overdue". **KCC Overdue only** -- PNPA's own same-named "Cust NPA Date" field records a date already in the past by definition (see `parsePnpaRows`' own comment: "only ever populated once an account HAS ALREADY been classified NPA"), a different meaning entirely, so this alert is gated to `isKcc` and never shown on a PNPA account page. The existing "Cust NPA Date" row inside the Particulars table below is untouched -- this is an additional, prominent callout, not a replacement.
+
+Verified via Playwright against real production KCC Overdue data: alert renders with the correct date and a correctly-computed day-count (cross-checked independently against the date string, both a genuine "N days overdue" case since the test account's date had already passed), red color confirmed via computed style, Particulars table's own row unaffected, and confirmed absent on a PNPA account page. Screenshotted light, dark, and phone width.
+
 ### KCC Overdue / Daily PNPA quick-detail: full-screen page instead of the small popup (2026-09-28, same day)
 
 Alok: "abhi apan pnpa and kcc overdue accounts ko popup main ek chota sa screen main show kar rahe hain kya usko bhi apan npa account details ki tarah hi show kar sakte hain kya" -- KCC Overdue/PNPA accounts opened in a small centered `#quickAcctModalOverlay` popup; wants the same full-screen treatment just shipped for NPA accounts. Confirmed with Alok directly (AskUserQuestion): both apps, and the *same fields* the old popup already showed (Outstanding, CADU, Limit, Cust NPA Date/Review Date, F.Y., Category, SMA, Reason -- KCC/PNPA rows have no Sanction Date/UCI/Provision, that only exists in the full NPA loan book), laid out full-screen in the same icon-prefixed particulars-row visual language as the NPA view, not a literal field-for-field copy.
