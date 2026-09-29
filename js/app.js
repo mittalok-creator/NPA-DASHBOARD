@@ -3484,6 +3484,10 @@ const OTS_XL_CALC_ROW_LABELS = ['UCI Anchor Date'];
 // Summary export, so this isn't a new palette, just the same one applied
 // to a fixed 3-section layout instead of a cycling per-F.Y. one).
 const XL_GROUP_BAND_ARGB = { 'Loan Terms':'FF1B2A44', 'Dues & Provisioning':'FF8B5E1F', 'Settlement & Impact':'FF2F7D7D' };
+// Light neutral fill for the "total" rows (STRONG_ROWS) -- Alok's own
+// mockup-approved feedback: bold text alone didn't make them jump out while
+// scanning, a real dashboard also tints the totals.
+const XL_STRONG_ROW_FILL = 'FFEFF2F6';
 /* SheetJS (the "xlsx" global used elsewhere in this file, e.g. Daily NPA
    Projection's export) is the free Community Edition, which can only
    READ cell styles, not write them -- .z (number format) writes fine, but
@@ -3703,12 +3707,12 @@ async function exportOtsExcel(){
   });
 
   OTS_XL_ROW_LABELS.forEach(label=>{
-    set(`A${ROW_OF[label]}`, label, {font:{bold:true, color:{argb:'FF000000'}}});
+    set(`A${ROW_OF[label]}`, label, {font:{bold:true, color:{argb:'FF000000'}}, fill: STRONG_ROWS.has(label) ? XL_STRONG_ROW_FILL : undefined});
   });
 
   slots.forEach((s,i)=>{
     const c = cols[i];
-    const rowStyle = r => ({border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}, bold:STRONG_ROWS.has(LABEL_OF_ROW[r])}});
+    const rowStyle = r => ({border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}, bold:STRONG_ROWS.has(LABEL_OF_ROW[r])}, fill: STRONG_ROWS.has(LABEL_OF_ROW[r]) ? XL_STRONG_ROW_FILL : undefined});
 
     // UCI Anchor Date (formula) for this account on the hidden sheet, read by
     // this sheet's UCI @ 8.5% below. Both its inputs -- NPA Date and Scheme --
@@ -3758,12 +3762,28 @@ async function exportOtsExcel(){
     // any Asset Code the rate table doesn't recognize falls back to "—"
     // rather than an Excel #N/A error.
     set(`${c}${R.lokAdalat}`, formula(`IF(${c}${R.assetCode}="SUB_STD","Not Eligible",IFERROR(${c}${R.os}*VLOOKUP(${c}${R.assetCode},${lokAdalatRateTable},2,FALSE),"—"))`), {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}}, numFmt:XL_INR_FMT});
+    // Left genuinely BLANK (not 0) when nothing's been typed yet -- matches
+    // the on-screen input, which shows only a faint "0" placeholder, not a
+    // real stored value (recalcLoan()'s own `ots===''` branch). Every
+    // formula that reads this cell (Total Sacrifice/Ledger Sacrifice/Impact
+    // on P&L, the aggregate SUM) already treats a blank cell as 0 in Excel
+    // arithmetic, so leaving it blank changes nothing about those figures --
+    // it only lets Settlement Progress below tell "not typed yet" apart
+    // from "typed as literally zero".
     const otsNum = parseOtsAmount(otsAmounts[s.acctNo]);
-    set(`${c}${R.ots}`, otsNum===null ? 0 : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, numFmt:XL_INR_FMT});
+    set(`${c}${R.ots}`, otsNum===null ? null : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, numFmt:XL_INR_FMT, fill:XL_STRONG_ROW_FILL});
     // Settlement Progress = OTS Amount as a share of Total Dues -- the same
-    // % the on-screen thin fill-bar (settleRow()) already shows; a data-bar
-    // conditional-formatting rule is applied over this row below.
-    set(`${c}${R.settleProgress}`, formula(`IF(${c}${R.totalDues}=0,0,${c}${R.ots}/${c}${R.totalDues})`), {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}}, numFmt:'0.0%'});
+    // % the on-screen thin fill-bar (settleRow()) already shows. Alok's own
+    // feedback on the first shipped version: 0% in red/pink looked like a
+    // bad result when it just meant nobody had typed an OTS Amount yet --
+    // on screen this same "not typed" state shows a plain dash, not a
+    // colored 0%. ISBLANK() mirrors that exactly and, since it's a live
+    // formula (not a value decided once at export time), typing a real OTS
+    // Amount straight into this cell in Excel still recalculates it
+    // immediately, same as every other live figure on this sheet. A
+    // color-scale conditional-formatting rule (below) leaves the "—" text
+    // result uncolored, matching the mockup Alok approved.
+    set(`${c}${R.settleProgress}`, formula(`IF(ISBLANK(${c}${R.ots}),"—",IF(${c}${R.totalDues}=0,0,${c}${R.ots}/${c}${R.totalDues}))`), {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}}, numFmt:'0.0%'});
     // Total Sacrifice = Total Dues - OTS Amount (Interest Reversal is
     // already folded into Total Dues above, not added a second time).
     set(`${c}${R.totalSac}`, formula(`${c}${R.totalDues}-${c}${R.ots}`), {...rowStyle(R.totalSac), numFmt:XL_INR_FMT});
