@@ -3461,52 +3461,78 @@ function renderPrintView(){
    lookup table are helper/intermediate values the PDF never showed, so
    they live on a second "Calculation Details" sheet instead of cluttering
    this one; formulas here just reference across to that sheet. */
-/* Grouped exactly like the on-screen Loan Detail table (loanTableHTML(),
-   its "Loan Terms" / "Dues & Provisioning" / "Settlement & Impact" section
-   headers) -- previously one flat 16-row list with no grouping and two
-   on-screen rows (Total Contractual Dues, Settlement Progress) missing
-   entirely. "OTS Amt as per Lok Adalat" was already on the print/PDF sheet
-   (a stale comment here once claimed the two sheets were row-for-row
-   identical -- they'd drifted since) and is now carried into Excel too,
-   as a real formula off the same static rate table print/screen already
-   use (LOK_ADALAT_RATES). */
+/* Visual redesign (2026-09-29): Alok supplied his own hand-built reference
+   file (a single-account "card" layout -- navy/blue/teal/gold bands, Aptos
+   fonts, icon-bullet section headers, an ivory value tint, a 2-up Loan
+   Terms/Dues & Provisioning layout, full-width Settlement & Impact rows,
+   and a tile-style Aggregate Totals with one big "TOTAL SACRIFICE" hero
+   number) and asked for the export to look like it -- confirmed directly
+   with him that this is a STYLE reference only: every field, formula, and
+   behavior below (UCI/Provision/Lok Adalat live formulas, the ISBLANK-
+   neutral Settlement Progress fix, STRONG_ROWS bolding) stays exactly as
+   already implemented; only the visual skin and the column/row geometry
+   change. The reference is single-account; confirmed the card repeats
+   once per linked account (1-4), stacked vertically, with one shared
+   Aggregate Totals section at the bottom summing across all of them. */
 const OTS_XL_GROUPS = [
   ['Loan Terms', ['Sanction Date','Sanction Limit','Asset Code','NPA Date','Days in NPA','Scheme','O/S Balance']],
   ['Dues & Provisioning', ['Interest Reversal','UCI @ 8.5%','Total Dues','Total Contractual Dues','Provision','Total P&L']],
   ['Settlement & Impact', ['OTS Amt as per Lok Adalat','OTS Amount','Settlement Progress','Total Sacrifice','Ledger Sacrifice (BDWO Amount)','Impact on P&L']],
 ];
-const OTS_XL_ROW_LABELS = OTS_XL_GROUPS.flatMap(g=>g[1]);
 const OTS_XL_CALC_ROW_LABELS = ['UCI Anchor Date'];
-// One fixed, meaningful color per section (not a cycling palette -- these
-// are 3 fixed named groups, unlike an open-ended list) -- reusing this
-// app's own navy/brass/teal identity colors (two of the three ARGB values
-// already exist verbatim in KCCOV_FY_PALETTE_ARGB from the KCC Overdue
-// Summary export, so this isn't a new palette, just the same one applied
-// to a fixed 3-section layout instead of a cycling per-F.Y. one).
-const XL_GROUP_BAND_ARGB = { 'Loan Terms':'FF1B2A44', 'Dues & Provisioning':'FF8B5E1F', 'Settlement & Impact':'FF2F7D7D' };
-// Light neutral fill for the "total" rows (STRONG_ROWS) -- Alok's own
-// mockup-approved feedback: bold text alone didn't make them jump out while
-// scanning, a real dashboard also tints the totals.
-const XL_STRONG_ROW_FILL = 'FFEFF2F6';
+// Same 7 fields the on-screen table already marks strong (lt-strong) --
+// hoisted to module scope (was function-local) since both the per-account
+// card builder and the aggregate tiles below need it. Named XL_-prefixed to
+// avoid any confusion with the unrelated, differently-scoped local
+// `STRONG_ROWS` a few hundred lines up in the print/PDF sheet's own
+// renderPrintView() (a deliberately smaller set -- that function is
+// untouched by this round).
+const XL_STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total Contractual Dues','Total P&L','OTS Amount','Total Sacrifice','Impact on P&L']);
 /* SheetJS (the "xlsx" global used elsewhere in this file, e.g. Daily NPA
    Projection's export) is the free Community Edition, which can only
    READ cell styles, not write them -- .z (number format) writes fine, but
    fonts/fills/borders are silently dropped, so a SheetJS-built workbook
    always comes out plain black-on-white regardless of what's set on the
    cell object. ExcelJS (window.ExcelJS, js/vendor/exceljs.min.js) writes
-   real styling, so this export uses it instead. Now genuinely colored
-   (group-band header rows + conditional formatting) rather than plain
-   black-on-white, at Alok's own request ("proper dashboard ki tarah
-   color formatting and conditional formatting") -- see the group-band
-   rows and the 3 addConditionalFormatting() rules below. */
-const XL_BORDER_THIN = {style:'thin', color:{argb:'FF555555'}};
+   real styling, so this export uses it instead. */
+// ---- Palette + fonts, lifted directly from Alok's reference file ----
+const XL_FONT_HEAD = 'Aptos Display';   // band/section-header text
+const XL_FONT_BODY = 'Aptos';           // everything else
+const XL_NAVY_TITLE  = 'FF073B70'; // title band; also the navy TEXT color on tiles/hero
+const XL_BLUE_MED    = 'FF0B4F8A'; // Customer Details band, Loan Terms sub-header, Aggregate Totals band
+const XL_GREEN_TEAL  = 'FF008A68'; // per-account "PARTICULARS" band
+const XL_GOLD_BROWN  = 'FF9A6815'; // Dues & Provisioning sub-header
+const XL_TEAL_SETTLE = 'FF087F82'; // Settlement & Impact band; reused on the 2nd footer line
+const XL_IVORY_VALUE = 'FFFFFDF0'; // ordinary value-cell fill ("receipt paper")
+const XL_GOLD_TINT   = 'FFFFF2D8'; // Total Dues label+value emphasis (subsection subtotal)
+const XL_HERO_BLUE   = 'FFEEF7FF'; // name/address hero-cell fill
+const XL_LABEL_MINT  = 'FFE7F7F1'; // customer-info label-cell fill
+const XL_TILE_BLUE   = 'FFDCEEFF'; // aggregate tile fill (label cell + hero tile)
+const XL_GREY_LABEL  = 'FF667085'; // "REPORT DATE"/"BRANCH" labels, footer credit line
+const XL_LIGHT_TXT   = 'FFDDEBFF'; // subtitle text on the navy title band
+const XL_DARK_TEXT   = 'FF111827'; // ordinary value text
+// Light neutral fill for the "total" rows (XL_STRONG_ROWS) -- Alok's own
+// mockup-approved feedback from an earlier round: bold text alone didn't
+// make them jump out while scanning. Total Dues specifically gets the
+// reference's own deeper gold tint instead (its "subsection subtotal"),
+// per fillFor()/below.
+const XL_STRONG_ROW_FILL = 'FFEFF2F6';
+const XL_BORDER_THIN = {style:'thin', color:{argb:'FFC9D4E0'}};
 const XL_BORDER_ALL = {top:XL_BORDER_THIN, bottom:XL_BORDER_THIN, left:XL_BORDER_THIN, right:XL_BORDER_THIN};
+// Box-drawn borders for the 4 small aggregate tiles only -- medium navy on
+// the outer edge, thin on the inner edge, so the label+value cells read as
+// one continuous drawn box rather than two separately-bordered cells.
+const XL_TILE_LABEL_BORDER = {top:{style:'medium',color:{argb:'FF073B70'}}, left:{style:'medium',color:{argb:'FF073B70'}}, bottom:XL_BORDER_THIN, right:XL_BORDER_THIN};
+const XL_TILE_VALUE_BORDER = {top:XL_BORDER_THIN, right:XL_BORDER_THIN, bottom:{style:'medium',color:{argb:'FF073B70'}}, left:{style:'medium',color:{argb:'FF073B70'}}};
 const XL_INR_FMT = '"₹"#,##,##0.00;[Red]-"₹"#,##,##0.00';
 // Impact on P&L only: same currency format, plus a profit/loss arrow driven
 // by the cell's live sign (green ▲ for profit, red ▼ for loss).
 const XL_INR_FMT_PL = '[Green]"▲ ₹"#,##,##0.00;[Red]"▼ -₹"#,##,##0.00';
 const XL_DATE_FMT = 'dd-mm-yyyy';
 const XL_CALC_SHEET = 'Calculation Details';
+const XL_ROW_H_NORMAL = 21;
+const XL_ROW_H_BAND = 28;
+const XL_ROW_H_TITLE = 38;
 
 async function exportOtsExcel(){
   const slots = window.__slots; const custRow = window.__custRow;
@@ -3516,22 +3542,21 @@ async function exportOtsExcel(){
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('OTS Calculator', { views: [{showGridLines:false}] });
   /* Hidden: it only carries the UCI anchor dates and the provision-rate
-     lookup the formulas point at. The printed sheet never showed either, so
-     the workbook now opens on one sheet that matches the PDF. Right-click
-     the tab strip and Unhide to inspect it. */
+     lookup the formulas point at. Right-click the tab strip and Unhide to
+     inspect it. Still one column per account (unrelated to the main
+     sheet's own layout, which is now row-blocks -- see below), since it's
+     helper data with no visual-design constraint of its own. */
   const wsCalc = wb.addWorksheet(XL_CALC_SHEET, { views: [{showGridLines:false}], state:'hidden' });
   const colLetter = i => XLSX.utils.encode_col(i+1); // account 0 -> B, 1 -> C, ...
   const cols = slots.map((s,i)=>colLetter(i));
-  const lastCol = cols[cols.length-1];
-  const lastColIdx = cols.length + 1; // 1-indexed: A=1, B=2...
-  /* One span for every merged row -- title, subtitle, meta, name, address,
-     aggregates and footer all end on the same column as the table below
-     them. Previously the header block merged out to column E while the table
-     stopped at D, leaving a permanently empty column hanging off the right
-     of every export. The floor of 4 keeps a single-account sheet wide enough
-     for the footer line without stretching a 3-account one. */
-  const SPAN = Math.max(lastColIdx, 4);
-  const SPAN_COL = XLSX.utils.encode_col(SPAN - 1);
+  // Fixed 8-column card layout (A..H), independent of account count --
+  // Alok's reference file's own column widths (A=4,B=24,C=18,D=18,E=4,
+  // F=27,G=18,H=18): A margin, B:D the Loan Terms value merge, E a thin
+  // gutter, F:H the Dues & Provisioning zone. Every account's card reuses
+  // this same 8-column frame, stacked one below the other -- so SPAN is a
+  // constant now, not a function of how many accounts are linked.
+  const SPAN = 8;
+  const SPAN_COL = 'H';
 
   const setOn = (sheet, addr, value, opts={}) => {
     const cell = sheet.getCell(addr);
@@ -3547,32 +3572,73 @@ async function exportOtsExcel(){
   const setCalc = (addr, value, opts) => setOn(wsCalc, addr, value, opts);
   const dateVal = jsDate => jsDate || null;
   const formula = f => ({formula: f});
-
-  // ---- Header, matching the print sheet exactly: no logo (dropped per
-  // Alok's request -- it never fit cleanly at export width either), a
-  // plain title/subtitle/meta block, then the borrower's name and address,
-  // then the same two-column info grid the PDF uses (Cust ID/Mobile/PAN/
-  // Aadhar beside SB A/c/SB Balance; Sol ID rides in the Branch line, not
-  // its own field). Built with a running row counter, not fixed row
-  // numbers, so the header can grow or shrink without hand-recalculating
-  // every row below it. ----
-  const solId = String(custRow[C.SOL_ID]||'');
-  /* Guidance the paper sheet has no need for (paper cannot be edited) is
-     attached as a cell note rather than its own row, so the sheet keeps the
-     PDF's exact shape. Wrapped because note support varies by ExcelJS build
-     and a missing note must never cost the whole export. */
   const addNote = (addr, text) => { try{ ws.getCell(addr).note = text; }catch(e){} };
-  let r = 1;
-  ws.mergeCells(r,1,r,SPAN);
-  set(`A${r}`, 'UPGB OTS CALCULATOR', {font:{bold:true, size:16, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
-  ws.getRow(r).height = 26;
-  r++;
-  ws.mergeCells(r,1,r,SPAN);
-  set(`A${r}`, 'Uttar Pradesh Gramin Bank (Regional Office Hathras)', {font:{size:11, color:{argb:'FF333333'}}, align:{horizontal:'center'}, border:{bottom:{style:'medium', color:{argb:'FF555555'}}}});
-  r += 2;
+  const writeBand = (rowNum, colStart, colEnd, text, fillArgb, opts={}) => {
+    ws.mergeCells(rowNum, colStart, rowNum, colEnd);
+    const addr = `${XLSX.utils.encode_col(colStart-1)}${rowNum}`;
+    set(addr, text, {font:{name:XL_FONT_HEAD, bold:true, size:opts.size||12, color:{argb:'FFFFFFFF'}}, align:{horizontal:opts.align||'left', vertical:'middle'}, fill:fillArgb, border:false});
+    ws.getRow(rowNum).height = XL_ROW_H_BAND;
+  };
+  // Value/label styling for every Particulars field, keyed directly by its
+  // label (not a reverse row->label lookup, which only made sense when one
+  // row was shared across every account's own column -- now each account
+  // has its own row for the same field, so the label is simply already
+  // known at the point each cell is written).
+  const FIELD_NUMFMT = {
+    'Sanction Date':XL_DATE_FMT, 'Sanction Limit':XL_INR_FMT, 'Asset Code':undefined,
+    'NPA Date':XL_DATE_FMT, 'Days in NPA':'0', 'Scheme':undefined, 'O/S Balance':XL_INR_FMT,
+    'Interest Reversal':XL_INR_FMT, 'UCI @ 8.5%':XL_INR_FMT, 'Total Dues':XL_INR_FMT,
+    'Total Contractual Dues':XL_INR_FMT, 'Provision':XL_INR_FMT, 'Total P&L':XL_INR_FMT,
+    'OTS Amt as per Lok Adalat':XL_INR_FMT, 'OTS Amount':XL_INR_FMT, 'Settlement Progress':'0.0%',
+    'Total Sacrifice':XL_INR_FMT, 'Ledger Sacrifice (BDWO Amount)':XL_INR_FMT, 'Impact on P&L':XL_INR_FMT_PL,
+  };
+  // Total Dues gets the reference's own deeper gold tint (its "subsection
+  // subtotal" callout); every other XL_STRONG_ROWS field gets the plain
+  // strong-row tint; anything else gets the ordinary ivory "receipt paper"
+  // value tint (labels stay unfilled, matching the reference).
+  const valueFill = label => label==='Total Dues' ? XL_GOLD_TINT : (XL_STRONG_ROWS.has(label) ? XL_STRONG_ROW_FILL : XL_IVORY_VALUE);
+  const labelFill = label => label==='Total Dues' ? XL_GOLD_TINT : (XL_STRONG_ROWS.has(label) ? XL_STRONG_ROW_FILL : undefined);
+  const valueStyle = label => ({border:XL_BORDER_ALL, align:{horizontal:'right', vertical:'middle'}, font:{name:XL_FONT_BODY, size:10.5, bold:XL_STRONG_ROWS.has(label), color:{argb:XL_DARK_TEXT}}, fill:valueFill(label), numFmt:FIELD_NUMFMT[label]});
+  const labelStyle = label => ({border:false, align:{horizontal:'left', vertical:'middle'}, font:{name:XL_FONT_BODY, size:10.5, bold:XL_STRONG_ROWS.has(label), color:{argb:XL_DARK_TEXT}}, fill:labelFill(label)});
+  // Loan Terms field: label merged A:C, value merged D:E (both zones run in
+  // parallel down the same rows as Dues & Provisioning's own F:G/H zone).
+  const writeLeftRow = (rowNum, label, valueOrFormula) => {
+    ws.getRow(rowNum).height = XL_ROW_H_NORMAL;
+    ws.mergeCells(rowNum,1,rowNum,3);
+    set(`A${rowNum}`, label, labelStyle(label));
+    ws.mergeCells(rowNum,4,rowNum,5);
+    set(`D${rowNum}`, valueOrFormula, valueStyle(label));
+  };
+  // Dues & Provisioning field: label merged F:G, value in H alone.
+  const writeRightRow = (rowNum, label, valueOrFormula) => {
+    ws.getRow(rowNum).height = XL_ROW_H_NORMAL;
+    ws.mergeCells(rowNum,6,rowNum,7);
+    set(`F${rowNum}`, label, labelStyle(label));
+    set(`H${rowNum}`, valueOrFormula, valueStyle(label));
+  };
+  // Settlement & Impact field: full-width row, label merged A:E, value
+  // merged F:H.
+  const writeFullRow = (rowNum, label, valueOrFormula) => {
+    ws.getRow(rowNum).height = XL_ROW_H_NORMAL;
+    ws.mergeCells(rowNum,1,rowNum,5);
+    set(`A${rowNum}`, label, labelStyle(label));
+    ws.mergeCells(rowNum,6,rowNum,8);
+    set(`F${rowNum}`, valueOrFormula, valueStyle(label));
+  };
 
-  const reportDateRow = r;
-  set(`A${reportDateRow}`, 'Report Date', {font:{bold:true, color:{argb:'FF333333'}}, border:false});
+  // ---- Title band ----
+  writeBand(1, 1, SPAN, 'UPGB  •  OTS CALCULATOR', XL_NAVY_TITLE, {size:22, align:'center'});
+  ws.getRow(1).height = XL_ROW_H_TITLE;
+  ws.mergeCells(2,1,2,SPAN);
+  set('A2', 'Uttar Pradesh Gramin Bank  |  Regional Office Hathras', {font:{name:XL_FONT_BODY, size:11, color:{argb:XL_LIGHT_TXT}}, align:{horizontal:'center', vertical:'middle'}, fill:XL_NAVY_TITLE, border:false});
+  ws.getRow(2).height = XL_ROW_H_NORMAL;
+  ws.getRow(3).height = 6; // hairline gap before the Report Date row
+
+  // ---- Report Date / Branch row ----
+  const solId = String(custRow[C.SOL_ID]||'');
+  const reportDateRow = 4;
+  ws.mergeCells(reportDateRow,1,reportDateRow,2);
+  set(`A${reportDateRow}`, 'REPORT DATE', {font:{name:XL_FONT_BODY, bold:true, size:9, color:{argb:XL_GREY_LABEL}}, align:{horizontal:'left', vertical:'middle'}, border:false});
   /* On screen, "days since X" (computeUCI, Days in NPA, etc.) is
      daysBetween(today, anchor) = Math.round((today-anchor)/86400000),
      with `today` carrying the current time-of-day -- so it rounds UP to
@@ -3588,46 +3654,53 @@ async function exportOtsExcel(){
      identical whole-day count instead. */
   const reportDateSnapshot = new Date();
   reportDateSnapshot.setHours(reportDateSnapshot.getHours()>=12 ? 24 : 0, 0, 0, 0);
-  set(`B${reportDateRow}`, dateVal(reportDateSnapshot), {numFmt:XL_DATE_FMT, font:{bold:true, color:{argb:'FF000000'}}, border:XL_BORDER_ALL});
-  addNote(`B${reportDateRow}`, 'Editable. Every UCI, Days in NPA and dues figure below recalculates off this date.');
-  set(`C${reportDateRow}`, 'Branch', {font:{bold:true, color:{argb:'FF333333'}}, border:false});
-  ws.mergeCells(reportDateRow,4,reportDateRow,SPAN);
-  set(`D${reportDateRow}`, `${custRow[C.SOL_DESC]||''}${solId?` (${solId})`:''}`, {font:{color:{argb:'FF000000'}}, border:false});
-  const reportDateRef = `$B$${reportDateRow}`;
-  r += 2;
+  ws.mergeCells(reportDateRow,3,reportDateRow,4);
+  set(`C${reportDateRow}`, dateVal(reportDateSnapshot), {numFmt:XL_DATE_FMT, font:{name:XL_FONT_BODY, bold:true, size:12, color:{argb:XL_NAVY_TITLE}}, align:{horizontal:'center', vertical:'middle'}, fill:XL_IVORY_VALUE, border:XL_BORDER_ALL});
+  addNote(`C${reportDateRow}`, 'Editable. Every UCI, Days in NPA and dues figure below recalculates off this date.');
+  const reportDateRef = `$C$${reportDateRow}`;
+  ws.mergeCells(reportDateRow,6,reportDateRow,7);
+  set(`F${reportDateRow}`, 'BRANCH', {font:{name:XL_FONT_BODY, bold:true, size:9, color:{argb:XL_GREY_LABEL}}, align:{horizontal:'left', vertical:'middle'}, border:false});
+  set(`H${reportDateRow}`, `${custRow[C.SOL_DESC]||''}${solId?` (${solId})`:''}`, {font:{name:XL_FONT_BODY, bold:true, size:10.5, color:{argb:XL_DARK_TEXT}}, align:{horizontal:'right', vertical:'middle'}, fill:XL_IVORY_VALUE, border:XL_BORDER_ALL});
+  ws.getRow(reportDateRow).height = XL_ROW_H_NORMAL;
+  ws.getRow(5).height = XL_ROW_H_NORMAL; // gap before the Customer Details band
 
-  ws.mergeCells(r,1,r,SPAN);
-  set(`A${r}`, custRow[C.NAME]||'', {font:{bold:true, size:12, color:{argb:'FF000000'}}, border:false});
-  r++;
-  ws.mergeCells(r,1,r,SPAN);
-  set(`A${r}`, custRow[C.ADDR]||'', {font:{size:10, color:{argb:'FF333333'}}, border:false});
-  r += 2;
-
-  const infoPairs = [
-    ['Cust ID', String(custRow[C.CUST_ID]||''), 'SB A/c', String(custRow[C.SB_ACCT]||'')],
-    ['Mobile', String(custRow[C.PHONE]||''), 'SB Balance', custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL]],
-    ['PAN', String(custRow[C.PAN]||''), '', ''],
-    ['Aadhar', String(custRow[C.AADHAR]||''), '', ''],
+  // ---- Customer Details (once -- shared across every linked account) ----
+  const custBandRow = 6;
+  writeBand(custBandRow, 1, SPAN, '●  CUSTOMER DETAILS', XL_BLUE_MED, {size:13, align:'left'});
+  // 6-row identity grid (Cust ID/Mobile/PAN/Aadhar/SB A/c/SB Balance), one
+  // label(F:G)/value(H) pair per row -- widened from the reference file's
+  // own 2-pairs-per-row layout, which put a label ("Cust ID" etc.) into a
+  // lone 4-unit-wide column (E) with no room to actually display it
+  // (nothing merges with E there); that reads as an authoring slip in a
+  // hand-built file rather than an intentional design, so this keeps the
+  // same mint-tinted-label/plain-value STYLE without reproducing the
+  // clipped text.
+  const custInfoStart = custBandRow + 1;
+  const CUST_INFO_FIELDS = [
+    ['Cust ID', String(custRow[C.CUST_ID]||''), undefined],
+    ['Mobile', String(custRow[C.PHONE]||''), undefined],
+    ['PAN', String(custRow[C.PAN]||''), undefined],
+    ['Aadhar', String(custRow[C.AADHAR]||''), undefined],
+    ['SB A/c', String(custRow[C.SB_ACCT]||''), undefined],
+    ['SB Balance', custRow[C.SB_BAL]===''?0:custRow[C.SB_BAL], XL_INR_FMT],
   ];
-  infoPairs.forEach((row,i)=>{
-    const rr = r+i;
-    set(`A${rr}`, row[0], {font:{bold:true, color:{argb:'FF333333'}}, border:false});
-    set(`B${rr}`, row[1], {font:{color:{argb:'FF000000'}}, border:false});
-    if(row[2]){
-      set(`C${rr}`, row[2], {font:{bold:true, color:{argb:'FF333333'}}, border:false});
-      ws.mergeCells(rr,4,rr,SPAN);
-      set(`D${rr}`, row[3], {font:{color:{argb:'FF000000'}}, numFmt: row[2]==='SB Balance'?XL_INR_FMT:undefined, border:false});
-    }
+  const custInfoEnd = custInfoStart + CUST_INFO_FIELDS.length - 1;
+  ws.mergeCells(custInfoStart,1,custInfoEnd,4);
+  set(`A${custInfoStart}`, `${custRow[C.NAME]||''}\n${custRow[C.ADDR]||''}`, {font:{name:XL_FONT_BODY, bold:true, size:14, color:{argb:XL_NAVY_TITLE}}, align:{horizontal:'left', vertical:'middle', wrapText:true}, fill:XL_HERO_BLUE, border:XL_BORDER_ALL});
+  CUST_INFO_FIELDS.forEach(([label,value,numFmt],j)=>{
+    const rr = custInfoStart + j;
+    ws.mergeCells(rr,6,rr,7);
+    set(`F${rr}`, label, {font:{name:XL_FONT_BODY, bold:true, size:9.5, color:{argb:XL_GREY_LABEL}}, align:{horizontal:'left', vertical:'middle'}, fill:XL_LABEL_MINT, border:XL_BORDER_ALL});
+    set(`H${rr}`, value, {font:{name:XL_FONT_BODY, bold:true, size:10.5, color:{argb:XL_DARK_TEXT}}, align:{horizontal:'left', vertical:'middle'}, border:XL_BORDER_ALL, numFmt});
+    ws.getRow(rr).height = XL_ROW_H_NORMAL;
   });
-  r += infoPairs.length + 1;
 
-  // ---- Calculation Details sheet (hidden): the UCI anchor date per account
-  // plus the Provision Rate lookup table. Scheme no longer lives here -- it
-  // is a proper row on the main sheet now, and the anchor formula reads it
-  // from there, so the same value is not stored in two places. ----
-  wsCalc.mergeCells(1,1,1,Math.max(lastColIdx,4));
+  // ---- Calculation Details sheet (hidden): unchanged from before this
+  // round -- the UCI anchor date per account (still one column per account)
+  // plus the Provision Rate / Lok Adalat Minimum-% lookup tables. ----
+  wsCalc.mergeCells(1,1,1,Math.max(cols.length+1,4));
   setCalc('A1', 'Calculation Details', {font:{bold:true, size:14, color:{argb:'FF000000'}}, border:false});
-  wsCalc.mergeCells(2,1,2,Math.max(lastColIdx,4));
+  wsCalc.mergeCells(2,1,2,Math.max(cols.length+1,4));
   setCalc('A2', 'Helper values feeding the "OTS Calculator" sheet\'s formulas -- not shown on the printed sheet.', {font:{italic:true, size:10, color:{argb:'FF666666'}}, border:false});
   const calcHeaderRow = 4;
   setCalc(`A${calcHeaderRow}`, 'Particulars', {font:{bold:true, color:{argb:'FF000000'}}});
@@ -3659,66 +3732,48 @@ async function exportOtsExcel(){
     setCalc(`B${laRateHeadRow+1+i}`, rate, {numFmt:'0%', font:{color:{argb:'FF000000'}}});
   });
 
-  // ---- Particulars table (main sheet) ----
-  const headerRow = r;
-  set(`A${headerRow}`, 'Particulars', {font:{bold:true, color:{argb:'FF000000'}}});
-  slots.forEach((s,i)=>set(`${cols[i]}${headerRow}`, s.acctNo, {font:{bold:true, color:{argb:'FF000000'}}, align:{horizontal:'center'}}));
-
-  // Same rows the on-screen table marks strong (lt-strong), so the sheet
-  // reads with the same visual hierarchy as the app screen.
-  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total Contractual Dues','Total P&L','OTS Amount','Total Sacrifice','Impact on P&L']);
-  // Row numbers now account for one colored group-band row inserted before
-  // each of the 3 on-screen sections (Loan Terms / Dues & Provisioning /
-  // Settlement & Impact) -- ROW_OF/GROUP_BAND_ROW are built by walking
-  // OTS_XL_GROUPS once, so every label's row number (and the reverse
-  // LABEL_OF_ROW lookup used for bolding below) automatically accounts for
-  // the band rows without any hand-counted offsets.
-  const ROW_OF = {}, GROUP_BAND_ROW = {}, LABEL_OF_ROW = {};
-  let rowCursor = headerRow + 1;
-  OTS_XL_GROUPS.forEach(([groupLabel, labels])=>{
-    GROUP_BAND_ROW[groupLabel] = rowCursor;
-    rowCursor++;
-    labels.forEach(label=>{ ROW_OF[label] = rowCursor; LABEL_OF_ROW[rowCursor] = label; rowCursor++; });
-  });
-  const lastDataRow = rowCursor - 1;
-  const rowOf = label => ROW_OF[label];
-  const R = {
-    sanctionDate: rowOf('Sanction Date'), sanctionLimit: rowOf('Sanction Limit'), assetCode: rowOf('Asset Code'),
-    npaDate: rowOf('NPA Date'), daysNpa: rowOf('Days in NPA'), scheme: rowOf('Scheme'),
-    os: rowOf('O/S Balance'), uci85: rowOf('UCI @ 8.5%'), totalDues: rowOf('Total Dues'),
-    totalContractualDues: rowOf('Total Contractual Dues'),
-    uri: rowOf('Interest Reversal'), provision: rowOf('Provision'), totalPL: rowOf('Total P&L'),
-    lokAdalat: rowOf('OTS Amt as per Lok Adalat'), ots: rowOf('OTS Amount'), settleProgress: rowOf('Settlement Progress'),
-    totalSac: rowOf('Total Sacrifice'),
-    ledgerSac: rowOf('Ledger Sacrifice (BDWO Amount)'), impact: rowOf('Impact on P&L'),
-  };
-  addNote(`A${R.ots}`, 'Type a settlement amount here. Total Sacrifice, Ledger Sacrifice, Impact on P&L and the aggregate totals all recalculate from it.');
-  addNote(`A${R.lokAdalat}`, 'Minimum settlement floor under Lok Adalat: 80% of O/S for DA1, 70% for DA2, 50% for DA3, 40% for Loss. Substandard accounts are not eligible for Lok Adalat OTS at all.');
-
-  // Colored group-band header rows, matching the on-screen table's own
-  // "Loan Terms" / "Dues & Provisioning" / "Settlement & Impact" section
-  // headers -- the one piece of genuine "dashboard ki tarah" color this
-  // sheet was entirely missing before.
-  OTS_XL_GROUPS.forEach(([groupLabel])=>{
-    const bandRow = GROUP_BAND_ROW[groupLabel];
-    ws.mergeCells(bandRow, 1, bandRow, SPAN);
-    set(`A${bandRow}`, groupLabel.toUpperCase(), {font:{bold:true, size:11, color:{argb:'FFFFFFFF'}}, align:{horizontal:'center', vertical:'middle'}, fill:XL_GROUP_BAND_ARGB[groupLabel], border:false});
-    ws.getRow(bandRow).height = 20;
-  });
-
-  OTS_XL_ROW_LABELS.forEach(label=>{
-    set(`A${ROW_OF[label]}`, label, {font:{bold:true, color:{argb:'FF000000'}}, fill: STRONG_ROWS.has(label) ? XL_STRONG_ROW_FILL : undefined});
-  });
+  // ---- Per-account cards, stacked vertically ----
+  // Every field's formula TEXT is unchanged from before this round -- only
+  // which column letter stands for "this account's own O/S cell" etc.
+  // changes, since Loan Terms fields always live in column D, Dues &
+  // Provisioning outputs in column H, and Settlement & Impact outputs in
+  // column F, all within that one account's own row-block.
+  let rowCursor = custInfoEnd + 2; // one blank spacer row after Customer Details
+  const assetCells = [], settleCells = [], impactCells = [];
+  const osAddrs = [], duesAddrs = [], otsAddrs = [], ledgerAddrs = [], sacAddrs = [];
 
   slots.forEach((s,i)=>{
-    const c = cols[i];
-    const rowStyle = r => ({border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}, bold:STRONG_ROWS.has(LABEL_OF_ROW[r])}, fill: STRONG_ROWS.has(LABEL_OF_ROW[r]) ? XL_STRONG_ROW_FILL : undefined});
+    const calcCol = cols[i];
+    const block = {};
+    block.particularsBandRow = rowCursor; rowCursor++;
+    block.subHeaderRow = rowCursor; rowCursor++;
+    const ltStart = rowCursor;
+    block.sanctionDate = ltStart+0; block.sanctionLimit = ltStart+1; block.assetCode = ltStart+2;
+    block.npaDate = ltStart+3; block.daysNpa = ltStart+4; block.scheme = ltStart+5; block.os = ltStart+6;
+    block.uri = ltStart+0; block.uci85 = ltStart+1; block.totalDues = ltStart+2;
+    block.totalContractualDues = ltStart+3; block.provision = ltStart+4; block.totalPL = ltStart+5;
+    rowCursor = ltStart + 7; // Loan Terms (7 rows) is the taller side; Dues & Provisioning (6) simply ends one row earlier
+    block.settleBandRow = rowCursor; rowCursor++;
+    const siStart = rowCursor;
+    block.lokAdalat = siStart+0; block.ots = siStart+1; block.settleProgress = siStart+2;
+    block.totalSac = siStart+3; block.ledgerSac = siStart+4; block.impact = siStart+5;
+    rowCursor = siStart + 6;
 
-    // UCI Anchor Date (formula) for this account on the hidden sheet, read by
-    // this sheet's UCI @ 8.5% below. Both its inputs -- NPA Date and Scheme --
-    // are read back off the main sheet, so editing either there flows through.
-    const npaRefMain = `'OTS Calculator'!${c}${R.npaDate}`;
-    const schemeRefCalc = `'OTS Calculator'!${c}${R.scheme}`;
+    // PARTICULARS band + account-number chip
+    writeBand(block.particularsBandRow, 1, 5, '▣  PARTICULARS', XL_GREEN_TEAL);
+    ws.mergeCells(block.particularsBandRow,6,block.particularsBandRow,8);
+    set(`F${block.particularsBandRow}`, s.acctNo, {font:{name:XL_FONT_BODY, bold:true, size:13, color:{argb:XL_GREEN_TEAL}}, align:{horizontal:'center', vertical:'middle'}, fill:XL_IVORY_VALUE, border:XL_BORDER_ALL});
+
+    // Split sub-header: Loan Terms (left) | Dues & Provisioning (right)
+    writeBand(block.subHeaderRow, 1, 5, '₹  LOAN TERMS', XL_BLUE_MED);
+    writeBand(block.subHeaderRow, 6, 8, '●  DUES & PROVISIONING', XL_GOLD_BROWN);
+
+    // UCI Anchor Date (formula) for this account on the hidden sheet, read
+    // by this sheet's UCI @ 8.5% below. Both its inputs -- NPA Date and
+    // Scheme -- are read back off the main sheet, so editing either there
+    // flows through.
+    const npaRefMain = `'OTS Calculator'!D${block.npaDate}`;
+    const schemeRefCalc = `'OTS Calculator'!D${block.scheme}`;
     // Anchor date replicates computeUCI()'s scheme-dependent rule exactly:
     // CC004 (KCC) uses fixed 24-Mar/24-Sep half-year edges; every other
     // scheme anchors to end of NPA month (or the previous month's end, if
@@ -3727,41 +3782,48 @@ async function exportOtsExcel(){
       `IF(${npaRefMain}>DATE(YEAR(${npaRefMain}),9,24),DATE(YEAR(${npaRefMain}),9,24),`+
         `IF(${npaRefMain}>DATE(YEAR(${npaRefMain}),3,24),DATE(YEAR(${npaRefMain}),3,24),DATE(YEAR(${npaRefMain})-1,9,24))),`+
       `IF(${npaRefMain}=EOMONTH(${npaRefMain},0),DATE(YEAR(${npaRefMain}),MONTH(${npaRefMain}),29),EOMONTH(${npaRefMain},-1)))`;
-    setCalc(`${c}${RC.anchor}`, formula(anchorF), {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}}, numFmt:XL_DATE_FMT});
-    const anchorRefCalc = `'${XL_CALC_SHEET}'!${c}${RC.anchor}`;
+    setCalc(`${calcCol}${RC.anchor}`, formula(anchorF), {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}}, numFmt:XL_DATE_FMT});
+    const anchorRefCalc = `'${XL_CALC_SHEET}'!${calcCol}${RC.anchor}`;
 
-    set(`${c}${R.sanctionDate}`, dateVal(toDate(s.sanctionDate)), {...rowStyle(R.sanctionDate), numFmt:XL_DATE_FMT});
-    set(`${c}${R.sanctionLimit}`, s.sanctionLimit===''?0:s.sanctionLimit, {...rowStyle(R.sanctionLimit), numFmt:XL_INR_FMT});
-    set(`${c}${R.assetCode}`, s.assetCode, rowStyle(R.assetCode));
-    set(`${c}${R.npaDate}`, dateVal(toDate(s.npaDate)), {...rowStyle(R.npaDate), numFmt:XL_DATE_FMT});
-    set(`${c}${R.daysNpa}`, formula(`${reportDateRef}-${c}${R.npaDate}`), {...rowStyle(R.daysNpa), numFmt:'0'});
-    set(`${c}${R.scheme}`, s.scheme||'', rowStyle(R.scheme));
-    set(`${c}${R.os}`, s.os===''?0:s.os, {...rowStyle(R.os), numFmt:XL_INR_FMT});
-    set(`${c}${R.uci85}`, formula(`${c}${R.os}*8.5/100*((${reportDateRef}-${anchorRefCalc})/365)`), {...rowStyle(R.uci85), numFmt:XL_INR_FMT});
-    set(`${c}${R.uri}`, uriFor(s), {...rowStyle(R.uri), numFmt:XL_INR_FMT});
+    // Loan Terms
+    writeLeftRow(block.sanctionDate, 'Sanction Date', dateVal(toDate(s.sanctionDate)));
+    writeLeftRow(block.sanctionLimit, 'Sanction Limit', s.sanctionLimit===''?0:s.sanctionLimit);
+    writeLeftRow(block.assetCode, 'Asset Code', s.assetCode);
+    writeLeftRow(block.npaDate, 'NPA Date', dateVal(toDate(s.npaDate)));
+    writeLeftRow(block.daysNpa, 'Days in NPA', formula(`${reportDateRef}-D${block.npaDate}`));
+    writeLeftRow(block.scheme, 'Scheme', s.scheme||'');
+    writeLeftRow(block.os, 'O/S Balance', s.os===''?0:s.os);
+
+    // Dues & Provisioning
+    writeRightRow(block.uri, 'Interest Reversal', uriFor(s));
+    writeRightRow(block.uci85, 'UCI @ 8.5%', formula(`D${block.os}*8.5/100*((${reportDateRef}-${anchorRefCalc})/365)`));
     // Total Dues = O/S + UCI@8.5% + Interest Reversal.
-    set(`${c}${R.totalDues}`, formula(`${c}${R.os}+${c}${R.uci85}+${c}${R.uri}`), {...rowStyle(R.totalDues), numFmt:XL_INR_FMT});
+    writeRightRow(block.totalDues, 'Total Dues', formula(`D${block.os}+H${block.uci85}+H${block.uri}`));
     // Total Contractual Dues = O/S + UCI@12.5% + Interest Reversal -- same
     // shape as Total Dues above but at the 12.5% rate, exactly matching
     // totalContractualDuesFor()'s on-screen formula. UCI@12.5% has no row
     // of its own on-screen (it only ever feeds this one figure), so it is
     // computed inline here rather than as a separate visible row, keeping
     // this sheet's row set matching the app exactly.
-    set(`${c}${R.totalContractualDues}`, formula(`${c}${R.os}+(${c}${R.os}*12.5/100*((${reportDateRef}-${anchorRefCalc})/365))+${c}${R.uri}`), {...rowStyle(R.totalContractualDues), numFmt:XL_INR_FMT});
-    // Provision reads O/S Balance directly. It used to go through a Net O/S
-    // row, but that row only ever mirrored O/S Balance -- which is exactly
-    // why the print sheet dropped it -- so the indirection is gone with it.
-    set(`${c}${R.provision}`, formula(`${c}${R.os}*VLOOKUP(${c}${R.assetCode},${rateTable},2,FALSE)`), {...rowStyle(R.provision), numFmt:XL_INR_FMT});
+    writeRightRow(block.totalContractualDues, 'Total Contractual Dues', formula(`D${block.os}+(D${block.os}*12.5/100*((${reportDateRef}-${anchorRefCalc})/365))+H${block.uri}`));
+    // Provision reads O/S Balance directly.
+    writeRightRow(block.provision, 'Provision', formula(`D${block.os}*VLOOKUP(D${block.assetCode},${rateTable},2,FALSE)`));
     // Total P&L = O/S - Provision (Interest Reversal already flows into
     // Total Dues above, not into Total P&L).
-    set(`${c}${R.totalPL}`, formula(`${c}${R.os}-${c}${R.provision}`), {...rowStyle(R.totalPL), numFmt:XL_INR_FMT});
+    writeRightRow(block.totalPL, 'Total P&L', formula(`D${block.os}-H${block.provision}`));
+
+    // Settlement & Impact band
+    writeBand(block.settleBandRow, 1, 8, '↔  SETTLEMENT & IMPACT', XL_TEAL_SETTLE, {size:13, align:'center'});
+
     // OTS Amt as per Lok Adalat -- the same minimum-settlement floor the
     // on-screen table and print sheet already show, now a live formula off
     // the Lok Adalat rate table above. Sub-Standard accounts are simply not
     // eligible (lokAdalatMin() returns {eligible:false} for them on screen);
     // any Asset Code the rate table doesn't recognize falls back to "—"
     // rather than an Excel #N/A error.
-    set(`${c}${R.lokAdalat}`, formula(`IF(${c}${R.assetCode}="SUB_STD","Not Eligible",IFERROR(${c}${R.os}*VLOOKUP(${c}${R.assetCode},${lokAdalatRateTable},2,FALSE),"—"))`), {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}}, numFmt:XL_INR_FMT});
+    writeFullRow(block.lokAdalat, 'OTS Amt as per Lok Adalat', formula(`IF(D${block.assetCode}="SUB_STD","Not Eligible",IFERROR(D${block.os}*VLOOKUP(D${block.assetCode},${lokAdalatRateTable},2,FALSE),"—"))`));
+    addNote(`A${block.lokAdalat}`, 'Minimum settlement floor under Lok Adalat: 80% of O/S for DA1, 70% for DA2, 50% for DA3, 40% for Loss. Substandard accounts are not eligible for Lok Adalat OTS at all.');
+
     // Left genuinely BLANK (not 0) when nothing's been typed yet -- matches
     // the on-screen input, which shows only a faint "0" placeholder, not a
     // real stored value (recalcLoan()'s own `ots===''` branch). Every
@@ -3771,43 +3833,67 @@ async function exportOtsExcel(){
     // it only lets Settlement Progress below tell "not typed yet" apart
     // from "typed as literally zero".
     const otsNum = parseOtsAmount(otsAmounts[s.acctNo]);
-    set(`${c}${R.ots}`, otsNum===null ? null : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, numFmt:XL_INR_FMT, fill:XL_STRONG_ROW_FILL});
+    writeFullRow(block.ots, 'OTS Amount', otsNum===null ? null : otsNum);
+    addNote(`A${block.ots}`, 'Type a settlement amount here. Total Sacrifice, Ledger Sacrifice, Impact on P&L and the aggregate totals all recalculate from it.');
+
     // Settlement Progress = OTS Amount as a share of Total Dues -- the same
-    // % the on-screen thin fill-bar (settleRow()) already shows. Alok's own
-    // feedback on the first shipped version: 0% in red/pink looked like a
-    // bad result when it just meant nobody had typed an OTS Amount yet --
-    // on screen this same "not typed" state shows a plain dash, not a
-    // colored 0%. ISBLANK() mirrors that exactly and, since it's a live
-    // formula (not a value decided once at export time), typing a real OTS
-    // Amount straight into this cell in Excel still recalculates it
-    // immediately, same as every other live figure on this sheet. A
-    // color-scale conditional-formatting rule (below) leaves the "—" text
-    // result uncolored, matching the mockup Alok approved.
-    set(`${c}${R.settleProgress}`, formula(`IF(ISBLANK(${c}${R.ots}),"—",IF(${c}${R.totalDues}=0,0,${c}${R.ots}/${c}${R.totalDues}))`), {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}}, numFmt:'0.0%'});
+    // % the on-screen thin fill-bar (settleRow()) already shows. ISBLANK()
+    // shows a plain dash (matching the on-screen "not typed yet" state)
+    // instead of a misleading 0%, and stays a live formula -- typing a real
+    // OTS Amount straight into this cell in Excel still recalculates it
+    // immediately. A color-scale conditional-formatting rule (below) leaves
+    // the "—" text result uncolored.
+    writeFullRow(block.settleProgress, 'Settlement Progress', formula(`IF(ISBLANK(F${block.ots}),"—",IF(H${block.totalDues}=0,0,F${block.ots}/H${block.totalDues}))`));
     // Total Sacrifice = Total Dues - OTS Amount (Interest Reversal is
     // already folded into Total Dues above, not added a second time).
-    set(`${c}${R.totalSac}`, formula(`${c}${R.totalDues}-${c}${R.ots}`), {...rowStyle(R.totalSac), numFmt:XL_INR_FMT});
-    set(`${c}${R.ledgerSac}`, formula(`${c}${R.os}-${c}${R.ots}`), {...rowStyle(R.ledgerSac), numFmt:XL_INR_FMT});
+    writeFullRow(block.totalSac, 'Total Sacrifice', formula(`H${block.totalDues}-F${block.ots}`));
+    writeFullRow(block.ledgerSac, 'Ledger Sacrifice (BDWO Amount)', formula(`D${block.os}-F${block.ots}`));
     // Impact on P&L gets its own number format with a profit/loss arrow
-    // baked into the format string (not XL_INR_FMT, which every other
-    // currency cell also uses) -- Excel/Sheets pick the arrow from the
+    // baked into the format string -- Excel picks the arrow from the
     // formula's live sign, so it stays correct as OTS Amount is edited.
-    set(`${c}${R.impact}`, formula(`${c}${R.ots}-${c}${R.totalPL}`), {...rowStyle(R.impact), numFmt:XL_INR_FMT_PL});
+    writeFullRow(block.impact, 'Impact on P&L', formula(`F${block.ots}-H${block.totalPL}`));
+
+    assetCells.push(`D${block.assetCode}`);
+    settleCells.push(`F${block.settleProgress}`);
+    impactCells.push(`F${block.impact}`);
+    osAddrs.push(`D${block.os}`);
+    duesAddrs.push(`H${block.totalDues}`);
+    otsAddrs.push(`F${block.ots}`);
+    ledgerAddrs.push(`F${block.ledgerSac}`);
+    sacAddrs.push(`F${block.totalSac}`);
+
+    if(i < slots.length-1) rowCursor++; // spacer row before the next account's card
   });
+  const lastDataRow = rowCursor - 1;
 
   // ---- Conditional formatting -- 3 rules, each tied to a real on-screen
   // signal (not decoration): Asset Code gets the same 5-step severity ramp
-  // the on-screen badge already uses (css .badge-pill.SUB_STD/DA1/DA2/DA3/
-  // LOSS), Settlement Progress gets a data bar (the Excel equivalent of the
-  // on-screen thin fill-bar), and Impact on P&L gets green/red fills
-  // reinforcing the arrow already baked into its number format. Only the
-  // account columns (B..lastCol) are covered, never the label column. ----
-  if(cols.length){
-    const dataRange = (row) => `B${row}:${lastCol}${row}`;
+  // the on-screen badge already uses, Settlement Progress gets a color
+  // scale, and Impact on P&L gets green/red fills reinforcing the arrow
+  // already baked into its number format. Each rule now covers every
+  // account's own single cell for that field via a multi-area ref (one
+  // cell per account row-block, not a shared row spanning account-columns
+  // like before this round) -- SPACE-separated, not comma-separated: OOXML's
+  // own ST_Sqref type is a space-separated list of ranges; a comma-joined
+  // ref parsed fine through xmllint/ExcelJS's own writer but openpyxl's
+  // stricter CF reader rejected it outright when re-reading this exact
+  // file during verification ("expected MultiCellRange"), confirming
+  // real-world tools do enforce the space form even where lenient ones
+  // don't -- exactly the same class of "passed lenient tools, would have
+  // failed a stricter one" gap that caused the dataBar/extLst corruption
+  // bug fixed earlier the same day, so this uses the spec-correct
+  // separator rather than trusting the first tool that accepted it.
+  // Confirmed by direct testing against the real vendored ExcelJS that a
+  // multi-area ref combined with real cell notes still produces zero
+  // worksheet-level extLst elements either way, so this does not
+  // reintroduce that bug (see the dataBar comment just below on why that
+  // CF type specifically is never safe here). ----
+  if(assetCells.length){
     const ASSET_CF_COLORS = { SUB_STD:'FFD7F2E3', DA1:'FFFCE7BE', DA2:'FFF3DAB8', DA3:'FFFAD2CF', LOSS:'FFE8B9B6' };
+    const assetRef = assetCells.join(' ');
     Object.entries(ASSET_CF_COLORS).forEach(([code,argb])=>{
       ws.addConditionalFormatting({
-        ref: dataRange(R.assetCode),
+        ref: assetRef,
         rules: [{ type:'cellIs', operator:'equal', formulae:[`"${code}"`], priority: 1,
           style: { fill:{type:'pattern', pattern:'solid', bgColor:{argb}} } }],
       });
@@ -3819,19 +3905,16 @@ async function exportOtsExcel(){
     // above already need), violating the strict child-element order
     // CT_Worksheet requires (extLst must be the very last element). Real
     // Excel treats that as corruption and silently strips the sheet on
-    // open -- exactly the "blank sheet" Alok reported -- while lenient
-    // readers like openpyxl/LibreOffice tolerate it, which is why this
-    // wasn't caught in this round's own verification. A color scale needs
-    // no extLst at all (confirmed by inspecting the raw XML both ways), so
-    // it coexists safely with the existing cell notes.
+    // open. A color scale needs no extLst at all, so it coexists safely
+    // with the existing cell notes.
     ws.addConditionalFormatting({
-      ref: dataRange(R.settleProgress),
+      ref: settleCells.join(' '),
       rules: [{ type:'colorScale', priority: 1,
         cfvo: [{type:'num', value:0},{type:'num', value:0.5},{type:'num', value:1}],
         color: [{argb:'FFFAD2CF'},{argb:'FFFCE7BE'},{argb:'FFD7F2E3'}] }],
     });
     ws.addConditionalFormatting({
-      ref: dataRange(R.impact),
+      ref: impactCells.join(' '),
       rules: [
         { type:'cellIs', operator:'greaterThan', formulae:[0], priority: 1,
           style: { fill:{type:'pattern', pattern:'solid', bgColor:{argb:'FFD7F2E3'}} } },
@@ -3841,56 +3924,76 @@ async function exportOtsExcel(){
     });
   }
 
-  // ---- Aggregate totals: the print sheet's five, in its order (O/S, Dues,
-  // OTS, Ledger Sacrifice, Sacrifice). Ledger Sacrifice was missing here
-  // entirely, and the order did not match the paper. ----
-  // lastDataRow (not a label-count formula) since the 3 colored group-band
-  // rows now sit between sections -- a plain OTS_XL_ROW_LABELS.length+2
-  // offset would land 3 rows short of the real end of the table.
-  const aggTitleRow = lastDataRow + 2;
-  ws.mergeCells(aggTitleRow,1,aggTitleRow,SPAN);
-  set(`A${aggTitleRow}`, 'A G G R E G A T E   T O T A L S', {font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
-  const sumRange = row => `SUM(B${row}:${lastCol}${row})`;
-  const AGG = [
-    ['Total O/S Balance', R.os],
-    ['Total Dues', R.totalDues],
-    ['Total OTS Amount', R.ots],
-    ['Total Ledger Sacrifice', R.ledgerSac],
-    ['Total Sacrifice', R.totalSac],
-  ];
-  AGG.forEach(([label,srcRow],i)=>{
-    const rr = aggTitleRow+1+i;
-    set(`A${rr}`, label, {font:{bold:true, color:{argb:'FF000000'}}, border:false});
-    ws.mergeCells(rr,2,rr,SPAN);
-    set(`B${rr}`, formula(sumRange(srcRow)), {numFmt:XL_INR_FMT, font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'right'}, border:false});
-  });
+  // ---- Aggregate Totals: one shared section, summing every linked
+  // account's own row-block cell -- a comma-joined SUM() over each
+  // account's own address (accounts are no longer a contiguous column
+  // range to sum across). 4 small tiles in a 2x2 grid, plus one big
+  // 2-row-tall "TOTAL SACRIFICE" hero tile, per Alok's reference. ----
+  const aggBandRow = lastDataRow + 2;
+  writeBand(aggBandRow, 1, SPAN, '▥  AGGREGATE TOTALS', XL_BLUE_MED, {size:13, align:'left'});
 
-  // The per-account "scheme · branch" strip that used to sit here is gone:
-  // Scheme is a table row now, and the branch already prints in the header,
-  // so it was the same two facts repeated once per account.
-  const footerRow = aggTitleRow + AGG.length + 2;
-  ws.mergeCells(footerRow,1,footerRow,SPAN);
-  set(`A${footerRow}`, 'Designed & Developed by ALOK MITTAL · Uttar Pradesh Gramin Bank', {font:{italic:true, size:9.5, color:{argb:'FF666666'}}, align:{horizontal:'center'}, border:false});
+  const writeTile = (labelRow, valueRow, colStart, colEnd, label, sumAddrs) => {
+    const addr = XLSX.utils.encode_col(colStart-1);
+    ws.mergeCells(labelRow,colStart,labelRow,colEnd);
+    set(`${addr}${labelRow}`, label, {font:{name:XL_FONT_BODY, bold:true, size:9.5, color:{argb:XL_NAVY_TITLE}}, align:{horizontal:'center', vertical:'middle'}, fill:XL_TILE_BLUE, border:XL_TILE_LABEL_BORDER});
+    ws.getRow(labelRow).height = XL_ROW_H_NORMAL;
+    ws.mergeCells(valueRow,colStart,valueRow,colEnd);
+    set(`${addr}${valueRow}`, formula(`SUM(${sumAddrs.join(',')})`), {numFmt:XL_INR_FMT, font:{name:XL_FONT_BODY, bold:true, size:15, color:{argb:XL_DARK_TEXT}}, align:{horizontal:'center', vertical:'middle'}, fill:'FFFFFFFF', border:XL_TILE_VALUE_BORDER});
+    ws.getRow(valueRow).height = XL_ROW_H_NORMAL;
+  };
+  const tileRow1Label = aggBandRow+1, tileRow1Value = aggBandRow+2;
+  writeTile(tileRow1Label, tileRow1Value, 1, 4, 'Total O/S Balance', osAddrs);
+  writeTile(tileRow1Label, tileRow1Value, 5, 8, 'Total Dues', duesAddrs);
+  const tileRow2Label = tileRow1Value + 2, tileRow2Value = tileRow2Label + 1;
+  writeTile(tileRow2Label, tileRow2Value, 1, 4, 'Total OTS Amount', otsAddrs);
+  writeTile(tileRow2Label, tileRow2Value, 5, 8, 'Total Ledger Sacrifice', ledgerAddrs);
 
-  // ---- Column widths + freeze header row/label column ----
-  // Every column out to SPAN gets a width, including any beyond the last
-  // account -- an unsized column at the right edge reads as a stray blank.
-  ws.getColumn(1).width = 30;
-  for(let ci = 2; ci <= SPAN; ci++) ws.getColumn(ci).width = 17;
-  ws.views = [{state:'frozen', xSplit:1, ySplit:headerRow, topLeftCell:`B${headerRow+1}`, showGridLines:false}];
+  // Hero tile -- the headline number, 2 rows tall, bigger font, spans the
+  // full width.
+  const heroRowStart = tileRow2Value + 2, heroRowEnd = heroRowStart + 1;
+  ws.mergeCells(heroRowStart,1,heroRowEnd,6);
+  set(`A${heroRowStart}`, 'TOTAL SACRIFICE', {font:{name:XL_FONT_BODY, bold:true, size:12, color:{argb:XL_NAVY_TITLE}}, align:{horizontal:'left', vertical:'middle'}, fill:XL_TILE_BLUE, border:XL_BORDER_ALL});
+  ws.mergeCells(heroRowStart,7,heroRowEnd,8);
+  set(`G${heroRowStart}`, formula(`SUM(${sacAddrs.join(',')})`), {numFmt:XL_INR_FMT, font:{name:XL_FONT_BODY, bold:true, size:18, color:{argb:XL_NAVY_TITLE}}, align:{horizontal:'right', vertical:'middle'}, fill:XL_TILE_BLUE, border:XL_BORDER_ALL});
+  ws.getRow(heroRowStart).height = XL_ROW_H_NORMAL;
+  ws.getRow(heroRowEnd).height = XL_ROW_H_NORMAL;
+
+  // ---- Footer ----
+  const footerRow1 = heroRowEnd + 2;
+  ws.mergeCells(footerRow1,1,footerRow1,SPAN);
+  set(`A${footerRow1}`, 'Designed & Developed by ALOK MITTAL · Uttar Pradesh Gramin Bank', {font:{name:XL_FONT_BODY, italic:true, size:9.5, color:{argb:XL_GREY_LABEL}}, align:{horizontal:'center', vertical:'middle'}, border:false});
+  ws.getRow(footerRow1).height = XL_ROW_H_NORMAL;
+  const footerRow2 = footerRow1 + 1;
+  ws.mergeCells(footerRow2,1,footerRow2,SPAN);
+  set(`A${footerRow2}`, 'ONE TIME SETTLEMENT  |  RECOVERY • IMPACT • TRANSPARENCY', {font:{name:XL_FONT_BODY, bold:true, size:9, color:{argb:'FFFFFFFF'}}, align:{horizontal:'center', vertical:'middle'}, fill:XL_TEAL_SETTLE, border:false});
+  ws.getRow(footerRow2).height = XL_ROW_H_NORMAL;
+
+  // ---- Column widths + freeze the header/Customer Details block ----
+  ws.getColumn(1).width = 4; ws.getColumn(2).width = 24; ws.getColumn(3).width = 18; ws.getColumn(4).width = 18;
+  ws.getColumn(5).width = 4; ws.getColumn(6).width = 27; ws.getColumn(7).width = 18; ws.getColumn(8).width = 18;
+  // No persistent label column to freeze once cards stack vertically (each
+  // account's own Loan Terms label sits in a different place than the
+  // previous account's Settlement label) -- freeze the top rows instead,
+  // matching the reference's own freeze pane.
+  ws.views = [{state:'frozen', xSplit:0, ySplit:custInfoEnd, topLeftCell:`A${custInfoEnd+1}`, showGridLines:false}];
   wsCalc.getColumn(1).width = 30;
   cols.forEach((c,i)=>{ wsCalc.getColumn(2+i).width = 17; });
 
-  // ---- A4 print setup, so this sheet prints exactly like the PDF -- one
-  // page, portrait, scaled to fit regardless of how many accounts (2-4)
-  // are linked. Only the "OTS Calculator" sheet is set up this way; the
-  // "Calculation Details" sheet is helper data, not meant to be printed.
+  // ---- A4 print setup -- one page, portrait, scaled to fit regardless of
+  // how many accounts (1-4) are linked. Only the "OTS Calculator" sheet is
+  // set up this way; the "Calculation Details" sheet is helper data, not
+  // meant to be printed. No printTitlesRow any more -- there is no single
+  // header row to repeat per page once accounts are stacked cards rather
+  // than a shared table (matches the reference, which defines none
+  // either); a 3-4 account export scales down harder to fit one page at
+  // these taller (21/28px) row heights than the old tighter layout did --
+  // flagged for a visual check during verification, not assumed fine. ----
   ws.pageSetup = {
     paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1,
-    horizontalCentered: true, printTitlesRow: `${headerRow}:${headerRow}`,
+    horizontalCentered: true,
     margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
   };
-  ws.pageSetup.printArea = `A1:${SPAN_COL}${footerRow}`;
+  ws.pageSetup.printArea = `A1:${SPAN_COL}${footerRow2}`;
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
