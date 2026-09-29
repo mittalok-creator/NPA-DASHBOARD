@@ -6348,7 +6348,7 @@ function svgIcon(pathData){ return `<svg viewBox="0 0 24 24" fill="none" stroke=
 
 function heroKpiCard(opts){
   const side = (opts.badge||opts.corner) ? `<div class="hero-kpi-side">${opts.badge||''}${opts.corner||''}</div>` : '';
-  return `<div class="hero-kpi-card${opts.onclick?' clickable':''}"${opts.onclick?` onclick="${opts.onclick}"`:''} style="--hero-tint:${opts.tint};--hero-color:${opts.color}">
+  return `<div class="hero-kpi-card${opts.onclick?' clickable':''}${opts.extraClass?' '+opts.extraClass:''}"${opts.onclick?` onclick="${opts.onclick}"`:''} style="--hero-tint:${opts.tint};--hero-color:${opts.color}">
     <div class="hero-kpi-main">
       <div class="hero-kpi-icon">${svgIcon(opts.icon)}</div>
       <div class="hero-kpi-label">${esc(opts.label)}</div>
@@ -7183,6 +7183,25 @@ function setKccovDateMode(mode){ kccovDateMode = mode; renderKccOverdueBody(); }
 window.setKccovDateMode = setKccovDateMode;
 function setKccovMinAmount(v){ kccovMinAmount = v; renderKccOverdueBody(); }
 window.setKccovMinAmount = setKccovMinAmount;
+// Clears all 5 filter dimensions back to their defaults in one click --
+// the filter card's new Reset button. Deliberately doesn't touch kccovView
+// or kccovSchemeTab (which view/scheme tab is open isn't a "filter").
+function kccovResetFilters(){
+  kccovBranchFilter = '';
+  kccovFyFilter = '';
+  kccovDateMode = 'month';
+  kccovMonthFilter = '';
+  kccovDateFrom = '';
+  kccovDateTo = '';
+  kccovMinAmount = 0;
+  renderKccOverdueBody();
+}
+window.kccovResetFilters = kccovResetFilters;
+// Clicking a branch in the new Branch-wise bar chart filters the whole
+// tab to that branch, same as picking it from the toolbar's own Branch
+// select (which re-renders with this value already selected).
+function kccovSetBranchFilter(b){ kccovBranchFilter = b; renderKccOverdueBody(); }
+window.kccovSetBranchFilter = kccovSetBranchFilter;
 function setKccovView(v){
   kccovView = v;
   /* Datewise Calendar renders one column per distinct Cust NPA Date --
@@ -7349,16 +7368,38 @@ function renderKccOverdueBody(){
       ${amountChips.map(c=>`<button type="button" class="bank-tab-btn${kccovMinAmount===c.v?' active':''}" onclick="setKccovMinAmount(${c.v})">${c.label}</button>`).join('')}
     </div>`;
 
-  const toolbar = `<div class="dash-toolbar">
-      <span class="dash-toolbar-label">Branch</span>
-      <select id="kccovBranchFilterSelect" class="dash-select">${branchFilterOptions}</select>
+  // Compact filter toolbar: every control lives inside one bordered card
+  // (rather than 5-6 stacked bare rows) with a "Filters" header carrying
+  // Search (opens the existing Cmd+K palette) and Reset (clears all 5
+  // filter dimensions at once -- a genuine gap-fill, no such control
+  // existed before) icon buttons, reusing the already-theme-aware
+  // .section-search-btn class for both.
+  const toolbar = `<div class="chart-card kccov-filter-card">
+    <div class="chart-card-head-row" style="margin-top:0">
+      <div class="section-label">Filters</div>
+      <div style="display:flex;gap:8px;flex-shrink:0;margin-top:1px">
+        <button type="button" class="section-search-btn" onclick="openCmdk()" title="Search a borrower by name or account no." aria-label="Search a borrower">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+        <button type="button" class="section-search-btn" onclick="kccovResetFilters()" title="Reset all filters" aria-label="Reset all filters">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        </button>
+      </div>
     </div>
-    <div class="bank-filter-row">
-      <select id="kccovFyFilterSelect" class="dash-select">${fyFilterOptions}</select>
+    <div class="kccov-filter-grid">
+      <div class="kccov-filter-field">
+        <label>Branch</label>
+        <select id="kccovBranchFilterSelect" class="dash-select">${branchFilterOptions}</select>
+      </div>
+      <div class="kccov-filter-field">
+        <label>Financial Year</label>
+        <select id="kccovFyFilterSelect" class="dash-select">${fyFilterOptions}</select>
+      </div>
     </div>
     ${dateModeRow}
     <div class="bank-filter-row">${dateInputsRow}</div>
-    ${amountFilterRow}`;
+    ${amountFilterRow}
+  </div>`;
 
   const filteredRows = kccovFilteredRows(d);
   // Average Ticket Size -- Alok's request: shown in every KCC Overdue view
@@ -7372,11 +7413,11 @@ function renderKccOverdueBody(){
   const atsCount = filteredRows.length;
   const atsOS = filteredRows.reduce((a,r)=>a+(r[KC.OS]||0),0);
   const avgTicket = atsCount>0 ? atsOS/atsCount : 0;
-  const avgTicketRow = `<div class="hero-kpi-row" style="grid-template-columns:1fr;max-width:300px;margin-bottom:16px">
-    ${heroKpiCard({id:'kccovAvgTicket', icon:ICON_TICKET, tint:'var(--amber-soft)', color:'var(--amber)',
-      label:'Average Ticket Size', fallback: atsCount>0?fmtINR2(avgTicket):'—',
-      sub:`${atsCount.toLocaleString('en-IN')} account${atsCount!==1?'s':''} in current filter`})}
-  </div>`;
+  const avgTicketTile = heroKpiCard({
+    id:'kccovAvgTicket', icon:ICON_TICKET, tint:'var(--tool-sky-soft)', color:'var(--tool-sky)',
+    label:'Average Ticket Size', fallback: atsCount>0?fmtINR2(avgTicket):'—',
+    sub:`${atsCount.toLocaleString('en-IN')} account${atsCount!==1?'s':''} in current filter`,
+  });
   // The hero scheme-tab row and its bucketTotals are only meaningful for
   // Branch Summary/Calendar -- the 3 bifurcation views (F.Y./Month
   // Summary, Branch Report, All Branches Overview) exist specifically to
@@ -7385,43 +7426,104 @@ function renderKccOverdueBody(){
   // contradictory. Skipped entirely (not just hidden) when one of those
   // views is active, rather than computed and thrown away.
   const showHero = kccovView==='summary' || kccovView==='calendar';
+  // Bucket totals are also needed by the Branch Summary charts below (the
+  // scheme-wise donut), so they're computed unconditionally rather than
+  // only inside the showHero branch as before.
+  const bucketTotals = {};
+  KCC_OVERDUE_SCHEMES.forEach(s=>{ bucketTotals[s.key]={count:0,os:0,branches:new Set()}; });
+  for(const r of filteredRows){
+    const bk = kccOverdueBucketOf(r[KC.SCHEME]);
+    bucketTotals[bk].count++; bucketTotals[bk].os += r[KC.OS]; bucketTotals[bk].branches.add(r[KC.BRANCH]);
+  }
+  const bucketIcon = {kcc:ICON_TARGET, kccah:ICON_STAR, od023:ICON_ALERT_TRIANGLE};
+  // Each scheme keeps its own fixed identity color at all times now
+  // (jade/gold/coral) instead of the old active=blue/inactive=grey scheme,
+  // which erased a scheme's own color the moment it wasn't the selected
+  // tab -- "active" is now shown with a colored ring (.kccov-active) and
+  // the "Viewing" badge, not by recoloring the whole tile.
+  const KCCOV_SCHEME_COLOR = {kcc:'var(--tool-jade)', kccah:'var(--tool-gold)', od023:'var(--tool-coral)'};
+  const KCCOV_SCHEME_SOFT  = {kcc:'var(--tool-jade-soft)', kccah:'var(--tool-gold-soft)', od023:'var(--tool-coral-soft)'};
   let heroRow = '';
   if(showHero){
-    const bucketTotals = {};
-    KCC_OVERDUE_SCHEMES.forEach(s=>{ bucketTotals[s.key]={count:0,os:0,branches:new Set()}; });
-    for(const r of filteredRows){
-      const bk = kccOverdueBucketOf(r[KC.SCHEME]);
-      bucketTotals[bk].count++; bucketTotals[bk].os += r[KC.OS]; bucketTotals[bk].branches.add(r[KC.BRANCH]);
-    }
-    const bucketIcon = {kcc:ICON_TARGET, kccah:ICON_STAR, od023:ICON_ALERT_TRIANGLE};
-    heroRow = `<div class="hero-kpi-row bank-hero-row">${KCC_OVERDUE_SCHEMES.map(s=>{
+    const schemeTiles = KCC_OVERDUE_SCHEMES.map(s=>{
       const t = bucketTotals[s.key], isActive = kccovSchemeTab===s.key;
+      const sharePct = atsOS>0 ? (t.os/atsOS*100) : 0;
       return heroKpiCard({
         id:'kccovHero_'+s.key, icon: bucketIcon[s.key],
-        tint: isActive?'var(--accent-soft)':'rgba(120,120,140,.12)', color: isActive?'var(--accent)':'var(--ink-mute)',
+        tint: KCCOV_SCHEME_SOFT[s.key], color: KCCOV_SCHEME_COLOR[s.key],
+        extraClass: isActive ? 'kccov-active' : '',
         onclick:`setKccovSchemeTab('${s.key}')`,
         label: s.label,
         fallback: fmtCr(t.os),
-        sub: `${t.count.toLocaleString('en-IN')} accounts · ${t.branches.size.toLocaleString('en-IN')} branches`,
-        badge: isActive ? `<div class="hero-kpi-badge" style="background:var(--accent-soft);color:var(--accent)">Viewing</div>` : '',
+        sub: `${t.count.toLocaleString('en-IN')} accounts · ${t.branches.size.toLocaleString('en-IN')} branches`
+          + `<div class="hero-share-track"><div class="hero-share-fill" style="width:${sharePct.toFixed(1)}%;background:${KCCOV_SCHEME_COLOR[s.key]}"></div></div>`,
+        badge: isActive ? `<div class="hero-kpi-badge" style="background:${KCCOV_SCHEME_SOFT[s.key]};color:${KCCOV_SCHEME_COLOR[s.key]}">Viewing</div>` : '',
       });
-    }).join('')}</div>`;
+    }).join('');
+    // Average Ticket Size joins the same 4-column row as the 3 scheme
+    // tiles here (no longer an orphan single-column row floating above
+    // it) -- .hero-kpi-row's own base grid is already repeat(4,1fr), so
+    // dropping the old .bank-hero-row modifier (which forced 3 columns)
+    // is all a 4th tile needs.
+    heroRow = `<div class="hero-kpi-row">${schemeTiles}${avgTicketTile}</div>`;
   }
+  // Bifurcation views (F.Y./Month/Branch Report/All Branches) have no
+  // scheme-tab row to join, so Average Ticket Size keeps its own
+  // single-tile row there, same as before -- just re-skinned (sky, not
+  // amber) to match the new palette.
+  const avgTicketRow = showHero ? '' : `<div class="hero-kpi-row" style="grid-template-columns:1fr;max-width:300px;margin-bottom:16px">${avgTicketTile}</div>`;
 
-  // 5 view modes in one row: the original 2 (Branch Summary/Calendar,
-  // scoped to one scheme via the hero row above) plus 3 new ones (F.Y./
-  // Month Summary/Branch Report/All Branches Overview, always showing
-  // KCC/KCC-AH/OD-023 side by side) -- a thin .bank-tab-sep divider marks
-  // the boundary between the two groups without a second tab row, same
-  // flex-wrap this row already relies on for narrow screens.
-  const viewToggleRow = `<div class="bank-tab-row" style="margin-top:18px">
-    <button type="button" class="bank-tab-btn${kccovView==='summary'?' active':''}" onclick="setKccovView('summary')">Branch Summary</button>
-    <button type="button" class="bank-tab-btn${kccovView==='calendar'?' active':''}" onclick="setKccovView('calendar')">Datewise Calendar</button>
-    <span class="bank-tab-sep" aria-hidden="true"></span>
-    <button type="button" class="bank-tab-btn${kccovView==='fymonth'?' active':''}" onclick="setKccovView('fymonth')">F.Y./Month Summary</button>
-    <button type="button" class="bank-tab-btn${kccovView==='branchreport'?' active':''}" onclick="setKccovView('branchreport')">Branch Report</button>
-    <button type="button" class="bank-tab-btn${kccovView==='allbranches'?' active':''}" onclick="setKccovView('allbranches')">All Branches Overview</button>
+  // 5 view modes as underline-style segmented tabs -- visually distinct
+  // from the filter card's own pill-style controls above, so "this
+  // changes what data you see" (filters) and "this changes which report
+  // you're looking at" (these tabs) read as two different kinds of
+  // control rather than the same pill component repeated. A thin
+  // .kccov-view-tab-sep divider still marks the boundary between the
+  // original 2 views and the 3 newer bifurcation ones.
+  const viewToggleRow = `<div class="kccov-view-tabs">
+    <button type="button" class="kccov-view-tab${kccovView==='summary'?' active':''}" onclick="setKccovView('summary')">Branch Summary</button>
+    <button type="button" class="kccov-view-tab${kccovView==='calendar'?' active':''}" onclick="setKccovView('calendar')">Datewise Calendar</button>
+    <span class="kccov-view-tab-sep" aria-hidden="true"></span>
+    <button type="button" class="kccov-view-tab${kccovView==='fymonth'?' active':''}" onclick="setKccovView('fymonth')">F.Y./Month Summary</button>
+    <button type="button" class="kccov-view-tab${kccovView==='branchreport'?' active':''}" onclick="setKccovView('branchreport')">Branch Report</button>
+    <button type="button" class="kccov-view-tab${kccovView==='allbranches'?' active':''}" onclick="setKccovView('allbranches')">All Branches Overview</button>
   </div>`;
+
+  // Branch-wise bar chart + Scheme-wise donut -- Branch Summary view only,
+  // built off filteredRows (all 3 schemes, respecting every active filter)
+  // rather than scoped to kccovSchemeTab, since these sit above the
+  // scheme-specific table as an at-a-glance overview. Reuses this app's
+  // own existing SVG donut/bar-chart primitives (barRows()/donutCard()/
+  // donutLegend(), already used by the main Dashboard's asset-mix/slab/
+  // top-branch charts) -- no new charting library needed.
+  let chartsRowHtml = '';
+  if(kccovView==='summary'){
+    const branchOsMap = new Map();
+    for(const r of filteredRows){
+      const b = r[KC.BRANCH];
+      branchOsMap.set(b, (branchOsMap.get(b)||0) + (r[KC.OS]||0));
+    }
+    const branchBarItems = [...branchOsMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8)
+      .map(([b,os])=>({label:b, value:os, valueLabel:fmtCr(os), color:'var(--accent)', onclick:`kccovSetBranchFilter('${jsq(b)}')`}));
+    const schemeDonutSeg = KCC_OVERDUE_SCHEMES.map(s=>({
+      label:s.label, value:bucketTotals[s.key].os, color:KCCOV_SCHEME_COLOR[s.key],
+      valueLabel:`${bucketTotals[s.key].count.toLocaleString('en-IN')} A/C · ${fmtCr(bucketTotals[s.key].os)}`,
+      onclick:`setKccovSchemeTab('${s.key}')`,
+    }));
+    chartsRowHtml = branchOsMap.size ? `<div class="chart-grid" style="margin-top:16px">
+      <div class="chart-card">
+        <div class="chart-title">Branch-wise Balance Amount<span class="chart-sub">top ${Math.min(8,branchBarItems.length)} of ${branchOsMap.size.toLocaleString('en-IN')} branch(es) · all schemes · tap a branch to filter</span></div>
+        <div class="bar-list">${barRows(branchBarItems)}</div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Scheme-wise Split<span class="chart-sub">share of total Balance Amount</span></div>
+        <div class="donut-flex">
+          ${donutCard(schemeDonutSeg, undefined, fmtCr(atsOS), 'Total')}
+          <div class="donut-legend">${donutLegend(schemeDonutSeg)}</div>
+        </div>
+      </div>
+    </div>` : '';
+  }
 
   const isBifurcationView = kccovView==='fymonth' || kccovView==='branchreport' || kccovView==='allbranches';
   const showPrintPdf = kccovView==='fymonth' || kccovView==='allbranches';
@@ -7433,7 +7535,7 @@ function renderKccOverdueBody(){
            <button type="button" class="export-xl-btn" onclick="exportKccOverdueBifurcationPdf('${kccovView}')">Save as PDF</button>` : '')
       : '';
 
-  el.innerHTML = toolbar + avgTicketRow + heroRow + viewToggleRow +
+  el.innerHTML = toolbar + heroRow + avgTicketRow + viewToggleRow + chartsRowHtml +
     (kccovView==='calendar' ? `<div id="kccovInsightWrap"></div>` : '') +
     `<div class="chart-card" style="margin-top:16px">
       <div class="chart-card-head-row">
