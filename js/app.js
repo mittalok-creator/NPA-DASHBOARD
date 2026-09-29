@@ -3461,27 +3461,40 @@ function renderPrintView(){
    lookup table are helper/intermediate values the PDF never showed, so
    they live on a second "Calculation Details" sheet instead of cluttering
    this one; formulas here just reference across to that sheet. */
-/* Exactly the print sheet's 16 rows, in the print sheet's order -- Scheme
-   included (it used to sit on the helper sheet), Net O/S excluded (it is
-   always identical to O/S Balance, which is why the print sheet dropped it),
-   and "OTS Amount" plainly named. The two sheets are now row-for-row the
-   same document. */
-const OTS_XL_ROW_LABELS = [
-  'Sanction Date','Sanction Limit','Asset Code','NPA Date','Days in NPA','Scheme',
-  'O/S Balance','UCI @ 8.5%','Total Dues','Interest Reversal','Provision','Total P&L',
-  'OTS Amount','Total Sacrifice','Ledger Sacrifice (BDWO Amount)','Impact on P&L',
+/* Grouped exactly like the on-screen Loan Detail table (loanTableHTML(),
+   its "Loan Terms" / "Dues & Provisioning" / "Settlement & Impact" section
+   headers) -- previously one flat 16-row list with no grouping and two
+   on-screen rows (Total Contractual Dues, Settlement Progress) missing
+   entirely. "OTS Amt as per Lok Adalat" was already on the print/PDF sheet
+   (a stale comment here once claimed the two sheets were row-for-row
+   identical -- they'd drifted since) and is now carried into Excel too,
+   as a real formula off the same static rate table print/screen already
+   use (LOK_ADALAT_RATES). */
+const OTS_XL_GROUPS = [
+  ['Loan Terms', ['Sanction Date','Sanction Limit','Asset Code','NPA Date','Days in NPA','Scheme','O/S Balance']],
+  ['Dues & Provisioning', ['Interest Reversal','UCI @ 8.5%','Total Dues','Total Contractual Dues','Provision','Total P&L']],
+  ['Settlement & Impact', ['OTS Amt as per Lok Adalat','OTS Amount','Settlement Progress','Total Sacrifice','Ledger Sacrifice (BDWO Amount)','Impact on P&L']],
 ];
+const OTS_XL_ROW_LABELS = OTS_XL_GROUPS.flatMap(g=>g[1]);
 const OTS_XL_CALC_ROW_LABELS = ['UCI Anchor Date'];
+// One fixed, meaningful color per section (not a cycling palette -- these
+// are 3 fixed named groups, unlike an open-ended list) -- reusing this
+// app's own navy/brass/teal identity colors (two of the three ARGB values
+// already exist verbatim in KCCOV_FY_PALETTE_ARGB from the KCC Overdue
+// Summary export, so this isn't a new palette, just the same one applied
+// to a fixed 3-section layout instead of a cycling per-F.Y. one).
+const XL_GROUP_BAND_ARGB = { 'Loan Terms':'FF1B2A44', 'Dues & Provisioning':'FF8B5E1F', 'Settlement & Impact':'FF2F7D7D' };
 /* SheetJS (the "xlsx" global used elsewhere in this file, e.g. Daily NPA
    Projection's export) is the free Community Edition, which can only
    READ cell styles, not write them -- .z (number format) writes fine, but
    fonts/fills/borders are silently dropped, so a SheetJS-built workbook
    always comes out plain black-on-white regardless of what's set on the
    cell object. ExcelJS (window.ExcelJS, js/vendor/exceljs.min.js) writes
-   real styling, so this export uses it instead. Deliberately kept plain/
-   functional (bold text, real borders, live formulas, no fill colors) --
-   Excel is for editing and calculation, not decoration; the brass/color
-   treatment stays on the app screen and the print/PDF sheet. */
+   real styling, so this export uses it instead. Now genuinely colored
+   (group-band header rows + conditional formatting) rather than plain
+   black-on-white, at Alok's own request ("proper dashboard ki tarah
+   color formatting and conditional formatting") -- see the group-band
+   rows and the 3 addConditionalFormatting() rules below. */
 const XL_BORDER_THIN = {style:'thin', color:{argb:'FF555555'}};
 const XL_BORDER_ALL = {top:XL_BORDER_THIN, bottom:XL_BORDER_THIN, left:XL_BORDER_THIN, right:XL_BORDER_THIN};
 const XL_INR_FMT = '"₹"#,##,##0.00;[Red]-"₹"#,##,##0.00';
@@ -3627,32 +3640,75 @@ async function exportOtsExcel(){
     setCalc(`B${rateHeadRow+1+i}`, rate, {numFmt:'0%', font:{color:{argb:'FF000000'}}});
   });
 
+  // Lok Adalat minimum-settlement rate table -- same shape/pattern as the
+  // Provision Rate table above, sourced from the same static LOK_ADALAT_RATES
+  // the on-screen calculator and print sheet already use. SUB_STD is
+  // deliberately absent (not eligible for Lok Adalat OTS at all), matching
+  // lokAdalatMin()'s own "not eligible" handling rather than defaulting it
+  // to some guessed rate.
+  const laRateHeadRow = rateHeadRow + RATE_ROWS.length + 2;
+  const LOK_ADALAT_RATE_ROWS = [['DA1',0.80],['DA2',0.70],['DA3',0.50],['LOSS',0.40]];
+  const lokAdalatRateTable = `'${XL_CALC_SHEET}'!$A$${laRateHeadRow+1}:$B$${laRateHeadRow+LOK_ADALAT_RATE_ROWS.length}`;
+  setCalc(`A${laRateHeadRow}`, 'Lok Adalat Minimum Settlement % reference (by Asset Code)', {font:{bold:true, size:10.5}, border:false});
+  LOK_ADALAT_RATE_ROWS.forEach(([code,rate],i)=>{
+    setCalc(`A${laRateHeadRow+1+i}`, code, {font:{color:{argb:'FF000000'}}});
+    setCalc(`B${laRateHeadRow+1+i}`, rate, {numFmt:'0%', font:{color:{argb:'FF000000'}}});
+  });
+
   // ---- Particulars table (main sheet) ----
   const headerRow = r;
   set(`A${headerRow}`, 'Particulars', {font:{bold:true, color:{argb:'FF000000'}}});
   slots.forEach((s,i)=>set(`${cols[i]}${headerRow}`, s.acctNo, {font:{bold:true, color:{argb:'FF000000'}}, align:{horizontal:'center'}}));
 
-  // Same rows the print sheet bolds, so the two read identically on paper.
-  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amount','Total Sacrifice','Impact on P&L']);
-  const rowOf = label => headerRow + 1 + OTS_XL_ROW_LABELS.indexOf(label);
+  // Same rows the on-screen table marks strong (lt-strong), so the sheet
+  // reads with the same visual hierarchy as the app screen.
+  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total Contractual Dues','Total P&L','OTS Amount','Total Sacrifice','Impact on P&L']);
+  // Row numbers now account for one colored group-band row inserted before
+  // each of the 3 on-screen sections (Loan Terms / Dues & Provisioning /
+  // Settlement & Impact) -- ROW_OF/GROUP_BAND_ROW are built by walking
+  // OTS_XL_GROUPS once, so every label's row number (and the reverse
+  // LABEL_OF_ROW lookup used for bolding below) automatically accounts for
+  // the band rows without any hand-counted offsets.
+  const ROW_OF = {}, GROUP_BAND_ROW = {}, LABEL_OF_ROW = {};
+  let rowCursor = headerRow + 1;
+  OTS_XL_GROUPS.forEach(([groupLabel, labels])=>{
+    GROUP_BAND_ROW[groupLabel] = rowCursor;
+    rowCursor++;
+    labels.forEach(label=>{ ROW_OF[label] = rowCursor; LABEL_OF_ROW[rowCursor] = label; rowCursor++; });
+  });
+  const lastDataRow = rowCursor - 1;
+  const rowOf = label => ROW_OF[label];
   const R = {
     sanctionDate: rowOf('Sanction Date'), sanctionLimit: rowOf('Sanction Limit'), assetCode: rowOf('Asset Code'),
     npaDate: rowOf('NPA Date'), daysNpa: rowOf('Days in NPA'), scheme: rowOf('Scheme'),
     os: rowOf('O/S Balance'), uci85: rowOf('UCI @ 8.5%'), totalDues: rowOf('Total Dues'),
+    totalContractualDues: rowOf('Total Contractual Dues'),
     uri: rowOf('Interest Reversal'), provision: rowOf('Provision'), totalPL: rowOf('Total P&L'),
-    ots: rowOf('OTS Amount'), totalSac: rowOf('Total Sacrifice'),
+    lokAdalat: rowOf('OTS Amt as per Lok Adalat'), ots: rowOf('OTS Amount'), settleProgress: rowOf('Settlement Progress'),
+    totalSac: rowOf('Total Sacrifice'),
     ledgerSac: rowOf('Ledger Sacrifice (BDWO Amount)'), impact: rowOf('Impact on P&L'),
   };
   addNote(`A${R.ots}`, 'Type a settlement amount here. Total Sacrifice, Ledger Sacrifice, Impact on P&L and the aggregate totals all recalculate from it.');
+  addNote(`A${R.lokAdalat}`, 'Minimum settlement floor under Lok Adalat: 80% of O/S for DA1, 70% for DA2, 50% for DA3, 40% for Loss. Substandard accounts are not eligible for Lok Adalat OTS at all.');
 
-  OTS_XL_ROW_LABELS.forEach((label,i)=>{
-    const r = headerRow + 1 + i;
-    set(`A${r}`, label, {font:{bold:true, color:{argb:'FF000000'}}});
+  // Colored group-band header rows, matching the on-screen table's own
+  // "Loan Terms" / "Dues & Provisioning" / "Settlement & Impact" section
+  // headers -- the one piece of genuine "dashboard ki tarah" color this
+  // sheet was entirely missing before.
+  OTS_XL_GROUPS.forEach(([groupLabel])=>{
+    const bandRow = GROUP_BAND_ROW[groupLabel];
+    ws.mergeCells(bandRow, 1, bandRow, SPAN);
+    set(`A${bandRow}`, groupLabel.toUpperCase(), {font:{bold:true, size:11, color:{argb:'FFFFFFFF'}}, align:{horizontal:'center', vertical:'middle'}, fill:XL_GROUP_BAND_ARGB[groupLabel], border:false});
+    ws.getRow(bandRow).height = 20;
+  });
+
+  OTS_XL_ROW_LABELS.forEach(label=>{
+    set(`A${ROW_OF[label]}`, label, {font:{bold:true, color:{argb:'FF000000'}}});
   });
 
   slots.forEach((s,i)=>{
     const c = cols[i];
-    const rowStyle = r => ({border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}, bold:STRONG_ROWS.has(OTS_XL_ROW_LABELS[r-headerRow-1])}});
+    const rowStyle = r => ({border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}, bold:STRONG_ROWS.has(LABEL_OF_ROW[r])}});
 
     // UCI Anchor Date (formula) for this account on the hidden sheet, read by
     // this sheet's UCI @ 8.5% below. Both its inputs -- NPA Date and Scheme --
@@ -3681,6 +3737,13 @@ async function exportOtsExcel(){
     set(`${c}${R.uri}`, uriFor(s), {...rowStyle(R.uri), numFmt:XL_INR_FMT});
     // Total Dues = O/S + UCI@8.5% + Interest Reversal.
     set(`${c}${R.totalDues}`, formula(`${c}${R.os}+${c}${R.uci85}+${c}${R.uri}`), {...rowStyle(R.totalDues), numFmt:XL_INR_FMT});
+    // Total Contractual Dues = O/S + UCI@12.5% + Interest Reversal -- same
+    // shape as Total Dues above but at the 12.5% rate, exactly matching
+    // totalContractualDuesFor()'s on-screen formula. UCI@12.5% has no row
+    // of its own on-screen (it only ever feeds this one figure), so it is
+    // computed inline here rather than as a separate visible row, keeping
+    // this sheet's row set matching the app exactly.
+    set(`${c}${R.totalContractualDues}`, formula(`${c}${R.os}+(${c}${R.os}*12.5/100*((${reportDateRef}-${anchorRefCalc})/365))+${c}${R.uri}`), {...rowStyle(R.totalContractualDues), numFmt:XL_INR_FMT});
     // Provision reads O/S Balance directly. It used to go through a Net O/S
     // row, but that row only ever mirrored O/S Balance -- which is exactly
     // why the print sheet dropped it -- so the indirection is gone with it.
@@ -3688,8 +3751,19 @@ async function exportOtsExcel(){
     // Total P&L = O/S - Provision (Interest Reversal already flows into
     // Total Dues above, not into Total P&L).
     set(`${c}${R.totalPL}`, formula(`${c}${R.os}-${c}${R.provision}`), {...rowStyle(R.totalPL), numFmt:XL_INR_FMT});
+    // OTS Amt as per Lok Adalat -- the same minimum-settlement floor the
+    // on-screen table and print sheet already show, now a live formula off
+    // the Lok Adalat rate table above. Sub-Standard accounts are simply not
+    // eligible (lokAdalatMin() returns {eligible:false} for them on screen);
+    // any Asset Code the rate table doesn't recognize falls back to "—"
+    // rather than an Excel #N/A error.
+    set(`${c}${R.lokAdalat}`, formula(`IF(${c}${R.assetCode}="SUB_STD","Not Eligible",IFERROR(${c}${R.os}*VLOOKUP(${c}${R.assetCode},${lokAdalatRateTable},2,FALSE),"—"))`), {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}}, numFmt:XL_INR_FMT});
     const otsNum = parseOtsAmount(otsAmounts[s.acctNo]);
     set(`${c}${R.ots}`, otsNum===null ? 0 : otsNum, {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{bold:true, color:{argb:'FF000000'}}, numFmt:XL_INR_FMT});
+    // Settlement Progress = OTS Amount as a share of Total Dues -- the same
+    // % the on-screen thin fill-bar (settleRow()) already shows; a data-bar
+    // conditional-formatting rule is applied over this row below.
+    set(`${c}${R.settleProgress}`, formula(`IF(${c}${R.totalDues}=0,0,${c}${R.ots}/${c}${R.totalDues})`), {border:XL_BORDER_ALL, align:{horizontal:'right'}, font:{color:{argb:'FF000000'}}, numFmt:'0.0%'});
     // Total Sacrifice = Total Dues - OTS Amount (Interest Reversal is
     // already folded into Total Dues above, not added a second time).
     set(`${c}${R.totalSac}`, formula(`${c}${R.totalDues}-${c}${R.ots}`), {...rowStyle(R.totalSac), numFmt:XL_INR_FMT});
@@ -3701,10 +3775,47 @@ async function exportOtsExcel(){
     set(`${c}${R.impact}`, formula(`${c}${R.ots}-${c}${R.totalPL}`), {...rowStyle(R.impact), numFmt:XL_INR_FMT_PL});
   });
 
+  // ---- Conditional formatting -- 3 rules, each tied to a real on-screen
+  // signal (not decoration): Asset Code gets the same 5-step severity ramp
+  // the on-screen badge already uses (css .badge-pill.SUB_STD/DA1/DA2/DA3/
+  // LOSS), Settlement Progress gets a data bar (the Excel equivalent of the
+  // on-screen thin fill-bar), and Impact on P&L gets green/red fills
+  // reinforcing the arrow already baked into its number format. Only the
+  // account columns (B..lastCol) are covered, never the label column. ----
+  if(cols.length){
+    const dataRange = (row) => `B${row}:${lastCol}${row}`;
+    const ASSET_CF_COLORS = { SUB_STD:'FFD7F2E3', DA1:'FFFCE7BE', DA2:'FFF3DAB8', DA3:'FFFAD2CF', LOSS:'FFE8B9B6' };
+    Object.entries(ASSET_CF_COLORS).forEach(([code,argb])=>{
+      ws.addConditionalFormatting({
+        ref: dataRange(R.assetCode),
+        rules: [{ type:'cellIs', operator:'equal', formulae:[`"${code}"`], priority: 1,
+          style: { fill:{type:'pattern', pattern:'solid', bgColor:{argb}} } }],
+      });
+    });
+    ws.addConditionalFormatting({
+      ref: dataRange(R.settleProgress),
+      rules: [{ type:'dataBar', minLength:0, maxLength:100, priority: 1,
+        cfvo: [{type:'num', value:0},{type:'num', value:1}],
+        color: {argb:'FF2F7D7D'} }],
+    });
+    ws.addConditionalFormatting({
+      ref: dataRange(R.impact),
+      rules: [
+        { type:'cellIs', operator:'greaterThan', formulae:[0], priority: 1,
+          style: { fill:{type:'pattern', pattern:'solid', bgColor:{argb:'FFD7F2E3'}} } },
+        { type:'cellIs', operator:'lessThan', formulae:[0], priority: 2,
+          style: { fill:{type:'pattern', pattern:'solid', bgColor:{argb:'FFFAD2CF'}} } },
+      ],
+    });
+  }
+
   // ---- Aggregate totals: the print sheet's five, in its order (O/S, Dues,
   // OTS, Ledger Sacrifice, Sacrifice). Ledger Sacrifice was missing here
   // entirely, and the order did not match the paper. ----
-  const aggTitleRow = headerRow + OTS_XL_ROW_LABELS.length + 2;
+  // lastDataRow (not a label-count formula) since the 3 colored group-band
+  // rows now sit between sections -- a plain OTS_XL_ROW_LABELS.length+2
+  // offset would land 3 rows short of the real end of the table.
+  const aggTitleRow = lastDataRow + 2;
   ws.mergeCells(aggTitleRow,1,aggTitleRow,SPAN);
   set(`A${aggTitleRow}`, 'A G G R E G A T E   T O T A L S', {font:{bold:true, size:12, color:{argb:'FF000000'}}, align:{horizontal:'center'}, border:false});
   const sumRange = row => `SUM(B${row}:${lastCol}${row})`;
