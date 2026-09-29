@@ -1,4 +1,4 @@
-const CACHE_NAME = 'upgb-ots-shell-v294';
+const CACHE_NAME = 'upgb-ots-shell-v295';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
@@ -16,7 +16,7 @@ const SHELL_ASSETS = [
   './',
   './index.html',
   './css/styles.css?v=20260929b',
-  './js/app.js?v=20260929f',
+  './js/app.js?v=20260929g',
   './js/auth.js?v=20260912a',
   './js/publish.js?v=20260923a',
   './js/splash.js?v=20260917a',
