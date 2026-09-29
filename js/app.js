@@ -5508,7 +5508,7 @@ function openPublishReview(){
     icon: ICON_BANKNOTE, title: 'NPA Book', maybe: true,
     sub: `${summary.rowCount.toLocaleString('en-IN')} accounts · as on ${fmtAsOnDisplay()}`,
   })];
-  let pnpaLabel = null, weeklyPnpaLabel = null, monthlyPnpaLabel = null, kccovLabel = null;
+  let pnpaLabel = null, weeklyPnpaLabel = null, monthlyPnpaLabel = null, kccovLabel = null, smaLabel = null;
   if(__pendingPnpaData){
     pnpaLabel = `Daily PNPA (${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingPnpaData.asOnDate||''})`;
     items.push(publishReviewItemRow({ icon: ICON_ALERT_CIRCLE, title: 'Daily PNPA', sub: `${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingPnpaData.asOnDate||'')}` }));
@@ -5524,6 +5524,10 @@ function openPublishReview(){
   if(__pendingKccOverdueData){
     kccovLabel = `KCC Overdue (${__pendingKccOverdueData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingKccOverdueData.asOnDate||''})`;
     items.push(publishReviewItemRow({ icon: ICON_TARGET, title: 'KCC Overdue', sub: `${__pendingKccOverdueData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingKccOverdueData.asOnDate||'')}` }));
+  }
+  if(__pendingSmaData){
+    smaLabel = `SMA (${__pendingSmaData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingSmaData.asOnDate||''})`;
+    items.push(publishReviewItemRow({ icon: ICON_ALERT_TRIANGLE, title: 'SMA', sub: `${__pendingSmaData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingSmaData.asOnDate||'')}` }));
   }
   const specialNoteCount = Object.keys(DATA.specialNotes||{}).length;
   if(specialNoteCount){
@@ -5549,7 +5553,7 @@ function openPublishReview(){
       publishedBy: user.login || null,
       isRollback: false,
     },
-    labels: { pnpaLabel, weeklyPnpaLabel, monthlyPnpaLabel, kccovLabel },
+    labels: { pnpaLabel, weeklyPnpaLabel, monthlyPnpaLabel, kccovLabel, smaLabel },
   };
   document.getElementById('publishConfirmBtn').textContent = 'Confirm & Publish';
   document.getElementById('publishReviewPanel').style.display = 'block';
@@ -5583,6 +5587,9 @@ async function confirmPublish(){
     if(__pendingPublish.type!=='rollback' && __pendingKccOverdueData){
       extraFiles = (extraFiles||[]).concat([{ path:'data/kcc-overdue.json', content: __pendingKccOverdueData, label: labels.kccovLabel }]);
     }
+    if(__pendingPublish.type!=='rollback' && __pendingSmaData){
+      extraFiles = (extraFiles||[]).concat([{ path:'data/sma.json', content: __pendingSmaData, label: labels.smaLabel }]);
+    }
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
       : await window.UPGBPublish.publishData(__pendingPublish.dataObj, __pendingPublish.meta, onProgress, extraFiles);
@@ -5592,6 +5599,7 @@ async function confirmPublish(){
     __pendingPnpaWeeklyData = null;
     __pendingPnpaMonthlyData = null;
     __pendingKccOverdueData = null;
+    __pendingSmaData = null;
     __hasUnpublishedRefData = false;
     updateUnpublishedBanner();
     closePublishReview();
@@ -8333,6 +8341,345 @@ function renderKccOverdueAllBranches(filteredRows){
   wrap.innerHTML = kccovRenderAllBranchesTable(mapped);
 }
 
+/* ---------- SMA Dashboard: whole loan book, SMA0/1/2 early-warning
+   classification (RBI). A genuinely separate, broader dataset than KCC
+   Overdue above -- 20+ scheme codes, not just KCC/KCC-AH/OD-023 -- built
+   from Head Office's own pipe-delimited (NOT Excel/CSV) daily export.
+   Current-snapshot only this round; no trend/history yet (Alok, confirmed
+   directly, same bootstrapping KCC Overdue itself started with). ---------- */
+// 0-indexed column map for the raw pipe-delimited export -- verified
+// directly against a real file's header row (HATHRAS_SMA_28-09-2026.txt).
+// Column 24 carries no header text in the source file and is unused.
+const SM = {CAMP:0, EBANK:1, SOL_ID:2, REGION:3, BRANCH:4, ACCT:5, CUST_ID:6, SCHEME:7, NAME:8, OS:9,
+  CONTEXCESS_DATE:10, LIMREVIEW_DATE:11, KCCDISB_STOCK_DATE:12, DEMAND_DATE:13, ADJUST_AMOUNT:14,
+  SMAREASON:15, SMAACC:16, SMACUST:17, SBA_BALANCE:18, CADU:19, SANCT_DT:20, LIMIT:21, ROI:22, MOB:23,
+  SMA_TYPE:25, NON_FINANCIAL:26};
+// Row shape after parseSmaRows(): [solId, branch, acctNo, custId, scheme, name, os, smaCust, smaAcc,
+// smaReasonRaw, smaType, nonFinancial, limReviewDate, limit, roi, cadu, sanctDt, mobile]
+const SR = {SOL_ID:0, BRANCH:1, ACCT:2, CUST_ID:3, SCHEME:4, NAME:5, OS:6, SMACUST:7, SMAACC:8,
+  SMAREASON:9, SMA_TYPE:10, NON_FINANCIAL:11, LIMREVIEW_DATE:12, LIMIT:13, ROI:14, CADU:15, SANCT_DT:16, MOB:17};
+const SMA_STAGES = [
+  {key:'sma0', label:'SMA-0', match:'SMA0', color:'var(--tool-jade)', soft:'var(--tool-jade-soft)'},
+  {key:'sma1', label:'SMA-1', match:'SMA1', color:'var(--tool-gold)', soft:'var(--tool-gold-soft)'},
+  {key:'sma2', label:'SMA-2', match:'SMA2', color:'var(--tool-coral)', soft:'var(--tool-coral-soft)'},
+];
+// Splits the pipe-delimited file into rows -- the file's own CRLF line
+// endings mean a raw split('\n') leaves a trailing '\r' on the LAST column
+// of every row (NON-FINANCIAL), which would otherwise never equal 'Y'.
+// Confirmed directly against a real export before writing this.
+function parseSmaLines(text){
+  const lines = String(text).split('\n').map(l=>l.replace(/\r$/,''));
+  while(lines.length && lines[lines.length-1]==='') lines.pop();
+  return lines.map(l=>l.split('|'));
+}
+function parseSmaRows(lines){
+  if(!lines.length) throw new Error('Empty file.');
+  const header = lines[0];
+  if(header.length < 27) throw new Error(`Expected 27 columns in the SMA export, found ${header.length}. Check this is the correct file.`);
+  const rows = [];
+  for(let i=1;i<lines.length;i++){
+    const row = lines[i];
+    if(row.length < 27 || !row[SM.ACCT]) continue;
+    const os = Math.abs(parseFloat(row[SM.OS]) || 0);
+    rows.push([
+      row[SM.SOL_ID].trim(),
+      row[SM.BRANCH].trim(),
+      row[SM.ACCT].trim(),
+      normId(row[SM.CUST_ID]),
+      row[SM.SCHEME].trim(),
+      row[SM.NAME].trim(),
+      os,
+      row[SM.SMACUST].trim(),
+      row[SM.SMAACC].trim(),
+      row[SM.SMAREASON].trim(),
+      row[SM.SMA_TYPE].trim(),
+      row[SM.NON_FINANCIAL].trim()==='Y',
+      row[SM.LIMREVIEW_DATE] ? row[SM.LIMREVIEW_DATE].trim() : '',
+      parseFloat(row[SM.LIMIT])||0,
+      parseFloat(row[SM.ROI])||0,
+      parseFloat(row[SM.CADU])||0,
+      row[SM.SANCT_DT] ? row[SM.SANCT_DT].trim() : '',
+      row[SM.MOB] ? row[SM.MOB].trim() : '',
+    ]);
+  }
+  return rows;
+}
+
+let SMA_DATA = null;
+let __pendingSmaData = null;
+let smaBranchFilter = '';
+let smaStageFilter = '';
+let smaNonFinOnly = false;
+
+async function handleSmaUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const labelEl = document.getElementById('smaUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('smaUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading SMA file…</div>`;
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      const lines = parseSmaLines(String(e.target.result));
+      const rows = parseSmaRows(lines);
+      if(!rows.length) throw new Error('No account rows found in this file.');
+      const guessed = parseAsOnDateFromFilename(file.name);
+      const asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
+      __pendingSmaData = { asOnDate, rows };
+      SMA_DATA = __pendingSmaData;
+      const label = document.getElementById('smaStatusLabel');
+      if(label) label.textContent = `${rows.length.toLocaleString('en-IN')} accounts loaded (${file.name})`;
+      const tileLabel = document.getElementById('smaStatusLabelTile');
+      if(tileLabel) tileLabel.textContent = `${rows.length.toLocaleString('en-IN')} accounts loaded`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${rows.length.toLocaleString('en-IN')} accounts, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.</div>`;
+      clearStalePublishStatus();
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.querySelector('.view.active')?.dataset.view==='sma') renderSmaBody();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  reader.readAsText(file);
+}
+window.handleSmaUpload = handleSmaUpload;
+
+function renderSmaDashboard(){
+  const el = document.getElementById('smaArea');
+  if(!el) return;
+  if(SMA_DATA){ renderSmaBody(); return; }
+  el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading SMA data…</p></div>`;
+  fetchJson('data/sma.json?t=' + Date.now())
+    .then(d => { SMA_DATA = d; renderSmaBody(); })
+    .catch(() => {
+      el.innerHTML = `<div class="empty-state"><h2>No SMA data yet</h2><p>Upload the SMA file from Update Data to populate this tab.</p></div>`;
+    });
+}
+
+function smaFilteredRows(d){
+  let rows = d.rows;
+  if(smaBranchFilter) rows = rows.filter(r=>r[SR.BRANCH]===smaBranchFilter);
+  if(smaStageFilter) rows = rows.filter(r=>r[SR.SMACUST]===SMA_STAGES.find(s=>s.key===smaStageFilter).match);
+  if(smaNonFinOnly) rows = rows.filter(r=>r[SR.NON_FINANCIAL]);
+  return rows;
+}
+function setSmaBranchFilter(b){ smaBranchFilter = b; renderSmaBody(); }
+window.setSmaBranchFilter = setSmaBranchFilter;
+function setSmaStageFilter(key){ smaStageFilter = (smaStageFilter===key) ? '' : key; renderSmaBody(); }
+window.setSmaStageFilter = setSmaStageFilter;
+function toggleSmaNonFinOnly(){ smaNonFinOnly = !smaNonFinOnly; renderSmaBody(); }
+window.toggleSmaNonFinOnly = toggleSmaNonFinOnly;
+function resetSmaFilters(){
+  smaBranchFilter = ''; smaStageFilter = ''; smaNonFinOnly = false;
+  renderSmaBody();
+}
+window.resetSmaFilters = resetSmaFilters;
+
+function renderSmaBody(){
+  const el = document.getElementById('smaArea');
+  const d = SMA_DATA;
+  if(!el) return;
+  if(!d || !d.rows){ el.innerHTML = `<div class="empty-state"><h2>No SMA data yet</h2><p>Upload the SMA file from Update Data to populate this tab.</p></div>`; return; }
+
+  document.querySelectorAll('.sma-report-date-val').forEach(e=>{
+    const parts = (d.asOnDate||'').split('-');
+    e.textContent = parts.length===3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : (d.asOnDate||'—');
+  });
+
+  const allBranches = [...new Set(d.rows.map(r=>r[SR.BRANCH]))].sort((a,b)=>a.localeCompare(b));
+  const branchOptions = `<option value="">Regional Office</option>` +
+    allBranches.map(b=>`<option value="${esc(b)}"${smaBranchFilter===b?' selected':''}>${esc(b)}</option>`).join('');
+
+  const toolbar = `<div class="chart-card kccov-filter-card">
+    <div class="chart-card-head-row" style="margin-top:0">
+      <div class="section-label">Filters</div>
+      <div style="display:flex;gap:8px;flex-shrink:0;margin-top:1px">
+        <button type="button" class="section-search-btn" onclick="openCmdk()" title="Search a borrower by name or account no." aria-label="Search a borrower">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+        <button type="button" class="section-search-btn" onclick="resetSmaFilters()" title="Reset all filters" aria-label="Reset all filters">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="kccov-filter-grid">
+      <div class="kccov-filter-field">
+        <label>Branch</label>
+        <select id="smaBranchFilterSelect" class="dash-select">${branchOptions}</select>
+      </div>
+      <div class="kccov-filter-field">
+        <label>Flag</label>
+        <button type="button" class="bank-tab-btn${smaNonFinOnly?' active':''}" onclick="toggleSmaNonFinOnly()" style="width:100%">Non-Financial only</button>
+      </div>
+    </div>
+  </div>`;
+
+  const total = { count: d.rows.length, os: d.rows.reduce((a,r)=>a+r[SR.OS],0) };
+  const stageTotals = {};
+  SMA_STAGES.forEach(s=>{ stageTotals[s.key] = {count:0, os:0}; });
+  let nonFinCount=0, nonFinOs=0;
+  for(const r of d.rows){
+    const st = SMA_STAGES.find(s=>s.match===r[SR.SMACUST]);
+    if(st){ stageTotals[st.key].count++; stageTotals[st.key].os += r[SR.OS]; }
+    if(r[SR.NON_FINANCIAL]){ nonFinCount++; nonFinOs += r[SR.OS]; }
+  }
+  const stageTiles = SMA_STAGES.map(s=>{
+    const t = stageTotals[s.key], isActive = smaStageFilter===s.key;
+    const pct = total.os>0 ? (t.os/total.os*100) : 0;
+    return heroKpiCard({
+      id:'smaHero_'+s.key, icon: ICON_ALERT_TRIANGLE, tint: s.soft, color: s.color,
+      extraClass: isActive ? 'kccov-active' : '',
+      onclick:`setSmaStageFilter('${s.key}')`,
+      label: s.label, fallback: fmtCr(t.os),
+      sub: `${t.count.toLocaleString('en-IN')} accounts`
+        + `<div class="hero-share-track"><div class="hero-share-fill" style="width:${pct.toFixed(1)}%;background:${s.color}"></div></div>`,
+      badge: isActive ? `<div class="hero-kpi-badge" style="background:${s.soft};color:${s.color}">Viewing</div>` : '',
+    });
+  }).join('');
+  const totalTile = heroKpiCard({
+    id:'smaTotal', icon: ICON_BANKNOTE, tint:'var(--tool-sky-soft)', color:'var(--tool-sky)',
+    label:'Total SMA', fallback: fmtCr(total.os), sub:`${total.count.toLocaleString('en-IN')} accounts`,
+  });
+  const nonFinPct = total.count>0 ? (nonFinCount/total.count*100) : 0;
+  const nonFinTile = heroKpiCard({
+    id:'smaNonFin', icon: ICON_ALERT_CIRCLE, tint:'var(--tool-violet-soft)', color:'var(--tool-violet)',
+    extraClass: smaNonFinOnly ? 'kccov-active' : '',
+    onclick:'toggleSmaNonFinOnly()',
+    label:'Non-Financial SMA', fallback: fmtCr(nonFinOs),
+    sub:`${nonFinCount.toLocaleString('en-IN')} accounts · ${nonFinPct.toFixed(0)}% of book`,
+  });
+  const heroRow = `<div class="hero-kpi-row">${stageTiles}${totalTile}${nonFinTile}</div>`;
+
+  const filteredRows = smaFilteredRows(d);
+
+  // Branch-wise bar chart (all schemes, every active filter) -- the
+  // Region-wise substitution this file's own data shape requires (REGION
+  // is constant "HATHRAS" for every row, so a real region breakdown is
+  // impossible; Branch is the natural equivalent, same substitution
+  // already made for KCC Overdue's own redesign).
+  const branchOsMap = new Map();
+  for(const r of filteredRows) branchOsMap.set(r[SR.BRANCH], (branchOsMap.get(r[SR.BRANCH])||0) + r[SR.OS]);
+  const branchBarItems = [...branchOsMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10)
+    .map(([b,os])=>({label:b, value:os, valueLabel:fmtCr(os), color:'var(--accent)', onclick:`setSmaBranchFilter('${jsq(b)}')`}));
+
+  // Reason-wise donut -- SMAREASON is a '^'-joined multi-value string (e.g.
+  // "^KCC36^LIMREV"), so one row can contribute to more than one segment;
+  // segment totals therefore exceed the account count -- called out in the
+  // chart's own caption so it doesn't read as a bug.
+  const reasonCounts = new Map();
+  for(const r of filteredRows){
+    const tokens = r[SR.SMAREASON].split('^').filter(Boolean);
+    for(const t of tokens) reasonCounts.set(t, (reasonCounts.get(t)||0)+1);
+  }
+  const REASON_PALETTE = ['var(--accent)','var(--tool-jade)','var(--tool-gold)','var(--tool-coral)','var(--tool-sky)','var(--tool-violet)','var(--tool-teal)','var(--tool-terracotta)','var(--tool-rose)','var(--tool-indigo)','var(--ink-mute)','var(--amber)'];
+  const reasonSeg = [...reasonCounts.entries()].sort((a,b)=>b[1]-a[1])
+    .map(([label,count],i)=>({label, value:count, valueLabel:`${count.toLocaleString('en-IN')} occurrence(s)`, color:REASON_PALETTE[i%REASON_PALETTE.length]}));
+
+  const chartsRow = filteredRows.length ? `<div class="chart-grid" style="margin-top:16px">
+    <div class="chart-card">
+      <div class="chart-title">Branch-wise Balance Amount<span class="chart-sub">top ${Math.min(10,branchBarItems.length)} of ${branchOsMap.size.toLocaleString('en-IN')} branch(es) · tap a branch to filter</span></div>
+      <div class="bar-list">${barRows(branchBarItems)}</div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Reason-wise Split<span class="chart-sub">an account can carry more than one reason -- totals exceed account count</span></div>
+      <div class="donut-flex">
+        ${donutCard(reasonSeg, undefined, filteredRows.length.toLocaleString('en-IN'), 'Accounts')}
+        <div class="donut-legend">${donutLegend(reasonSeg)}</div>
+      </div>
+    </div>
+  </div>` : '';
+
+  // Top 20 accounts by O/S -- plain rows this round (no drill-down; a real
+  // account-detail page would need a new 'sma' source branch added to the
+  // shared showQuickAcctDetail()/kccPnpaParticularsTableHTML() machinery,
+  // a clean, well-scoped fast-follow once this table's own shape is proven).
+  const top20 = [...filteredRows].sort((a,b)=>b[SR.OS]-a[SR.OS]).slice(0,20);
+  const top20Rows = top20.map((r,i)=>`<tr>
+    <td><span class="dash-rank">${i+1}</span></td>
+    <td>${esc(r[SR.ACCT])}</td>
+    <td class="tal">${esc(r[SR.NAME])||'—'}</td>
+    <td class="tal">${esc(r[SR.BRANCH])}</td>
+    <td>${esc(r[SR.SCHEME])}</td>
+    <td><span class="badge-pill" style="background:${SMA_STAGES.find(s=>s.match===r[SR.SMACUST])?.soft||'var(--card)'};color:${SMA_STAGES.find(s=>s.match===r[SR.SMACUST])?.color||'var(--ink)'}">${esc(r[SR.SMACUST])}</span></td>
+    <td>${fmtCr(r[SR.OS])}</td>
+    <td>${r[SR.NON_FINANCIAL]?'Y':'—'}</td>
+  </tr>`).join('');
+
+  // Top 10 high-risk CUSTOMERS -- distinct from the account-level Top 20
+  // above. Grouped by CUST_ID (a customer may hold >1 account), ranked by
+  // days-since-LIMREVIEW_DATE-due (highest fill rate of any date column in
+  // this file -- 99.2% -- unlike DEMAND_DATE, which is basically unusable).
+  const custMap = new Map();
+  for(const r of filteredRows){
+    const cid = r[SR.CUST_ID];
+    let e = custMap.get(cid);
+    if(!e) e = { custId:cid, name:r[SR.NAME], branch:r[SR.BRANCH], os:0, count:0, worstReviewDate:null };
+    e.os += r[SR.OS]; e.count++;
+    const rd = toDate(r[SR.LIMREVIEW_DATE]);
+    if(rd && (!e.worstReviewDate || rd < e.worstReviewDate)) e.worstReviewDate = rd;
+    custMap.set(cid, e);
+  }
+  const today = new Date();
+  const top10 = [...custMap.values()]
+    .map(c=>({...c, daysOverdue: c.worstReviewDate ? daysBetween(today, c.worstReviewDate) : -Infinity}))
+    .filter(c=>c.worstReviewDate)
+    .sort((a,b)=>b.daysOverdue-a.daysOverdue)
+    .slice(0,10);
+  const top10Rows = top10.map((c,i)=>`<tr>
+    <td><span class="dash-rank">${i+1}</span></td>
+    <td class="tal">${esc(c.name)||'—'}</td>
+    <td class="tal">${esc(c.branch)}</td>
+    <td>${c.count}</td>
+    <td>${fmtCr(c.os)}</td>
+    <td>${fmtDate(c.worstReviewDate)}</td>
+    <td>${c.daysOverdue>0 ? c.daysOverdue.toLocaleString('en-IN')+' days' : '—'}</td>
+  </tr>`).join('');
+
+  el.innerHTML = toolbar + heroRow + chartsRow +
+    `<div class="chart-card" style="margin-top:16px">
+      <div class="chart-card-head-row">
+        <div class="section-label">Top 20 SMA Accounts<span class="chart-sub">by Outstanding, highest first</span></div>
+        <button type="button" class="export-xl-btn" onclick="exportSmaSummary()">${EXPORT_XL_ICON} Export to Excel</button>
+      </div>
+      <div class="dash-table-wrap acct-list-scroll">
+        <table class="dash-table">
+          <thead><tr><th>Rank</th><th class="tal">Account No.</th><th class="tal">Name</th><th class="tal">Branch</th><th>Scheme</th><th>SMA</th><th>O/S</th><th>Non-Fin.</th></tr></thead>
+          <tbody>${top20Rows || emptyStateRowHtml(8, 'No accounts match this filter')}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="chart-card" style="margin-top:16px">
+      <div class="section-label">Top 10 High-Risk Customers<span class="chart-sub">by days overdue on limit review, most overdue first</span></div>
+      <div class="dash-table-wrap acct-list-scroll">
+        <table class="dash-table">
+          <thead><tr><th>Rank</th><th class="tal">Name</th><th class="tal">Branch</th><th>Accounts</th><th>Total O/S</th><th>Review Due</th><th>Overdue By</th></tr></thead>
+          <tbody>${top10Rows || emptyStateRowHtml(7, 'No customers with a review-due date in this filter')}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  const branchSel = document.getElementById('smaBranchFilterSelect');
+  if(branchSel) branchSel.onchange = () => { smaBranchFilter = branchSel.value; renderSmaBody(); };
+}
+
+let smaLastExport = null;
+function exportSmaSummary(){
+  const d = SMA_DATA;
+  if(!d || !d.rows) return;
+  const rows = [...smaFilteredRows(d)].sort((a,b)=>b[SR.OS]-a[SR.OS]).slice(0,20)
+    .map((r,i)=>[i+1, r[SR.ACCT], r[SR.NAME], r[SR.BRANCH], r[SR.SCHEME], r[SR.SMACUST], r[SR.OS], r[SR.NON_FINANCIAL]?'Y':'']);
+  if(!rows.length) return;
+  exportRowsToExcel(
+    `SMA_Top20_${dateToInputValue(new Date())}.xlsx`, 'SMA Top 20',
+    ['Rank','Account No.','Name','Branch','Scheme','SMA Stage','O/S','Non-Financial'], rows,
+    [null,null,null,null,null,null,XL_INR_FMT,null]
+  );
+  showToast(`✓ ${rows.length} account row${rows.length>1?'s':''} exported`);
+}
+window.exportSmaSummary = exportSmaSummary;
+
 /* ---------- Nav / view switching ---------- */
 // OneDrive/PassSheet are reached only via the Utility hub now (2026-09-08),
 // not their own nav-rail items -- the "Utility" nav-item stays highlighted
@@ -8379,6 +8726,7 @@ function switchView(view){
     if(view==='dashboard') renderDashboard();
     if(view==='pnpa') renderPnpaDashboard();
     if(view==='kccov') renderKccOverdue();
+    if(view==='sma') renderSmaDashboard();
     if(view==='otsapplicationform') renderOtsApplicationView();
     if(view==='npatarget') renderNpaTargetView();
     // Resume a still-valid OneDrive sign-in silently (no popup) whenever
@@ -8629,6 +8977,8 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('monthlyPnpaFileInput','change',(e)=>handleMonthlyPnpaUpload(e));
   on('kccOverdueUploadDrop','click',()=>document.getElementById('kccOverdueFileInput').click());
   on('kccOverdueFileInput','change',(e)=>handleKccOverdueUpload(e));
+  on('smaUploadDrop','click',()=>document.getElementById('smaFileInput').click());
+  on('smaFileInput','change',(e)=>handleSmaUpload(e));
   on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
