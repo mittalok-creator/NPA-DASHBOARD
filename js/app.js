@@ -4067,6 +4067,7 @@ function openUpdateDataPanel(panelId){
   document.querySelectorAll('.update-data-panel').forEach(p=>{ p.hidden = (p.id !== panelId); });
   const sheet = document.querySelector('#updateModalOverlay .modal-sheet');
   if(sheet) sheet.scrollTop = 0;
+  if(panelId==='otsBookPanel') renderOtsBookPanel();
 }
 window.openUpdateDataPanel = openUpdateDataPanel;
 function closeUpdateDataPanel(){
@@ -4079,7 +4080,7 @@ window.closeUpdateDataPanel = closeUpdateDataPanel;
 function toggleUpdateModal(show){
   document.getElementById('updateModalOverlay').classList.toggle('show', show);
   closePublishReview();
-  if(show){ loadVersionHistory(); renderSpecialNoteList(); updateLokAdalatClearBtn(); closeUpdateDataPanel(); }
+  if(show){ loadVersionHistory(); renderSpecialNoteList(); updateLokAdalatClearBtn(); updateOtsBookStatusTile(); closeUpdateDataPanel(); }
   if(!show){
     document.getElementById('uploadStatus').innerHTML='';
     document.getElementById('uploadSummary').innerHTML='';
@@ -4695,6 +4696,70 @@ function clearLokAdalat(){
   if(publishBtn) publishBtn.disabled = false;
   updateLokAdalatClearBtn();
 }
+
+/* OTS Calculator book: manual "force reset now" escape hatch. DATA.otsBook
+   is deliberately designed to KEEP an account that drops out of a daily
+   upload until the next calendar month-end (see the otsBook merge/reset
+   block in applyNewDataNow()) -- normal and correct for a genuine one-day
+   gap in an upload, but wrong for a mistaken upload that was corrected the
+   same day (Alok, 2026-09-30: SB accounts were accidentally pushed live,
+   then removed in a corrected re-upload -- otsBook correctly, but
+   unhelpfully, kept them since it wasn't a month-end date, and there is no
+   other way to clear them before 31-Oct). This lets the Admin force
+   otsBook back in sync with the current DATA.npa right now, without
+   waiting for month-end -- same effect as a month-end reset, triggered on
+   demand instead of by date. */
+function otsBookExtraRows(){
+  if(!DATA.otsBook || !DATA.otsBook.rows || !DATA.otsBook.rows.length) return [];
+  const liveSet = new Set((DATA.npa.rows||[]).map(r=>String(r[C.ACCT_NO]||'')));
+  return DATA.otsBook.rows.filter(r=>!liveSet.has(String(r[C.ACCT_NO]||'')));
+}
+function updateOtsBookStatusTile(){
+  const tile = document.getElementById('otsBookStatusLabelTile');
+  if(!tile) return;
+  const n = otsBookExtraRows().length;
+  tile.textContent = n ? `${n} extra account(s) held` : 'in sync with latest upload';
+}
+function renderOtsBookPanel(){
+  const summaryEl = document.getElementById('otsBookSummary');
+  const btn = document.getElementById('otsBookResetBtn');
+  if(!summaryEl) return;
+  const extra = otsBookExtraRows();
+  const totalInBook = (DATA.otsBook && DATA.otsBook.rows) ? DATA.otsBook.rows.length : 0;
+  if(btn) btn.disabled = !extra.length;
+  if(!extra.length){
+    summaryEl.innerHTML = `<div class="upload-status ok">✔ The OTS Calculator book (${totalInBook} account(s)) matches the latest upload exactly — nothing is being held back.</div>`;
+    return;
+  }
+  const shown = extra.slice(0, 50);
+  const rows = shown.map(r=>`<tr><td>${esc(String(r[C.ACCT_NO]||''))}</td><td>${esc(String(r[C.NAME]||''))}</td><td>${esc(String(r[C.SOL_DESC]||''))}</td></tr>`).join('');
+  const more = extra.length>50 ? `<div style="font-size:11px;color:var(--ink-mute);margin-top:6px;">...and ${extra.length-50} more</div>` : '';
+  summaryEl.innerHTML = `
+    <div class="upload-status warn">⚠ ${extra.length} account(s) in the OTS Calculator book are not in the latest upload — kept until the next month-end by design. If these got here by mistake (not a genuine one-day gap), check the list below, then use the button to remove them right now.</div>
+    <div style="max-height:220px;overflow:auto;margin-top:10px;border:1px solid var(--line);border-radius:8px;">
+      <table class="dash-table" style="width:100%;font-size:12px;">
+        <thead><tr><th>Account No.</th><th>Name</th><th>Branch</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${more}`;
+}
+function forceResetOtsBook(){
+  const extra = otsBookExtraRows();
+  if(!extra.length) return;
+  if(!confirm(`This removes ${extra.length} account(s) currently held in the OTS Calculator that are not in the latest upload, resetting the book to exactly match the latest upload (same effect as a month-end reset).\n\nUse this only to correct a mistaken upload -- not for routine daily use, since a genuine one-day gap is normally meant to be kept until month-end.\n\nProceed?`)) return;
+  DATA.otsBook = { headers: DATA.npa.headers, rows: DATA.npa.rows.slice() };
+  rebuildOtsBookMaps();
+  const statusEl = document.getElementById('otsBookResetStatus');
+  if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ OTS Calculator book reset to the latest upload — ${extra.length} account(s) removed. Not live for anyone else until you hit Publish below.</div>`;
+  __hasUnpublishedRefData = true;
+  clearStalePublishStatus();
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+  renderOtsBookPanel();
+  updateOtsBookStatusTile();
+}
+window.forceResetOtsBook = forceResetOtsBook;
 
 /* Special Note -- Admin types an Account No. one at a time (no file
    upload), sees the matching name/branch immediately via the same
