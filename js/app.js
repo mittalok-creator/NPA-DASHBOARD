@@ -60,12 +60,40 @@ function ensureMsal(){ return typeof msal!=='undefined' ? Promise.resolve() : lo
 const npaByAcct = new Map();
 const npaByHelper = new Map();
 const byCustId = new Map();
+/* DATA.otsBook -- the OTS Calculator's own working book, deliberately
+   separate from DATA.npa (the "latest" book everything else reads). Reset
+   at each calendar month-end, merged in between so an existing account's
+   own figures still track the latest upload while the SET of accounts
+   stays pinned -- see the reset/merge logic in applyNewDataNow() and the
+   PROJECT_ROADMAP entry for the full rationale. Bootstrapped just below;
+   rebuilt by rebuildOtsBookMaps() on every later daily upload. */
+const otsBookByAcct = new Map();
+const otsBookByHelper = new Map();
+const otsBookByCustId = new Map();
+function rebuildOtsBookMaps(){
+  otsBookByAcct.clear(); otsBookByHelper.clear(); otsBookByCustId.clear();
+  DATA.otsBook.rows.forEach(r=>{
+    if(r[C.ACCT_NO]!=='') otsBookByAcct.set(String(r[C.ACCT_NO]), r);
+    if(r[C.HELPER]!=='') otsBookByHelper.set(String(r[C.HELPER]), r);
+    const cid = String(r[C.CUST_ID]);
+    if(cid && !otsBookByCustId.has(cid)) otsBookByCustId.set(cid, r);
+  });
+}
 DATA.npa.rows.forEach(r=>{
   if(r[C.ACCT_NO]!=='') npaByAcct.set(String(r[C.ACCT_NO]), r);
   if(r[C.HELPER]!=='') npaByHelper.set(String(r[C.HELPER]), r);
   const cid = String(r[C.CUST_ID]);
   if(cid && !byCustId.has(cid)) byCustId.set(cid, r);
 });
+/* Bootstrap for the very first load after this feature ships (a
+   currently-published data/latest.json predating DATA.otsBook has no such
+   key at all) -- and the normal case on every later load, where DATA.otsBook
+   already round-tripped through Publish just like DATA.npa. Row objects
+   are shared by reference with DATA.npa.rows on purpose (see
+   applyNewDataNow()'s own comment) -- .slice() only copies the array
+   container, never the rows themselves. */
+DATA.otsBook = DATA.otsBook || { headers: DATA.npa.headers, rows: DATA.npa.rows.slice() };
+rebuildOtsBookMaps();
 const oldOtsByAcct = new Map();
 DATA.oldots.rows.forEach(r=>{
   if(r[0]!=='' && !oldOtsByAcct.has(String(r[0]))) oldOtsByAcct.set(String(r[0]), {date:r[1], amount:r[2]});
@@ -223,6 +251,24 @@ function endOfMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0); }
 function sameDate(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
 function daysBetween(a,b){ return Math.round((a-b)/86400000); }
 function fmtDate(d){ if(!d) return '—'; return String(d.getDate()).padStart(2,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+d.getFullYear(); }
+/* 'YYYY-MM-DD' -> true iff that date is the actual last calendar day of its
+   month (28/29/30/31) -- the same EOMONTH idiom already used by the UCI
+   anchor-date Excel formula elsewhere in this file, just in plain JS:
+   new Date(y, m, 0) with m the 1-indexed month number rolls back to the
+   last day of month m. Drives DATA.otsBook's month-end reset below. */
+function isMonthEndDate(dateStr){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr||''));
+  if(!m) return false;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  return d === new Date(y, mo, 0).getDate();
+}
+/* 'YYYY-MM-DD' -> 'DD-MM-YYYY', for plain date strings read out of
+   data/npa-branch-history.json entries (a different shape from a real
+   Date object, so this is separate from fmtDate() above). */
+function isoToDisplay(iso){
+  const p = String(iso||'').split('-');
+  return p.length===3 ? `${p[2]}-${p[1]}-${p[0]}` : String(iso||'');
+}
 /* Date part always goes through fmtDate() (DD-MM-YYYY, never locale-
    dependent) -- only the time-of-day portion uses toLocaleTimeString,
    since that carries no date-format ambiguity. */
@@ -499,7 +545,7 @@ let __otsAppLetterHtml = null;
 function otsAppFindAccount(query){
   const q = String(query||'').trim().toLowerCase();
   if(!q) return null;
-  const rows = DATA.npa.rows;
+  const rows = DATA.otsBook.rows;
   return rows.find(r=>String(r[C.ACCT_NO]||'').toLowerCase()===q)
       || rows.find(r=>String(r[C.ACCT_NO]||'').toLowerCase().includes(q))
       || rows.find(r=>String(r[C.NAME]||'').toLowerCase().includes(q))
@@ -1853,7 +1899,7 @@ function slotFromRow(row){
   };
 }
 function lookupLoanSlot(custId, slotNo){
-  return slotFromRow(npaByHelper.get(custId+':'+slotNo));
+  return slotFromRow(otsBookByHelper.get(custId+':'+slotNo));
 }
 function computeSlot(slot){
   if(!slot) return null;
@@ -2049,7 +2095,7 @@ function runSearch(){
   const mode = SEARCH_MODES.find(m=>m.id===searchMode);
   const seen = new Set();
   const matches = [];
-  for(const r of DATA.npa.rows){
+  for(const r of DATA.otsBook.rows){
     const val = r[mode.col];
     if(val==='' || val===null) continue;
     if(String(val).toLowerCase().includes(q)){
@@ -2157,8 +2203,8 @@ function otsWorksheetRows(){
   Object.keys(otsAmounts).forEach(acctNo => {
     const ots = parseOtsAmount(otsAmounts[acctNo]);
     if(ots===null) return;
-    const raw = npaByAcct.get(String(acctNo));
-    if(!raw) return; // account no longer in the book (regularized/closed)
+    const raw = otsBookByAcct.get(String(acctNo));
+    if(!raw) return; // account no longer in the OTS working book (dropped at last month-end reset)
     const s = computeSlot(slotFromRow(raw));
     const totalDues = totalDuesFor(s);
     rows.push({
@@ -2626,7 +2672,7 @@ function totalContractualDuesFor(s){
 }
 
 function openDetail(custId, jumpAcct){
-  const custRow = byCustId.get(custId);
+  const custRow = otsBookByCustId.get(custId);
   if(!custRow) return;
   rememberBorrower(custRow);
   switchView('search');
@@ -4675,7 +4721,7 @@ function onSpecialNoteAcctInput(){
     saveBtn.textContent = 'Save Note';
     return;
   }
-  const row = npaByAcct.get(acctNo);
+  const row = otsBookByAcct.get(acctNo);
   if(!row){
     lookupEl.innerHTML = `<div class="special-note-lookup-row notfound">⚠ Account not found in current NPA data</div>`;
     textEl.value = '';
@@ -4706,7 +4752,7 @@ function saveSpecialNote(){
   if(!input || !textEl) return;
   const acctNo = input.value.trim();
   const note = textEl.value.trim();
-  const row = npaByAcct.get(acctNo);
+  const row = otsBookByAcct.get(acctNo);
   if(!acctNo || !row || !note) return;
   const user = (window.UPGBAuth && window.UPGBAuth.getCurrentUser()) || {};
   DATA.specialNotes = DATA.specialNotes || {};
@@ -4725,7 +4771,7 @@ function removeSpecialNote(){
 }
 function removeSpecialNoteByAcct(acctNo){
   if(!acctNo || !DATA.specialNotes || !DATA.specialNotes[acctNo]) return;
-  const row = npaByAcct.get(acctNo);
+  const row = otsBookByAcct.get(acctNo);
   delete DATA.specialNotes[acctNo];
   const statusEl = document.getElementById('specialNoteStatus');
   if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Note removed for A/c ${esc(acctNo)}${row?(' — '+esc(row[C.NAME])):''}. Goes live for everyone on Publish.</div>`;
@@ -4753,7 +4799,7 @@ function renderSpecialNoteList(){
   if(!listEl) return;
   if(!acctNos.length){ listEl.innerHTML = ''; return; }
   listEl.innerHTML = acctNos.map(acctNo => {
-    const row = npaByAcct.get(acctNo);
+    const row = otsBookByAcct.get(acctNo);
     const name = row ? (row[C.NAME]||'—') : 'not in current NPA data';
     return `<div class="special-note-list-item">
       <div class="special-note-list-body">
@@ -5218,6 +5264,25 @@ function applyNewDataNow(){
   if(__pendingData.oldots) DATA.oldots = __pendingData.oldots;
   if(__pendingAsOnDate) DATA.asOnDate = __pendingAsOnDate;
 
+  /* DATA.otsBook: reset to a fresh snapshot of today's book on a calendar
+     month-end, otherwise merge today's rows in -- an account present today
+     is represented ONLY by today's fresh row (so its own figures always
+     track the latest upload), an account absent today keeps whatever row
+     it last had (never auto-removed mid-month, per Alok's own confirmed
+     answer), and a brand-new account is included automatically since it's
+     already part of newRows. Row objects are never deep-copied here --
+     .slice()/.filter()/.concat() only ever copy the array container -- so
+     Customer Master's in-place row mutation (mergeCustomerDetails())
+     transparently reaches otsBook too for any account still tracked in
+     both, with no extra enrichment code needed. */
+  if(!DATA.otsBook || isMonthEndDate(DATA.asOnDate)){
+    DATA.otsBook = { headers: DATA.npa.headers, rows: DATA.npa.rows.slice() };
+  } else {
+    const kept = DATA.otsBook.rows.filter(r=>!newAcctSet.has(String(r[C.ACCT_NO]||'')));
+    DATA.otsBook = { headers: DATA.npa.headers, rows: kept.concat(DATA.npa.rows) };
+  }
+  rebuildOtsBookMaps();
+
   npaByAcct.clear(); npaByHelper.clear(); byCustId.clear(); oldOtsByAcct.clear();
   DATA.npa.rows.forEach(r=>{
     if(r[C.ACCT_NO]!=='') npaByAcct.set(String(r[C.ACCT_NO]), r);
@@ -5231,10 +5296,12 @@ function applyNewDataNow(){
 
   /* A daily upload used to wipe every typed OTS Amount. Now that these are
      saved on the device, wiping would throw away real work each morning --
-     so entries are pruned to accounts still present in the new file
-     (regularized/closed ones go) and everything else carries forward. */
+     so entries are pruned to accounts still present in DATA.otsBook (not
+     just today's own upload -- an account otsBook is deliberately keeping
+     between month-ends should keep its typed amount too) and everything
+     else carries forward. */
   [[otsAmounts, saveOtsAmounts], [interestReversalOverrides, saveUriOverrides]].forEach(([map, save])=>{
-    Object.keys(map).forEach(acct=>{ if(!newAcctSet.has(String(acct))) delete map[acct]; });
+    Object.keys(map).forEach(acct=>{ if(!otsBookByAcct.has(String(acct))) delete map[acct]; });
     save();
   });
   updateReportDateDisplay();
@@ -5333,6 +5400,29 @@ function showToast(msg){
   clearTimeout(__toastTimer);
   __toastTimer = setTimeout(()=>el.classList.remove('show'), 2800);
 }
+/* Flat, all-branches/all-dates dump of data/npa-branch-history.json (see
+   buildNpaBranchHistoryExtraFile()) -- one row per (date, branch), Alok's
+   own confirmed long-table layout. Reuses exportRowsToExcel() unchanged --
+   this is a plain data dump, not a styled dashboard export. */
+async function exportNpaBranchHistory(){
+  let doc;
+  try{ doc = await fetchJson('data/npa-branch-history.json?t=' + Date.now()); }
+  catch(err){
+    if(err && err.message === 'HTTP 404'){ showToast('No NPA history captured yet.'); return; }
+    showToast('Could not load NPA daily history.'); return;
+  }
+  const entries = (doc && doc.entries) || [];
+  if(!entries.length){ showToast('No NPA history captured yet.'); return; }
+  const headers = ['Date','Sol ID','Branch','Accounts','Outstanding (Lakh)'];
+  const rows = [];
+  entries.forEach(e=>{
+    e.branches.forEach(b=>{
+      rows.push([ isoToDisplay(e.date), b.solId, b.branchName, b.count, +(b.os/100000).toFixed(2) ]);
+    });
+  });
+  await exportRowsToExcel('UPGB_NPA_Daily_Branch_History.xlsx', 'NPA Daily History', headers, rows, [null,null,null,null,'0.00']);
+}
+window.exportNpaBranchHistory = exportNpaBranchHistory;
 function downloadDailyTemplate(){
   const headers = ['Sol','Region','Branch','Account No','Customer ID','Intt Rev','Scheme Code','Account Name','Balance Amount','Turnover','Interest Charge Amount','Continuous Excess Date','Review Date','KCC Disbursement Date/Stock Date','Due date','Demand Amount','Adjustment Amount','Reasons','Exempted','Account NPA Date','Cust NPA Date','SBA Acc/Balance','Remarks','Category','Prov Amt','CADU','Sanction Date','Limit','Disb Date','ROI','Mobile No','SMA Status','Sec Val','Sec OS','Unsec OS'];
   const example = ['9316','HATHRAS','MAANT','160720303013711','705760143','','AG203','EXAMPLE BORROWER NAME','38155.85','','','','','','','38155.85','','CBS NPA','','30-11-2012','30-11-2012','124610100004372 -> 0','Marked in CBS','DA3','38155.85','1009','23-11-2010','40000','23-11-2011','9','9999999999','SMA0','80000','38155.85','0'];
@@ -5545,7 +5635,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, branchAdvances: DATA.branchAdvances||{}, branchTargets: DATA.branchTargets||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{}, customerAddressMap: DATA.customerAddressMap||{} },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, otsBook: DATA.otsBook, branchAdvances: DATA.branchAdvances||{}, branchTargets: DATA.branchTargets||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{}, customerAddressMap: DATA.customerAddressMap||{} },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -5563,6 +5653,38 @@ function closePublishReview(){
   const panel = document.getElementById('publishReviewPanel');
   if(panel) panel.style.display = 'none';
   __pendingPublish = null;
+}
+/* Day-wise, branch-wise NPA history (data/npa-branch-history.json) --
+   captured automatically on every Publish. Fetches the currently-published
+   file (plain fetchJson(), the same read path every other file in this app
+   already uses -- NOT the GitHub Contents API js/publish.js uses
+   internally), upserts today's entry by DATA.asOnDate (so republishing the
+   same date to fix a mistake replaces it rather than duplicating), and
+   returns the extraFiles entry to include. A missing file (HTTP 404) means
+   this is the first publish since the feature shipped -- starts empty. Any
+   OTHER fetch/decrypt failure returns null so a flaky connection can never
+   silently wipe the whole history with an empty one -- the rest of the
+   publish still proceeds without this file this one time. Deliberately not
+   gated on js/publish.js's own npaChanged fingerprint (not available here
+   before publishData() runs) -- an upsert-by-date is naturally idempotent,
+   so a publish that didn't actually change the NPA book just overwrites
+   today's entry with an identical value. */
+async function buildNpaBranchHistoryExtraFile(){
+  let doc;
+  try{
+    doc = await fetchJson('data/npa-branch-history.json?t=' + Date.now());
+    if(!doc || !Array.isArray(doc.entries)) doc = { entries: [] };
+  } catch(err){
+    if(err && err.message === 'HTTP 404'){ doc = { entries: [] }; }
+    else { return null; }
+  }
+  const entry = { date: DATA.asOnDate || null, branches: computeBranchTotals(DATA.npa.rows) };
+  entry.totalCount = entry.branches.reduce((a,b)=>a+b.count, 0);
+  entry.totalOs = entry.branches.reduce((a,b)=>a+b.os, 0);
+  const idx = doc.entries.findIndex(e=>e.date===entry.date);
+  if(idx>=0) doc.entries[idx] = entry; else doc.entries.push(entry);
+  doc.entries.sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : 0);
+  return { path:'data/npa-branch-history.json', content: doc, label: `NPA Daily History (${fmtAsOnDisplay()})` };
 }
 async function confirmPublish(){
   if(!__pendingPublish || !window.UPGBPublish) return;
@@ -5589,6 +5711,10 @@ async function confirmPublish(){
     }
     if(__pendingPublish.type!=='rollback' && __pendingSmaData){
       extraFiles = (extraFiles||[]).concat([{ path:'data/sma.json', content: __pendingSmaData, label: labels.smaLabel }]);
+    }
+    if(__pendingPublish.type!=='rollback'){
+      const branchHistoryFile = await buildNpaBranchHistoryExtraFile();
+      if(branchHistoryFile) extraFiles = (extraFiles||[]).concat([branchHistoryFile]);
     }
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
@@ -5960,6 +6086,44 @@ const SLAB_DEFS = [
 ];
 const HIGH_VALUE_CUST_THRESHOLD = 1000000; // ₹10 Lakh
 
+/* Branch aggregation for the day-wise NPA history capture (see
+   buildNpaBranchHistoryExtraFile() below) -- mirrors computeDashboardStats()'s
+   own branchMap logic (same OUTBAL-numeric-or-0 handling, same per-account
+   seen-Set dedup) but kept as an independent function rather than
+   refactored out of that large, already-well-tested live-Dashboard
+   function. Zero-fills every one of the 57 BRANCH_LIST branches (Alok's
+   own confirmed choice) -- a branch with a genuinely clean day shows 0,
+   not silently vanishing from a longitudinal history file, which would be
+   ambiguous with "not captured that day." Keyed by Sol ID (not branch-name
+   text), since CBS's raw SOL_DESC spelling doesn't always match
+   BRANCH_LIST's canonical names -- any row whose Sol ID isn't in
+   BRANCH_LIST rolls into a single "Unassigned" bucket so totals always
+   reconcile exactly against the whole book. Stores rupees, not Lakh --
+   Lakh is always a display/export-time conversion in this codebase. */
+function computeBranchTotals(rows){
+  const bySol = new Map();
+  const seen = new Set();
+  rows.forEach(r=>{
+    const acct = String(r[C.ACCT_NO]);
+    if(acct==='' || seen.has(acct)) return;
+    seen.add(acct);
+    const solId = String(r[C.SOL_ID]||'');
+    if(!bySol.has(solId)) bySol.set(solId, {count:0, os:0});
+    const b = bySol.get(solId);
+    b.count++;
+    b.os += (typeof r[C.OUTBAL]==='number' ? r[C.OUTBAL] : 0);
+  });
+  const out = BRANCH_LIST.map(([, solId, branchName]) => {
+    const key = String(solId);
+    const b = bySol.get(key) || {count:0, os:0};
+    bySol.delete(key);
+    return { solId:key, branchName, count:b.count, os:b.os };
+  });
+  let leftoverCount=0, leftoverOs=0;
+  bySol.forEach(b=>{ leftoverCount+=b.count; leftoverOs+=b.os; });
+  if(leftoverCount>0) out.push({solId:'', branchName:'Unassigned', count:leftoverCount, os:leftoverOs});
+  return out;
+}
 function computeDashboardStats(branchFilter){
   const rows = DATA.npa.rows;
   const today = new Date();
@@ -6084,6 +6248,69 @@ function updateDashTitle(){
   if(!el) return;
   const first = DATA.npa.rows.find(r=>r[C.REGION]);
   el.textContent = first ? `UPGB ${titleCase(String(first[C.REGION]))} region NPA Portfolio` : 'UPGB NPA Portfolio';
+}
+
+/* ---------- Dashboard: "view NPA as of a past date" (2026-09-30) ----------
+   Reads data/npa-branch-history.json (see buildNpaBranchHistoryExtraFile())
+   -- deliberately limited to what that file captured (branch/Sol ID/count/
+   O/S per day), never a full account-level drill-down for a past date,
+   since full rows aren't retained day-wise in this lightweight design (the
+   differently-keyed, 60-capped data/history/* mechanism is a separate
+   concern this doesn't touch or conflate with). The live hero row/charts
+   above stay exactly as they are today, driven by computeDashboardStats()/
+   DATA.npa.rows -- this is a clearly separate, historical-only section. */
+let __npaHistoryDoc = null;
+async function ensureNpaHistoryDoc(){
+  if(__npaHistoryDoc) return __npaHistoryDoc;
+  const doc = await fetchJson('data/npa-branch-history.json?t=' + Date.now());
+  __npaHistoryDoc = (doc && Array.isArray(doc.entries)) ? doc : {entries:[]};
+  return __npaHistoryDoc;
+}
+let __npaHistoryPickerInited = false;
+async function initNpaHistoryPickerOnce(){
+  if(__npaHistoryPickerInited) return;
+  __npaHistoryPickerInited = true;
+  const input = document.getElementById('npaHistoryDateInput');
+  if(!input) return;
+  try{
+    const doc = await ensureNpaHistoryDoc();
+    if(!doc.entries.length) return;
+    const dates = doc.entries.map(e=>e.date);
+    input.min = dates[0]; input.max = dates[dates.length-1];
+    // Defaults to the latest captured date strictly before today's own
+    // DATA.asOnDate, since today's own figures are already visible in the
+    // live hero row above -- falls back to the latest available date if
+    // there's nothing earlier yet.
+    const earlier = dates.filter(d=>d < (DATA.asOnDate||dates[dates.length-1]));
+    input.value = earlier.length ? earlier[earlier.length-1] : dates[dates.length-1];
+    onNpaHistoryDateChange();
+  } catch(err){ /* non-critical -- picker just stays empty */ }
+}
+async function onNpaHistoryDateChange(){
+  const input = document.getElementById('npaHistoryDateInput');
+  const wrap = document.getElementById('npaHistoryTableWrap');
+  if(!input || !wrap || !input.value) return;
+  wrap.innerHTML = '<div style="padding:10px;color:var(--sub)">Loading…</div>';
+  try{
+    const doc = await ensureNpaHistoryDoc();
+    renderNpaHistoryTable(doc.entries.find(e=>e.date===input.value), input.value);
+  } catch(err){
+    wrap.innerHTML = `<div class="upload-status err">Could not load history: ${esc(err.message||err)}</div>`;
+  }
+}
+function renderNpaHistoryTable(entry, dateVal){
+  const wrap = document.getElementById('npaHistoryTableWrap');
+  if(!wrap) return;
+  if(!entry){
+    wrap.innerHTML = `<div style="padding:10px;color:var(--sub)">No figures captured for ${esc(isoToDisplay(dateVal))}.</div>`;
+    return;
+  }
+  const sorted = [...entry.branches].sort((a,b)=>b.os-a.os);
+  wrap.innerHTML = `<div class="dash-table-wrap"><table class="dash-table">
+    <thead><tr><th>Branch</th><th>Sol ID</th><th>Accounts</th><th>Outstanding</th></tr></thead>
+    <tbody>${sorted.map(b=>`<tr><td>${esc(b.branchName)}</td><td>${esc(b.solId)}</td><td>${b.count.toLocaleString('en-IN')}</td><td>${fmtCr(b.os)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td><b>Total</b></td><td></td><td><b>${entry.totalCount.toLocaleString('en-IN')}</b></td><td><b>${fmtCr(entry.totalOs)}</b></td></tr></tfoot>
+  </table></div>`;
 }
 
 function svgDonut(segments, size){
@@ -8723,7 +8950,7 @@ function switchView(view){
     document.querySelectorAll('.view').forEach(v=>{ v.classList.toggle('active', v.dataset.view===view); v.classList.remove('view-leave'); });
     document.querySelectorAll('.nav-item[data-view]').forEach(b=>b.classList.toggle('active',
       b.dataset.view===view || (UTILITY_CHILD_VIEWS.includes(view) && b.dataset.view==='utility')));
-    if(view==='dashboard') renderDashboard();
+    if(view==='dashboard'){ renderDashboard(); initNpaHistoryPickerOnce(); }
     if(view==='pnpa') renderPnpaDashboard();
     if(view==='kccov') renderKccOverdue();
     if(view==='sma') renderSmaDashboard();
