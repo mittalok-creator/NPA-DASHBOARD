@@ -1011,7 +1011,7 @@
           </div>
         </div>
         <div class="utility-category">
-          <div class="utility-category-heading utility-cat-gold"><span>Reference Data</span><i></i><b>7 files</b></div>
+          <div class="utility-category-heading utility-cat-gold"><span>Reference Data</span><i></i><b>8 files</b></div>
           <div class="utility-category-cards">
             <button type="button" class="utility-card tool-blue" onclick="openUpdateDataPanel('masterUploadDetails')">
               <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -1054,6 +1054,12 @@
               <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
               <span class="utility-card-title">Special Note</span>
               <span class="utility-card-desc">Per Account No. — <span id="specialNoteCountLabelTile">none saved</span></span>
+            </button>
+            <button type="button" class="utility-card tool-teal" onclick="openUpdateDataPanel('otsBookPanel')">
+              <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></span>
+              <span class="utility-card-title">OTS Calculator Book</span>
+              <span class="utility-card-desc">Fix a mistaken upload — <span id="otsBookStatusLabelTile">checking…</span></span>
             </button>
           </div>
         </div>
@@ -1211,6 +1217,17 @@
       <div id="specialNoteStatus"></div>
       <div id="specialNoteList" class="special-note-list"></div>
       <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Type an existing Account No. to see the borrower's name and branch, then type a note and Save — no file upload needed, one account at a time. Shown to every viewer, not just Admin, at the top of that account's Loan Detail screen. Stays on the account across daily NPA updates until removed. Goes live the next time you hit Publish.</p>
+    </div>
+
+    <div class="update-data-panel" id="otsBookPanel" hidden>
+      <button type="button" class="update-data-back-btn" onclick="closeUpdateDataPanel()">← Back to Update Data</button>
+      <h4>OTS Calculator Book</h4>
+      <p style="font-size:12px;color:var(--ink-mute);margin:2px 2px 12px;line-height:1.6">The OTS Calculator normally stays pinned to the last upload's accounts and only grows between month-ends — an account that drops out of a later daily upload is deliberately kept here until the next month-end, so it doesn't vanish over a routine one-day gap. If accounts were pushed here by mistake and you've already re-published the corrected file, use this to remove them right now instead of waiting for month-end.</p>
+      <div id="otsBookSummary"></div>
+      <div class="modal-btn-row" style="margin-top:12px">
+        <button type="button" class="btn-primary" id="otsBookResetBtn" disabled onclick="forceResetOtsBook()">Reset OTS Calculator book to latest upload now</button>
+      </div>
+      <div id="otsBookResetStatus"></div>
     </div>
 
     <div class="update-data-panel" id="lokAdalatUploadDetails" hidden>
@@ -1513,7 +1530,7 @@
 <script src="js/publish.js?v=20260923a"></script>
 <script src="js/splash.js?v=20260917a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20260930a"></script>
+<script src="js/app.js?v=20260930b"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
