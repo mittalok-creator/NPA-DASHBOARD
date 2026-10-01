@@ -25,6 +25,93 @@ function lokAdalatMin(s){
   return {eligible:true, amount:s.os*rate, pct:rate};
 }
 
+/* OTS Sanction Authority -- who must approve a given settlement, based on
+   who sanctioned the loan, the current Branch Manager's scale, and the
+   Total Sacrifice amount. Reproduced verbatim from Alok's own already-
+   verified reference table (shipped once before as part of the since-
+   reverted "OTS Compromise Settlement Note" feature, retrieved from that
+   commit's history) -- real bank-policy cadre/committee names, not
+   re-derived. A newer uploaded matrix had real overlapping/contradictory
+   Sacrifice ranges in several groups; Alok confirmed directly to use this
+   table instead, not the new upload. */
+const OTS_AUTH_OPTIONS = ['BM SCALE - 1','BM SCALE - 2','BM SCALE - 3','BM SCALE - 4','SENIOR MANAGER RO','RM SCALE IV','RM SCALE V'];
+const OTS_BM_OPTIONS = ['BM SCALE - 1','BM SCALE - 2','BM SCALE - 3','BM SCALE - 4'];
+const OTS_AUTH_CODE = { 'BM SCALE - 1':'BM1','BM SCALE - 2':'BM2','BM SCALE - 3':'BM3','BM SCALE - 4':'BM4','SENIOR MANAGER RO':'SMRO3','RM SCALE IV':'RMRO4','RM SCALE V':'RMRO5' };
+// Columns: Loan Sanction Authority code, Current BM code, Sacrifice range
+// low, Sacrifice range high, full authority name.
+const OTS_SANCTION_AUTH_TABLE = [
+  ['BM1','BM1',0,300000,'Sr. Manager at Regional Office (RO SAC-IV)'],
+  ['BM1','BM1',300000.01,600000,'Chief Manager (RO SAC-III)'],
+  ['BM1','BM1',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM1','BM2',0,150000,'Branch Manager Scale-II (BR SAC-III)'],
+  ['BM1','BM2',150000.01,300000,'Sr. Manager at Regional Office (RO SAC-IV)'],
+  ['BM1','BM2',300000.01,600000,'Chief Manager (RO SAC-III)'],
+  ['BM1','BM2',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM1','BM3',0,200000,'Sr. Manager as Branch Head (BR SAC-II)'],
+  ['BM1','BM3',200000.01,300000,'Sr. Manager at Regional Office (RO SAC-IV)'],
+  ['BM1','BM3',300000.01,600000,'Chief Manager (RO SAC-III)'],
+  ['BM1','BM3',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM1','BM4',0,400000,'Chief Manager as Branch Head (BR SAC-I)'],
+  ['BM1','BM4',400000.01,600000,'Chief Manager (RO SAC-III)'],
+  ['BM1','BM4',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM2','BM1',0,300000,'Sr. Manager at Regional Office (RO SAC-IV)'],
+  ['BM2','BM1',300000.01,600000,'Chief Manager (RO SAC-III)'],
+  ['BM2','BM1',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM2','BM2',0,300000,'Sr. Manager at Regional Office (RO SAC-IV)'],
+  ['BM2','BM2',300000.01,600000,'Chief Manager (RO SAC-III)'],
+  ['BM2','BM2',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM2','BM3',0,200000,'Sr. Manager as Branch Head (BR SAC-II)'],
+  ['BM2','BM3',200000.01,300000,'Sr. Manager at Regional Office (RO SAC-IV)'],
+  ['BM2','BM3',300000.01,600000,'Chief Manager (RO SAC-III)'],
+  ['BM2','BM3',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM2','BM4',0,400000,'Chief Manager as Branch Head (BR SAC-I)'],
+  ['BM2','BM4',400000.01,600000,'Chief Manager (RO SAC-III)'],
+  ['BM2','BM4',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM3','BM1',0,600000,'Chief Manager (RO SAC-III)'],
+  ['BM3','BM1',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM3','BM2',0,600000,'Chief Manager (RO SAC-III)'],
+  ['BM3','BM2',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM3','BM3',0,600000,'Chief Manager (RO SAC-III)'],
+  ['BM3','BM3',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM3','BM4',0,400000,'Chief Manager as Branch Head (BR SAC-I)'],
+  ['BM3','BM4',400000.01,600000,'Chief Manager (RO SAC-III)'],
+  ['BM3','BM4',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM4','BM1',0,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM4','BM2',0,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM4','BM3',0,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['BM4','BM4',0,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['SMRO3','BM1',0,600000,'Chief Manager (RO SAC-III)'],
+  ['SMRO3','BM1',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['SMRO3','BM2',0,600000,'Chief Manager (RO SAC-III)'],
+  ['SMRO3','BM2',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['SMRO3','BM3',0,600000,'Chief Manager (RO SAC-III)'],
+  ['SMRO3','BM3',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['SMRO3','BM4',0,400000,'Chief Manager as Branch Head (BR SAC-I)'],
+  ['SMRO3','BM4',400000.01,600000,'Chief Manager (RO SAC-III)'],
+  ['SMRO3','BM4',600000.01,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['RMRO4','BM1',0,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['RMRO4','BM2',0,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['RMRO4','BM3',0,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['RMRO4','BM4',0,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['RMRO5','BM1',0,1500000,'Regional Manager Scale-V (RO SAC-I)'],
+  ['RMRO5','BM2',0,2000000,'General Manager (AGM) at Head Office (HO SAC-III)'],
+  ['RMRO5','BM3',0,2000000,'General Manager (AGM) at Head Office (HO SAC-III)'],
+  ['RMRO5','BM4',0,2000000,'General Manager (AGM) at Head Office (HO SAC-III)']
+];
+// Distinct authority/committee names, derived from the table itself (not
+// hand-typed) so the manual-override dropdown can never drift from it.
+const OTS_SANCTION_AUTH_NAMES = [...new Set(OTS_SANCTION_AUTH_TABLE.map(r=>r[4]))];
+function determineOtsSanctionAuthority(sanctAuthStr, curBmStr, totalSacrifice){
+  const k = OTS_AUTH_CODE[sanctAuthStr];
+  const l = OTS_AUTH_CODE[curBmStr];
+  if(!k||!l) return '';
+  const rows = OTS_SANCTION_AUTH_TABLE.filter(r=>r[0]===k && r[1]===l);
+  if(!rows.length) return '';
+  const hit = rows.find(r=> totalSacrifice>=r[2] && totalSacrifice<=r[3]);
+  if(hit) return hit[4];
+  return rows.reduce((a,b)=> b[3]>a[3]?b:a)[4];
+}
+
 /* ---------- Lazy-loaded vendor libraries ----------
    msal-browser, xlsx, exceljs, html2canvas and jsPDF used to be plain
    blocking <script src> tags in index.html -- ~2.76MB combined, parsed
@@ -2819,6 +2906,19 @@ let otsAmounts = loadStoredMap(OTS_AMOUNTS_KEY);          // key: acctNo -> type
 let interestReversalOverrides = loadStoredMap(URI_OVERRIDES_KEY); // key: acctNo -> typed Interest Reversal
 function saveOtsAmounts(){ persistStoredMap(OTS_AMOUNTS_KEY, otsAmounts); }
 function saveUriOverrides(){ persistStoredMap(URI_OVERRIDES_KEY, interestReversalOverrides); }
+// Same per-device, per-account convention as the two maps above -- used by
+// the OTS Sanction Authority feature (Loan Terms' "Who Sanctioned the Loan"
+// / "Current BM Scale" dropdowns, and a manual override on the computed
+// authority itself).
+const SANCT_AUTH_KEY = 'upgb-ots-sanct-auth';
+const CUR_BM_KEY = 'upgb-ots-cur-bm';
+const AUTH_OVERRIDE_KEY = 'upgb-ots-auth-override';
+let sanctionedByMap = loadStoredMap(SANCT_AUTH_KEY);       // key: acctNo -> "Who Sanctioned the Loan"
+let currentBmScaleMap = loadStoredMap(CUR_BM_KEY);         // key: acctNo -> "Current BM Scale"
+let authorityOverrideMap = loadStoredMap(AUTH_OVERRIDE_KEY); // key: acctNo -> manually chosen authority (wins over the computed one)
+function saveSanctionedBy(){ persistStoredMap(SANCT_AUTH_KEY, sanctionedByMap); }
+function saveCurrentBmScale(){ persistStoredMap(CUR_BM_KEY, currentBmScaleMap); }
+function saveAuthorityOverride(){ persistStoredMap(AUTH_OVERRIDE_KEY, authorityOverrideMap); }
 // Resolves the live Interest Reversal for a slot: the user's typed override
 // if present, else the value loaded from the daily NPA data.
 function uriFor(s){
@@ -3227,6 +3327,34 @@ function loanTableHTML(slots){
     if(!la.eligible) return '<td><span class="lt-lokadalat-na">Not Eligible</span></td>';
     return `<td>${fmtINR2(la.amount)} <span class="pct-tag">(${(la.pct*100).toFixed(0)}%)</span></td>`;
   }).join('')}</tr>`;
+  // "Who Sanctioned the Loan" / "Current BM Scale" -- always-manual inputs
+  // (Alok confirmed: no existing app data can auto-fill either), feeding the
+  // OTS Sanction Authority row below. First <select> dropdowns in this
+  // table (every other editable cell is a plain <input>), so styled via a
+  // new .lt-select class sized to match .lt-ots-input.
+  const selectRow = (label, icon, idPrefix, options, map, handlerName) => `<tr><th scope="row" class="lt-label">${ltIconBadge(icon)}<span class="lt-label-text"><span class="lt-label-inner">${label}</span></span></th>${slots.map((s,i)=>{
+    const val = map[s.acctNo] || '';
+    const opts = options.map(o=>`<option value="${esc(o)}"${val===o?' selected':''}>${esc(o)}</option>`).join('');
+    return `<td><select class="lt-select" id="${idPrefix}-${i}" aria-label="${esc(label)} for account ${esc(String(s.acctNo))}" onchange="${handlerName}(${i},'${esc(String(s.acctNo))}')"><option value="">-- Select --</option>${opts}</select></td>`;
+  }).join('')}</tr>`;
+  // OTS Sanction Authority -- auto-computed from Sanctioned-By + Current BM
+  // Scale + Total Sacrifice (see recalcLoan()), but kept as an always-
+  // editable <select> (not a read-only statRow cell) so it can be manually
+  // changed, per Alok's own request. A small state label + reset button
+  // make it visible at a glance whether the shown value is auto-computed or
+  // has been manually overridden -- recalcLoan()/onAuthorityOverrideChange()
+  // keep both of these in sync with authorityOverrideMap.
+  const authorityRow = () => `<tr class="lt-ots-row"><th scope="row" class="lt-label">${ltIconBadge('shield')}<span class="lt-label-text"><span class="lt-label-inner">OTS Sanction Authority</span></span></th>${slots.map((s,i)=>`
+      <td><div class="lt-auth-cell">
+        <select class="lt-select lt-auth-select" id="authSelect-${i}" aria-label="OTS Sanction Authority for account ${esc(String(s.acctNo))}" onchange="onAuthorityOverrideChange(${i},'${esc(String(s.acctNo))}')">
+          <option value="">—</option>
+          ${OTS_SANCTION_AUTH_NAMES.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}
+        </select>
+        <span class="lt-auth-state-row">
+          <span class="lt-auth-state" id="authState-${i}"></span>
+          <button type="button" class="lt-auth-reset" id="authReset-${i}" title="Reset to auto-computed authority" onclick="resetAuthorityOverride(${i},'${esc(String(s.acctNo))}')" hidden>↺ Auto</button>
+        </span>
+      </div></td>`).join('')}</tr>`;
 
   return `
   <div class="loan-table-wrap">
@@ -3239,6 +3367,8 @@ function loanTableHTML(slots){
       ${row('Sanction Limit', 'doc', s=>fmtINR2(s.sanctionLimit))}
       ${row('NPA Date', 'warn', s=>fmtDate(toDate(s.npaDate)))}
       ${row('O/S Balance', 'coin', s=>fmtINR2(s.os), 'lt-strong')}
+      ${selectRow('Who Sanctioned the Loan', 'avatar', 'sanctAuthSelect', OTS_AUTH_OPTIONS, sanctionedByMap, 'onSanctAuthChange')}
+      ${selectRow('Current BM Scale', 'avatar', 'curBmSelect', OTS_BM_OPTIONS, currentBmScaleMap, 'onCurBmChange')}
       ${group('Dues &amp; Provisioning', 'dues')}
       ${uriRow()}
       ${row(uciLabelWithTenure(slots), 'percent', s=>fmtINR2(s.uci))}
@@ -3253,6 +3383,7 @@ function loanTableHTML(slots){
       ${statRow('Total Sacrifice', 'percent', 'totalSac')}
       ${statRow('Ledger Sacrifice (BDWO Amount)', 'badge', 'ledgerSac')}
       ${statRow('P&amp;L Impact', 'bars', 'impact')}
+      ${authorityRow()}
     </tbody>
   </table>
   </div>
@@ -3300,6 +3431,63 @@ function onUriInput(i, acctNo){
 }
 window.onUriInput = onUriInput;
 
+function onSanctAuthChange(i, acctNo){
+  const v = document.getElementById('sanctAuthSelect-'+i).value;
+  if(v==='') delete sanctionedByMap[acctNo]; else sanctionedByMap[acctNo] = v;
+  saveSanctionedBy();
+  recalcLoan(i);
+}
+function onCurBmChange(i, acctNo){
+  const v = document.getElementById('curBmSelect-'+i).value;
+  if(v==='') delete currentBmScaleMap[acctNo]; else currentBmScaleMap[acctNo] = v;
+  saveCurrentBmScale();
+  recalcLoan(i);
+}
+// Manually changing the OTS Sanction Authority dropdown itself. If the
+// picked value matches what would be auto-computed anyway, treated as "not
+// actually overridden" (no stored override, stays in sync with future
+// Sanctioned-By/Current-BM-Scale/OTS-Amount edits) -- only a genuine
+// divergence from the computed value is persisted as a manual override.
+function onAuthorityOverrideChange(i, acctNo){
+  const v = document.getElementById('authSelect-'+i).value;
+  const s = window.__slots[i];
+  const otsParsed = parseOtsAmount(otsAmounts[s.acctNo]);
+  const ots = otsParsed===null ? '' : otsParsed;
+  const totalDues = totalDuesFor(s);
+  const totalSac = (ots!=='' && totalDues!=='') ? totalDues-ots : '';
+  const computed = determineOtsSanctionAuthority(sanctionedByMap[acctNo], currentBmScaleMap[acctNo], totalSac);
+  if(v==='' || v===computed) delete authorityOverrideMap[acctNo]; else authorityOverrideMap[acctNo] = v;
+  saveAuthorityOverride();
+  recalcLoan(i);
+}
+function resetAuthorityOverride(i, acctNo){
+  delete authorityOverrideMap[acctNo];
+  saveAuthorityOverride();
+  recalcLoan(i);
+}
+// Keeps the authSelect-i cell (value + auto/manual label + reset button) in
+// sync with sanctionedByMap/currentBmScaleMap/authorityOverrideMap. Called
+// from recalcLoan() both on the normal path (real totalSac) and the early-
+// return path (blank OTS Amount -> totalSac undefined, cell shows "—").
+function updateAuthorityCell(i, acctNo, totalSac){
+  const selEl = document.getElementById('authSelect-'+i);
+  if(!selEl) return;
+  const stateEl = document.getElementById('authState-'+i);
+  const resetEl = document.getElementById('authReset-'+i);
+  if(totalSac===''||totalSac===undefined||isNaN(totalSac)){
+    selEl.value = '';
+    if(stateEl) stateEl.textContent = '';
+    if(resetEl) resetEl.hidden = true;
+    return;
+  }
+  const computed = determineOtsSanctionAuthority(sanctionedByMap[acctNo], currentBmScaleMap[acctNo], totalSac);
+  const override = authorityOverrideMap[acctNo];
+  const finalAuth = override || computed;
+  selEl.value = finalAuth || '';
+  if(stateEl) stateEl.textContent = finalAuth ? (override ? '(manual)' : '(auto)') : '';
+  if(resetEl) resetEl.hidden = !override;
+}
+
 const __reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 function animateNumber(el, from, to, render, dur){
   if(el.__raf) cancelAnimationFrame(el.__raf);
@@ -3342,6 +3530,7 @@ function recalcLoan(i){
     impactEl.__val = 0;
     if(pctEl) pctEl.textContent='';
     if(settleCellEl) settleCellEl.innerHTML = '<span class="dash">—</span>';
+    updateAuthorityCell(i, s.acctNo, '');
     return;
   }
   if(settleCellEl){
@@ -3360,6 +3549,7 @@ function recalcLoan(i){
   const impact = s.totalPL!=='' ? ots - s.totalPL : '';
   totalSacEl.textContent = fmtINR2(totalSac);
   ledgerEl.textContent = fmtINR2(ledgerSac);
+  updateAuthorityCell(i, s.acctNo, totalSac);
   if(pctEl) pctEl.textContent = (s.os) ? (ots/s.os*100).toFixed(1)+'%' : '—';
   impactEl.classList.remove('pos','neg');
   if(impact!=='' && !isNaN(impact)){
@@ -3576,7 +3766,7 @@ function renderPrintView(){
   // Total Contractual Dues is deliberately NOT in this print/PDF table --
   // it stays on-screen only (loanTableHTML) per Alok's review; Total
   // Sacrifice below reads off Total Dues (+ Interest Reversal), not it.
-  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amt as per Lok Adalat','OTS Amount','Total Sacrifice','Impact on P&L']);
+  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amt as per Lok Adalat','OTS Amount','Total Sacrifice','Impact on P&L','OTS Sanction Authority']);
   // Scheme moved here from the page footer (was repeating the branch name a
   // third time alongside the header and the borrower info grid) -- one row
   // per account, right above O/S Balance where the settlement figures start.
@@ -3618,6 +3808,17 @@ function renderPrintView(){
     // for a negative one -- so the sign reads at a glance, not just from the
     // minus sign buried in the number.
     ['Impact on P&L', 'bars', s=>{const v=otsFor(s); if(v===null) return '—'; const impact=v-s.totalPL; const arrow=impact>0?'▲ ':(impact<0?'▼ ':''); return arrow+fmtINR2(impact);}],
+    // Sanctioned-By/Current-BM-Scale/OTS Sanction Authority -- read straight
+    // from the per-device maps/lookup table, not the DOM, matching this
+    // sheet's own "rebuilds from data" convention for every row above.
+    ['Sanctioned By', 'avatar', s=>esc(sanctionedByMap[s.acctNo])||'—'],
+    ['Current BM Scale', 'avatar', s=>esc(currentBmScaleMap[s.acctNo])||'—'],
+    ['OTS Sanction Authority', 'shield', s=>{
+      const v=otsFor(s); if(v===null) return '—';
+      const totalSac = totalDuesFor(s)-v;
+      const computed = determineOtsSanctionAuthority(sanctionedByMap[s.acctNo], currentBmScaleMap[s.acctNo], totalSac);
+      return esc(authorityOverrideMap[s.acctNo] || computed) || '—';
+    }],
   ];
   const tableRows = rows.map(([label,icon,fn])=>`<tr${STRONG_ROWS.has(label)?' class="pv-strong"':''}><td class="pv-label">${label}</td>${slots.map(s=>`<td>${fn(s)}</td>`).join('')}</tr>`).join('');
 
@@ -5535,7 +5736,8 @@ function applyNewDataNow(){
      just today's own upload -- an account otsBook is deliberately keeping
      between month-ends should keep its typed amount too) and everything
      else carries forward. */
-  [[otsAmounts, saveOtsAmounts], [interestReversalOverrides, saveUriOverrides]].forEach(([map, save])=>{
+  [[otsAmounts, saveOtsAmounts], [interestReversalOverrides, saveUriOverrides],
+   [sanctionedByMap, saveSanctionedBy], [currentBmScaleMap, saveCurrentBmScale], [authorityOverrideMap, saveAuthorityOverride]].forEach(([map, save])=>{
     Object.keys(map).forEach(acct=>{ if(!otsBookByAcct.has(String(acct))) delete map[acct]; });
     save();
   });
@@ -9570,6 +9772,10 @@ switchView('dashboard');
 window.openDetail = openDetail;
 window.closeDetail = closeDetail;
 window.onOtsInput = onOtsInput;
+window.onSanctAuthChange = onSanctAuthChange;
+window.onCurBmChange = onCurBmChange;
+window.onAuthorityOverrideChange = onAuthorityOverrideChange;
+window.resetAuthorityOverride = resetAuthorityOverride;
 }
 
 /* ---------- Encrypted-data decrypt helpers (2026-09-17) ----------
