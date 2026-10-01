@@ -1,5 +1,13 @@
 [
   {
+    "date": "2026-09-30",
+    "file": "history/2026-09-30-1790836833990.json",
+    "rowCount": 13483,
+    "publishedAt": "2026-10-01T06:40:33.990Z",
+    "publishedBy": "mittalok-creator",
+    "isRollback": false
+  },
+  {
     "date": "2026-08-31",
     "file": "history/2026-08-31-1790831020421.json",
     "rowCount": 13671,
@@ -470,14 +478,5 @@
     "publishedAt": "2026-07-22T16:50:13.210Z",
     "publishedBy": "mittalok-creator",
     "isRollback": false
-  },
-  {
-    "date": "2026-07-22",
-    "file": "history/2026-07-22.json",
-    "rowCount": 14000,
-    "regions": [
-      "HATHRAS"
-    ],
-    "publishedAt": "2026-07-22T00:00:00Z"
   }
 ]
