@@ -3014,6 +3014,7 @@ table.bifurcation-table{border-collapse:collapse;width:100%;font-size:12px;backg
 .data-loading-spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(212,165,68,.25);border-top-color:#D4A544;animation:dataLoadingSpin .8s linear infinite}
 .data-loading-text{font-size:13px;color:rgba(242,237,228,.7);letter-spacing:.3px}
 .data-loading-text.err{color:#e5484d;max-width:320px;text-align:center;line-height:1.5}
+.data-loading-slow-hint{font-size:11.5px;color:rgba(242,237,228,.45);margin-top:-6px}
 .data-loading-retry-btn{margin-top:4px;padding:10px 28px;border-radius:10px;border:1px solid rgba(212,165,68,.4);background:rgba(212,165,68,.12);color:#D4A544;font-size:13px;font-weight:600;letter-spacing:.3px;cursor:pointer}
 .data-loading-retry-btn:active{background:rgba(212,165,68,.22)}
 @keyframes dataLoadingSpin{to{transform:rotate(360deg)}}

@@ -9883,32 +9883,63 @@ async function decryptEnvelope(envelope){
    served stale while a real connection is available (same reasoning as the
    service worker's network-first fetch).
 
-   30s timeout (added 2026-09-17): plain fetch() never rejects on a merely
-   stalled connection (as opposed to an outright failure), only on one that
-   actually errors out -- so loadNpaData()'s existing retry-then-error-with-
-   Retry-button handling below never used to fire for that case, and the
-   page could sit on its loading spinner forever with nothing wrong showing
-   at all. This was a real contributor to "sometimes the app just goes
-   blank," reported across several branch computers on different networks.
-   30s is generous enough not to abort a merely slow (not stalled) transfer
-   of this file's several-MB size on a weak connection. */
+   Timeout (added 2026-09-17, raised 30s->60s 2026-10-01): plain fetch()
+   never rejects on a merely stalled connection (as opposed to an outright
+   failure), only on one that actually errors out -- so loadNpaData()'s
+   existing retry-then-error-with-Retry-button handling below never used to
+   fire for that case, and the page could sit on its loading spinner
+   forever with nothing wrong showing at all. This was a real contributor
+   to "sometimes the app just goes blank," reported across several branch
+   computers on different networks.
+
+   Raised from 30s to 60s after a live DevTools Network-tab capture on a
+   genuinely slow connection showed OUR OWN 30s abort was the thing
+   actually killing the data fetch, while every other request on the same
+   page load (the HTML shell, app.js, splash.js, etc. -- none of which have
+   any timeout) succeeded anyway, just 37-40s in. On a connection that
+   slow, 30s was shorter than what a real, eventually-successful transfer
+   needed -- 60s gives the data fetch the same fair chance the rest of the
+   page's own files already get, while still eventually giving up on a
+   connection that's actually dead, not just slow. */
 function fetchJson(url, timeoutMs){
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs || 30000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs || 60000);
   return fetch(url, { signal: controller.signal })
     .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
     .then(parsed => isEncryptedEnvelope(parsed) ? decryptEnvelope(parsed) : parsed)
     .finally(() => clearTimeout(timer));
 }
 function loadNpaData(isRetry){
+  const overlay = document.getElementById('dataLoadingOverlay');
+  // On a merely slow (not dead) connection, this attempt can now legitimately
+  // take up to fetchJson()'s own 60s timeout -- without this, the user sees
+  // nothing but a silent spinner that whole time, which reads exactly like
+  // "the app just doesn't load." Appends a visible hint if this specific
+  // attempt is still running ~8s in; cleared the instant it settles either
+  // way, so it can never show for an attempt that already finished.
+  const slowHintTimer = setTimeout(() => {
+    const hintTarget = overlay && overlay.querySelector('.data-loading-text:not(.err)');
+    if(hintTarget && !document.getElementById('dataLoadingSlowHint')){
+      const hint = document.createElement('div');
+      hint.id = 'dataLoadingSlowHint';
+      hint.className = 'data-loading-text data-loading-slow-hint';
+      hint.textContent = 'Taking longer than usual -- still trying…';
+      hintTarget.insertAdjacentElement('afterend', hint);
+    }
+  }, 8000);
+  const clearSlowHint = () => {
+    clearTimeout(slowHintTimer);
+    const hint = document.getElementById('dataLoadingSlowHint');
+    if(hint) hint.remove();
+  };
   fetchJson('data/latest.json?t=' + Date.now())
     .then(data => {
-      const overlay = document.getElementById('dataLoadingOverlay');
+      clearSlowHint();
       if(overlay) overlay.classList.add('hidden');
       initApp(data);
     })
     .catch(err => {
-      const overlay = document.getElementById('dataLoadingOverlay');
+      clearSlowHint();
       // A wrong/missing PIN or corrupted ciphertext can't be fixed by
       // retrying the same fetch -- skip the auto-retry-once below (that's
       // for network blips only) and point at the one thing that actually
