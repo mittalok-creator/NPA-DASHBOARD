@@ -3436,12 +3436,14 @@ function onSanctAuthChange(i, acctNo){
   if(v==='') delete sanctionedByMap[acctNo]; else sanctionedByMap[acctNo] = v;
   saveSanctionedBy();
   recalcLoan(i);
+  recalcAggregate(); // also re-renders #printArea (renderPrintView()) so Print/PDF picks this up immediately
 }
 function onCurBmChange(i, acctNo){
   const v = document.getElementById('curBmSelect-'+i).value;
   if(v==='') delete currentBmScaleMap[acctNo]; else currentBmScaleMap[acctNo] = v;
   saveCurrentBmScale();
   recalcLoan(i);
+  recalcAggregate();
 }
 // Manually changing the OTS Sanction Authority dropdown itself. If the
 // picked value matches what would be auto-computed anyway, treated as "not
@@ -3459,11 +3461,13 @@ function onAuthorityOverrideChange(i, acctNo){
   if(v==='' || v===computed) delete authorityOverrideMap[acctNo]; else authorityOverrideMap[acctNo] = v;
   saveAuthorityOverride();
   recalcLoan(i);
+  recalcAggregate();
 }
 function resetAuthorityOverride(i, acctNo){
   delete authorityOverrideMap[acctNo];
   saveAuthorityOverride();
   recalcLoan(i);
+  recalcAggregate();
 }
 // Keeps the authSelect-i cell (value + auto/manual label + reset button) in
 // sync with sanctionedByMap/currentBmScaleMap/authorityOverrideMap. Called
