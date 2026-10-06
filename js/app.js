@@ -2941,7 +2941,7 @@ function totalContractualDuesFor(s){
   return (s.os!=='' && s.uci125!=='') ? s.os + s.uci125 + uriFor(s) : '';
 }
 
-function openDetail(custId, jumpAcct){
+function openDetail(custId, jumpAcct, fromHistory){
   const custRow = otsBookByCustId.get(custId);
   if(!custRow) return;
   rememberBorrower(custRow);
@@ -2953,8 +2953,10 @@ function openDetail(custId, jumpAcct){
   const prevOts = oldOtsByAcct.get(String(custRow[C.ACCT_NO]));
 
   const pane = document.getElementById('detailPane');
+  const wasOpen = pane.classList.contains('open');
   document.getElementById('shell').classList.add('detail-active');
   pane.classList.add('open');
+  if(!wasOpen && !fromHistory) pushDetailHistoryState({kind:'npa', custId});
   pane.innerHTML = `
     <div class="detail-head">
       <div class="detail-headrow">
@@ -3065,7 +3067,20 @@ window.toggleAggWf = toggleAggWf;
 // (unchanged, pre-existing behavior for that flow -- not something this
 // round touches) -- closeDetail() only acts on it when it's actually set.
 let __quickDetailReturnView = null;
+// Narrower browser Back/Forward support (Alok's own request) -- scoped to
+// just this one full-screen #detailPane, not the whole app's tab navigation,
+// to keep the change contained. closeDetail() is still every onclick/Escape
+// handler's own entry point; it now only asks history to go back (if a
+// detail-open entry is actually on the stack) rather than tearing the pane
+// down itself -- the popstate listener below (registered once, near the
+// other top-level listeners) does the real teardown via closeDetailActual(),
+// so a hardware/swipe Back gesture and the in-app back arrow converge on the
+// exact same close path instead of drifting out of sync with each other.
 function closeDetail(){
+  if(history.state && history.state.upgbDetailOpen){ history.back(); }
+  else { closeDetailActual(); }
+}
+function closeDetailActual(){
   const pane = document.getElementById('detailPane');
   pane.classList.remove('open');
   pane.innerHTML = '';
@@ -3086,6 +3101,30 @@ function closeDetail(){
      start screen is what's showing; a result list is left as it was. */
   if(document.querySelector('#mainArea .ots-start')) renderEmpty();
 }
+// Pushes one history entry marking the detail pane as open -- called right
+// after the pane's own 'open' class is added, only on a genuinely fresh
+// open (guarded by the caller) so re-rendering the same pane with a
+// different account doesn't pile up extra back-stack entries. `extra`
+// carries just enough to reopen the exact same screen on Forward -- a
+// customer ID for the real OTS Calculator, or a source+account no. for the
+// KCC/PNPA quick-detail page -- not the full row (history state should stay
+// small/serializable, and a fresh lookup is already cheap either way).
+function pushDetailHistoryState(extra){
+  try{ history.pushState(Object.assign({upgbDetailOpen:true}, extra), ''); }catch(e){}
+}
+window.addEventListener('popstate', (event)=>{
+  const pane = document.getElementById('detailPane');
+  const state = event.state;
+  if(state && state.upgbDetailOpen){
+    // Forward (or landing back on a still-open detail entry) -- reopen the
+    // exact screen without pushing a new entry (we're already sitting on
+    // this one).
+    if(state.kind==='npa' && state.custId) openDetail(state.custId, undefined, true);
+    else if(state.kind==='quick' && state.source && state.acctNo) showQuickAcctDetailByAcct(state.source, state.acctNo, true);
+    return;
+  }
+  if(pane && pane.classList.contains('open')) closeDetailActual();
+});
 
 function drawDetailBody(custRow, slots, prevOts){
   const body = document.getElementById('detailBody');
@@ -6637,7 +6676,7 @@ function drawKccPnpaDetailBody(row, source){
   </div>
   `;
 }
-function showQuickAcctDetail(source, row){
+function showQuickAcctDetail(source, row, fromHistory){
   const isKcc = source==='kccov';
   const name = isKcc ? row[KC.NAME] : row[PC.NAME];
   const branch = isKcc ? row[KC.BRANCH] : row[PC.BRANCH];
@@ -6662,8 +6701,10 @@ function showQuickAcctDetail(source, row){
   closeListModal();
   switchView('search');
   const pane = document.getElementById('detailPane');
+  const wasOpen = pane.classList.contains('open');
   document.getElementById('shell').classList.add('detail-active');
   pane.classList.add('open');
+  if(!wasOpen && !fromHistory) pushDetailHistoryState({kind:'quick', source, acctNo: String(isKcc ? row[KC.ACCT] : row[PC.ACCT])});
   pane.innerHTML = `
     <div class="detail-head">
       <div class="detail-headrow">
@@ -6693,12 +6734,12 @@ window.showQuickAcctDetail = showQuickAcctDetail;
    account no. against the raw dataset rather than threading the raw row
    through the list-modal's already-transformed {acctNo,name,os,...}
    display objects, since account numbers are unique within each report. */
-function showQuickAcctDetailByAcct(source, acctNo){
+function showQuickAcctDetailByAcct(source, acctNo, fromHistory){
   const data = source==='kccov' ? KCC_OVERDUE_DATA : PNPA_DATA;
   if(!data || !data.rows) return;
   const col = source==='kccov' ? KC.ACCT : PC.ACCT;
   const row = data.rows.find(r=>String(r[col])===String(acctNo));
-  if(row) showQuickAcctDetail(source, row);
+  if(row) showQuickAcctDetail(source, row, fromHistory);
 }
 window.showQuickAcctDetailByAcct = showQuickAcctDetailByAcct;
 function cmdkEnsureVisible(){ const el=cmdkResults.querySelector('.cmdk-item.active'); if(el) el.scrollIntoView({block:'nearest'}); }
