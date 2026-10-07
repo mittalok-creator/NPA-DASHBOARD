@@ -695,6 +695,19 @@ function buildNegativePLImpactLetterHTML(row, d, impactAmt){
 let __otsAppRows = [];
 let __otsAppLetters = [];
 let __otsAppNegativePLLetters = [];
+// otsAppRenderLetterCanvas() repeatedly writes each letter's HTML into the
+// ONE shared #printArea scratch element and awaits fonts/html2canvas before
+// moving on -- a multi-step async sequence. If otsAppSavePdf()/
+// otsAppSharePdf()/otsAppPrint() are invoked again (double-click, or
+// Print then immediately Save) before that finishes, two overlapping
+// builds can race on the same #printArea, each capturing whatever HTML a
+// DIFFERENT concurrent call most recently wrote -- a real, confirmed
+// cause of a reported bug (2026-10-07): the negative-P&L letter's own
+// canvas capture got hijacked by a concurrent call still rendering the
+// regular Hindi letter, producing a combined PDF with 2 copies of the
+// Hindi letter and none of the negative one. This flag makes a second
+// invocation while one is still in flight a no-op instead of a race.
+let __otsAppPdfBusy = false;
 function otsAppFindAccount(query){
   const q = String(query||'').trim().toLowerCase();
   if(!q) return null;
@@ -841,12 +854,17 @@ function otsAppGenerate(){
 }
 window.otsAppGenerate = otsAppGenerate;
 function otsAppPrint(){
-  if(!__otsAppLetters.length) return;
-  document.getElementById('printArea').innerHTML = '<div class="ots-app-print-wrap">'
-    + __otsAppLetters.map(l=>'<div class="ots-app-letter-page">' + l.html + '</div>').join('')
-    + __otsAppNegativePLLetters.map(l=>'<div class="ots-app-letter-page">' + l.html + '</div>').join('')
-    + '</div>';
-  printWithPageSize('size:A4;margin:12mm');
+  if(!__otsAppLetters.length || __otsAppPdfBusy) return;
+  __otsAppPdfBusy = true;
+  try{
+    document.getElementById('printArea').innerHTML = '<div class="ots-app-print-wrap">'
+      + __otsAppLetters.map(l=>'<div class="ots-app-letter-page">' + l.html + '</div>').join('')
+      + __otsAppNegativePLLetters.map(l=>'<div class="ots-app-letter-page">' + l.html + '</div>').join('')
+      + '</div>';
+    printWithPageSize('size:A4;margin:12mm');
+  } finally {
+    __otsAppPdfBusy = false;
+  }
 }
 window.otsAppPrint = otsAppPrint;
 async function otsAppRenderLetterCanvas(html){
@@ -910,7 +928,8 @@ async function otsAppBuildCombinedPdfBlob(){
   return doc.output('blob');
 }
 async function otsAppSavePdf(){
-  if(!__otsAppLetters.length) return;
+  if(!__otsAppLetters.length || __otsAppPdfBusy) return;
+  __otsAppPdfBusy = true;
   try{
     const blob = await otsAppBuildCombinedPdfBlob();
     const url = URL.createObjectURL(blob);
@@ -921,11 +940,14 @@ async function otsAppSavePdf(){
   }catch(err){
     console.error(err);
     alert('Could not prepare the PDF. Please try again.');
+  } finally {
+    __otsAppPdfBusy = false;
   }
 }
 window.otsAppSavePdf = otsAppSavePdf;
 async function otsAppSharePdf(){
-  if(!__otsAppLetters.length) return;
+  if(!__otsAppLetters.length || __otsAppPdfBusy) return;
+  __otsAppPdfBusy = true;
   try{
     const blob = await otsAppBuildCombinedPdfBlob();
     const row = __otsAppRows[0] || {};
@@ -934,6 +956,8 @@ async function otsAppSharePdf(){
   }catch(err){
     console.error(err);
     alert('Could not prepare the PDF to share. Please try again.');
+  } finally {
+    __otsAppPdfBusy = false;
   }
 }
 window.otsAppSharePdf = otsAppSharePdf;
