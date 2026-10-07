@@ -7756,6 +7756,59 @@ function dashboardCornerStats(s, branchFilter){
   return html;
 }
 
+/* Alok, 2026-10-07: "ismain jo alag se card hai jismain keval no of
+   accounts likhe hain iski jagah yahan march current month next month
+   matlab sare targets and gaps do" -- replace the Dashboard's "Total
+   Accounts" hero tile entirely with the same Mar'26/current-month/Mar'27
+   Target+Gap panel the "Total Outstanding" tile's own corner already
+   shows (dashboardCornerStats above) -- same source (DATA.branchTargets),
+   same 3-row shape, no account count anywhere in this card any more.
+   Initially built with ₹ Lakh formatting per his first answer, then
+   switched to ₹ Cr (fmtCr, same formatter/unit as the Outstanding card's
+   own corner panel) per his immediate follow-up ("ise cr. main convert
+   karo"). Laid out full-width as this card's own main body (not a small
+   side "corner" accessory), so the rows read at a normal size rather
+   than the corner panel's small type. */
+function dashboardTargetGapPanel(s, branchFilter){
+  const gapLine = (v) => { const improved = v<=0; return `<span style="color:${improved?'var(--green)':'var(--red)'}">${improved?'▼':'▲'} ${fmtCr(Math.abs(v))}</span>`; };
+  const row = (label, val, gapVal) => `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>${esc(label)}</span><b>${fmtCr(val)}</b></div><div class="hero-kpi-corner-gap">${gapLine(gapVal)}</div></div>`;
+  const bt = DATA.branchTargets;
+  if(bt && bt.monthLabels && bt.monthLabels.length){
+    let rec = null;
+    if(branchFilter){
+      const solId = (s.branchMap.get(branchFilter)||{}).solId;
+      rec = solId ? (bt.branches[solId]||null) : null;
+    } else {
+      rec = bt.region || null;
+    }
+    if(rec && rec.targets && rec.targets.length){
+      const actualNow = s.totalOS;
+      const currentLabel = npaTargetDefaultMonth(bt.monthLabels);
+      const currentIdx = bt.monthLabels.indexOf(currentLabel);
+      const finalTarget = rec.targets[rec.targets.length-1];
+      const currentTarget = rec.targets[currentIdx];
+      let html = '<div class="hero-kpi-corner-stats hero-kpi-target-main">';
+      if(rec.marActual!=null) html += row("Mar'26", rec.marActual, actualNow-rec.marActual);
+      if(currentTarget && currentTarget.rupees!=null && currentIdx!==rec.targets.length-1) html += row(currentLabel, currentTarget.rupees, actualNow-currentTarget.rupees);
+      if(finalTarget && finalTarget.rupees!=null) html += row(finalTarget.label, finalTarget.rupees, actualNow-finalTarget.rupees);
+      html += '</div>';
+      return html;
+    }
+  }
+  let marOS=0, marBase=0, marN=0, junOS=0, junBase=0, junN=0;
+  s.branchMap.forEach((v)=>{
+    const rec = DATA.branchAdvances[v.solId];
+    if(rec && rec.npaMar26!=null){ marOS+=v.os; marBase+=rec.npaMar26; marN++; }
+    if(rec && rec.npaJun26!=null){ junOS+=v.os; junBase+=rec.npaJun26; junN++; }
+  });
+  if(!marN && !junN) return '<div class="hero-kpi-target-empty">No Target uploaded yet.</div>';
+  let html = '<div class="hero-kpi-corner-stats hero-kpi-target-main">';
+  if(marN) html += row('Mar', marBase, marOS-marBase);
+  if(junN) html += row('Jun', junBase, junOS-junBase);
+  html += '</div>';
+  return html;
+}
+
 /* Branch profile card shown at the top of the Dashboard. A single branch
    picked from #dashBranchFilter reads its Sol ID off s.branchMap (captured
    straight from the real NPA rows during computeDashboardStats, so it
@@ -7874,7 +7927,13 @@ function renderDashboard(){
     ${dashboardBranchInfoCard(branchFilter, s)}
     <div class="hero-kpi-row">
       ${heroKpiCard({id:'heroTotalOs', label:'Total Outstanding', fallback:fmtCr(s.totalOS), sub:s.totalAccounts.toLocaleString('en-IN')+' accounts', icon:ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', badge:heroNpaBadge, corner:heroCorner})}
-      ${heroKpiCard({id:'heroTotalAccts', label:'Total Accounts', fallback:s.totalAccounts.toLocaleString('en-IN'), sub:s.custCount.toLocaleString('en-IN')+' unique customers', icon:ICON_USERS, tint:'var(--gauge-track)', color:'var(--accent-2)'})}
+      <div class="hero-kpi-card hero-target-card" style="--hero-tint:var(--gauge-track);--hero-color:var(--accent-2)">
+        <div class="hero-kpi-main">
+          <div class="hero-kpi-icon">${svgIcon(ICON_USERS)}</div>
+          <div class="hero-kpi-label">NPA Target &amp; Gap</div>
+          <div class="hero-kpi-target-body">${dashboardTargetGapPanel(s, branchFilter)}</div>
+        </div>
+      </div>
       ${heroKpiCard({id:'heroHighRisk', label:'High-Risk Exposure', fallback:fmtCr(highRiskOS), sub:'DA3 + Loss · '+highRiskPct.toFixed(1)+'% of book', icon:ICON_ALERT_TRIANGLE, tint:'var(--red-soft)', color:'var(--red)', onclick:(s.assetMix.LOSS||s.assetMix.DA3)?`showAssetList('${s.assetMix.LOSS?'LOSS':'DA3'}')`:''})}
       ${heroKpiCard({id:'heroAvgTicket', label:'Average Ticket Size', fallback:fmtINR2(avgTicket), sub:'per account, this book', icon:ICON_TICKET, tint:'var(--amber-soft)', color:'var(--amber)'})}
     </div>
@@ -7963,8 +8022,6 @@ function renderDashboard(){
 
   const heroOs = document.getElementById('heroTotalOs');
   if(heroOs) animateNumber(heroOs, 0, s.totalOS, fmtCr, 900);
-  const heroAccts = document.getElementById('heroTotalAccts');
-  if(heroAccts) animateNumber(heroAccts, 0, s.totalAccounts, n=>Math.round(n).toLocaleString('en-IN'), 900);
   const heroRisk = document.getElementById('heroHighRisk');
   if(heroRisk) animateNumber(heroRisk, 0, highRiskOS, fmtCr, 900);
   const heroTicket = document.getElementById('heroAvgTicket');
