@@ -6043,6 +6043,37 @@ function dlExportThisFY(){
   dlExportWorkbook([{name:'This_FY_SubStd', rows}], 'This_FY_SubStd_' + dateToInputValue(new Date()) + '.xlsx');
 }
 
+// KCC Overdue rows carry no address of their own -- resolved the same way
+// window.UPGB_getAddressList()/...ByCustomer() already build their own maps
+// (DATA.npa.rows' own already-merged C.ADDR, keyed by account no. and by
+// customer ID), but cached once per DATA.npa.rows reference instead of
+// rebuilt on every call -- this export can run over ~6,800 KCC Overdue
+// rows, and rebuilding a ~13,000-row map from scratch for each one would be
+// a real O(n^2) cost. Falls back to DATA.customerAddressMap[custId] for a
+// KCC Overdue account that isn't currently in the NPA book at all (the
+// documented reason that map exists in the first place -- see its own
+// init comment above). Named to match Recovery Dashboard's own
+// kccovAddressFor() for cross-app consistency, but NOT a verbatim port of
+// that function -- its DATA.addressList/addressListByCustomer fallbacks
+// reference fields this app's own DATA object doesn't carry at all (this
+// app replaced that older mechanism with the simpler Customer-Master-
+// merged-into-C.ADDR approach described above).
+let __kccovAddrCache = { forRows: null, byAcct: null, byCust: null };
+function kccovAddressFor(acctNo, custId){
+  const rows = DATA.npa && DATA.npa.rows;
+  if(__kccovAddrCache.forRows !== rows){
+    const byAcct = {}, byCust = {};
+    (rows||[]).forEach(r=>{
+      if(r[C.ADDR]){
+        const a = normId(r[C.ACCT_NO]); if(!byAcct[a]) byAcct[a] = r[C.ADDR];
+        const c = normId(r[C.CUST_ID]); if(!byCust[c]) byCust[c] = r[C.ADDR];
+      }
+    });
+    __kccovAddrCache = { forRows: rows, byAcct, byCust };
+  }
+  const acctKey = normId(acctNo), custKey = custId ? normId(custId) : '';
+  return __kccovAddrCache.byAcct[acctKey] || (custKey ? __kccovAddrCache.byCust[custKey] : '') || (custKey ? DATA.customerAddressMap[custKey] : '') || '';
+}
 /* ---------- Download tab: KCC Overdue exports -- a second DL_TAB_GROUPS
    category, same download mechanics (dlExportWorkbook) as the NPA category
    above, reading from KCC_OVERDUE_DATA/KC instead of DATA.npa.rows/C.
@@ -6050,8 +6081,8 @@ function dlExportThisFY(){
    field only exists on the NPA book), so there is deliberately no SB
    Balance export here. ---------- */
 const KCC_DL_OUT_HEADERS = ['Branch','Account No','Customer ID','Scheme Code','Account Name',
-  'Balance Amount','CADU','Limit','Review Date','Cust NPA Date','F.Y.','Category','SMA','Reason'];
-const KCC_DL_OUT_WIDTHS = [18,16,14,12,30,16,13,12,13,13,10,12,10,22];
+  'ADDRESS','Balance Amount','CADU','Limit','Review Date','Cust NPA Date','F.Y.','Category','SMA','Reason'];
+const KCC_DL_OUT_WIDTHS = [18,16,14,12,30,40,16,13,12,13,13,10,12,10,22];
 function dlWriteKccSheet(ws, rows){
   const hRow = ws.getRow(1);
   KCC_DL_OUT_HEADERS.forEach((h,i)=>{ hRow.getCell(i+1).value = h; });
@@ -6060,12 +6091,13 @@ function dlWriteKccSheet(ws, rows){
     const row = ws.getRow(ri+2);
     row.getCell(1).value = r[KC.BRANCH]; row.getCell(2).value = r[KC.ACCT]; row.getCell(2).numFmt = '0';
     row.getCell(3).value = r[KC.CUST_ID]; row.getCell(4).value = r[KC.SCHEME]; row.getCell(5).value = r[KC.NAME];
-    row.getCell(6).value = Number(r[KC.OS])||0; row.getCell(6).numFmt = '0.00';
-    row.getCell(7).value = Number(r[KC.CADU])||0; row.getCell(7).numFmt = '0.00';
-    row.getCell(8).value = Number(r[KC.LIMIT])||0; row.getCell(8).numFmt = '0.00';
-    row.getCell(9).value = r[KC.REVIEW]; row.getCell(10).value = r[KC.CUSTNPADATE];
-    row.getCell(11).value = stripQuoteChars(r[KC.FY]); row.getCell(12).value = r[KC.CATEGORY];
-    row.getCell(13).value = r[KC.SMA]; row.getCell(14).value = r[KC.REASON];
+    row.getCell(6).value = kccovAddressFor(r[KC.ACCT], r[KC.CUST_ID]);
+    row.getCell(7).value = Number(r[KC.OS])||0; row.getCell(7).numFmt = '0.00';
+    row.getCell(8).value = Number(r[KC.CADU])||0; row.getCell(8).numFmt = '0.00';
+    row.getCell(9).value = Number(r[KC.LIMIT])||0; row.getCell(9).numFmt = '0.00';
+    row.getCell(10).value = r[KC.REVIEW]; row.getCell(11).value = r[KC.CUSTNPADATE];
+    row.getCell(12).value = stripQuoteChars(r[KC.FY]); row.getCell(13).value = r[KC.CATEGORY];
+    row.getCell(14).value = r[KC.SMA]; row.getCell(15).value = r[KC.REASON];
     if(ri % 2 === 1){
       for(let fc=1; fc<=KCC_DL_OUT_HEADERS.length; fc++){ row.getCell(fc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F5F3'}}; }
     }
