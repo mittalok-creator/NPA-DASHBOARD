@@ -37,6 +37,31 @@
     errorEl.textContent = text || ' ';
     errorEl.classList.toggle('ok', !!ok);
   }
+  // Alok's request, 2026-10-07: every real PIN entry should force a hard
+  // refresh, so a long-open tab can never keep running whatever JS/CSS it
+  // happened to load before the latest deploy (the exact failure shape
+  // behind an earlier "Application Form generating twice" investigation --
+  // the fix for that bug was real, but a stale tab that never reloads
+  // would still be running the pre-fix code indefinitely). Clears every
+  // Cache Storage entry except the dedicated offline-data cache (so
+  // "work offline once data has loaded once" -- Alok's own separate,
+  // standing request -- survives this), then reloads the page outright.
+  // sessionStorage's 'upgb-splash-unlocked' flag is already set by the
+  // time this runs, so the reload lands straight back in the app (the
+  // inline guard in index.html skips the splash screen on a reload once
+  // that flag is present) -- it does not ask for the PIN a second time.
+  function hardRefreshAfterLogin() {
+    try {
+      if ('caches' in window) {
+        caches.keys()
+          .then(names => Promise.all(names.filter(n => n !== 'upgb-ots-data').map(n => caches.delete(n))))
+          .catch(() => {})
+          .then(() => location.reload());
+        return;
+      }
+    } catch (e) {}
+    location.reload();
+  }
   function unlock() {
     locked = true;
     setError('Verified', true);
@@ -53,11 +78,14 @@
     // well before a human finishes typing 4 digits here -- this event is
     // how app.js knows to wait for an actual unlock instead of racing it
     // (see its own listener, registered only when no PIN is in
-    // sessionStorage yet at startup).
+    // sessionStorage yet at startup). Harmless that this fires even
+    // though a reload is coming right behind it -- nothing meaningful
+    // depends on it finishing before hardRefreshAfterLogin() navigates
+    // away.
     try { window.dispatchEvent(new CustomEvent('upgb-pin-unlocked')); } catch (e) {}
     setTimeout(() => {
       screen.classList.add('unlocked');
-      setTimeout(() => { screen.style.display = 'none'; }, 700);
+      setTimeout(hardRefreshAfterLogin, 700);
     }, reduceMotion ? 0 : 350);
   }
   function reject() {
