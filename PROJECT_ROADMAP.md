@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Dashboard: "Total Accounts" hero tile replaced with a "NPA Target & Gap" panel (2026-10-07)
+
+Alok, pointing at the Dashboard's two lead hero cards (Total Outstanding, which already shows Mar'26/current-month/Mar'27 Target+Gap in its own small corner panel, and Total Accounts, a bare count): "ismain jo alag se card hai jismain keval no of accounts likhe hain iski jagah yahan march current month next month matlab sare targets and gaps do" -- replace the Total Accounts tile with the same Target+Gap panel, not just a plain count.
+
+New `dashboardTargetGapPanel(s, branchFilter)` -- same source/logic as the existing `dashboardCornerStats()` (reads `DATA.branchTargets`, region figure for the whole book or the selected branch's own row), laid out as this card's own full-width main body (not a small side accessory) so the rows read at normal size. The old "Total Accounts" hero tile (plain count + "unique customers" sub-line, `#heroTotalAccts`) is removed entirely -- confirmed via his own explicit follow-up ("target and gap keval amount lakhs main show karna hai, us card main count aayega hi nahi") that no account count should appear in this card at all. Initially built in ₹ Lakh, then switched to ₹ Cr (same `fmtCr()` formatter the Outstanding card's own corner panel already uses) per his immediate follow-up ("ise cr. main convert karo").
+
+Recovery Dashboard needed no mirrored change -- it already dropped its own separate Total Accounts tile in an earlier round this session and already has its own `dashboardTargetGapCard()` serving the same purpose.
+
+Verified via Playwright against real local data: the new card's Mar'26/Oct'26/Mar'27 figures exactly match the Outstanding card's own corner-panel figures (both read from the same `DATA.branchTargets` source), confirmed correct for both the whole book and a single selected branch (Agsauli), confirmed `#heroTotalAccts` is gone from the DOM, screenshotted light/dark/mobile.
+
 ### Application Form PDF bug: 2 identical Hindi letters, no negative letter -- traced to a race condition, not data/formula (2026-10-07)
 
 Right after the negative-P&L-letter feature shipped (above), Alok reported a specific real account (160535110000042, OTS=180000) where the negative letter failed to appear, and a follow-up that the regular application letter itself was "generating twice." Investigated thoroughly before touching any code:

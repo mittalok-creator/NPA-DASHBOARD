@@ -2166,6 +2166,17 @@ html,body{overscroll-behavior:none}
 .hero-kpi-corner-row span{text-transform:uppercase;letter-spacing:.4px;margin-right:5px}
 .hero-kpi-corner-row b{color:var(--ink);font-weight:800}
 .hero-kpi-corner-gap{font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:1px;white-space:nowrap}
+/* Dashboard's "NPA Target & Gap" card (replaced the old "Total Accounts"
+   tile, 2026-10-07): reuses the same .hero-kpi-corner-stats row markup as
+   the Total Outstanding card's own small side panel, but here it's the
+   card's own MAIN body -- so every row is bumped up to full value-text
+   size/weight instead of the tiny corner-accessory type. */
+.hero-kpi-target-body{margin-top:6px}
+.hero-kpi-target-body .hero-kpi-corner-stats.hero-kpi-target-main{flex-direction:column;gap:10px;align-items:flex-start}
+.hero-kpi-target-body .hero-kpi-corner-row{font-size:15px}
+.hero-kpi-target-body .hero-kpi-corner-row span{font-size:11px}
+.hero-kpi-target-body .hero-kpi-corner-gap{font-size:13px}
+.hero-kpi-target-empty{color:var(--ink-mute);font-size:13px;margin-top:8px}
 .bank-hero-row{grid-template-columns:repeat(3,1fr)}
 @media (max-width:1023px){ .hero-kpi-row{grid-template-columns:repeat(2,1fr)} }
 @media (max-width:599px){
