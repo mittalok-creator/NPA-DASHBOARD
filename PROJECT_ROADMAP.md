@@ -123,6 +123,14 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### OTS one-pager PDF: remove the "OTS Amt as per Lok Adalat" row (PDF/print only) (2026-10-07)
+
+Alok: "ots calculator ki pdf sheet main se lok adalat ka ots amount wala row hata do keval pdf main se" -- remove the Lok Adalat row from the PDF/print sheet specifically, not from the on-screen loan table or the Excel export.
+
+**Fix**: removed the `['OTS Amt as per Lok Adalat', ...]` entry from `renderPrintView()`'s own `rows` array (the one that builds `#printArea`, shared by both the Print button and the WhatsApp PDF share) and dropped the now-unused `'OTS Amt as per Lok Adalat'` key from that same function's `STRONG_ROWS` set. The on-screen Loan Detail table's own Lok Adalat row (`loanTableHTML`'s `lokAdalatRow`) and the Excel export's Lok Adalat row/formula (`exportOtsExcel()`) are both untouched -- this is purely a print/PDF-sheet-scoped removal, matching exactly what was asked.
+
+**Verified**: Playwright against a real production customer -- on-screen table still shows the Lok Adalat row (`.lt-lokadalat-row` present), but `#printArea`'s rebuilt HTML (triggered by typing an OTS Amount, the same recalc path that feeds both Print and the PDF share) no longer mentions "Lok Adalat" anywhere while "OTS Amount" and every other row are still present. Zero console errors. `node --check` clean.
+
 ### Monthly PNPA still failed after the header-row fix -- needed a genuinely more robust detector, not another guess (2026-10-07)
 
 Follow-up to the entry immediately below: that fix (header-row detection via `findHeaderRowIndex`) shipped and was confirmed live -- the new, generalized error wording ("Daily/Weekly/Monthly PNPA export layout") was confirmed showing -- but the real `MONTHLY PNPA OCT'26 AS ON 06.10.2026.xlsb` file still threw the exact same "Missing required column(s)" error. The title-row-above-headers hypothesis was therefore wrong or incomplete for this specific file. Asked Alok to share the file or its header text for a precise diagnosis; his answer ("[No preference]") wasn't a usable one, so rather than guess a third time blind, this round made detection itself strictly more thorough (covers every remaining plausible cause) and made a future failure self-diagnosing.

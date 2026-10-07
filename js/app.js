@@ -3823,7 +3823,7 @@ function renderPrintView(){
   // Total Contractual Dues is deliberately NOT in this print/PDF table --
   // it stays on-screen only (loanTableHTML) per Alok's review; Total
   // Sacrifice below reads off Total Dues (+ Interest Reversal), not it.
-  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amt as per Lok Adalat','OTS Amount','Total Sacrifice','Impact on P&L','OTS Sanction Authority']);
+  const STRONG_ROWS = new Set(['O/S Balance','Total Dues','Total P&L','OTS Amount','Total Sacrifice','Impact on P&L','OTS Sanction Authority']);
   // Scheme moved here from the page footer (was repeating the branch name a
   // third time alongside the header and the borrower info grid) -- one row
   // per account, right above O/S Balance where the settlement figures start.
@@ -3843,7 +3843,9 @@ function renderPrintView(){
     ['Interest Reversal', 'rotate', s=>fmtINR2(uriFor(s))],
     ['Provision', 'shield', s=>fmtINR2(s.provision)],
     ['Total P&L', 'trend', s=>fmtINR2(s.totalPL) + (s.ratio!==''?` (${(s.ratio*100).toFixed(1)}%)`:'')],
-    ['OTS Amt as per Lok Adalat', 'scale', s=>{const la=lokAdalatMin(s); if(!la) return '—'; if(!la.eligible) return 'Not Eligible'; return fmtINR2(la.amount)+` (${(la.pct*100).toFixed(0)}%)`;}],
+    // "OTS Amt as per Lok Adalat" row removed from this print/PDF sheet
+    // only, per Alok's explicit request (2026-10-07) -- stays on-screen
+    // (loanTableHTML's lokAdalatRow) and in the Excel export unchanged.
     // Same Settlement Progress % the on-screen loan table already shows per
     // account (recalcLoan()'s settlePct/settlePctOs) -- this print/PDF sheet
     // never had it, so it read as "missing" even though the underlying
