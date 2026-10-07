@@ -675,13 +675,29 @@
   // limit, comfortably blown past by 55 real branch names, so it has to
   // reference a range instead of an inline comma list). Returns that
   // sorted branch list so the caller doesn't have to recompute it.
+  // Returns a value fit for an Excel cell representing a numeric-looking
+  // ID (Account No, Sol): a real Number when the raw value is a clean,
+  // non-leading-zero digit string short enough to round-trip exactly
+  // through IEEE-754 (<=15 digits), so Excel shows/sorts/filters it as a
+  // real number instead of "Number Stored as Text"; the original string
+  // otherwise -- a real Account No can carry a genuine leading zero
+  // (e.g. "070426110000005") where a numeric cast would corrupt the
+  // value by dropping it, so that stays text, correctly.
+  function idCellValue(raw){
+    var s = (raw==null ? '' : String(raw)).trim();
+    if(s === '') return '';
+    if(/^\d+$/.test(s) && s.length <= 15 && !(s.length > 1 && s[0] === '0')) return Number(s);
+    return s;
+  }
   function writeDataSheet(ws, rows){
     ws.addRow(['Sol','Branch','Account No','Balance Amount','Reason','Cust NPA Date','F.Y.','Month Label']);
     ws.getRow(1).font = {bold:true};
     ws.getRow(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFDCEEE8'}};
     rows.forEach(function(r){
-      ws.addRow([r.sol, r.branch, r.acctNo, r.bal, GROUP_LABEL_BY_KEY[r.reason], r.npaDate, r.fy, r.monthLabel]);
+      ws.addRow([idCellValue(r.sol), r.branch, idCellValue(r.acctNo), r.bal, GROUP_LABEL_BY_KEY[r.reason], r.npaDate, r.fy, r.monthLabel]);
     });
+    ws.getColumn(1).numFmt = '0';
+    ws.getColumn(3).numFmt = '0';
     ws.getColumn(6).numFmt = 'dd-mm-yyyy';
     for(var c=1;c<=8;c++) ws.getColumn(c).width = (c===2?22:(c===3?16:14));
     var branchNames = Array.from(new Set(rows.map(function(r){ return r.branch; }))).sort();

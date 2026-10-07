@@ -1358,15 +1358,31 @@ function setDateCell(cell, rawVal){
   if(typeof rawVal === 'number' && rawVal>0){ cell.value = rawVal; cell.numFmt = 'dd-mm-yyyy'; }
   else { cell.value = rawVal==null? '' : rawVal; }
 }
+// Returns a value fit for an Excel cell representing a numeric-looking ID
+// (Account No, Sol, Customer ID): a real Number when the raw value is a
+// clean, non-leading-zero digit string short enough to round-trip exactly
+// through IEEE-754 (<=15 digits), so Excel shows/sorts/filters it as a
+// real number instead of "Number Stored as Text"; the original string
+// otherwise -- a real Customer ID is often alphanumeric (e.g.
+// "A03728572") and a real Account No can carry a genuine leading zero
+// (e.g. "070426110000005") where a numeric cast would corrupt the value
+// by dropping it, so those stay text, correctly.
+function idCellValue(raw){
+  var s = (raw==null ? '' : String(raw)).trim();
+  if(s === '') return '';
+  if(/^\d+$/.test(s) && s.length <= 15 && !(s.length > 1 && s[0] === '0')) return Number(s);
+  return s;
+}
+function setIdCell(cell, raw){ cell.value = idCellValue(raw); cell.numFmt = '0'; }
 function writeNpaSheetBody(ws, npaRows){
   var hRow = ws.getRow(1);
   OUT_HEADERS.forEach(function(h,i){ hRow.getCell(i+1).value = h; });
   styleHeaderRow(hRow, OUT_HEADERS.length);
   npaRows.forEach(function(nr, ri){
     var row = ws.getRow(ri+2);
-    row.getCell(1).value = nr.sol; row.getCell(2).value = nr.branch;
-    row.getCell(3).value = nr.acctNo; row.getCell(3).numFmt = '0';
-    row.getCell(4).value = nr.custId; row.getCell(5).value = nr.scheme;
+    setIdCell(row.getCell(1), nr.sol); row.getCell(2).value = nr.branch;
+    setIdCell(row.getCell(3), nr.acctNo);
+    setIdCell(row.getCell(4), nr.custId); row.getCell(5).value = nr.scheme;
     row.getCell(6).value = nr.name; row.getCell(7).value = nr.address;
     row.getCell(8).value = nr.balance; row.getCell(8).numFmt = '0.00';
     setDateCell(row.getCell(9), nr.npaDate);
