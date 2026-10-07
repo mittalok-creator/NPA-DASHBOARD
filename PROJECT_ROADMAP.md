@@ -133,6 +133,8 @@ Recovery Dashboard needed no mirrored change -- it already dropped its own separ
 
 Verified via Playwright against real local data: the new card's Mar'26/Oct'26/Mar'27 figures exactly match the Outstanding card's own corner-panel figures (both read from the same `DATA.branchTargets` source), confirmed correct for both the whole book and a single selected branch (Agsauli), confirmed `#heroTotalAccts` is gone from the DOM, screenshotted light/dark/mobile.
 
+**Same-day follow-up**: Alok, once the dedicated card above made the Total Outstanding card's own small Target+Gap corner panel redundant ("ab o/s wale block se targets and gap hata do") -- removed `dashboardCornerStats()` entirely (it had exactly one call site) along with the `corner:heroCorner` argument on the Total Outstanding `heroKpiCard()` call; the card now shows only its headline figure, accounts sub-line, and NPA% badge. Verified via Playwright (zero corner-stat rows remaining on Total Outstanding, the new NPA Target & Gap card completely unaffected, zero console errors) and screenshotted light/dark/mobile.
+
 ### Application Form PDF bug: 2 identical Hindi letters, no negative letter -- traced to a race condition, not data/formula (2026-10-07)
 
 Right after the negative-P&L-letter feature shipped (above), Alok reported a specific real account (160535110000042, OTS=180000) where the negative letter failed to appear, and a follow-up that the regular application letter itself was "generating twice." Investigated thoroughly before touching any code:

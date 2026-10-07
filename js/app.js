@@ -7694,81 +7694,29 @@ window.showSchemeList = showSchemeList;
 window.showSlabList = showSlabList;
 window.showHighValueCustList = showHighValueCustList;
 
-/* Shown in the top-right corner of the "Total Outstanding" hero card,
-   below the NPA% badge -- a March/June + gap treatment using the
-   per-branch NPA March/June figures from the Branch Advance upload.
-   Only aggregates
-   over branches that actually have a Mar/Jun figure (and only compares
-   against THOSE branches' current O/S), same safeguard as the advance
-   aggregation just above -- so a partial upload never produces a
-   misleading gap by comparing against branches with no baseline. */
-/* Redesigned 2026-09-28 (Alok's request, following the new Branch/Region
-   NPA Target upload): shows March'26 / the current month / March'27 --
-   Target and Gap for each -- instead of the old Mar/Jun-baseline-only
-   corner stat. Sourced from DATA.branchTargets, matching whatever's
-   currently in view: the whole book gets the REGION's own figure
-   (DATA.branchTargets.region -- never a sum of the branches, per Alok's
-   own explicit confirmation that Head Office's Region target is a
-   separate commitment, not a rollup), a single selected branch gets that
-   branch's own row. Falls back to the old branchAdvances-based Mar/Jun
-   comparison only when no Branch/Region Target has been uploaded at all,
-   so the corner stat never just disappears for someone who hasn't
-   uploaded the new file yet. "Current month" is whichever uploaded month
-   is nearest today (npaTargetDefaultMonth, shared with the NPA Target
-   Tracker view) -- skipped if it's the same as the final month, so a
-   March visit doesn't show the identical figure twice. */
-function dashboardCornerStats(s, branchFilter){
-  const gapLine = (v) => { const improved = v<=0; return `<span style="color:${improved?'var(--green)':'var(--red)'}">${improved?'▼':'▲'} ${fmtCr(Math.abs(v))}</span>`; };
-  const bt = DATA.branchTargets;
-  if(bt && bt.monthLabels && bt.monthLabels.length){
-    let rec = null;
-    if(branchFilter){
-      const solId = (s.branchMap.get(branchFilter)||{}).solId;
-      rec = solId ? (bt.branches[solId]||null) : null;
-    } else {
-      rec = bt.region || null;
-    }
-    if(rec && rec.targets && rec.targets.length){
-      const actualNow = s.totalOS;
-      const currentLabel = npaTargetDefaultMonth(bt.monthLabels);
-      const currentIdx = bt.monthLabels.indexOf(currentLabel);
-      const finalTarget = rec.targets[rec.targets.length-1];
-      const currentTarget = rec.targets[currentIdx];
-      let html = '<div class="hero-kpi-corner-stats">';
-      if(rec.marActual!=null) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>Mar'26</span><b>${fmtCr(rec.marActual)}</b></div><div class="hero-kpi-corner-gap">${gapLine(actualNow-rec.marActual)}</div></div>`;
-      if(currentTarget && currentTarget.rupees!=null && currentIdx!==rec.targets.length-1) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>${esc(currentLabel)}</span><b>${fmtCr(currentTarget.rupees)}</b></div><div class="hero-kpi-corner-gap">${gapLine(actualNow-currentTarget.rupees)}</div></div>`;
-      if(finalTarget && finalTarget.rupees!=null) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>${esc(finalTarget.label)}</span><b>${fmtCr(finalTarget.rupees)}</b></div><div class="hero-kpi-corner-gap">${gapLine(actualNow-finalTarget.rupees)}</div></div>`;
-      html += '</div>';
-      return html;
-    }
-  }
-  let marOS=0, marBase=0, marN=0, junOS=0, junBase=0, junN=0;
-  s.branchMap.forEach((v)=>{
-    const rec = DATA.branchAdvances[v.solId];
-    if(rec && rec.npaMar26!=null){ marOS+=v.os; marBase+=rec.npaMar26; marN++; }
-    if(rec && rec.npaJun26!=null){ junOS+=v.os; junBase+=rec.npaJun26; junN++; }
-  });
-  if(!marN && !junN) return '';
-  let html = '<div class="hero-kpi-corner-stats">';
-  if(marN) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>Mar</span><b>${fmtCr(marBase)}</b></div><div class="hero-kpi-corner-gap">${gapLine(marOS-marBase)}</div></div>`;
-  if(junN) html += `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>Jun</span><b>${fmtCr(junBase)}</b></div><div class="hero-kpi-corner-gap">${gapLine(junOS-junBase)}</div></div>`;
-  html += '</div>';
-  return html;
-}
-
 /* Alok, 2026-10-07: "ismain jo alag se card hai jismain keval no of
    accounts likhe hain iski jagah yahan march current month next month
    matlab sare targets and gaps do" -- replace the Dashboard's "Total
-   Accounts" hero tile entirely with the same Mar'26/current-month/Mar'27
-   Target+Gap panel the "Total Outstanding" tile's own corner already
-   shows (dashboardCornerStats above) -- same source (DATA.branchTargets),
-   same 3-row shape, no account count anywhere in this card any more.
-   Initially built with ₹ Lakh formatting per his first answer, then
-   switched to ₹ Cr (fmtCr, same formatter/unit as the Outstanding card's
-   own corner panel) per his immediate follow-up ("ise cr. main convert
-   karo"). Laid out full-width as this card's own main body (not a small
-   side "corner" accessory), so the rows read at a normal size rather
-   than the corner panel's small type. */
+   Accounts" hero tile entirely with a Mar'26/current-month/Mar'27
+   Target+Gap panel, sourced from DATA.branchTargets: the whole book gets
+   the REGION's own figure (DATA.branchTargets.region -- never a sum of
+   the branches, per Alok's own explicit confirmation that Head Office's
+   Region target is a separate commitment, not a rollup), a single
+   selected branch gets that branch's own row. Falls back to the old
+   branchAdvances-based Mar/Jun comparison only when no Branch/Region
+   Target has been uploaded at all. "Current month" is whichever
+   uploaded month is nearest today (npaTargetDefaultMonth, shared with
+   the NPA Target Tracker view) -- skipped if it's the same as the final
+   month, so a March visit doesn't show the identical figure twice. No
+   account count anywhere in this card any more. Initially built with ₹
+   Lakh formatting per his first answer, then switched to ₹ Cr (fmtCr)
+   per his immediate follow-up ("ise cr. main convert karo"). Laid out
+   full-width as this card's own main body (not a small side "corner"
+   accessory), so the rows read at a normal size. This same panel used
+   to ALSO appear, in miniature, in a small corner of the Total
+   Outstanding card next door -- removed from there the same day
+   ("ab o/s wale block se targets and gap hata do") once this dedicated
+   card made that duplicate redundant. */
 function dashboardTargetGapPanel(s, branchFilter){
   const gapLine = (v) => { const improved = v<=0; return `<span style="color:${improved?'var(--green)':'var(--red)'}">${improved?'▼':'▲'} ${fmtCr(Math.abs(v))}</span>`; };
   const row = (label, val, gapVal) => `<div class="hero-kpi-corner-group"><div class="hero-kpi-corner-row"><span>${esc(label)}</span><b>${fmtCr(val)}</b></div><div class="hero-kpi-corner-gap">${gapLine(gapVal)}</div></div>`;
@@ -7909,7 +7857,6 @@ function renderDashboard(){
     if(rec && rec.adv>0){ advOsSum+=v.os; advSum+=rec.adv; advBranchCount++; }
   });
   const aggNpaPct = advSum>0 ? (advOsSum/advSum*100) : null;
-  const heroCorner = dashboardCornerStats(s, branchFilter);
   let heroNpaBadge = '';
   if(aggNpaPct!==null){
     const sev = npaPctSeverity(aggNpaPct);
@@ -7926,7 +7873,7 @@ function renderDashboard(){
   el.innerHTML = `
     ${dashboardBranchInfoCard(branchFilter, s)}
     <div class="hero-kpi-row">
-      ${heroKpiCard({id:'heroTotalOs', label:'Total Outstanding', fallback:fmtCr(s.totalOS), sub:s.totalAccounts.toLocaleString('en-IN')+' accounts', icon:ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', badge:heroNpaBadge, corner:heroCorner})}
+      ${heroKpiCard({id:'heroTotalOs', label:'Total Outstanding', fallback:fmtCr(s.totalOS), sub:s.totalAccounts.toLocaleString('en-IN')+' accounts', icon:ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', badge:heroNpaBadge})}
       <div class="hero-kpi-card hero-target-card" style="--hero-tint:var(--gauge-track);--hero-color:var(--accent-2)">
         <div class="hero-kpi-main">
           <div class="hero-kpi-icon">${svgIcon(ICON_USERS)}</div>
