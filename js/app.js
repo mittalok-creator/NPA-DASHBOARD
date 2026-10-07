@@ -7828,7 +7828,7 @@ function parsePnpaRows(headerCells, dataRows){
   if(iBal<0) missing.push('Balance Amount');
   if(iCadu<0) missing.push('CADU');
   if(iRegion<0) missing.push('Region');
-  if(missing.length) throw new Error('Missing required column(s): '+missing.join(', ')+'. Check this file matches the "Daily PNPA" export layout.');
+  if(missing.length) throw new Error('Missing required column(s): '+missing.join(', ')+'. Check this file matches the Daily/Weekly/Monthly PNPA export layout (they\'re all the same format).');
   const rows = [];
   for(const row of dataRows){
     if(!row || row.length<3) continue;
@@ -7881,17 +7881,19 @@ async function handlePnpaUpload(evt){
   reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
   reader.onload = function(e){
     try{
-      let header, dataRows;
+      const headerHints = ['accountno','schemecode','balanceamount'];
+      let allRows, hIdx;
       if(isCsv){
-        const allRows = parseCSV(String(e.target.result));
-        header = allRows[0]||[]; dataRows = allRows.slice(1);
+        allRows = parseCSV(String(e.target.result));
+        hIdx = findHeaderRowIndex(allRows, headerHints);
       } else {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, {type:'array'});
         const sheetName = wb.SheetNames.find(n=>/pnpa/i.test(n)) || wb.SheetNames[0];
-        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
-        header = raw[0]||[]; dataRows = raw.slice(1);
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+        hIdx = findHeaderRowIndex(allRows, headerHints);
       }
+      const header = allRows[hIdx]||[], dataRows = allRows.slice(hIdx+1);
       const rows = parsePnpaRows(header, dataRows);
       if(!rows.length) throw new Error('No account rows found in this file.');
       const guessed = parseAsOnDateFromFilename(file.name);
@@ -7941,17 +7943,19 @@ async function handleWeeklyPnpaUpload(evt){
   reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
   reader.onload = function(e){
     try{
-      let header, dataRows;
+      const headerHints = ['accountno','schemecode','balanceamount'];
+      let allRows, hIdx;
       if(isCsv){
-        const allRows = parseCSV(String(e.target.result));
-        header = allRows[0]||[]; dataRows = allRows.slice(1);
+        allRows = parseCSV(String(e.target.result));
+        hIdx = findHeaderRowIndex(allRows, headerHints);
       } else {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, {type:'array'});
         const sheetName = wb.SheetNames.find(n=>/pnpa/i.test(n)) || wb.SheetNames[0];
-        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
-        header = raw[0]||[]; dataRows = raw.slice(1);
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+        hIdx = findHeaderRowIndex(allRows, headerHints);
       }
+      const header = allRows[hIdx]||[], dataRows = allRows.slice(hIdx+1);
       const rows = parsePnpaRows(header, dataRows);
       if(!rows.length) throw new Error('No account rows found in this file.');
       const guessed = parseAsOnDateFromFilename(file.name);
@@ -7985,17 +7989,19 @@ async function handleMonthlyPnpaUpload(evt){
   reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
   reader.onload = function(e){
     try{
-      let header, dataRows;
+      const headerHints = ['accountno','schemecode','balanceamount'];
+      let allRows, hIdx;
       if(isCsv){
-        const allRows = parseCSV(String(e.target.result));
-        header = allRows[0]||[]; dataRows = allRows.slice(1);
+        allRows = parseCSV(String(e.target.result));
+        hIdx = findHeaderRowIndex(allRows, headerHints);
       } else {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, {type:'array'});
         const sheetName = wb.SheetNames.find(n=>/pnpa/i.test(n)) || wb.SheetNames[0];
-        const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
-        header = raw[0]||[]; dataRows = raw.slice(1);
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, raw:true, defval:''});
+        hIdx = findHeaderRowIndex(allRows, headerHints);
       }
+      const header = allRows[hIdx]||[], dataRows = allRows.slice(hIdx+1);
       const rows = parsePnpaRows(header, dataRows);
       if(!rows.length) throw new Error('No account rows found in this file.');
       const guessed = parseAsOnDateFromFilename(file.name);
