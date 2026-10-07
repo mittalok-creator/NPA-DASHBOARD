@@ -123,6 +123,16 @@ Vercel first**, see notes below).
 overhaul), whichever you want next.
 (M3 is superseded, see Section 2.)
 
+### Force a hard refresh on every PIN login (2026-10-07)
+
+Alok, as a standing mitigation after the Application Form double-letter investigation (traced to a race condition in the PDF pipeline, fixed separately -- but the episode highlighted that a long-open tab can keep running whatever JS it loaded before a deploy indefinitely, since the service worker's stale-while-revalidate shell cache only refreshes "for next time"): every real PIN entry should force a hard refresh, every time.
+
+`js/splash.js`'s `unlock()` -- already the one and only place a real PIN entry funnels through (a tab that's already unlocked skips the splash entirely via its own `sessionStorage` guard in `index.html`, so this never re-prompts) -- now calls a new `hardRefreshAfterLogin()` right after its existing unlock animation: clears every Cache Storage entry except the dedicated offline-data cache (`upgb-ots-data`, so "work offline once data has loaded once" is unaffected), then `location.reload()`s outright. Since `sessionStorage`'s unlock flag is already set by the time this runs, the reload lands straight back in the app without asking for the PIN again -- it is a login-time hard refresh, not a second login.
+
+Mirrored into Recovery Dashboard's own `js/login.js` (same `unlock()` shape, same guard, its own data-cache name `recovery-dashboard-data`).
+
+Verified via Playwright against both apps' local builds: confirmed a real reload navigation fires after login, confirmed the splash does not re-block afterward, confirmed the shell cache is cleared-then-repopulated while the data cache survives, confirmed Recovery Dashboard's branch-scoping (`upgb-sol-id`) survives the reload.
+
 ### Dashboard: "Total Accounts" hero tile replaced with a "NPA Target & Gap" panel (2026-10-07)
 
 Alok, pointing at the Dashboard's two lead hero cards (Total Outstanding, which already shows Mar'26/current-month/Mar'27 Target+Gap in its own small corner panel, and Total Accounts, a bare count): "ismain jo alag se card hai jismain keval no of accounts likhe hain iski jagah yahan march current month next month matlab sare targets and gaps do" -- replace the Total Accounts tile with the same Target+Gap panel, not just a plain count.
