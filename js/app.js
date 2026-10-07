@@ -6181,6 +6181,69 @@ const KCC_DL_EXPORTS = [
   {id:'kccthisfy', title:'This Financial Year', desc:'Cust NPA Date falls within the current financial year (April–March).', fn:'dlExportKccThisFY', icon:DL_ICON_CAL_RANGE, color:'teal'},
 ];
 
+/* ---------- Download tab: PNPA exports -- a third DL_TAB_GROUPS category
+   (Alok, 2026-10-07: "isko bhi excel main download ka option de do"),
+   reading from PNPA_DATA/PNPA_WEEKLY_DATA/PNPA_MONTHLY_DATA/PC -- all
+   declared later in the file, which is safe here since these are only
+   referenced inside function bodies, called well after the whole script
+   has run once (see the TDZ comment above DL_ICON_LIST). ---------- */
+const PNPA_DL_OUT_HEADERS = ['Region','Branch','Scheme Code','Account No','Account Name',
+  'ADDRESS','Balance Amount','CADU','Limit','Review Date','Reasons','Cust NPA Date','Customer ID'];
+const PNPA_DL_OUT_WIDTHS = [12,18,12,16,30,40,16,13,12,13,22,13,14];
+function dlWritePnpaSheet(ws, rows){
+  const hRow = ws.getRow(1);
+  PNPA_DL_OUT_HEADERS.forEach((h,i)=>{ hRow.getCell(i+1).value = h; });
+  dlStyleHeaderRow(hRow, PNPA_DL_OUT_HEADERS.length);
+  rows.forEach((r, ri)=>{
+    const row = ws.getRow(ri+2);
+    row.getCell(1).value = r[PC.REGION]; row.getCell(2).value = r[PC.BRANCH];
+    row.getCell(3).value = r[PC.SCHEME]; row.getCell(4).value = r[PC.ACCT]; row.getCell(4).numFmt = '0';
+    row.getCell(5).value = r[PC.NAME]; row.getCell(6).value = pnpaAddressFor(r[PC.ACCT], r[PC.CUST_ID]);
+    row.getCell(7).value = Number(r[PC.OS])||0; row.getCell(7).numFmt = '0.00';
+    row.getCell(8).value = Number(r[PC.CADU])||0; row.getCell(8).numFmt = '0.00';
+    row.getCell(9).value = Number(r[PC.LIMIT])||0; row.getCell(9).numFmt = '0.00';
+    row.getCell(10).value = r[PC.REVIEW]; row.getCell(11).value = r[PC.REASON];
+    row.getCell(12).value = r[PC.CUSTNPADATE]; row.getCell(13).value = r[PC.CUST_ID];
+    if(ri % 2 === 1){
+      for(let fc=1; fc<=PNPA_DL_OUT_HEADERS.length; fc++){ row.getCell(fc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F5F3'}}; }
+    }
+  });
+  ws.columns.forEach((col,i)=>{ col.width = PNPA_DL_OUT_WIDTHS[i]; });
+  if(rows.length){ ws.autoFilter = { from:{row:1,column:1}, to:{row:rows.length+1,column:PNPA_DL_OUT_HEADERS.length} }; }
+}
+// Overridden by Recovery Dashboard's own copy of this file to branch-lock
+// via pnpaLoggedInBranchName(), matching dlKccSourceRows()'s own convention.
+function dlPnpaSourceRows(kind){
+  return kind==='daily' ? (PNPA_DATA?PNPA_DATA.rows:[])
+    : kind==='weekly' ? (PNPA_WEEKLY_DATA?PNPA_WEEKLY_DATA.rows:[])
+    : (PNPA_MONTHLY_DATA?PNPA_MONTHLY_DATA.rows:[]);
+}
+// Filters to just today's slippage, matching the on-screen "Today" tab
+// exactly (reuses the same pnpaSlipBucketOf() that tab itself uses) -- the
+// export can never silently disagree with what the screen shows.
+function dlExportPnpaDaily(){
+  ensurePnpaDataLoaded(()=>{
+    const today = new Date();
+    const rows = dlPnpaSourceRows('daily').filter(r=>pnpaSlipBucketOf(r[PC.CUSTNPADATE], today)==='today');
+    dlExportWorkbook([{name:'PNPA_Daily_Today', rows}], 'PNPA_Daily_Today_' + dateToInputValue(new Date()) + '.xlsx', dlWritePnpaSheet);
+  }, () => showToast('Could not load Daily PNPA data.'));
+}
+function dlExportPnpaWeekly(){
+  ensurePnpaWeeklyDataLoaded(()=>{
+    dlExportWorkbook([{name:'PNPA_Weekly', rows: dlPnpaSourceRows('weekly')}], 'PNPA_Weekly_' + dateToInputValue(new Date()) + '.xlsx', dlWritePnpaSheet);
+  });
+}
+function dlExportPnpaMonthly(){
+  ensurePnpaMonthlyDataLoaded(()=>{
+    dlExportWorkbook([{name:'PNPA_Monthly', rows: dlPnpaSourceRows('monthly')}], 'PNPA_Monthly_' + dateToInputValue(new Date()) + '.xlsx', dlWritePnpaSheet);
+  });
+}
+const PNPA_DL_EXPORTS = [
+  {id:'pnpadaily', title:"Daily PNPA — Today's Slippage", desc:'Accounts whose Cust NPA Date is today.', fn:'dlExportPnpaDaily', icon:DL_ICON_CLOCK, color:'indigo'},
+  {id:'pnpaweekly', title:'Weekly PNPA', desc:"This week's slippage, as uploaded (already period-scoped by Head Office).", fn:'dlExportPnpaWeekly', icon:DL_ICON_CAL_DAY, color:'gold'},
+  {id:'pnpamonthly', title:'Monthly PNPA', desc:"This month's slippage, as uploaded (already period-scoped by Head Office).", fn:'dlExportPnpaMonthly', icon:DL_ICON_CAL_RANGE, color:'teal'},
+];
+
 const DL_EXPORTS = [
   {id:'complete', title:'Complete NPA List', desc:'Every account in the current NPA book, one sheet.', fn:'dlExportComplete', icon:DL_ICON_LIST, color:'jade'},
   {id:'assetcode', title:'Asset Code wise NPA List', desc:'Pick all 5 categories in one workbook, or any single category on its own.', fn:'dlExportAssetCodeWise', icon:DL_ICON_LAYERS, color:'gold'},
@@ -6196,10 +6259,11 @@ const DL_EXPORTS = [
 const DL_TAB_GROUPS = [
   {id:'npa', label:'NPA', exports: DL_EXPORTS},
   {id:'kccoverdue', label:'KCC Overdue', exports: KCC_DL_EXPORTS},
+  {id:'pnpa', label:'PNPA', exports: PNPA_DL_EXPORTS},
 ];
 // Icons for the tab row itself (separate from each card's own icon above),
 // keyed by DL_TAB_GROUPS id.
-const DL_TAB_ICONS = { npa: DL_ICON_LIST, kccoverdue: DL_ICON_CLOCK };
+const DL_TAB_ICONS = { npa: DL_ICON_LIST, kccoverdue: DL_ICON_CLOCK, pnpa: DL_ICON_CAL_DAY };
 let dlActiveTab = DL_TAB_GROUPS[0].id;
 const DL_DOWNLOAD_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
 function setDlTab(id){ dlActiveTab = id; renderNpaDownloadView(); }
@@ -7248,6 +7312,21 @@ function updateSortIcons(theadId, sort){
     th.setAttribute('aria-sort', active ? (sort.dir==='asc'?'ascending':'descending') : 'none');
   });
 }
+// Live-typing filter wiring for a toolbar input that sits inside a full
+// re-render (plain oninput would drop focus after the first keystroke,
+// since the input itself gets destroyed/recreated each time). Ported from
+// Recovery Dashboard's own wireLiveTextFilter(), 2026-10-07, for the new
+// PNPA Slippage tab's Address/Name filters.
+function wireLiveTextFilter(inputId, onInput){
+  const input = document.getElementById(inputId);
+  if(!input) return;
+  input.oninput = () => {
+    const pos = input.selectionStart;
+    onInput(input.value);
+    const fresh = document.getElementById(inputId);
+    if(fresh){ fresh.focus(); try{ fresh.setSelectionRange(pos,pos); }catch(e){} }
+  };
+}
 /* Keyboard support for sortable column headers (Enter/Space triggers the same click handler) */
 document.addEventListener('keydown', (e)=>{
   if(e.key!=='Enter' && e.key!==' ') return;
@@ -8220,6 +8299,256 @@ function pnpaShowBranchAccounts(bucket, branch){
   showPnpaListModal(`${branch} — ${bLabel}`, `Hathras · ${list.length.toLocaleString('en-IN')} account(s)`, list);
 }
 window.pnpaShowBranchAccounts = pnpaShowBranchAccounts;
+
+/* ---------- PNPA Slippage: Today/This Week/This Month tab (2026-10-07) ----------
+   Ported from Recovery Dashboard's own already-shipped "PNPA Slippage" tab
+   (Alok: "ye daily, weekly and monthly tab apne main app main bhi add kar
+   do wo to yahan hai hi nahi" -- that tab isn't even here). This is a
+   DIFFERENT, NEW feature from the old hidden "Daily PNPA" branch-bucket
+   view above (data-view="pnpa", nav commented out 2026-08-14) -- that view
+   is left completely untouched. This one reads all 3 of Daily/Weekly/
+   Monthly PNPA (PNPA_DATA/PNPA_WEEKLY_DATA/PNPA_MONTHLY_DATA, published
+   as data/pnpa.json/-weekly.json/-monthly.json but, until now, never
+   displayed anywhere in THIS app -- only Recovery Dashboard read them
+   back). Unlike Recovery Dashboard (branch-locked by Sol-ID login), this
+   app is Admin-facing and shows every branch, with its own Branch filter
+   dropdown -- same pattern Dashboard/KCC Overdue/SMA already use here. */
+function ensurePnpaDataLoaded(onReady, onError){
+  if(PNPA_DATA){ onReady(); return; }
+  fetchJson('data/pnpa.json?t=' + Date.now())
+    .then(d => { PNPA_DATA = d; onReady(); })
+    .catch(() => { if(onError) onError(); });
+}
+let __pnpaWeeklyFailed = false;
+function ensurePnpaWeeklyDataLoaded(onReady){
+  if(PNPA_WEEKLY_DATA || __pnpaWeeklyFailed){ onReady(); return; }
+  fetchJson('data/pnpa-weekly.json?t=' + Date.now())
+    .then(d => { PNPA_WEEKLY_DATA = d; onReady(); })
+    .catch(() => { __pnpaWeeklyFailed = true; onReady(); });
+}
+let __pnpaMonthlyFailed = false;
+function ensurePnpaMonthlyDataLoaded(onReady){
+  if(PNPA_MONTHLY_DATA || __pnpaMonthlyFailed){ onReady(); return; }
+  fetchJson('data/pnpa-monthly.json?t=' + Date.now())
+    .then(d => { PNPA_MONTHLY_DATA = d; onReady(); })
+    .catch(() => { __pnpaMonthlyFailed = true; onReady(); });
+}
+const PNPA_SLIP_TABS = [
+  {key:'today', label:'Today'},
+  {key:'week', label:'This Week'},
+  {key:'month', label:'This Month'},
+];
+// "Today" is bucketed off Daily PNPA's own Cust NPA Date, since that file
+// is a whole-book snapshot (every account currently on Head Office's PNPA
+// watch, whenever it slipped), not something already scoped to just today.
+function pnpaSlipBucketOf(custNpaDateStr, today){
+  const d = toDate(custNpaDateStr);
+  if(!d) return null;
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startOfRow = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const daysAgo = Math.round((startOfToday - startOfRow) / 86400000);
+  if(daysAgo !== 0) return null;
+  return 'today';
+}
+function pnpaSlipSchemeKey(row){ return row[PC.SCHEME]==='CC004' ? 'kcc' : 'nonkcc'; }
+function pnpaEmptySlipTotals(){ return { kcc:{cnt:0,amt:0}, nonkcc:{cnt:0,amt:0}, all:{cnt:0,amt:0} }; }
+function pnpaAddRowToSlipTotals(t, row){
+  const k = pnpaSlipSchemeKey(row);
+  t[k].cnt++; t[k].amt += row[PC.OS];
+  t.all.cnt++; t.all.amt += row[PC.OS];
+}
+function pnpaAggregateToday(rows, branch, today){
+  const totals = pnpaEmptySlipTotals(), list = [];
+  for(const r of rows){
+    if(branch && r[PC.BRANCH]!==branch) continue;
+    if(pnpaSlipBucketOf(r[PC.CUSTNPADATE], today)!=='today') continue;
+    pnpaAddRowToSlipTotals(totals, r);
+    list.push(r);
+  }
+  list.sort((a,b)=>b[PC.OS]-a[PC.OS]);
+  return { totals, list };
+}
+// This Week/This Month: Alok confirmed (2026-09-25, Recovery Dashboard
+// round) these are their own separate files from Head Office, already
+// scoped to that exact period -- every row shown as-is, branch-filtered only.
+function pnpaAggregatePeriod(rows, branch){
+  const totals = pnpaEmptySlipTotals(), list = [];
+  for(const r of (rows||[])){
+    if(branch && r[PC.BRANCH]!==branch) continue;
+    pnpaAddRowToSlipTotals(totals, r);
+    list.push(r);
+  }
+  list.sort((a,b)=>b[PC.OS]-a[PC.OS]);
+  return { totals, list };
+}
+// Reuses the already-existing, already-cached kccovAddressFor() (built for
+// KCC Overdue's own Download export) rather than a new resolver -- this
+// wrapper exists only so the ported table-rendering code below (which
+// matches Recovery Dashboard's own naming) needs no find-and-replace.
+function pnpaAddressFor(acctNo, custId){ return kccovAddressFor(acctNo, custId); }
+
+/* Remark: device-local only (same pattern as Recovery Dashboard's own PNPA
+   Slippage tab -- localStorage, not published, since there's no per-branch
+   sync backend for this yet). */
+const PNPA_REMARK_KEY = 'upgb-pnpa-remarks';
+function getPnpaRemarks(){
+  try{ return JSON.parse(localStorage.getItem(PNPA_REMARK_KEY) || '{}'); }catch(e){ return {}; }
+}
+function savePnpaRemark(acctNo, text){
+  try{
+    const map = getPnpaRemarks();
+    if(text && text.trim()) map[acctNo] = text.trim(); else delete map[acctNo];
+    localStorage.setItem(PNPA_REMARK_KEY, JSON.stringify(map));
+  }catch(e){ /* private mode / quota -- remark is a convenience, not critical */ }
+}
+window.savePnpaRemark = function(acctNo, inputEl){
+  savePnpaRemark(acctNo, inputEl.value);
+  const status = inputEl.closest('tr')?.querySelector('.pnpa-remark-status');
+  if(status){ status.textContent = 'Saved on this device'; status.classList.add('show'); setTimeout(()=>status.classList.remove('show'), 1600); }
+};
+
+let pnpaSlipTab = 'today';
+let pnpaSlipBranchFilter = '';
+let pnpaAddressFilter = '';
+let pnpaNameFilter = '';
+let pnpaSlipSchemeFilter = 'all';
+function setPnpaSlipTab(tab){ pnpaSlipTab = tab; renderPnpaSlipView(); }
+window.setPnpaSlipTab = setPnpaSlipTab;
+function setPnpaSlipScheme(scheme){ pnpaSlipSchemeFilter = scheme; renderPnpaSlipView(); }
+window.setPnpaSlipScheme = setPnpaSlipScheme;
+function pnpaSlipTodayCardClick(scheme){ pnpaSlipTab = 'today'; pnpaSlipSchemeFilter = scheme; renderPnpaSlipView(); }
+window.pnpaSlipTodayCardClick = pnpaSlipTodayCardClick;
+function setPnpaSlipBranch(branch){ pnpaSlipBranchFilter = branch; renderPnpaSlipView(); }
+window.setPnpaSlipBranch = setPnpaSlipBranch;
+
+let pnpaSlipSort = {key:'os', dir:'desc'};
+function sortPnpaSlipBy(key){ pnpaSlipSort = nextSort(pnpaSlipSort, key); renderPnpaSlipView(); }
+window.sortPnpaSlipBy = sortPnpaSlipBy;
+function renderPnpaSlipTable(list, emptyMessage){
+  if(pnpaAddressFilter){
+    const q = pnpaAddressFilter.trim().toLowerCase();
+    list = list.filter(r=>pnpaAddressFor(r[PC.ACCT], r[PC.CUST_ID]).toLowerCase().includes(q));
+  }
+  if(pnpaNameFilter){
+    const q = pnpaNameFilter.trim().toLowerCase();
+    list = list.filter(r=>String(r[PC.NAME]||'').toLowerCase().includes(q));
+  }
+  if(!list.length) return `<div class="empty-state"><p>${esc(emptyMessage || 'No accounts slipped in this period.')}</p></div>`;
+  const remarks = getPnpaRemarks();
+  const objs = list.map(r=>({
+    acctNo:r[PC.ACCT], name:r[PC.NAME], address:pnpaAddressFor(r[PC.ACCT], r[PC.CUST_ID]), os:r[PC.OS], cadu:r[PC.CADU],
+    custNpaDate:r[PC.CUSTNPADATE], remark: remarks[r[PC.ACCT]] || '',
+  }));
+  const sorted = applySort(objs, pnpaSlipSort);
+  const rowsHtml = sorted.map(o=>{
+    const acct = esc(o.acctNo);
+    const remark = esc(o.remark);
+    return `<tr>
+      <td class="clickable" onclick="showQuickAcctDetailByAcct('pnpa','${acct}')">${acct}</td>
+      <td class="tal clickable" onclick="showQuickAcctDetailByAcct('pnpa','${acct}')">${esc(o.name)||'—'}</td>
+      <td class="tal">${esc(o.address)||'—'}</td>
+      <td>${fmtINR2(o.os)}</td>
+      <td>${fmtINR2(o.cadu)}</td>
+      <td class="tal">${esc(o.custNpaDate)||'—'}</td>
+      <td class="tal">
+        <input type="text" class="pnpa-remark-input" value="${remark}" placeholder="Remark…" onchange="savePnpaRemark('${acct}', this)">
+        <span class="pnpa-remark-status">Saved on this device</span>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<div class="dash-table-wrap acct-list-scroll"><table class="dash-table pnpa-slip-table">
+    <thead id="pnpaSlipTableHead"><tr>
+      <th class="sortable" data-key="acctNo" tabindex="0" role="button" aria-sort="none" onclick="sortPnpaSlipBy('acctNo')">Account<span class="sort-ic">▾</span></th>
+      <th class="tal sortable" data-key="name" tabindex="0" role="button" aria-sort="none" onclick="sortPnpaSlipBy('name')">Name<span class="sort-ic">▾</span></th>
+      <th class="tal sortable" data-key="address" tabindex="0" role="button" aria-sort="none" onclick="sortPnpaSlipBy('address')">Address<span class="sort-ic">▾</span></th>
+      <th class="sortable" data-key="os" tabindex="0" role="button" aria-sort="none" onclick="sortPnpaSlipBy('os')">Balance<span class="sort-ic">▾</span></th>
+      <th class="sortable" data-key="cadu" tabindex="0" role="button" aria-sort="none" onclick="sortPnpaSlipBy('cadu')">CADU<span class="sort-ic">▾</span></th>
+      <th class="tal sortable" data-key="custNpaDate" tabindex="0" role="button" aria-sort="none" onclick="sortPnpaSlipBy('custNpaDate')">Cust NPA Date<span class="sort-ic">▾</span></th>
+      <th class="tal sortable" data-key="remark" tabindex="0" role="button" aria-sort="none" onclick="sortPnpaSlipBy('remark')">Remark <span class="pnpa-remark-note">(saved on this device only)</span><span class="sort-ic">▾</span></th>
+    </tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table></div>`;
+}
+function pnpaSlipSummaryChips(totals, activeScheme){
+  const chip = (key, cls, label, t) => `<div class="pnpa-slip-chip clickable${cls?' '+cls:''}${activeScheme===key?' active':''}" onclick="setPnpaSlipScheme('${key}')"><span class="lbl">${label}</span><span class="cnt">${t.cnt.toLocaleString('en-IN')} A/C</span><span class="amt">${fmtCr(t.amt)}</span></div>`;
+  return `<div class="pnpa-slip-summary">
+    ${chip('kcc','','KCC',totals.kcc)}
+    ${chip('nonkcc','','Non-KCC',totals.nonkcc)}
+    ${chip('all','total','Total',totals.all)}
+  </div>`;
+}
+function pnpaTodayHeroBlocks(todayTotals, pnpaSlipTab, activeScheme){
+  const isActive = (scheme) => pnpaSlipTab==='today' && activeScheme===scheme;
+  return `<div class="pnpa-today-hero">
+    <div class="pnpa-today-hero-head">Today's Slippage</div>
+    <div class="pnpa-today-hero-row">
+      <div class="pnpa-today-card total clickable${isActive('all')?' active':''}" onclick="pnpaSlipTodayCardClick('all')">
+        <span class="lbl">Total Slippage</span>
+        <span class="cnt">${todayTotals.all.cnt.toLocaleString('en-IN')} A/C</span>
+        <span class="amt">${fmtCr(todayTotals.all.amt)}</span>
+      </div>
+      <div class="pnpa-today-card kcc clickable${isActive('kcc')?' active':''}" onclick="pnpaSlipTodayCardClick('kcc')">
+        <span class="lbl">KCC Slippage</span>
+        <span class="cnt">${todayTotals.kcc.cnt.toLocaleString('en-IN')} A/C</span>
+        <span class="amt">${fmtCr(todayTotals.kcc.amt)}</span>
+      </div>
+      <div class="pnpa-today-card nonkcc clickable${isActive('nonkcc')?' active':''}" onclick="pnpaSlipTodayCardClick('nonkcc')">
+        <span class="lbl">Non-KCC &amp; Technical</span>
+        <span class="cnt">${todayTotals.nonkcc.cnt.toLocaleString('en-IN')} A/C</span>
+        <span class="amt">${fmtCr(todayTotals.nonkcc.amt)}</span>
+        <span class="note">Technical breakdown to be added</span>
+      </div>
+    </div>
+  </div>`;
+}
+function renderPnpaSlipView(){
+  const el = document.getElementById('pnpaSlipArea');
+  if(!el) return;
+  if(!PNPA_DATA){
+    el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading PNPA data…</p></div>`;
+    ensurePnpaDataLoaded(renderPnpaSlipView, () => {
+      el.innerHTML = `<div class="empty-state"><h2>Could not load PNPA data</h2><p>Check your internet connection, then tap Refresh.</p></div>`;
+    });
+    return;
+  }
+  if(!PNPA_WEEKLY_DATA && !__pnpaWeeklyFailed){ ensurePnpaWeeklyDataLoaded(renderPnpaSlipView); return; }
+  if(!PNPA_MONTHLY_DATA && !__pnpaMonthlyFailed){ ensurePnpaMonthlyDataLoaded(renderPnpaSlipView); return; }
+  const branch = pnpaSlipBranchFilter;
+  const today = new Date();
+  const agg = {
+    today: pnpaAggregateToday(PNPA_DATA.rows, branch, today),
+    week: pnpaAggregatePeriod(PNPA_WEEKLY_DATA ? PNPA_WEEKLY_DATA.rows : [], branch),
+    month: pnpaAggregatePeriod(PNPA_MONTHLY_DATA ? PNPA_MONTHLY_DATA.rows : [], branch),
+  };
+  const tabsHtml = `<div class="bank-tab-row">${PNPA_SLIP_TABS.map(t=>
+    `<button type="button" class="bank-tab-btn${pnpaSlipTab===t.key?' active':''}" onclick="setPnpaSlipTab('${t.key}')">${t.label} <span class="pnpa-tab-count">${agg[t.key].totals.all.cnt}</span></button>`
+  ).join('')}</div>`;
+  const active = agg[pnpaSlipTab];
+  const filteredList = pnpaSlipSchemeFilter==='all' ? active.list : active.list.filter(r=>pnpaSlipSchemeKey(r)===pnpaSlipSchemeFilter);
+  const schemeLabel = {all:'', kcc:'KCC ', nonkcc:'Non-KCC '}[pnpaSlipSchemeFilter];
+  const emptyMessages = {
+    today: `No ${schemeLabel}accounts slipped today.`,
+    week: __pnpaWeeklyFailed ? 'No Weekly PNPA file uploaded yet.' : `No ${schemeLabel}accounts in this week's slippage file.`,
+    month: __pnpaMonthlyFailed ? 'No Monthly PNPA file uploaded yet.' : `No ${schemeLabel}accounts in this month's slippage file.`,
+  };
+  const allBranches = [...new Set(PNPA_DATA.rows.map(r=>r[PC.BRANCH]))].sort();
+  const branchSelect = `<select id="pnpaSlipBranchSelect" class="dash-select" onchange="setPnpaSlipBranch(this.value)" style="max-width:200px"><option value="">All Branches</option>${allBranches.map(b=>`<option value="${esc(b)}"${branch===b?' selected':''}>${esc(b)}</option>`).join('')}</select>`;
+  el.innerHTML = `
+    ${pnpaTodayHeroBlocks(agg.today.totals, pnpaSlipTab, pnpaSlipSchemeFilter)}
+    ${tabsHtml}
+    <div class="bank-filter-row">
+      ${branchSelect}
+      <input type="text" id="pnpaAddressFilterInput" class="dash-select" placeholder="Filter by Address…" value="${esc(pnpaAddressFilter)}" style="max-width:220px">
+      <input type="text" id="pnpaNameFilterInput" class="dash-select" placeholder="Filter by Name…" value="${esc(pnpaNameFilter)}" style="max-width:220px">
+    </div>
+    ${pnpaSlipSummaryChips(active.totals, pnpaSlipSchemeFilter)}
+    ${renderPnpaSlipTable(filteredList, emptyMessages[pnpaSlipTab])}
+  `;
+  wireLiveTextFilter('pnpaAddressFilterInput', (v) => { pnpaAddressFilter = v; renderPnpaSlipView(); });
+  wireLiveTextFilter('pnpaNameFilterInput', (v) => { pnpaNameFilter = v; renderPnpaSlipView(); });
+  updateSortIcons('pnpaSlipTableHead', pnpaSlipSort);
+}
+window.renderPnpaSlipView = renderPnpaSlipView;
 
 /* ---------- KCC Overdue -- Hathras-only, restricted to 3 schemes, rich filters ----------
    Unlike PNPA, the source "KCC Overdue" file is already Hathras-scoped (confirmed
@@ -9859,6 +10188,7 @@ function switchView(view){
     if(view==='kccov') renderKccOverdue();
     if(view==='sma') renderSmaDashboard();
     if(view==='npadownload') renderNpaDownloadView();
+    if(view==='pnpaslip') renderPnpaSlipView();
     if(view==='otsapplicationform') renderOtsApplicationView();
     if(view==='npatarget') renderNpaTargetView();
     // Resume a still-valid OneDrive sign-in silently (no popup) whenever
@@ -10254,6 +10584,9 @@ window.dlExportThisFY = dlExportThisFY;
 window.dlExportKccThisMonth = dlExportKccThisMonth;
 window.dlExportKccThisFY = dlExportKccThisFY;
 window.dlExportKccTotal = dlExportKccTotal;
+window.dlExportPnpaDaily = dlExportPnpaDaily;
+window.dlExportPnpaWeekly = dlExportPnpaWeekly;
+window.dlExportPnpaMonthly = dlExportPnpaMonthly;
 window.setDlTab = setDlTab;
 }
 

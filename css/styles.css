@@ -3581,3 +3581,32 @@ table.bifurcation-table{border-collapse:collapse;width:100%;font-size:12px;backg
   #aggBar .agg-wf-key{gap:4px;margin-top:6px}
   #aggBar .agg-wf-key div{font-size:9px}
 }
+
+/* PNPA Slippage tab (2026-10-07) -- ported verbatim from Recovery
+   Dashboard's own already-shipped PNPA Slippage tab. */
+.pnpa-today-hero{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-md);padding:16px 16px 14px;margin-bottom:16px}
+.pnpa-today-hero-head{font-size:11px;text-transform:uppercase;letter-spacing:.6px;font-weight:800;color:var(--sub);margin-bottom:10px}
+.pnpa-today-hero-row{display:flex;gap:12px;flex-wrap:wrap}
+.pnpa-today-card{flex:1;min-width:150px;background:var(--stripe);border:1px solid var(--line);border-radius:var(--radius-md);padding:12px 14px;display:flex;flex-direction:column;gap:3px;cursor:pointer;transition:border-color .15s var(--ease),background .15s var(--ease),box-shadow .15s var(--ease)}
+.pnpa-today-card:hover{border-color:var(--accent);background:var(--accent-soft)}
+.pnpa-today-card.total{background:var(--accent-soft);border-color:var(--accent)}
+.pnpa-today-card.active{box-shadow:0 0 0 2px var(--accent) inset}
+.pnpa-today-card .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--sub);font-weight:800}
+.pnpa-today-card .cnt{font-size:12.5px;font-weight:700;color:var(--ink)}
+.pnpa-today-card .amt{font-size:17px;font-weight:800;color:var(--ink)}
+.pnpa-today-card .note{font-size:9.5px;color:var(--ink-mute);font-style:italic;margin-top:2px}
+.pnpa-tab-count{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:20px;background:rgba(0,0,0,.08);font-size:10.5px;font-weight:800}
+.pnpa-slip-summary{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+.pnpa-slip-chip{flex:1;min-width:130px;background:var(--stripe);border:1px solid var(--line);border-radius:var(--radius-md);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.pnpa-slip-chip.total{background:var(--accent-soft);border-color:var(--accent)}
+.pnpa-slip-chip.clickable{cursor:pointer;transition:border-color .15s var(--ease),box-shadow .15s var(--ease)}
+.pnpa-slip-chip.clickable:hover{border-color:var(--accent)}
+.pnpa-slip-chip.active{box-shadow:0 0 0 2px var(--accent) inset}
+.pnpa-slip-chip .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);font-weight:800}
+.pnpa-slip-chip .cnt{font-size:12.5px;font-weight:700;color:var(--ink)}
+.pnpa-slip-chip .amt{font-size:14.5px;font-weight:800;color:var(--ink)}
+.pnpa-remark-input{font:inherit;font-size:12px;padding:6px 9px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);width:100%;min-width:120px}
+.pnpa-remark-input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 2px var(--accent-soft)}
+.pnpa-remark-status{display:none;font-size:10px;color:var(--green);font-weight:700;margin-top:3px}
+.pnpa-remark-status.show{display:block}
+.pnpa-remark-note{font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink-mute);font-size:10px}
