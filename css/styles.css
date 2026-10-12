@@ -216,6 +216,11 @@
   /* NPA Notice's own "Notices" category (2026-10-12) -- every other hue
      above is already in use by an existing category/tile. */
   --tool-plum:#C15FAC; --tool-plum-soft:rgba(193,95,172,.16);
+  /* PDF Page Manager (2026-10-12) -- every hue above is already assigned
+     to an existing tile; this cool grey-blue is deliberately distinct
+     from every warm/jewel-tone hue already in use, a good fit for a
+     plain file-management utility. */
+  --tool-slate:#5B7290; --tool-slate-soft:rgba(91,114,144,.16);
   --emboss-rim:rgba(255,255,255,.05);
   --gold:#3A7BFF; --gold-l:#7FB0FF; --gold-d:#245BFF; --gold-soft:rgba(58,123,255,.12);
 
@@ -2006,6 +2011,7 @@ html,body{overscroll-behavior:none}
 .utility-card.tool-coral{--tool-color:var(--tool-coral);--tool-soft:var(--tool-coral-soft)}
 .utility-card.tool-sky{--tool-color:var(--tool-sky);--tool-soft:var(--tool-sky-soft)}
 .utility-card.tool-plum{--tool-color:var(--tool-plum);--tool-soft:var(--tool-plum-soft)}
+.utility-card.tool-slate{--tool-color:var(--tool-slate);--tool-soft:var(--tool-slate-soft)}
 .utility-card-icon{position:relative;display:flex;align-items:center;justify-content:center;width:52px;height:52px;flex-shrink:0;
   border-radius:50%;color:#fff;
   background:radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--tool-color, var(--accent-2)) 55%, white), var(--tool-color, var(--accent-2)) 78%);
@@ -2580,6 +2586,7 @@ header.app-head::before,.detail-head::before{
   --tool-coral:#B33F2C; --tool-coral-soft:rgba(179,63,44,.10);
   --tool-sky:#1E74B0; --tool-sky-soft:rgba(30,116,176,.10);
   --tool-plum:#8A3570; --tool-plum-soft:rgba(138,53,112,.10);
+  --tool-slate:#7E93AC; --tool-slate-soft:rgba(126,147,172,.14);
   --emboss-rim:rgba(255,255,255,.75);
   --gold:#1B4FE0; --gold-l:#3A7BFF; --gold-d:#123A9E; --gold-soft:rgba(27,79,224,.08);
   --stripe:rgba(62,50,30,.024); --stripe-label:rgba(62,50,30,.035);
@@ -3331,6 +3338,11 @@ table.bifurcation-table{border-collapse:collapse;width:100%;font-size:12px;backg
    view (2026-09-24). */
 #viewKccOverdueSummary .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
 #viewKccOverdueSummary .tool-frame{height:520px;min-height:0}
+/* PDF Page Manager (2026-10-12) -- same missing-override bug class already
+   documented above for NPA SOL Summary/Branch Split/KCC Overdue Summary;
+   added here from the start so it never bites this tool too. */
+#viewPdfPageManager .tool-frame-wrap{height:auto;min-height:0;border-radius:0;border:none;background:transparent}
+#viewPdfPageManager .tool-frame{height:720px;min-height:0}
 .onedrive-page-head{display:flex;flex-direction:column;gap:4px}
 .onedrive-page-title{display:flex;align-items:center;gap:10px;color:var(--ink)}
 .onedrive-page-title svg{color:var(--accent);flex-shrink:0}
