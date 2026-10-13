@@ -6983,3 +6983,58 @@ silently halted the rest of the script, leaving every later tab showing
 a static "₹0" and the tab-switcher itself never wired up. Fixed by
 moving the initialization to the top of the script, before any
 calculator panel runs.
+
+## 2026-10-13 (Phase 2) — CalcIndia: searchable directory, favourites, recent calculations
+
+Phase 1 (spec/sitemap/design-system/architecture, scoped to live inside
+the existing Utility Hub per Alok's answer — no React/TypeScript build,
+no separate PWA, no backend) was presented and approved. This round
+builds Phase 2: the shared registry/directory/favourites/recents shell,
+replacing the flat 5-button tab row in `tools/emi-calculator.html` (file
+path, view id `emicalculator`, iframe id `emiCalculatorFrame` all kept
+unchanged — only the on-screen title/tile text changes to "CalcIndia").
+
+- `CALCULATORS` registry (`{id, category, label, desc, keywords, icon}`)
+  and `CATEGORIES` metadata (All / ★ Favourites / Recent / Loans /
+  Deposits / Investments / Tax & Salary / Personal Finance / Currency /
+  Everyday) drive a searchable card grid generically, instead of a
+  hardcoded tab row — the architecture Phase 3 will add the next 20
+  calculators into without touching this shell again.
+- Search (type-ahead over label/desc/keywords), category pills, and a
+  card grid with a ★ favourite toggle, all per-device via localStorage
+  (`calcindia-favourites`/`calcindia-recent`, capped at 10 recents) — a
+  convenience, never treated as authoritative/synced state, same
+  established convention as every other localStorage use in this app.
+- Clicking a card opens that calculator's own existing, already-verified
+  panel completely unchanged (same ids, same math, same Print/Excel
+  logic) — only the outer navigation changed, not any calculator's
+  internals, to minimize regression risk to the already-shipped
+  EMI/FD/RD/SIP/NPS math.
+- Categories with no calculators yet (Tax & Salary, Personal Finance,
+  Currency, Everyday) show an honest "More calculators coming soon in
+  this category" empty state rather than a fabricated placeholder
+  calculator — directly following the spec's own "never create
+  placeholder calculators that display fabricated results" instruction.
+
+**Real bug found and fixed during verification**: the first implementation
+made each calculator "card" a `<button>` with a nested `<button>` (the ★
+favourite toggle) inside it — invalid HTML, since interactive elements
+cannot nest. The browser's parser auto-closed the outer button at the
+first nested one, silently scattering the rest of each card's markup
+(icon/title/category label) as sibling content instead of children,
+which broke search/category filtering and caused unrelated cards'
+favourite buttons to visually overlap and intercept clicks. Fixed by
+making the card a `<div role="button" tabindex="0">` with a real
+`<button>` nested inside (valid), plus a keydown handler so Enter/Space
+still activates it from the keyboard.
+
+Verified via Playwright: directory shows all 5 on load; search for
+"pension" returns exactly NPS; category filter for Deposits returns
+Fixed Deposit + Recurring Deposit; an empty category (Tax & Salary)
+shows the honest "coming soon" message; favouriting FD and reloading
+the page still shows it under ★ Favourites (localStorage persistence);
+opening EMI/FD via a card click still computes the exact same
+already-verified figures (₹12,939.76 / ₹1,41,477.82); opening a card
+via keyboard Enter works; Print still captures the active calculator's
+content; zero console errors; screenshotted light/dark/mobile (390px,
+no horizontal overflow, cards stack to one column, pills wrap).
