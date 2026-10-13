@@ -7102,3 +7102,71 @@ confirmed the hero figure, sub-line and schedule all recompute
 correctly; screenshotted both tools in light theme, dark theme, and at
 phone width (390px) — all render cleanly with no clipping or
 regression to the pre-existing math/behavior.
+
+## 2026-10-13 — CalcIndia: finish Phase 3 — all 21 remaining calculators, live
+
+Alok asked for the rest of CalcIndia's calculators to be built and shipped
+(the directory had only ever shipped 5 of the planned 26 — EMI/FD/RD/SIP/NPS
+— with Phase 3's own 21 additional registry entries left orphaned, no
+matching panel, from a much earlier round in this session that never got
+finished or merged).
+
+**14 of 21 were already built and verified in an earlier, uncommitted round
+of this same session** (Income Tax, Take-home Salary, GST, Gratuity, SWP,
+STP, Step-up SIP, CAGR, XIRR, PPF, Inflation Impact, Retirement Corpus, Debt
+Payoff, Credit Card Repayment) — that work was sitting, unmerged, on a
+long-stale branch. Recovered it cleanly via `git cherry-pick` of that
+branch's one commit onto a fresh branch off current `main` (a real 3-way
+merge, not a manual copy-paste — auto-merged with zero conflicts against
+this session's own earlier visual-redesign commit).
+
+**The remaining 7 were built fresh this round** (all "Everyday"/"Currency"
+category, previously orphaned registry-only entries): Currency Converter
+(live rates from the free, no-key `open.er-api.com` API, cached in
+`localStorage` with a visible "rates as of" timestamp, and a graceful
+fallback to the cached rates — clearly labeled as such — if the live fetch
+fails; never fabricates a rate if there's neither a live fetch nor any
+cache at all), Percentage (3 modes: X% of Y / X is what % of Y / increase
+or decrease Y by X%), Discount, Ratio (GCD-simplified, plus decimal and %
+split), Average (mean/median/mode/count/sum/min/max from a free-form list
+of numbers), Age Calculator (calendar-aware years/months/days, not a naive
+days÷365 division, plus days to the next birthday), and Date Difference.
+Every formula was independently verified in a Node harness driving the
+real, unmodified `new-calcs.js` source (not a re-derivation) against
+hand-computed expected values before being spliced into the real file.
+
+**A real, serious bug was found and fixed during end-to-end verification**:
+`window.__calcPrintHandlers`/`__calcExcelHandlers` (the dispatch objects
+every Phase-3 calculator registers itself into, added in the original,
+unmerged Phase-3 round) were only ever initialized late in the script —
+right before the Print/Excel button click-handlers are wired up — but
+every calculator's own IIFE tries to register into them immediately at
+load time, long before that point in the script runs. The very first
+Phase-3 calculator to load (Income Tax) threw `Cannot set properties of
+undefined` on its very first synchronous statement, which — same failure
+mode already documented once before in this file's own history for an
+unrelated bug — silently aborted every single calculator IIFE after it in
+the script, including the entire CalcIndia directory/search/favourites
+shell itself. The live directory screen would have shipped completely
+blank (0 cards, confirmed via Playwright before the fix). Fixed by moving
+both objects' initialization next to `window.__calcResults`'s own, at the
+very top of the script, before any calculator can run.
+
+Mirrored the finished file into Recovery Dashboard's byte-identical copy
+(confirmed via `diff`).
+
+Verified: `node --check`; HTML div-nesting balance (Python `html.parser`);
+CSS brace-balance; duplicate-element-id check across the whole file (229
+ids, zero duplicates); a Node DOM-stub harness driving the real new
+calculators' source directly (not a re-derivation) against hand-computed
+expected values for Discount/Ratio/all 3 Percentage modes/Average's full
+stat set/Age's calendar-aware y-m-d diff and next-birthday count/Date
+Difference; a full Playwright pass clicking through all 26 calculators
+confirming every panel renders with a real, non-broken hero value (this
+is what caught the handler-initialization bug above); a dedicated
+Currency Converter test mocking both the live-fetch-succeeds and the
+live-fetch-fails-but-a-cache-exists paths, confirming the converted
+amount, exchange rate, and "rates as of"/"showing cached" status text are
+all correct in both cases; screenshotted the full directory, the
+Currency Converter, the Average calculator, and the Age Calculator (incl.
+at phone width) in light and dark theme.

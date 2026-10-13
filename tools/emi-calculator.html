@@ -95,9 +95,10 @@
 
   .field{margin-bottom:14px}
   .field label{display:block;font-size:12.2px;color:var(--ink-muted);margin-bottom:5px;font-weight:600}
-  .field input[type=number],.field input[type=date],.field select{
+  .field input[type=number],.field input[type=date],.field select,.field textarea{
     width:100%;border:1px solid var(--line);background:var(--surface-muted);color:var(--ink);
     border-radius:8px;padding:9px 10px;font-size:14px;font-family:'IBM Plex Mono',monospace}
+  .field textarea{min-height:88px;resize:vertical;line-height:1.6}
   .field .unit-row{display:flex;gap:8px}
   .field .unit-row input{flex:1}
   .field .unit-row select{flex:0 0 110px}
@@ -496,7 +497,7 @@
           <div class="summary-card"><div class="label">You Save</div><div class="value" id="itrSavings">₹0</div></div>
         </div>
         <div class="toolbar">
-          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn">🖨 Print</button></div>
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
         </div>
         <details class="sched" open>
           <summary>Slab-wise breakdown (both regimes)</summary>
@@ -548,7 +549,7 @@
           <div class="summary-card"><div class="label">Employer PF (monthly)</div><div class="value" id="thsErPf">₹0</div></div>
         </div>
         <div class="toolbar">
-          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn">🖨 Print</button></div>
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
         </div>
         <details class="sched" open>
           <summary>Monthly breakdown</summary>
@@ -599,7 +600,7 @@
           <div class="summary-card"><div class="label">GST Amount</div><div class="value" id="gstTax">₹0</div></div>
         </div>
         <div class="toolbar">
-          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn">🖨 Print</button></div>
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
         </div>
       </div>
     </div>
@@ -629,7 +630,7 @@
           <div class="summary-card"><div class="label">Formula Amount (before cap)</div><div class="value" id="gratUncapped">₹0</div></div>
         </div>
         <div class="toolbar">
-          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn">🖨 Print</button></div>
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
         </div>
       </div>
     </div>
@@ -668,8 +669,8 @@
         </div>
         <div class="toolbar">
           <div class="tbgroup">
-            <button type="button" class="tbtn primary calc-print-btn">🖨 Print</button>
-            <button type="button" class="tbtn calc-excel-btn">📊 Export to Excel</button>
+            <button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button>
+            <button type="button" class="tbtn calc-excel-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg> Export to Excel</button>
           </div>
         </div>
         <details class="sched" open>
@@ -722,8 +723,8 @@
         </div>
         <div class="toolbar">
           <div class="tbgroup">
-            <button type="button" class="tbtn primary calc-print-btn">🖨 Print</button>
-            <button type="button" class="tbtn calc-excel-btn">📊 Export to Excel</button>
+            <button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button>
+            <button type="button" class="tbtn calc-excel-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg> Export to Excel</button>
           </div>
         </div>
         <details class="sched" open>
@@ -772,8 +773,8 @@
         </div>
         <div class="toolbar">
           <div class="tbgroup">
-            <button type="button" class="tbtn primary calc-print-btn">🖨 Print</button>
-            <button type="button" class="tbtn calc-excel-btn">📊 Export to Excel</button>
+            <button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button>
+            <button type="button" class="tbtn calc-excel-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg> Export to Excel</button>
           </div>
         </div>
         <details class="sched" open>
@@ -817,7 +818,7 @@
           <div class="summary-card"><div class="label">Total Return</div><div class="value" id="cagrTotalReturn">0%</div></div>
         </div>
         <div class="toolbar">
-          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn">🖨 Print</button></div>
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
         </div>
       </div>
     </div>
@@ -837,7 +838,7 @@
           <div class="value" id="xirrValue">—</div>
         </div>
         <div class="toolbar">
-          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn">🖨 Print</button></div>
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
         </div>
         <div class="note" id="xirrNote"></div>
       </div>
@@ -874,8 +875,8 @@
         </div>
         <div class="toolbar">
           <div class="tbgroup">
-            <button type="button" class="tbtn primary calc-print-btn">🖨 Print</button>
-            <button type="button" class="tbtn calc-excel-btn">📊 Export to Excel</button>
+            <button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button>
+            <button type="button" class="tbtn calc-excel-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg> Export to Excel</button>
           </div>
         </div>
         <details class="sched" open>
@@ -925,7 +926,7 @@
           <div class="summary-card"><div class="label">Purchasing Power Lost</div><div class="value" id="inflPowerLost">0%</div></div>
         </div>
         <div class="toolbar">
-          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn">🖨 Print</button></div>
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
         </div>
       </div>
     </div>
@@ -976,7 +977,7 @@
           <div class="summary-card"><div class="label">Required Monthly SIP</div><div class="value" id="retRequiredSip">₹0</div></div>
         </div>
         <div class="toolbar">
-          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn">🖨 Print</button></div>
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
         </div>
       </div>
     </div>
@@ -1011,7 +1012,7 @@
           <div class="summary-card"><div class="label">Total Paid</div><div class="value" id="debtTotalPaid">₹0</div></div>
         </div>
         <div class="toolbar">
-          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn">🖨 Print</button></div>
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
         </div>
       </div>
     </div>
@@ -1045,9 +1046,262 @@
           <div class="summary-card"><div class="label">Total Paid</div><div class="value" id="ccTotalPaid">₹0</div></div>
         </div>
         <div class="toolbar">
-          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn">🖨 Print</button></div>
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
         </div>
         <div class="note" id="ccNote"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CURRENCY CONVERTER ================= -->
+  <div class="calc-panel" data-calc="curr">
+    <div class="split">
+      <div class="panel">
+        <h2 class="sec">Convert</h2>
+        <div class="field">
+          <label>Amount</label>
+          <input type="number" id="currAmount" value="1000" min="0" step="10">
+        </div>
+        <div class="field">
+          <label>From</label>
+          <select id="currFrom">
+            <option value="USD" selected>USD — US Dollar</option>
+            <option value="INR">INR — Indian Rupee</option>
+            <option value="EUR">EUR — Euro</option>
+            <option value="GBP">GBP — British Pound</option>
+            <option value="JPY">JPY — Japanese Yen</option>
+            <option value="AUD">AUD — Australian Dollar</option>
+            <option value="CAD">CAD — Canadian Dollar</option>
+            <option value="SGD">SGD — Singapore Dollar</option>
+            <option value="AED">AED — UAE Dirham</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>To</label>
+          <select id="currTo">
+            <option value="USD">USD — US Dollar</option>
+            <option value="INR" selected>INR — Indian Rupee</option>
+            <option value="EUR">EUR — Euro</option>
+            <option value="GBP">GBP — British Pound</option>
+            <option value="JPY">JPY — Japanese Yen</option>
+            <option value="AUD">AUD — Australian Dollar</option>
+            <option value="CAD">CAD — Canadian Dollar</option>
+            <option value="SGD">SGD — Singapore Dollar</option>
+            <option value="AED">AED — UAE Dirham</option>
+          </select>
+        </div>
+        <div class="note" id="currStatus">Fetching live rates…</div>
+      </div>
+      <div class="panel">
+        <div class="hero">
+          <div class="label">Converted Amount</div>
+          <div class="value" id="currResult">—</div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-card"><div class="label">Exchange Rate</div><div class="value" id="currRate" style="font-size:14px">—</div></div>
+          <div class="summary-card"><div class="label">Rates As Of</div><div class="value" id="currAsOf" style="font-size:12px">—</div></div>
+        </div>
+        <div class="toolbar">
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PERCENTAGE ================= -->
+  <div class="calc-panel" data-calc="pct">
+    <div class="split">
+      <div class="panel">
+        <h2 class="sec">What do you want to work out?</h2>
+        <div class="toggle-row">
+          <button type="button" class="toggle-btn active" id="pctModeOf" data-mode="of">X% of Y</button>
+          <button type="button" class="toggle-btn" id="pctModeWhat" data-mode="what">X is what % of Y</button>
+          <button type="button" class="toggle-btn" id="pctModeChange" data-mode="change">Increase/decrease Y by X%</button>
+        </div>
+        <div class="field">
+          <label id="pctLabelX">X (%)</label>
+          <input type="number" id="pctX" value="25" step="0.5">
+        </div>
+        <div class="field">
+          <label id="pctLabelY">Y</label>
+          <input type="number" id="pctY" value="400" step="1">
+        </div>
+        <div class="field" id="pctDirField" style="display:none">
+          <label>Direction</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn active" id="pctDirInc" data-dir="inc">Increase</button>
+            <button type="button" class="toggle-btn" id="pctDirDec" data-dir="dec">Decrease</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="hero">
+          <div class="label" id="pctResultLabel">Result</div>
+          <div class="value" id="pctResult">0</div>
+        </div>
+        <div class="note" id="pctExplain"></div>
+        <div class="toolbar">
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DISCOUNT ================= -->
+  <div class="calc-panel" data-calc="disc">
+    <div class="split">
+      <div class="panel">
+        <h2 class="sec">Discount details</h2>
+        <div class="field">
+          <label>Original Price (₹)</label>
+          <input type="number" id="discPrice" value="1000" min="0" step="10">
+        </div>
+        <div class="field">
+          <label>Discount (%)</label>
+          <input type="number" id="discPct" value="20" min="0" max="100" step="1">
+        </div>
+      </div>
+      <div class="panel">
+        <div class="hero">
+          <div class="label">Discounted Price</div>
+          <div class="value" id="discFinal">₹0</div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-card"><div class="label">You Save</div><div class="value" id="discSaved">₹0</div></div>
+          <div class="summary-card"><div class="label">Discount</div><div class="value" id="discPctOut">0%</div></div>
+        </div>
+        <div class="toolbar">
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RATIO ================= -->
+  <div class="calc-panel" data-calc="ratio">
+    <div class="split">
+      <div class="panel">
+        <h2 class="sec">Ratio details</h2>
+        <div class="field">
+          <label>Value A</label>
+          <input type="number" id="ratioA" value="48" min="0" step="1">
+        </div>
+        <div class="field">
+          <label>Value B</label>
+          <input type="number" id="ratioB" value="18" min="0" step="1">
+        </div>
+      </div>
+      <div class="panel">
+        <div class="hero">
+          <div class="label">Simplified Ratio</div>
+          <div class="value" id="ratioSimplified">—</div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-card"><div class="label">Decimal (A ÷ B)</div><div class="value" id="ratioDecimal">0</div></div>
+          <div class="summary-card"><div class="label">Share of Total</div><div class="value" id="ratioSplit" style="font-size:14px">0% : 0%</div></div>
+        </div>
+        <div class="toolbar">
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= AVERAGE ================= -->
+  <div class="calc-panel" data-calc="avg">
+    <div class="split">
+      <div class="panel">
+        <h2 class="sec">Enter your numbers</h2>
+        <div class="field">
+          <label>Numbers (comma, space or new-line separated)</label>
+          <textarea id="avgNumbers">4, 8, 6, 5, 3, 2, 8, 9, 8</textarea>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="hero">
+          <div class="label">Mean (Average)</div>
+          <div class="value" id="avgMean">0</div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-card"><div class="label">Median</div><div class="value" id="avgMedian">0</div></div>
+          <div class="summary-card"><div class="label">Mode</div><div class="value" id="avgMode" style="font-size:16px">—</div></div>
+          <div class="summary-card"><div class="label">Count</div><div class="value" id="avgCount">0</div></div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-card"><div class="label">Sum</div><div class="value" id="avgSum">0</div></div>
+          <div class="summary-card"><div class="label">Min</div><div class="value" id="avgMin">0</div></div>
+          <div class="summary-card"><div class="label">Max</div><div class="value" id="avgMax">0</div></div>
+        </div>
+        <div class="toolbar">
+          <div class="tbgroup">
+            <button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button>
+            <button type="button" class="tbtn calc-excel-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg> Export to Excel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= AGE CALCULATOR ================= -->
+  <div class="calc-panel" data-calc="age">
+    <div class="split">
+      <div class="panel">
+        <h2 class="sec">Dates</h2>
+        <div class="field">
+          <label>Date of Birth</label>
+          <input type="date" id="ageDob" value="1990-03-15">
+        </div>
+        <div class="field">
+          <label>As Of Date</label>
+          <input type="date" id="ageAsOf">
+        </div>
+      </div>
+      <div class="panel">
+        <div class="hero">
+          <div class="label">Exact Age</div>
+          <div class="value" id="ageResult" style="font-size:24px">—</div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-card"><div class="label">Total Days Lived</div><div class="value" id="ageTotalDays">0</div></div>
+          <div class="summary-card"><div class="label">Total Months Lived</div><div class="value" id="ageTotalMonths">0</div></div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-card"><div class="label">Next Birthday In</div><div class="value" id="ageNextBday" style="font-size:16px">—</div></div>
+        </div>
+        <div class="toolbar">
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DATE DIFFERENCE ================= -->
+  <div class="calc-panel" data-calc="datediff">
+    <div class="split">
+      <div class="panel">
+        <h2 class="sec">Dates</h2>
+        <div class="field">
+          <label>Start Date</label>
+          <input type="date" id="ddFrom" value="2026-01-01">
+        </div>
+        <div class="field">
+          <label>End Date</label>
+          <input type="date" id="ddTo">
+        </div>
+      </div>
+      <div class="panel">
+        <div class="hero">
+          <div class="label">Total Days Between</div>
+          <div class="value" id="ddDays">0</div>
+        </div>
+        <div class="summary-row">
+          <div class="summary-card"><div class="label">Weeks</div><div class="value" id="ddWeeks">0</div></div>
+          <div class="summary-card"><div class="label">Months (approx.)</div><div class="value" id="ddMonths">0</div></div>
+          <div class="summary-card"><div class="label">Years (approx.)</div><div class="value" id="ddYears">0</div></div>
+        </div>
+        <div class="toolbar">
+          <div class="tbgroup"><button type="button" class="tbtn primary calc-print-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18h12v-6H6z"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg> Print</button></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1063,9 +1317,22 @@
   'use strict';
 
   // Initialized before any calculator IIFE runs its first render() call,
-  // since each one writes into this object immediately on load.
+  // since each one writes into this object immediately on load. Every
+  // Phase-3 calculator also registers window.__calcPrintHandlers[id] /
+  // __calcExcelHandlers[id] synchronously at load time (inside its own
+  // IIFE, right after its first render()) -- those two objects must
+  // exist before the very first such registration (Income Tax, the
+  // first Phase-3 calculator) runs, not just before the print/excel
+  // button click-handlers are wired up later in this same script.
+  // Getting this wrong throws "Cannot set properties of undefined" on
+  // the very first Phase-3 calculator and silently aborts every
+  // calculator IIFE after it in the script -- the exact failure mode
+  // already documented once before in this file's own history for a
+  // different bug (see the CalcIndia Phase 2 entry in the roadmap).
   window.__calcResults = window.__calcResults || {};
   window.__calcRenderers = window.__calcRenderers || {};
+  window.__calcPrintHandlers = window.__calcPrintHandlers || {};
+  window.__calcExcelHandlers = window.__calcExcelHandlers || {};
 
   // ---------- shared helpers ----------
   function fmtINR(v){
@@ -2406,6 +2673,389 @@
       if(!r) return;
       genericPrintSchedule('Credit Card Repayment Calculator', 'Months to Pay Off', r.neverPaysOff?'Never':r.months, ['Metric','Value'],
         r.neverPaysOff ? [] : [['Total Interest', fmtINR(r.totalInterest)], ['Total Paid', fmtINR(r.totalPaid)]]);
+    };
+    render();
+  })();
+
+  // =====================================================================
+  // 20. CURRENCY CONVERTER -- live rates from a free, no-key public API
+  //     (open.er-api.com, base USD), cached in localStorage with a
+  //     visible "rates as of" timestamp; falls back to the cached rates
+  //     (clearly labeled as such) if the live fetch fails, and only shows
+  //     a hard error if there is neither a live fetch nor any cache at
+  //     all -- never fabricates a rate.
+  // =====================================================================
+  (function(){
+    var el = {};
+    ['currAmount','currFrom','currTo','currStatus','currResult','currRate','currAsOf'].forEach(function(id){ el[id] = document.getElementById(id); });
+    var FX_CACHE_KEY = 'calcindia-fx-rates';
+    var rates = null, fetchedAt = null;
+
+    function loadCache(){
+      try{
+        var raw = localStorage.getItem(FX_CACHE_KEY);
+        if(!raw) return null;
+        var obj = JSON.parse(raw);
+        if(obj && obj.rates && obj.fetchedAt) return obj;
+      }catch(e){}
+      return null;
+    }
+    function saveCache(r, t){
+      try{ localStorage.setItem(FX_CACHE_KEY, JSON.stringify({rates:r, fetchedAt:t})); }catch(e){}
+    }
+    function fmtWhen(iso){
+      var d = new Date(iso);
+      function p(n){ return n<10 ? '0'+n : ''+n; }
+      return p(d.getDate())+'-'+p(d.getMonth()+1)+'-'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());
+    }
+
+    function render(){
+      if(!rates){
+        el.currResult.textContent = '—';
+        el.currRate.textContent = '—';
+        window.__calcResults.curr = null;
+        return;
+      }
+      var amount = Number(el.currAmount.value) || 0;
+      var from = el.currFrom.value, to = el.currTo.value;
+      if(!rates[from] || !rates[to]){ el.currResult.textContent = '—'; window.__calcResults.curr = null; return; }
+      var amountInUsd = amount / rates[from];
+      var result = amountInUsd * rates[to];
+      var oneRate = rates[to] / rates[from];
+      el.currResult.textContent = result.toLocaleString('en-IN', {maximumFractionDigits:2}) + ' ' + to;
+      el.currRate.textContent = '1 ' + from + ' = ' + oneRate.toLocaleString('en-IN', {maximumFractionDigits:4}) + ' ' + to;
+      el.currAsOf.textContent = fetchedAt ? fmtWhen(fetchedAt) : '—';
+      window.__calcResults.curr = { amount:amount, from:from, to:to, result:result, oneRate:oneRate, fetchedAt:fetchedAt };
+    }
+
+    function applyRates(r, t, fromCacheOnly){
+      rates = r; fetchedAt = t;
+      el.currStatus.textContent = fromCacheOnly
+        ? 'Showing cached rates from ' + fmtWhen(t) + ' — could not fetch live rates (check your connection).'
+        : 'Live rates loaded — as of ' + fmtWhen(t) + '.';
+      render();
+    }
+
+    var cached = loadCache();
+    if(cached) applyRates(cached.rates, cached.fetchedAt, true);
+    else el.currStatus.textContent = 'Fetching live rates…';
+
+    fetch('https://open.er-api.com/v6/latest/USD')
+      .then(function(res){ if(!res.ok) throw new Error('bad response'); return res.json(); })
+      .then(function(data){
+        if(!data || !data.rates) throw new Error('no rates in response');
+        var now = new Date().toISOString();
+        saveCache(data.rates, now);
+        applyRates(data.rates, now, false);
+      })
+      .catch(function(){
+        if(!cached){
+          el.currStatus.textContent = 'Could not load exchange rates — check your internet connection and reopen this calculator.';
+        }
+      });
+
+    ['currAmount','currFrom','currTo'].forEach(function(id){
+      var node = document.getElementById(id);
+      node.addEventListener('input', render); node.addEventListener('change', render);
+    });
+    window.__calcRenderers.curr = render;
+    window.__calcPrintHandlers.curr = function(){
+      var r = window.__calcResults.curr;
+      if(!r) return;
+      genericPrintSchedule('Currency Converter', 'Converted Amount', r.amount + ' ' + r.from + ' = ' + r.result.toLocaleString('en-IN',{maximumFractionDigits:2}) + ' ' + r.to,
+        ['Metric','Value'], [['Exchange Rate', '1 '+r.from+' = '+r.oneRate.toFixed(4)+' '+r.to], ['Rates As Of', r.fetchedAt ? fmtWhen(r.fetchedAt) : '—']]);
+    };
+  })();
+
+  // =====================================================================
+  // 21. PERCENTAGE -- 3 modes: X% of Y / X is what % of Y / increase or
+  //     decrease Y by X%.
+  // =====================================================================
+  (function(){
+    var el = {};
+    ['pctModeOf','pctModeWhat','pctModeChange','pctX','pctY','pctLabelX','pctLabelY','pctDirField','pctDirInc','pctDirDec','pctResultLabel','pctResult','pctExplain']
+      .forEach(function(id){ el[id] = document.getElementById(id); });
+    var mode = 'of', dir = 'inc';
+
+    function setMode(m){
+      mode = m;
+      el.pctModeOf.classList.toggle('active', m==='of');
+      el.pctModeWhat.classList.toggle('active', m==='what');
+      el.pctModeChange.classList.toggle('active', m==='change');
+      el.pctDirField.style.display = m==='change' ? '' : 'none';
+      if(m==='of'){ el.pctLabelX.textContent = 'X (%)'; el.pctLabelY.textContent = 'Y'; }
+      else if(m==='what'){ el.pctLabelX.textContent = 'X'; el.pctLabelY.textContent = 'Y'; }
+      else { el.pctLabelX.textContent = 'X (%)'; el.pctLabelY.textContent = 'Y (base value)'; }
+      render();
+    }
+    function setDir(d){
+      dir = d;
+      el.pctDirInc.classList.toggle('active', d==='inc');
+      el.pctDirDec.classList.toggle('active', d==='dec');
+      render();
+    }
+    function render(){
+      var x = Number(el.pctX.value) || 0;
+      var y = Number(el.pctY.value) || 0;
+      var result, explain;
+      if(mode==='of'){
+        result = y * x / 100;
+        explain = x + '% of ' + y + ' = ' + result.toLocaleString('en-IN',{maximumFractionDigits:2});
+      } else if(mode==='what'){
+        result = y !== 0 ? (x/y*100) : 0;
+        explain = x + ' is ' + result.toLocaleString('en-IN',{maximumFractionDigits:2}) + '% of ' + y;
+      } else {
+        result = dir==='inc' ? y*(1+x/100) : y*(1-x/100);
+        explain = y + ' ' + (dir==='inc'?'increased':'decreased') + ' by ' + x + '% = ' + result.toLocaleString('en-IN',{maximumFractionDigits:2});
+      }
+      el.pctResultLabel.textContent = mode==='of' ? (x+'% of '+y) : (mode==='what' ? 'X as a % of Y' : (y+' '+(dir==='inc'?'↑':'↓')+' '+x+'%'));
+      el.pctResult.textContent = (mode==='what' ? result.toLocaleString('en-IN',{maximumFractionDigits:2})+'%' : result.toLocaleString('en-IN',{maximumFractionDigits:2}));
+      el.pctExplain.textContent = explain;
+      window.__calcResults.pct = { mode:mode, x:x, y:y, dir:dir, result:result, explain:explain };
+    }
+    el.pctModeOf.addEventListener('click', function(){ setMode('of'); });
+    el.pctModeWhat.addEventListener('click', function(){ setMode('what'); });
+    el.pctModeChange.addEventListener('click', function(){ setMode('change'); });
+    el.pctDirInc.addEventListener('click', function(){ setDir('inc'); });
+    el.pctDirDec.addEventListener('click', function(){ setDir('dec'); });
+    ['pctX','pctY'].forEach(function(id){
+      var node = document.getElementById(id);
+      node.addEventListener('input', render); node.addEventListener('change', render);
+    });
+    window.__calcRenderers.pct = render;
+    window.__calcPrintHandlers.pct = function(){
+      var r = window.__calcResults.pct;
+      if(!r) return;
+      genericPrintSchedule('Percentage Calculator', 'Result', r.explain, ['Metric','Value'], [['X', r.x], ['Y', r.y], ['Mode', r.mode]]);
+    };
+    render();
+  })();
+
+  // =====================================================================
+  // 22. DISCOUNT
+  // =====================================================================
+  (function(){
+    var el = {};
+    ['discPrice','discPct','discFinal','discSaved','discPctOut'].forEach(function(id){ el[id] = document.getElementById(id); });
+    function render(){
+      var price = Number(el.discPrice.value) || 0;
+      var pct = Number(el.discPct.value) || 0;
+      var saved = price * pct / 100;
+      var finalPrice = price - saved;
+      el.discFinal.textContent = fmtINR2(finalPrice);
+      el.discSaved.textContent = fmtINR2(saved);
+      el.discPctOut.textContent = pct + '%';
+      window.__calcResults.disc = { price:price, pct:pct, saved:saved, finalPrice:finalPrice };
+    }
+    ['discPrice','discPct'].forEach(function(id){
+      var node = document.getElementById(id);
+      node.addEventListener('input', render); node.addEventListener('change', render);
+    });
+    window.__calcRenderers.disc = render;
+    window.__calcPrintHandlers.disc = function(){
+      var r = window.__calcResults.disc;
+      if(!r) return;
+      genericPrintSchedule('Discount Calculator', 'Discounted Price', fmtINR2(r.finalPrice), ['Metric','Value'],
+        [['Original Price', fmtINR2(r.price)], ['Discount %', r.pct+'%'], ['Amount Saved', fmtINR2(r.saved)]]);
+    };
+    render();
+  })();
+
+  // =====================================================================
+  // 23. RATIO -- simplified via GCD, plus the decimal and % split.
+  // =====================================================================
+  (function(){
+    var el = {};
+    ['ratioA','ratioB','ratioSimplified','ratioDecimal','ratioSplit'].forEach(function(id){ el[id] = document.getElementById(id); });
+    function gcd(a,b){ a=Math.abs(a); b=Math.abs(b); while(b){ var t=b; b=a%b; a=t; } return a || 1; }
+    function render(){
+      var a = Number(el.ratioA.value) || 0;
+      var b = Number(el.ratioB.value) || 0;
+      if(a===0 && b===0){
+        el.ratioSimplified.textContent = '—'; el.ratioDecimal.textContent = '0'; el.ratioSplit.textContent = '0% : 0%';
+        window.__calcResults.ratio = null;
+        return;
+      }
+      var g = gcd(Math.round(a), Math.round(b));
+      var sa = a/g, sb = b/g;
+      var decimal = b!==0 ? (a/b) : 0;
+      var total = a+b;
+      var pctA = total!==0 ? (a/total*100) : 0;
+      var pctB = total!==0 ? (b/total*100) : 0;
+      el.ratioSimplified.textContent = sa + ' : ' + sb;
+      el.ratioDecimal.textContent = decimal.toLocaleString('en-IN',{maximumFractionDigits:4});
+      el.ratioSplit.textContent = pctA.toFixed(1) + '% : ' + pctB.toFixed(1) + '%';
+      window.__calcResults.ratio = { a:a, b:b, sa:sa, sb:sb, decimal:decimal, pctA:pctA, pctB:pctB };
+    }
+    ['ratioA','ratioB'].forEach(function(id){
+      var node = document.getElementById(id);
+      node.addEventListener('input', render); node.addEventListener('change', render);
+    });
+    window.__calcRenderers.ratio = render;
+    window.__calcPrintHandlers.ratio = function(){
+      var r = window.__calcResults.ratio;
+      if(!r) return;
+      genericPrintSchedule('Ratio Calculator', 'Simplified Ratio', r.sa+' : '+r.sb, ['Metric','Value'],
+        [['A', r.a], ['B', r.b], ['Decimal (A ÷ B)', r.decimal.toFixed(4)], ['Share of Total', r.pctA.toFixed(1)+'% : '+r.pctB.toFixed(1)+'%']]);
+    };
+    render();
+  })();
+
+  // =====================================================================
+  // 24. AVERAGE -- mean, median, mode, count, sum, min, max from a
+  //     comma/space/newline-separated list of numbers.
+  // =====================================================================
+  (function(){
+    var el = {};
+    ['avgNumbers','avgMean','avgMedian','avgMode','avgCount','avgSum','avgMin','avgMax'].forEach(function(id){ el[id] = document.getElementById(id); });
+    function parseNumbers(text){
+      return text.split(/[,\s]+/).map(function(s){ return s.trim(); }).filter(function(s){ return s!==''; }).map(Number).filter(function(n){ return !isNaN(n); });
+    }
+    function render(){
+      var nums = parseNumbers(el.avgNumbers.value);
+      if(!nums.length){
+        el.avgMean.textContent='0'; el.avgMedian.textContent='0'; el.avgMode.textContent='—';
+        el.avgCount.textContent='0'; el.avgSum.textContent='0'; el.avgMin.textContent='0'; el.avgMax.textContent='0';
+        window.__calcResults.avg = null;
+        return;
+      }
+      var sum = nums.reduce(function(a,b){return a+b;},0);
+      var mean = sum/nums.length;
+      var sorted = nums.slice().sort(function(a,b){return a-b;});
+      var mid = Math.floor(sorted.length/2);
+      var median = sorted.length%2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2;
+      var freq = {};
+      nums.forEach(function(n){ freq[n] = (freq[n]||0)+1; });
+      var maxFreq = Math.max.apply(null, Object.keys(freq).map(function(k){return freq[k];}));
+      var modes = Object.keys(freq).filter(function(k){ return freq[k]===maxFreq; }).map(Number);
+      var modeText = maxFreq > 1 ? modes.join(', ') : 'No mode (all unique)';
+      el.avgMean.textContent = mean.toLocaleString('en-IN',{maximumFractionDigits:2});
+      el.avgMedian.textContent = median.toLocaleString('en-IN',{maximumFractionDigits:2});
+      el.avgMode.textContent = modeText;
+      el.avgCount.textContent = nums.length;
+      el.avgSum.textContent = sum.toLocaleString('en-IN',{maximumFractionDigits:2});
+      el.avgMin.textContent = sorted[0].toLocaleString('en-IN',{maximumFractionDigits:2});
+      el.avgMax.textContent = sorted[sorted.length-1].toLocaleString('en-IN',{maximumFractionDigits:2});
+      window.__calcResults.avg = { nums:nums, mean:mean, median:median, modeText:modeText, sum:sum, min:sorted[0], max:sorted[sorted.length-1] };
+    }
+    el.avgNumbers.addEventListener('input', render);
+    window.__calcRenderers.avg = render;
+    window.__calcPrintHandlers.avg = function(){
+      var r = window.__calcResults.avg;
+      if(!r) return;
+      genericPrintSchedule('Average Calculator', 'Mean', r.mean.toFixed(2), ['Metric','Value'],
+        [['Count', r.nums.length], ['Sum', r.sum], ['Median', r.median], ['Mode', r.modeText], ['Min', r.min], ['Max', r.max]]);
+    };
+    window.__calcExcelHandlers.avg = function(){
+      var r = window.__calcResults.avg;
+      if(!r) return;
+      var rows = r.nums.map(function(n,i){ return [i+1, n]; });
+      genericExportExcel('Numbers', ['#','Value'], rows, 'Average_Numbers_' + Date.now() + '.xlsx');
+    };
+    render();
+  })();
+
+  // =====================================================================
+  // 25. AGE CALCULATOR -- calendar-aware years/months/days (not a naive
+  //     days/365 division), plus days to the next birthday.
+  // =====================================================================
+  (function(){
+    var el = {};
+    ['ageDob','ageAsOf','ageResult','ageTotalDays','ageTotalMonths','ageNextBday'].forEach(function(id){ el[id] = document.getElementById(id); });
+    (function initToday(){
+      var t = new Date();
+      function p(n){ return n<10?'0'+n:''+n; }
+      el.ageAsOf.value = t.getFullYear()+'-'+p(t.getMonth()+1)+'-'+p(t.getDate());
+    })();
+    function parseDate(v){
+      if(!v) return null;
+      var parts = v.split('-');
+      return new Date(Number(parts[0]), Number(parts[1])-1, Number(parts[2]));
+    }
+    function render(){
+      var dob = parseDate(el.ageDob.value);
+      var asOf = parseDate(el.ageAsOf.value);
+      if(!dob || !asOf || asOf < dob){
+        el.ageResult.textContent = '—'; el.ageTotalDays.textContent='0'; el.ageTotalMonths.textContent='0'; el.ageNextBday.textContent='—';
+        window.__calcResults.age = null;
+        return;
+      }
+      var y = asOf.getFullYear() - dob.getFullYear();
+      var m = asOf.getMonth() - dob.getMonth();
+      var d = asOf.getDate() - dob.getDate();
+      if(d < 0){ m -= 1; var prevMonthLastDay = new Date(asOf.getFullYear(), asOf.getMonth(), 0).getDate(); d += prevMonthLastDay; }
+      if(m < 0){ y -= 1; m += 12; }
+      var totalDays = Math.round((asOf - dob) / 86400000);
+      var totalMonths = y*12 + m;
+      var nextBday = new Date(asOf.getFullYear(), dob.getMonth(), dob.getDate());
+      if(nextBday < asOf){ nextBday = new Date(asOf.getFullYear()+1, dob.getMonth(), dob.getDate()); }
+      var daysToNext = Math.round((nextBday - asOf) / 86400000);
+      el.ageResult.textContent = y + ' years, ' + m + ' months, ' + d + ' days';
+      el.ageTotalDays.textContent = totalDays.toLocaleString('en-IN');
+      el.ageTotalMonths.textContent = totalMonths.toLocaleString('en-IN');
+      el.ageNextBday.textContent = daysToNext===0 ? 'Today!' : (daysToNext + ' day' + (daysToNext===1?'':'s'));
+      window.__calcResults.age = { y:y, m:m, d:d, totalDays:totalDays, totalMonths:totalMonths, daysToNext:daysToNext };
+    }
+    ['ageDob','ageAsOf'].forEach(function(id){
+      var node = document.getElementById(id);
+      node.addEventListener('input', render); node.addEventListener('change', render);
+    });
+    window.__calcRenderers.age = render;
+    window.__calcPrintHandlers.age = function(){
+      var r = window.__calcResults.age;
+      if(!r) return;
+      genericPrintSchedule('Age Calculator', 'Exact Age', r.y+' years, '+r.m+' months, '+r.d+' days', ['Metric','Value'],
+        [['Total Days Lived', r.totalDays], ['Total Months Lived', r.totalMonths], ['Next Birthday In', r.daysToNext+' day(s)']]);
+    };
+    render();
+  })();
+
+  // =====================================================================
+  // 26. DATE DIFFERENCE -- total days between two dates (order-independent),
+  //     plus weeks and approximate months/years.
+  // =====================================================================
+  (function(){
+    var el = {};
+    ['ddFrom','ddTo','ddDays','ddWeeks','ddMonths','ddYears'].forEach(function(id){ el[id] = document.getElementById(id); });
+    (function initToday(){
+      var t = new Date();
+      function p(n){ return n<10?'0'+n:''+n; }
+      el.ddTo.value = t.getFullYear()+'-'+p(t.getMonth()+1)+'-'+p(t.getDate());
+    })();
+    function parseDate(v){
+      if(!v) return null;
+      var parts = v.split('-');
+      return new Date(Number(parts[0]), Number(parts[1])-1, Number(parts[2]));
+    }
+    function render(){
+      var a = parseDate(el.ddFrom.value);
+      var b = parseDate(el.ddTo.value);
+      if(!a || !b){
+        el.ddDays.textContent='0'; el.ddWeeks.textContent='0'; el.ddMonths.textContent='0'; el.ddYears.textContent='0';
+        window.__calcResults.datediff = null;
+        return;
+      }
+      var early = a < b ? a : b, late = a < b ? b : a;
+      var days = Math.round((late - early) / 86400000);
+      var weeks = days / 7;
+      var months = days / 30.4375;
+      var years = days / 365.25;
+      el.ddDays.textContent = days.toLocaleString('en-IN');
+      el.ddWeeks.textContent = weeks.toLocaleString('en-IN', {maximumFractionDigits:1});
+      el.ddMonths.textContent = months.toLocaleString('en-IN', {maximumFractionDigits:1});
+      el.ddYears.textContent = years.toLocaleString('en-IN', {maximumFractionDigits:2});
+      window.__calcResults.datediff = { days:days, weeks:weeks, months:months, years:years };
+    }
+    ['ddFrom','ddTo'].forEach(function(id){
+      var node = document.getElementById(id);
+      node.addEventListener('input', render); node.addEventListener('change', render);
+    });
+    window.__calcRenderers.datediff = render;
+    window.__calcPrintHandlers.datediff = function(){
+      var r = window.__calcResults.datediff;
+      if(!r) return;
+      genericPrintSchedule('Date Difference Calculator', 'Total Days', r.days, ['Metric','Value'],
+        [['Weeks', r.weeks.toFixed(1)], ['Months (approx.)', r.months.toFixed(1)], ['Years (approx.)', r.years.toFixed(2)]]);
     };
     render();
   })();
