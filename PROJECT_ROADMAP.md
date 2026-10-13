@@ -6866,3 +6866,42 @@ verbatim parsed all 35,059 data rows correctly (SMA0/1/2 split
 input + SMA Dashboard rendering confirmed the hero tiles (₹409.73 Cr /
 ₹117.17 Cr / ₹154.53 Cr / ₹681.43 Cr, reconciling exactly) and the honest
 "Not in file" Non-Financial tile, with zero console errors.
+
+## 2026-10-13 — PDF Page Manager: fix mobile layout (toolbar + page strip caused horizontal page scroll)
+
+Alok: "PDF UTILITY ko mobile par use karne k liye proper align karo tabs
+and buttons ko" — the toolbar buttons and page thumbnails weren't aligned
+properly on a phone. Confirmed directly with Playwright at a real phone
+width (390px): the tool's whole page scrolled sideways, and screenshotting
+showed the toolbar button groups overflowing their own rounded boxes
+instead of wrapping.
+
+Root cause, found via direct `getBoundingClientRect()` inspection, not
+guessed: two separate instances of the same classic CSS flex/grid pitfall
+— a flex/grid item's default `min-width:auto` floors its size at its
+*content's* natural width, not the smaller width its container would
+otherwise give it.
+1. `.tbgroup` (each rounded toolbar button strip, e.g. Rotate/Rotate/
+   Duplicate/Remove/Reverse Order/Extract-Split — 6 buttons) had no
+   `flex-wrap`, so a group too wide for a phone screen didn't drop its
+   buttons onto a second line — it just overflowed sideways, stretching
+   the whole page wider than the viewport.
+2. `.panel` (the "Page strip" card) is itself a grid item of `.split`,
+   which collapses to one column under 860px — but without `min-width:0`
+   on `.panel`, that column still floored at the panel's own content width
+   (the thumbnail grid's natural, unshrunk size), so the panel — and
+   everything in it — stayed wider than the phone's screen even though
+   `.split` had "switched to one column."
+
+Fixed both (`.tbgroup{flex-wrap:wrap}`, `.panel{min-width:0}`, plus
+`.card{min-width:0}` for the same reason one level deeper, and a tightened
+mobile-only toolbar spacing rule under a new `@media (max-width:600px)`
+block), plus a defensive `overflow-x:hidden` on `body` as a safety net
+against any future case like this. Verified at 390px width, both as the
+standalone tool and through the real app's Utility Hub → iframe path:
+zero horizontal page overflow in either the outer app or the iframe,
+confirmed via `document.documentElement.scrollWidth` matching
+`window.innerWidth` exactly, both before and after loading a real 4-page
+PDF. Same fix applied byte-identically to Recovery Dashboard's copy of
+this file (the two apps' `tools/pdf-page-manager.html` are kept
+byte-identical, confirmed via `diff`).
