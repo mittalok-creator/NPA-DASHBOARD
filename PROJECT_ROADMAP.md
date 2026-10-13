@@ -7038,3 +7038,67 @@ already-verified figures (₹12,939.76 / ₹1,41,477.82); opening a card
 via keyboard Enter works; Print still captures the active calculator's
 content; zero console errors; screenshotted light/dark/mobile (390px,
 no horizontal overflow, cards stack to one column, pills wrap).
+
+## 2026-10-13 — Visual redesign: Universal Letter Generator + CalcIndia's EMI panel
+
+Alok asked for a mockup-first visual polish pass (per his own established
+workflow this session: review mockups, then implement) on two existing,
+already-shipped tools. A design-canvas mockup of both screens was built
+and shown for review; he confirmed "go ahead, build it into both apps".
+Clarified two scoping questions before implementing (AskUserQuestion):
+(1) restyle the existing Universal Letter Generator tool in place, rather
+than build a second, duplicate tool; (2) apply the richer look to
+CalcIndia's existing EMI panel specifically, rather than carve EMI out
+into its own separate tile alongside CalcIndia. No functional/behavioral
+changes in either tool — purely CSS/markup polish plus two small,
+additive JS touches (a live row-count label, an EMI hero sub-line).
+
+**`tools/universal-letter-generator.html`**:
+- Two-column layout — upload/token-chips/template/toolbar on the left,
+  a sticky "live preview" paper card on the right (was one long single
+  column before, preview buried at the bottom).
+- Token chips restyled from flat monospace tags into amber pill
+  buttons with a hover lift; numbered step badges (①②③) added to each
+  section heading.
+- Generate/Print buttons' emoji icons (📄/🖨) replaced with inline SVG,
+  matching this app's icon convention everywhere else.
+- The live preview now sits in a proper "paper" card (drop shadow,
+  centered) with a "Row 1 of N" label. The letter itself is always
+  rendered at a fixed 800px width (`buildLetterHTML`'s own markup) —
+  which is wider than this tool's new, narrower preview column, so a
+  new `fitPreviewToWidth()` scales it down (CSS `transform:scale`,
+  with the host box's own width/height resized to match, since a CSS
+  transform doesn't reflow layout) rather than letting it overflow
+  sideways or get clipped. Recalculates on window resize.
+
+**`tools/emi-calculator.html` (CalcIndia)**: the EMI panel already had
+every piece of functionality a redesign would otherwise need to add
+(Reducing Balance/Flat Rate toggle, full amortisation schedule, hero
+value, summary tiles) — this was CSS/markup polish only, applied to the
+*shared* component classes (`.hero`, `.summary-card`, `.toggle-btn`,
+`table.sched-table`) that every one of CalcIndia's 18 calculator panels
+already uses, so the whole suite picks up the same lift, not just EMI:
+- `.hero` — from a flat soft-tint box to a navy→mint gradient card,
+  white text, plus a new `.sub` line (EMI panel only: "for ₹X at Y%
+  over Z months · Reducing Balance/Flat Rate").
+- `.summary-card` — from a flat muted-background tile to a bordered,
+  shadowed card (closer to the rest of this app's own tile language).
+- `.toggle-btn.active` gained a soft colored shadow.
+- `table.sched-table` gained a row hover highlight.
+- Print/Export buttons' emoji icons (🖨/📊) replaced with inline SVG
+  across all 18 panels (same two fixed button strings everywhere, a
+  safe mechanical find/replace — their `onclick` wiring is attached by
+  class, not by reading button text, confirmed before editing).
+
+Mirrored into Recovery Dashboard's byte-identical copies of both files
+(confirmed via `diff` before and after).
+
+Verified: `node --check` on both files' extracted script blocks; HTML
+div-nesting balance check (Python `html.parser`); CSS brace-balance
+check; Playwright — uploaded a real CSV into the Letter Generator
+(chips render, preview fills in, paper card fits with no overflow in
+light/dark/mobile); toggled the EMI calculator's Reducing/Flat mode and
+confirmed the hero figure, sub-line and schedule all recompute
+correctly; screenshotted both tools in light theme, dark theme, and at
+phone width (390px) — all render cleanly with no clipping or
+regression to the pre-existing math/behavior.
