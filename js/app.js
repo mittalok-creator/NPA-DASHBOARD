@@ -10578,6 +10578,65 @@ function parseSmaRows(lines){
   }
   return rows;
 }
+// A second, newer SMA export shape shows up starting 2026-10-13 (confirmed
+// against a real file Alok uploaded): comma-delimited, double-quote-quoted
+// CSV, 23 columns (not 27), different order/names, and -- unlike the pipe
+// file above -- it carries real header text, so this one is matched by
+// header name (same idx()/normHeader() idiom every other importer in this
+// app already uses) instead of fixed positions, which also makes it
+// tolerant of the exact column order/set Head Office happens to export.
+// Two columns the pipe format relies on (a dedicated "SMA Type" column, a
+// dedicated Y/N "Non-Financial" flag) have no equivalent here at all --
+// left blank/false rather than guessed, and renderSmaBody() is told via
+// hasNonFinCol so it can say "not in this file" instead of showing a
+// confident-looking zero for Non-Financial SMA.
+function parseSmaCsvRows(text){
+  const allRows = parseCSV(String(text));
+  while(allRows.length && allRows[allRows.length-1].every(c=>!String(c||'').trim())) allRows.pop();
+  if(!allRows.length) throw new Error('Empty file.');
+  const header = allRows[0].map(normHeader);
+  const idx = (...names) => { for(const n of names){ const i = header.indexOf(normHeader(n)); if(i>=0) return i; } return -1; };
+  const iSol = idx('solid','sol');
+  const iBranch = idx('branch');
+  const iAcct = idx('accountno','acctno','account');
+  const iCust = idx('customerid','custid','cif');
+  const iScheme = idx('schemecode','scheme');
+  const iName = idx('accountname','customername','name');
+  const iOs = idx('outstanding','balanceamount','os','balance');
+  const iSmaCust = idx('smacustomer','smacust','sma');
+  const iSmaAcc = idx('smaaccount','smaacc');
+  const iReason = idx('smareason','reason','reasons');
+  const iSmaType = idx('smatype');
+  const iNonFin = idx('nonfinancial','nonfinancialsma');
+  const iLimReview = idx('limitreviewdate','limreviewdate','reviewdate');
+  const iLimit = idx('limitamount','limit');
+  const iRoi = idx('roi');
+  const iCadu = idx('cadu');
+  const iSanct = idx('sanctiondate','sanctdt');
+  const iMob = idx('mobileno','mobile');
+  const missing = [];
+  if(iSol<0) missing.push('SOL ID'); if(iBranch<0) missing.push('Branch');
+  if(iAcct<0) missing.push('Account No'); if(iCust<0) missing.push('Customer ID');
+  if(iScheme<0) missing.push('Scheme Code'); if(iName<0) missing.push('Account Name');
+  if(iOs<0) missing.push('Outstanding'); if(iSmaCust<0) missing.push('SMA / SMA Customer');
+  if(missing.length) throw new Error(`Missing required column(s) in the SMA export: ${missing.join(', ')}. Check this is the correct file.`);
+  const num = (s) => parseFloat(String(s||'').replace(/,/g,'')) || 0;
+  const rows = [];
+  for(let i=1;i<allRows.length;i++){
+    const row = allRows[i];
+    const acct = cellStr(row, iAcct);
+    if(!acct) continue;
+    rows.push([
+      cellStr(row, iSol), cellStr(row, iBranch), acct, normId(cellStr(row, iCust)),
+      cellStr(row, iScheme), cellStr(row, iName), Math.abs(num(cellStr(row, iOs))),
+      cellStr(row, iSmaCust), cellStr(row, iSmaAcc), cellStr(row, iReason), cellStr(row, iSmaType),
+      iNonFin>=0 ? cellStr(row, iNonFin)==='Y' : false,
+      cellStr(row, iLimReview), num(cellStr(row, iLimit)), num(cellStr(row, iRoi)), num(cellStr(row, iCadu)),
+      cellStr(row, iSanct), cellStr(row, iMob),
+    ]);
+  }
+  return { rows, hasNonFinCol: iNonFin>=0 };
+}
 
 let SMA_DATA = null;
 let __pendingSmaData = null;
@@ -10596,18 +10655,38 @@ async function handleSmaUpload(evt){
   reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
   reader.onload = function(e){
     try{
-      const lines = parseSmaLines(String(e.target.result));
-      const rows = parseSmaRows(lines);
+      const text = String(e.target.result);
+      // Head Office has sent this as two different real shapes -- the
+      // original pipe-delimited .txt, and (confirmed 2026-10-13, a real
+      // file Alok uploaded) a comma-delimited, quoted .csv with a
+      // different column set. '|' can never appear in the comma file's
+      // header by coincidence, so checking the first line for it is a
+      // safe way to pick the right parser.
+      const firstLine = text.split(/\r\n|\n|\r/, 1)[0] || '';
+      let rows, hasNonFinCol = true;
+      if(firstLine.indexOf('|') >= 0){
+        rows = parseSmaRows(parseSmaLines(text));
+      } else {
+        const parsed = parseSmaCsvRows(text);
+        rows = parsed.rows; hasNonFinCol = parsed.hasNonFinCol;
+      }
       if(!rows.length) throw new Error('No account rows found in this file.');
       const guessed = parseAsOnDateFromFilename(file.name);
       const asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
-      __pendingSmaData = { asOnDate, rows };
+      __pendingSmaData = { asOnDate, rows, hasNonFinCol };
       SMA_DATA = __pendingSmaData;
+      // A left-on "Non-Financial only" toggle from a previous (pipe-format)
+      // upload would otherwise silently filter this one down to 0 rows
+      // everywhere, with no visible explanation -- the toggle button
+      // itself is disabled below, but that alone doesn't un-set a filter
+      // already in effect from earlier in the session.
+      if(!hasNonFinCol) smaNonFinOnly = false;
       const label = document.getElementById('smaStatusLabel');
       if(label) label.textContent = `${rows.length.toLocaleString('en-IN')} accounts loaded (${file.name})`;
       const tileLabel = document.getElementById('smaStatusLabelTile');
       if(tileLabel) tileLabel.textContent = `${rows.length.toLocaleString('en-IN')} accounts loaded`;
-      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${rows.length.toLocaleString('en-IN')} accounts, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.</div>`;
+      const nonFinNote = hasNonFinCol ? '' : ' Note: this file has no Non-Financial flag column, so that one tile will show "not in this file" instead of a figure.';
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${rows.length.toLocaleString('en-IN')} accounts, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.${nonFinNote}</div>`;
       clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
@@ -10685,7 +10764,7 @@ function renderSmaBody(){
       </div>
       <div class="kccov-filter-field">
         <label>Flag</label>
-        <button type="button" class="bank-tab-btn${smaNonFinOnly?' active':''}" onclick="toggleSmaNonFinOnly()" style="width:100%">Non-Financial only</button>
+        <button type="button" class="bank-tab-btn${smaNonFinOnly?' active':''}" onclick="toggleSmaNonFinOnly()" style="width:100%"${d.hasNonFinCol===false?' disabled title="This upload has no Non-Financial flag column"':''}>Non-Financial only</button>
       </div>
     </div>
   </div>`;
@@ -10717,12 +10796,22 @@ function renderSmaBody(){
     label:'Total SMA', fallback: fmtCr(total.os), sub:`${total.count.toLocaleString('en-IN')} accounts`,
   });
   const nonFinPct = total.count>0 ? (nonFinCount/total.count*100) : 0;
+  // d.hasNonFinCol is only ever explicitly false for a CSV-format upload
+  // whose header has no Non-Financial-flag column at all (see
+  // parseSmaCsvRows()) -- undefined (an older/pipe-format upload, or data
+  // already published before this distinction existed) is treated as
+  // available, same as it always has been, so this never changes behavior
+  // for data that genuinely has the flag.
+  const nonFinAvailable = d.hasNonFinCol !== false;
   const nonFinTile = heroKpiCard({
     id:'smaNonFin', icon: ICON_ALERT_CIRCLE, tint:'var(--tool-violet-soft)', color:'var(--tool-violet)',
-    extraClass: smaNonFinOnly ? 'kccov-active' : '',
-    onclick:'toggleSmaNonFinOnly()',
-    label:'Non-Financial SMA', fallback: fmtCr(nonFinOs),
-    sub:`${nonFinCount.toLocaleString('en-IN')} accounts · ${nonFinPct.toFixed(0)}% of book`,
+    extraClass: nonFinAvailable && smaNonFinOnly ? 'kccov-active' : '',
+    onclick: nonFinAvailable ? 'toggleSmaNonFinOnly()' : '',
+    label:'Non-Financial SMA',
+    fallback: nonFinAvailable ? fmtCr(nonFinOs) : 'Not in file',
+    sub: nonFinAvailable
+      ? `${nonFinCount.toLocaleString('en-IN')} accounts · ${nonFinPct.toFixed(0)}% of book`
+      : `This upload has no Non-Financial flag column`,
   });
   const heroRow = `<div class="hero-kpi-row">${stageTiles}${totalTile}${nonFinTile}</div>`;
 

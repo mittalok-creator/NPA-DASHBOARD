@@ -6822,3 +6822,47 @@ GitHub settings, etc.) so nothing is forgotten or duplicated.
   `https://npa-dashboard.vercel.app`) both merged to `main`. **M2 fully
   verified live**: real GitHub sign-in on `https://npadashboard.alokmittal.net/`
   works end-to-end.
+
+## 2026-10-13 — SMA upload: support Head Office's new comma-delimited CSV export
+
+Alok's SMA upload ("SMA Dashboard" → Update Data) rejected his real file
+(`SMA_Report_20261013.csv`) with "Expected 27 columns in the SMA export,
+found 1." Investigated by reading the real file directly (he attached it):
+it's a genuinely different export shape than the one this feature was
+originally built against — comma-delimited, double-quote-quoted CSV, 23
+columns (not 27), different column order/names — not just a mis-saved
+extension. The original parser (`parseSmaLines`/`parseSmaRows`) is purely
+positional (fixed `SM.*` indices over a `|`-split line), so it could never
+have worked against this shape regardless of extension.
+
+Added a second parser, `parseSmaCsvRows()`, for this new shape — header-text
+matched (`idx()`/`normHeader()`, same tolerant idiom every other importer in
+this app already uses) rather than positional, reusing the existing
+`parseCSV()` quote-aware splitter. `handleSmaUpload()` now detects which
+format it's looking at (checks for `|` in the first line — can't appear in
+the comma file's header by coincidence) and routes to the matching parser;
+the original pipe-format path is completely untouched, zero regression risk
+for a file already uploading successfully today.
+
+Two columns the old pipe format relies on — a dedicated "SMA Type" column
+and a dedicated Y/N "Non-Financial" flag — have no equivalent anywhere in
+the new CSV's 23 columns. Rather than silently default Non-Financial to a
+confident-looking "0 accounts," `SMA_DATA` now carries `hasNonFinCol`
+(`false` only when the new-format parser genuinely found no matching
+column), and the Non-Financial hero tile shows "Not in file" with an
+explanation instead of a figure when it's unavailable — the filter toggle
+is disabled too, and a stale `smaNonFinOnly=true` from an earlier upload is
+reset so it can't silently zero out every other tile. Also fixes a real,
+separately-confirmed data artifact: the new CSV's quoted Mobile No. field
+carries a literal embedded `\r` right before the closing quote (`"7300980913^M"`)
+— `cellStr()`'s existing `.trim()` already strips it correctly, confirmed
+against the real file.
+
+Verified against the real uploaded file (not a synthetic fixture): a Node
+harness extracting the real `parseSmaCsvRows()`/`parseCSV()`/`normId()`
+verbatim parsed all 35,059 data rows correctly (SMA0/1/2 split
+17,524/6,633/10,902, zero stray `\r` in any Mobile No., zero negative O/S,
+55 distinct branches), and a full Playwright pass through the real upload
+input + SMA Dashboard rendering confirmed the hero tiles (₹409.73 Cr /
+₹117.17 Cr / ₹154.53 Cr / ₹681.43 Cr, reconciling exactly) and the honest
+"Not in file" Non-Financial tile, with zero console errors.
