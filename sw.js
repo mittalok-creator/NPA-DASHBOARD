@@ -1,4 +1,4 @@
-const CACHE_NAME = 'upgb-ots-shell-v329';
+const CACHE_NAME = 'upgb-ots-shell-v330';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
