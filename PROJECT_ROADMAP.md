@@ -6945,3 +6945,41 @@ the single-tool-category precedent "Notices"/plum already set). Added
 the now-standard `#view<Name> .tool-frame-wrap{height:auto;...}`
 override for both from the start (the missing-override bug class
 documented several times above for earlier tools).
+
+## 2026-10-13 (follow-up) — EMI Calculator expanded into "Financial Calculators"
+
+Alok asked for more options in the calculator: Loan EMI, FD, RD, Mutual
+Fund, NPS. Expanded `tools/emi-calculator.html` (same file path/view
+id/iframe id, to keep the diff small and avoid touching nav wiring) into
+a 5-tab tool:
+
+- **Loan EMI** (unchanged math) — reducing-balance/flat-rate toggle.
+- **Fixed Deposit** — compound-interest formula (A = P(1+r/(n·100))^(n·t)),
+  selectable compounding frequency (monthly/quarterly/half-yearly/yearly)
+  or simple interest, year-wise growth table.
+- **Recurring Deposit** — the standard Indian-bank convention (quarterly
+  compounding on monthly deposits): M = R·[(1+i)^n − 1] / (1 − (1+i)^(−1/3)),
+  i = rate/400, n = tenure in quarters.
+- **Mutual Fund (SIP / Lumpsum)** — SIP future-value-of-annuity formula
+  and plain compound growth for lumpsum, toggle between the two, clearly
+  labeled as an estimate (real returns vary).
+- **NPS** — accumulation phase uses the same SIP formula; applies the
+  PFRDA minimum-40%-annuity rule at retirement, estimates lumpsum
+  withdrawal, annuity purchased, and monthly pension. Explicitly marked
+  simplified/estimate-only.
+
+Each formula verified against independently hand-computed Python values
+before shipping (RD/SIP/Lumpsum/FD/NPS all matched to the rupee).
+Print and Export-to-Excel both now operate on whichever tab is
+currently active. Tile/page title renamed "Financial Calculators" to
+reflect the broader scope; file path, view id (`emicalculator`), and
+iframe id are all unchanged so no other wiring needed to move.
+
+Found and fixed one real bug during verification: `window.__calcResults`
+was initialized by code that ran *after* the five calculator panels'
+own first render() call, which write into it immediately on load — a
+`TypeError` on the very first tab (any tab after the first one checked)
+silently halted the rest of the script, leaving every later tab showing
+a static "₹0" and the tab-switcher itself never wired up. Fixed by
+moving the initialization to the top of the script, before any
+calculator panel runs.
