@@ -441,6 +441,25 @@ function addCanvasPagesToDoc(doc, canvas, margin, usableW, usableH){
     }
   }
 }
+/* Places one canvas as exactly one PDF page, scaled down (never up, never
+   sliced) only as much as needed to fit both width and height -- for
+   single-letter documents like NPA Notice where spilling onto a second,
+   mostly-empty page (or worse, cropping mid-line via addCanvasPagesToDoc's
+   own strip-slicing) is never the right outcome. When width is the
+   binding constraint (the common case -- the letter already fits the
+   page height), this renders identically to a full-width placement. When
+   height is binding (today's overflow case), the whole letter shrinks
+   uniformly (no distortion) and is centered horizontally in the usable
+   area. Deliberately a separate function from addCanvasPagesToDoc(),
+   which must keep its own multi-page-slicing behavior for documents that
+   can legitimately span more than one page (e.g. the Application Form's
+   multi-account letters). */
+function addCanvasFitOnePageToDoc(doc, canvas, margin, usableW, usableH){
+  const scale = Math.min(usableW / canvas.width, usableH / canvas.height);
+  const w = canvas.width * scale, h = canvas.height * scale;
+  const x = margin + (usableW - w) / 2;
+  doc.addImage(canvas.toDataURL('image/png'), 'PNG', x, margin, w, h);
+}
 function canvasToPdfBlob(canvas){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'pt', format:'a4', orientation:'portrait', compress:true });
@@ -1522,7 +1541,11 @@ async function npaNoticeRenderCanvas(html){
   const printEl = document.getElementById('printArea');
   const prevCss = printEl.style.cssText;
   printEl.innerHTML = html;
-  printEl.style.cssText = 'display:block;position:fixed;left:-9999px;top:0;width:900px;background:#fff;padding:0;z-index:-1';
+  // Matches the letter div's own explicit width:800px (buildNpaNoticeLetterHTML)
+  // -- the old 900px here left a dead 100px strip on the right of every
+  // capture; addCanvasFitOnePageToDoc's own min(widthRatio,heightRatio)
+  // scaling makes the exact capture width safe to correct now.
+  printEl.style.cssText = 'display:block;position:fixed;left:-9999px;top:0;width:800px;background:#fff;padding:0;z-index:-1';
   if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
   await new Promise(r=>setTimeout(r, 60));
   let canvas;
@@ -1546,7 +1569,7 @@ async function npaNoticeBuildCombinedPdfBlob(candidates, noticeDateStr, onProgre
     const html = buildNpaNoticeLetterHTML(fields);
     const canvas = await npaNoticeRenderCanvas(html);
     if(i>0) doc.addPage();
-    addCanvasPagesToDoc(doc, canvas, margin, usableW, usableH);
+    addCanvasFitOnePageToDoc(doc, canvas, margin, usableW, usableH);
     if(onProgress) onProgress(i+1, candidates.length);
   }
   return doc.output('blob');

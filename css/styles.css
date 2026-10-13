@@ -1787,6 +1787,12 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
      letter this selector simply has no sibling to not-match, so a
      1-account customer prints exactly as it always did. */
   .ots-app-print-wrap .ots-app-letter-page:not(:last-child){page-break-after:always}
+  /* A letter that's too tall to fit the current page should push to the
+     next page as a whole unit, never get cut mid-sentence -- a defensive
+     fallback alongside npaNoticeBuildCombinedPdfBlob's own guaranteed
+     one-page-per-letter PDF path (addCanvasFitOnePageToDoc), since native
+     browser print pagination has no equivalent shrink-to-fit of its own. */
+  .ots-app-print-wrap .ots-app-letter-page{page-break-inside:avoid}
 }
 
 /* ==================================================================
