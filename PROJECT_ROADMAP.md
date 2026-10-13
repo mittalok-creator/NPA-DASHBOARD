@@ -6905,3 +6905,43 @@ confirmed via `document.documentElement.scrollWidth` matching
 PDF. Same fix applied byte-identically to Recovery Dashboard's copy of
 this file (the two apps' `tools/pdf-page-manager.html` are kept
 byte-identical, confirmed via `diff`).
+
+## 2026-10-13 — Two new Utility Hub tools: Universal Letter Generator and EMI/Loan Calculator
+
+Added two new self-contained Utility Hub tools, following the exact
+PDF Page Manager/PassSheet pattern (own iframe script context, own
+vendored copies of xlsx/html2canvas/jsPDF/exceljs, no access to
+js/app.js functions).
+
+**Universal Letter Generator** (`tools/universal-letter-generator.html`):
+upload any Excel/CSV file, get auto-detected `{{Token}}` chips from its
+header row, write a letter template using the same markup mini-language
+as NPA Notice (bold/underline/highlight/center/right-align/bullets/
+divider/split-line), optionally include the bank letterhead, and
+Generate a single combined PDF (one letter per data row) — or Print.
+The template-engine and PDF-placement logic (`fillTemplate`,
+`renderBodyHTML`, `addCanvasFitOnePageToDoc`) are ported verbatim from
+the main app's own NPA Notice feature, since this tool's iframe cannot
+call `js/app.js` directly. Token names are derived from each column
+header with a de-duplication guard for colliding names. Template text +
+letterhead choice are saved to `localStorage` as a per-device
+convenience (not critical state).
+
+**EMI / Loan Calculator** (`tools/emi-calculator.html`): Loan Amount,
+Interest Rate, Tenure (years/months), optional Start Date, and a
+Reducing-Balance/Flat-Rate toggle. Verified the underlying math against
+independently hand-computed values (standard annuity formula for
+reducing balance, principal/n + totalInterest/n for flat rate), plus two
+edge cases (0% rate, 1-month tenure) — every schedule's final closing
+balance reaches exactly ₹0. Shows the EMI, Total Interest, Total
+Payment, and a full month-by-month amortization table; Print (A4
+landscape) and Export to Excel (ExcelJS, same vendored library already
+used elsewhere in this app).
+
+Wired into the Utility Hub: Letter Generator joins the existing
+"Documents & Letters" category (new `tool-amber` hue); EMI Calculator
+gets its own new "Calculators" category (new `tool-mint` hue, matching
+the single-tool-category precedent "Notices"/plum already set). Added
+the now-standard `#view<Name> .tool-frame-wrap{height:auto;...}`
+override for both from the start (the missing-override bug class
+documented several times above for earlier tools).
