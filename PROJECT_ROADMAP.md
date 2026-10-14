@@ -7377,3 +7377,28 @@ calculated; confirmed Compromise-Amount-dependent rows correctly show
 generated, downloaded and visually inspected the actual PDF (single page,
 no overflow, narrative text wraps cleanly); screenshotted the input
 modal in light and dark theme. Zero console/page errors throughout.
+
+## 2026-10-14 — OTS One Pager: add Export to Excel
+
+Alok's immediate follow-up: "i need this in excel file too." Added a 4th
+action alongside Print/Save PDF/Share WhatsApp. Refactored the field
+computation out of `buildOnePagerHTML()` into a shared
+`computeOnePagerRows()` (num/label/value/kind per field) so the Excel
+export can never silently drift from what Print/PDF/WhatsApp show -- one
+place computes the 23 fields, two places render them. Unlike the HTML/PDF
+version (which only ever displays formatted text), the workbook writes
+REAL typed values -- true Date cells (`dd-mm-yyyy`) for Sanction/NPA Date,
+true numeric cells with the same `XL_INR_FMT` currency format used
+elsewhere in this file for every ₹ figure -- so the sheet is actually
+usable in Excel (sortable, summable), not just a picture of text. One
+sheet per linked account (named "Account N", or "ONE PAGER" for the
+common single-account case, sidestepping both ExcelJS's no-duplicate-
+sheet-name rule and an account no. containing characters Excel forbids in
+a sheet name).
+
+Verified: re-ran the same real account as the PDF test above with an OTS
+Amount typed in, downloaded the workbook, and confirmed every one of the
+23 rows/values/number-formats/borders came out correct via a direct
+openpyxl read -- in particular that the Waiver/Write-off/Total Sacrifice/
+Impact on P&L numbers exactly match the PDF's own (already hand-verified)
+figures. Zero console/page errors.

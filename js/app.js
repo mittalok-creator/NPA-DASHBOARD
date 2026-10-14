@@ -1329,14 +1329,22 @@ function onePagerRow(num, label, valueHtml, opts){
     + '<div class="op-val">' + valueHtml + '</div>'
     + '</div>';
 }
-// Builds one account's One Pager. Fields 1-6, 8-19 all read off the exact
-// same live figures the Settlement Statement/Loan Table already compute
-// (totalDuesFor()/uriFor() so a live Interest Reversal edit is reflected
-// here too, not a stale snapshot); only 7 and 20-23 come from the typed
-// fields above, since this app's NPA data has no source for them.
-function buildOnePagerHTML(s, custRow, fields){
+// Computes all 23 numbered fields once, as data (num/label/value/kind),
+// shared by buildOnePagerHTML() (the Print/PDF/WhatsApp rendering, below)
+// and onePagerExportExcel() -- so the Excel export can never silently
+// drift from what Print/PDF show, and a future field change only has to
+// happen in one place. kind drives how each consumer formats/types the
+// value: 'text' as-is, 'date' a real Date (fmtDate() for HTML, a real
+// Excel date cell for the workbook), 'currency' a real number (fmtINR2()
+// for HTML, a real numeric cell with a currency format for the workbook).
+// Fields 1-6, 8-19 all read off the exact same live figures the
+// Settlement Statement/Loan Table already compute (totalDuesFor()/
+// uriFor() so a live Interest Reversal edit is reflected here too, not a
+// stale snapshot); only 7 and 20-23 come from the typed fields, since
+// this app's NPA data has no source for them.
+function computeOnePagerRows(s, custRow, fields){
   const district = (BRANCH_META[Number(custRow[C.SOL_ID])]||{}).district || '—';
-  const solId = esc(custRow[C.SOL_ID]) || '—';
+  const solId = custRow[C.SOL_ID] || '—';
   // Same anchor-date logic as uciLabelWithTenure() above (the Settlement
   // Statement's own UCI@8.5% row label) -- "to" is always today, matching
   // computeUCI()'s own hardcoded end date, so the label never disagrees
@@ -1360,6 +1368,38 @@ function buildOnePagerHTML(s, custRow, fields){
   const waiver = totalSacrifice - writeOff;                // 16: the interest/dues portion of the sacrifice (Total Sacrifice less the principal Write-off)
   const impactPL = compromiseAmt + provision - os;         // 19: (15+14-10)
 
+  return [
+    {num:1, label:'REGION', value:district, kind:'text', center:true},
+    {num:2, label:'SOL-ID', value:solId, kind:'text', center:true},
+    {num:3, label:'ACCOUNT NO', value:s.acctNo||'—', kind:'text'},
+    {num:4, label:'ACCOUNT NAME', value:custRow[C.NAME]||'—', kind:'text'},
+    {num:5, label:'SANCTION DATE', value:toDate(s.sanctionDate), kind:'date'},
+    {num:6, label:'SANCTION AMT', value:Number(s.sanctionLimit)||0, kind:'currency'},
+    {num:7, label:'PURPOSE OF LOAN', value:fields.purpose||'—', kind:'text'},
+    {num:8, label:'NPA DATE', value:toDate(s.npaDate), kind:'date'},
+    {num:9, label:'NPA CATEGORY', value:s.assetCode||'—', kind:'text'},
+    {num:10, label:'NET BOOK DUE (O/S)', value:os, kind:'currency'},
+    {num:11, label:'INT REVERSED ON NPA DATE (URI/DI)', value:uri, kind:'currency'},
+    {num:12, label:notionalIntLabel, value:uci, kind:'currency'},
+    {num:13, label:'NOTIONAL DUES ( 10 + 11 + 12 )', value:notionalDues, kind:'currency'},
+    {num:14, label:'PROVISION HELD', value:provision, kind:'currency'},
+    {num:15, label:'COMPROMISE AMOUNT', value:hasOts?compromiseAmt:null, kind:'currency'},
+    {num:16, label:'WAIVER ( 18 − 17 )', value:hasOts?waiver:null, kind:'currency'},
+    {num:17, label:'WRITE-OFF ( 10 − 15 )', value:hasOts?writeOff:null, kind:'currency'},
+    {num:18, label:'TOTAL SACRIFICE AMOUNT ( 13 − 15 )', value:hasOts?totalSacrifice:null, kind:'currency'},
+    {num:19, label:'IMPACT ON PROFIT/LOSS (+/−) ( 15 + 14 − 10 )', value:hasOts?impactPL:null, kind:'currency'},
+    {num:20, label:'PROPERTY DETAILS WITH VALUATION AND DATE', value:fields.property||'—', kind:'text', wrap:true},
+    {num:21, label:'STAFF ACCOUNTABILITY STATUS', value:fields.staffAcct||'—', kind:'text', wrap:true},
+    {num:22, label:'COMPLETE RECOVERY ACTION TAKEN TILL DATE', value:fields.recoveryAction||'—', kind:'text', wrap:true},
+    {num:23, label:'REASON FOR COMPROMISE', value:fields.reason||'—', kind:'text', wrap:true},
+  ];
+}
+function onePagerFormatValueHtml(row){
+  if(row.kind==='date') return fmtDate(row.value);
+  if(row.kind==='currency') return row.value===null ? '—' : fmtINR2(row.value);
+  return esc(row.value)||'—';
+}
+function buildOnePagerHTML(rows){
   const logoSrc = document.querySelector('.nav-logo')?.src || '';
   const header = '<div class="pv-topbar"></div>'
     + '<div class="pv-brandrow">'
@@ -1367,32 +1407,15 @@ function buildOnePagerHTML(s, custRow, fields){
     +   '<div><div class="pv-bank">Uttar Pradesh Gramin Bank</div><div class="pv-bank-sub">Regional Office Hathras</div></div>'
     + '</div>';
 
-  const body = '<div class="op-title">One Time Settlement &ndash; One Pager</div>'
+  const r1 = rows[0], r2 = rows[1]; // REGION, SOL-ID -- the one row the official template shows as a side-by-side pair
+  let body = '<div class="op-title">One Time Settlement &ndash; One Pager</div>'
     + '<div class="op-row op-row-split">'
-    +   '<div class="op-num">1</div><div class="op-label op-strong">REGION</div><div class="op-val op-strong">' + esc(district) + '</div>'
-    +   '<div class="op-num op-sub">2</div><div class="op-label op-strong op-sub">SOL-ID</div><div class="op-val op-strong op-sub">' + solId + '</div>'
-    + '</div>'
-    + onePagerRow(3, 'ACCOUNT NO', esc(s.acctNo)||'—')
-    + onePagerRow(4, 'ACCOUNT NAME', esc(custRow[C.NAME])||'—')
-    + onePagerRow(5, 'SANCTION DATE', fmtDate(toDate(s.sanctionDate)))
-    + onePagerRow(6, 'SANCTION AMT', fmtINR2(s.sanctionLimit))
-    + onePagerRow(7, 'PURPOSE OF LOAN', esc(fields.purpose)||'—')
-    + onePagerRow(8, 'NPA DATE', fmtDate(toDate(s.npaDate)))
-    + onePagerRow(9, 'NPA CATEGORY', esc(s.assetCode)||'—')
-    + onePagerRow(10, 'NET BOOK DUE (O/S)', fmtINR2(os))
-    + onePagerRow(11, 'INT REVERSED ON NPA DATE (URI/DI)', fmtINR2(uri))
-    + onePagerRow(12, notionalIntLabel, fmtINR2(uci))
-    + onePagerRow(13, 'NOTIONAL DUES ( 10 + 11 + 12 )', fmtINR2(notionalDues))
-    + onePagerRow(14, 'PROVISION HELD', fmtINR2(provision))
-    + onePagerRow(15, 'COMPROMISE AMOUNT', hasOts?fmtINR2(compromiseAmt):'—')
-    + onePagerRow(16, 'WAIVER ( 18 − 17 )', hasOts?fmtINR2(waiver):'—')
-    + onePagerRow(17, 'WRITE-OFF ( 10 − 15 )', hasOts?fmtINR2(writeOff):'—')
-    + onePagerRow(18, 'TOTAL SACRIFICE AMOUNT ( 13 − 15 )', hasOts?fmtINR2(totalSacrifice):'—')
-    + onePagerRow(19, 'IMPACT ON PROFIT/LOSS (+/−) ( 15 + 14 − 10 )', hasOts?fmtINR2(impactPL):'—')
-    + onePagerRow(20, 'PROPERTY DETAILS WITH VALUATION AND DATE', esc(fields.property)||'—', {wrap:true})
-    + onePagerRow(21, 'STAFF ACCOUNTABILITY STATUS', esc(fields.staffAcct)||'—', {wrap:true})
-    + onePagerRow(22, 'COMPLETE RECOVERY ACTION TAKEN TILL DATE', esc(fields.recoveryAction)||'—', {wrap:true})
-    + onePagerRow(23, 'REASON FOR COMPROMISE', esc(fields.reason)||'—', {wrap:true});
+    +   '<div class="op-num">' + r1.num + '</div><div class="op-label op-strong">' + esc(r1.label) + '</div><div class="op-val op-strong">' + onePagerFormatValueHtml(r1) + '</div>'
+    +   '<div class="op-num op-sub">' + r2.num + '</div><div class="op-label op-strong op-sub">' + esc(r2.label) + '</div><div class="op-val op-strong op-sub">' + onePagerFormatValueHtml(r2) + '</div>'
+    + '</div>';
+  rows.slice(2).forEach(row=>{
+    body += onePagerRow(row.num, row.label, onePagerFormatValueHtml(row), {wrap:row.wrap});
+  });
 
   return header + body + '<div class="pv-foot">UPGB OTS Calculator &middot; Designed &amp; Developed by Alok Mittal</div>';
 }
@@ -1402,7 +1425,8 @@ function generateOnePager(){
   if(!slots || !custRow || !slots.length) return;
   const letters = slots.map((s, idx)=>{
     const fields = onePagerReadFields(idx, s.acctNo);
-    return { acctNo: s.acctNo, html: buildOnePagerHTML(s, custRow, fields) };
+    const rows = computeOnePagerRows(s, custRow, fields);
+    return { acctNo: s.acctNo, rows, html: buildOnePagerHTML(rows) };
   });
   saveOnePagerFields();
   __onePagerLetters = letters;
@@ -1411,6 +1435,7 @@ function generateOnePager(){
   const actionsHtml = '<div class="ots-app-letter-actions">'
     +   '<button type="button" class="ots-app-btn-pill" onclick="onePagerPrint()">🖨 <span>Print' + (letters.length>1?' All':'') + '</span></button>'
     +   '<button type="button" class="ots-app-btn-pill" onclick="onePagerSavePdf()">⬇ <span>Save as PDF</span></button>'
+    +   '<button type="button" class="ots-app-btn-pill" onclick="onePagerExportExcel()">' + EXPORT_XL_ICON + ' <span>Export to Excel</span></button>'
     +   '<button type="button" class="ots-app-btn-pill accent" onclick="onePagerSharePdf()">📤 <span>Share on WhatsApp</span></button>'
     + '</div>';
   wrap.innerHTML = '<div class="card ots-app-letter-frame" style="margin-top:16px;">'
@@ -1499,6 +1524,70 @@ async function onePagerSharePdf(){
   }
 }
 window.onePagerSharePdf = onePagerSharePdf;
+
+// Excel export (Alok's follow-up request, 2026-10-14: "i need this in
+// excel file too"). One sheet per linked account (ExcelJS worksheet names
+// can't repeat, and an account no. can contain characters Excel forbids
+// in a sheet name, so this sidesteps both with a plain "Account N" name
+// rather than sanitizing/deduplicating the real account no.). Reuses the
+// exact same computeOnePagerRows() data Print/PDF/WhatsApp render from --
+// see that function's own comment -- written as REAL typed values (a true
+// Date cell, a true numeric currency cell), not text, so the sheet is
+// actually usable in Excel (sortable/summable), with the same XL_INR_FMT/
+// XL_DATE_FMT/XL_BORDER_ALL constants and ExcelJS-not-SheetJS reasoning
+// (real borders/fonts, not silently dropped) as exportOtsWorksheet() above.
+async function onePagerExportExcel(){
+  if(!__onePagerLetters.length) return;
+  await Promise.all([ensureXLSX(), ensureExcelJS()]);
+  const wb = new ExcelJS.Workbook();
+  __onePagerLetters.forEach((l, idx)=>{
+    const sheetName = __onePagerLetters.length>1 ? ('Account ' + (idx+1)) : 'ONE PAGER';
+    const ws = wb.addWorksheet(sheetName, { views:[{showGridLines:false}] });
+    const set = (addr, value, opts={}) => {
+      const cell = ws.getCell(addr);
+      cell.value = value;
+      if(opts.numFmt) cell.numFmt = opts.numFmt;
+      cell.font = Object.assign({name:'Calibri', size:11}, opts.font||{});
+      cell.alignment = Object.assign({vertical:'middle', wrapText:true}, opts.align||{});
+      cell.border = XL_BORDER_ALL;
+      return cell;
+    };
+    ws.columns = [{width:5},{width:46},{width:34}];
+    ws.mergeCells('A1:C1');
+    set('A1', 'ONE TIME SETTLEMENT - ONE PAGER', {font:{bold:true, size:16}, align:{horizontal:'center'}});
+    ws.getRow(1).height = 26;
+
+    l.rows.forEach((row, i)=>{
+      const n = i + 2;
+      const align = {horizontal: row.center?'center':'left'};
+      const font = {bold: !!row.center};
+      set(`A${n}`, row.num, {font:{bold:true}, align:{horizontal:'center'}});
+      set(`B${n}`, row.label, {font, align});
+      if(row.kind==='date') set(`C${n}`, row.value || null, {numFmt:XL_DATE_FMT, font, align});
+      else if(row.kind==='currency') set(`C${n}`, row.value, {numFmt:XL_INR_FMT, font, align});
+      else set(`C${n}`, row.value, {font, align});
+      if(row.wrap) ws.getRow(n).height = 34;
+    });
+
+    ws.pageSetup = {
+      paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+      margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
+      printArea: `A1:C${l.rows.length + 1}`,
+    };
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = onePagerFileBase() + '.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+window.onePagerExportExcel = () => onePagerExportExcel().catch(err=>{
+  console.error(err);
+  alert('Could not prepare the Excel file. Please try again.');
+});
 
 /* ==================================================================
    NPA Notice -- branch-wise, PDF, generated-document feature (Alok's
