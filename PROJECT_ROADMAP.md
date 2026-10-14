@@ -7203,3 +7203,80 @@ real login screen itself sets, then opening the Utility Hub against
 real local data) confirming the tool count reads 14/6, the CalcIndia
 tile and "Calculators" category are both gone from the DOM, and zero
 console/page errors.
+
+## 2026-10-14 — PDF Page Manager: Branch Export (detect branch per page, save branch-wise PDFs/JPGs)
+
+Alok asked for a way to take a multi-page PDF where each page/letter
+belongs to some branch (named in Hindi or English, printed somewhere on
+the page) and automatically split it into branch-wise output -- either
+one combined PDF per branch, or a JPG per page -- saved into a folder he
+picks. He also sent a real sample photo (a UPGB letter photographed on a
+desk, "शाखा - पोरा" near the bottom) asking for a concrete rename-and-save
+demo before the full feature was built, and then asked specifically for
+HD, properly cropped/aligned output where zooming in doesn't blur the
+text ("stretch karne par fate na, text proper visible ho").
+
+Added as a new "🏷️ Branch Export" button/modal in `tools/pdf-page-manager.html`,
+operating directly on whatever is already loaded into the page strip
+(PDF pages and/or bare images, in whatever order/rotation the user has
+arranged) -- no separate upload step:
+
+- **Detection, real text first, OCR fallback**: `pdfjsLib`'s
+  `getTextContent()` is tried first for every page; this app's OWN
+  generated letters (NPA Notice, Application Form, Universal Letter
+  Generator) are html2canvas rasterizations with no text layer at all, so
+  real text always comes back empty for them and OCR picks up the work --
+  a genuinely text-based PDF instead skips OCR entirely (faster, more
+  accurate). OCR is Tesseract.js 5.1.1, self-hosted (not CDN) under
+  `js/vendor/tesseract*.min.js` + `js/vendor/tesseract-core/` (the LSTM +
+  SIMD-LSTM WASM cores only, ~8 MB -- OEM is forced to LSTM_ONLY so the
+  other two core variants are never requested) + `js/vendor/tessdata/`
+  (English + Hindi trained data, gzipped, ~2.9 MB). The ~10 MB engine is
+  injected lazily -- only once a page with no real text layer is actually
+  hit, so a session that only ever opens genuine text PDFs never pays for
+  it. Branch names are typed one per line (Hindi or English spelling) and
+  matched case-insensitively as a substring against each page's text;
+  unmatched pages go under their own "Unmatched" bucket rather than being
+  silently dropped.
+- **Quality pipeline, added after Alok's follow-up request**: a
+  photographed letter (an 'image' source, not a real PDF page) usually has
+  a visible desk/background margin and is a bit soft/low-contrast. Render
+  SCALE can't fix that -- stretching a photo past its own native pixels
+  only blurs it further on zoom -- so photos are kept at native
+  resolution and instead run through `autoCropToContent()` (Otsu's method
+  picks the brightness cut that best separates "paper" from "background",
+  adapting to whatever lighting the photo has; a flood-fill then finds the
+  single LARGEST connected bright region -- the page itself, since
+  scattered bright bits like keyboard key-labels lose out to the page's
+  one big blob -- and crops to its bounding box with a small margin) and
+  `enhanceForClarity()` (a gentle contrast/brightness stretch for crisper
+  text without blowing out signatures/stamps). A real PDF-rendered page
+  has no such resolution ceiling, so instead it's re-rendered via pdf.js
+  at a genuinely higher scale (3.0x) for crisp, zoomable HD output. JPG
+  export uses 0.95 JPEG quality; "Branch-wise PDF" output runs photographed
+  pages through the exact same crop+enhance pass before embedding (via a
+  new `buildBranchPdfBytes()`, a sibling of the existing `buildOutputBytes()`)
+  rather than embedding the raw, unedited camera photo. Deliberately NOT
+  attempted: correcting an arbitrarily tilted/skewed photo (true
+  perspective deskew) -- a much bigger computer-vision feature on its own;
+  the existing 90°-step Rotate buttons in the page strip, used before
+  running Branch Export, cover a sideways page.
+- **Output**: "Branch-wise PDF" (one combined PDF per branch, built via
+  pdf-lib exactly like the tool's existing Save/Extract, so real PDF
+  pages are copied as true vector pages, lossless) or "JPG images" (flat
+  folder, branch name in the filename, e.g. `Agsauli_1.jpg` -- Alok's own
+  confirmed choice over one-subfolder-per-branch). Saves via
+  `showDirectoryPicker()` to a user-chosen folder, with the same
+  JSZip-download fallback already established in Branch Split for
+  browsers without that API (or if the user skips the folder picker).
+
+Verified: `node --check` on the extracted script; HTML tag-balance
+check; a real end-to-end Playwright run against Alok's own actual sample
+photo for BOTH output formats -- confirmed OCR correctly read "पोरा"
+(Pora) and the tool wrote a correctly-named, correctly-cropped,
+contrast-enhanced output in each format with zero console/page errors;
+a second run with a genuine text-layer PDF (built with jsPDF) confirming
+the real-text path is used and OCR is skipped entirely when real text is
+present; screenshotted the open modal in light and dark theme.
+
+Not yet done: mirrored to Recovery Dashboard (next step).
