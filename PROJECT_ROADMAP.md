@@ -7279,4 +7279,49 @@ a second run with a genuine text-layer PDF (built with jsPDF) confirming
 the real-text path is used and OCR is skipped entirely when real text is
 present; screenshotted the open modal in light and dark theme.
 
-Not yet done: mirrored to Recovery Dashboard (next step).
+Mirrored to Recovery Dashboard (direct push to `main`).
+
+## 2026-10-14 — Branch Export: 3 bugs found by code review, then a real-world failure, both fixed
+
+A code review of the Branch Export diff above turned up 3 real issues,
+fixed and shipped in both apps:
+
+- `showDirectoryPicker()` now requests `{mode:'readwrite'}` up front.
+  Without it the handle was read-only, and the later `createWritable()`
+  call's implicit permission upgrade could be silently denied once the
+  user-activation window from the "Choose folder" click expired (easily
+  outlasted by a multi-second OCR detection pass) -- every write on the
+  primary (non-ZIP) save path could then fail.
+- `getOcrWorker()`'s cached worker promise is now reset after the worker
+  is terminated at the end of a run, so a second Branch Export run that
+  also needs OCR creates a fresh worker instead of reusing a dead one
+  (every `recognize()` call on a terminated worker rejects).
+- `buildOutputBytes()` and `buildBranchPdfBytes()` now share one
+  `buildPdfFromEntriesCore()` implementation (parameterized by how an
+  image source gets embedded) instead of two near-duplicate ~40-line
+  functions, and a shared `docCache` is passed across per-branch
+  `buildBranchPdfBytes()` calls so a single multi-page source PDF feeding
+  several branches is parsed once instead of once per branch.
+
+Then Alok uploaded a REAL 25-page scanned letters PDF and reported Branch
+Export "NOT WORKING". Root cause: the PDF was produced by Adobe Scan,
+which embeds its OWN OCR text layer -- and for Devanagari that layer can
+be long but completely garbled (`pdf.js`'s `getTextContent()` returned
+"ATET -" for a real "शाखा - पोरा" line, the branch name gone entirely).
+The existing code only checked whether real text was *long enough*, so it
+wrongly trusted this garbage and skipped the OCR fallback that would have
+worked -- every single page came back "no match". Fixed: real text is now
+trusted only once it actually **matches** a branch, not just because it's
+long enough -- a real-text page matching nothing always gets a second,
+independent opinion from OCR before being logged as "no match".
+
+Verified against the exact failing file: previously every page failed;
+after the fix, 16 of 25 branches are correctly identified via the OCR
+fallback, with the remaining 9 safely bucketed as "Unmatched" (genuinely
+hard OCR cases -- unusual conjuncts like "पुरदित्रनगर" -- not a logic
+bug). Also re-verified: running Branch Export twice in one session (both
+needing OCR, exercising the worker-reuse fix), and a 3-page/2-branch PDF
+from one source confirming the shared-core refactor and `docCache` group
+pages correctly. Zero console/page errors throughout. Shipped: NPA-DASHBOARD
+via PR #358 and #359 (squash-merged), Recovery Dashboard via direct push
+to `main`.
