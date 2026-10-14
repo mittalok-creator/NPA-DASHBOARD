@@ -7170,3 +7170,36 @@ amount, exchange rate, and "rates as of"/"showing cached" status text are
 all correct in both cases; screenshotted the full directory, the
 Currency Converter, the Average calculator, and the Age Calculator (incl.
 at phone width) in light and dark theme.
+
+## 2026-10-14 — Disable CalcIndia in the Utility Hub (both apps), revisit later
+
+Alok asked to disable the CalcIndia tool in both apps for now ("baad main
+kabhi karenge iska kuch"). `tools/emi-calculator.html` itself (all 26
+calculators, just shipped the day before) is left completely untouched
+on disk -- only its entry point into the Utility Hub is removed, so
+re-enabling later is a straight, small revert:
+
+- `index.html` (both apps) -- the "Calculators" category tile and the
+  `data-view="emicalculator"` view section are commented out (not
+  deleted), each with a note explaining why and how to restore it. The
+  Utility Hub's own tool-count header is decremented to match (15→14 on
+  NPA-DASHBOARD, 7→6 on Recovery Dashboard).
+- `js/app.js` (both apps) -- `'emicalculator'` removed from
+  `UTILITY_CHILD_VIEWS` and `TOOL_IFRAME_BY_VIEW`, with the same note.
+
+Confirmed `switchView()`/`loadToolIframeIfNeeded()` both already guard
+against a missing view/iframe-id gracefully (no crash if `emicalculator`
+were ever somehow still requested) -- verified by reading both functions
+directly, not assumed. Cmd+K search was also confirmed to never index
+Utility Hub tools at all (it only searches NPA/KCC/PNPA account data),
+so removing the tile is the one and only way CalcIndia was ever
+reachable in either app's UI.
+
+Verified: `node --check`; HTML div/section-nesting balance (Python
+`html.parser`, with `<!-- -->` comments correctly excluded from
+tag-parsing by the parser itself); a live Playwright pass in each app
+(bypassing the PIN/Sol-ID login via the same `sessionStorage` keys the
+real login screen itself sets, then opening the Utility Hub against
+real local data) confirming the tool count reads 14/6, the CalcIndia
+tile and "Calculators" category are both gone from the DOM, and zero
+console/page errors.
