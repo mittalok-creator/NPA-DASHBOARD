@@ -7325,3 +7325,55 @@ from one source confirming the shared-core refactor and `docCache` group
 pages correctly. Zero console/page errors throughout. Shipped: NPA-DASHBOARD
 via PR #358 and #359 (squash-merged), Recovery Dashboard via direct push
 to `main`.
+
+## 2026-10-14 — OTS Calculator: official "One Pager" format (Print/Save PDF/Share)
+
+Alok uploaded his own reference file (`OTS_ONE_PAGER_FORMAT.xlsx`) and
+asked for the OTS Calculator to also produce this exact format, shareable/
+downloadable the same way everything else in the calculator already is.
+This is the bank's own official 23-field numbered compromise-proposal
+annexure for CO/HO submission -- distinct from the existing OTS
+Settlement Statement (`renderPrintView()`/`shareOtsPdf()`), which Alok has
+separately, informally also called his "ots one pager" in the past but is
+a different, less formal sheet, left completely unchanged.
+
+Added a new "📄 One Pager" button alongside the account detail screen's
+existing Excel/Print/WhatsApp buttons. Of the 23 numbered fields, 18
+already have a live source elsewhere in this file -- Region (branch
+district), Sol-ID, Account No/Name, Sanction Date/Amt, NPA Date,
+NPA Category (Asset Code), Net Book Due (O/S Balance), Interest Reversed,
+Notional Interest (the existing UCI@8.5% figure, with the same anchor-
+date label `uciLabelWithTenure()` already uses), Notional Dues, Provision
+Held, the typed OTS Amount (Compromise Amount), and Waiver/Write-off/
+Total Sacrifice/Impact on P&L (all derived from the same figures,
+exactly consistent with the Settlement Statement/Loan Table -- editing
+OTS Amount or Interest Reversal elsewhere updates this too). Only 5
+narrative fields have no existing data source (Purpose of Loan, Property
+Details with Valuation and Date, Staff Accountability Status, Complete
+Recovery Action Taken till Date, Reason for Compromise) -- these get a
+small input card per linked account, persisted the same per-device/
+per-account-no `localStorage` way as `otsAmounts`/`sanctionedByMap` above
+(new `onePagerFieldsMap`/`upgb-ots-one-pager` key).
+
+Visually matches Alok's own reference file closely (plain black-on-white
+bordered numbered grid, Calibri, no color -- a formal annexure look,
+deliberately different from this app's usual branded-document style)
+under this app's own bank-identity header. Print/Save-as-PDF/WhatsApp
+Share reuse the exact same machinery every other generated document here
+already uses (`printWithPageSize()`/`addCanvasPagesToDoc()`/
+`shareFileOrFallback()`, plus the Application Form's generic
+`otsAppRenderLetterCanvas()`) -- its own `__onePagerPdfBusy` flag, not a
+shared one, per this file's established one-flag-per-feature convention
+(see `__npaNoticePdfBusy`'s own comment) so unrelated PDF-generating
+features never block each other.
+
+Verified against a real account from the live book: all 23 fields render
+correctly and match the template's own layout/wording; hand-checked the
+arithmetic after typing a real OTS Amount (₹10,00,000 against this
+account's own real O/S/Provision/Notional Dues) -- Write-off, Total
+Sacrifice, Waiver, and Impact on P&L all came out exactly as hand-
+calculated; confirmed Compromise-Amount-dependent rows correctly show
+"—" before any OTS Amount is typed, rather than a wrong ₹0 figure;
+generated, downloaded and visually inspected the actual PDF (single page,
+no overflow, narrative text wraps cleanly); screenshotted the input
+modal in light and dark theme. Zero console/page errors throughout.

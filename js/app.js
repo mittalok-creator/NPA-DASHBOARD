@@ -1216,6 +1216,291 @@ function renderOtsApplicationView(){
 window.renderOtsApplicationView = renderOtsApplicationView;
 
 /* ==================================================================
+   OTS One Pager -- the bank's own official "ONE PAGER" compromise-
+   proposal format for CO/HO submission (Alok's request, 2026-10-14,
+   with his own reference file OTS_ONE_PAGER_FORMAT.xlsx: a plain,
+   numbered 23-row label/value grid -- Region, Sol-ID, Account No/Name,
+   Sanction Date/Amt, Purpose, NPA Date/Category, Net Book Due, Interest
+   Reversed, Notional Interest, Notional Dues, Provision Held, Compromise
+   Amount, Waiver, Write-off, Total Sacrifice, Impact on P&L, Property
+   Details, Staff Accountability, Recovery Action Taken, Reason for
+   Compromise). Distinct from the existing OTS Settlement Statement
+   (renderPrintView()/shareOtsPdf() above) -- a different, less formal
+   sheet Alok has separately called his "ots one pager" in conversation,
+   left completely unchanged here.
+
+   Nearly every numbered field already has a live source elsewhere in
+   this file -- O/S Balance, Interest Reversal, UCI@8.5%, Total Dues,
+   Provision, the typed OTS Amount, Total Sacrifice and Impact on P&L are
+   all exactly the same figures the Settlement Statement/Loan Table
+   already compute (same totalDuesFor()/uriFor()/otsAmounts lookups, so
+   editing those elsewhere keeps this in sync). Only 5 narrative fields
+   have no existing data source (Purpose of Loan, Property Details,
+   Staff Accountability, Recovery Action Taken, Reason for Compromise) --
+   those get their own small input card per account, persisted the same
+   per-device/per-account-no way as otsAmounts/sanctionedByMap above.
+
+   Print/Save-as-PDF/WhatsApp Share reuse this file's existing
+   printWithPageSize()/addCanvasPagesToDoc()/shareFileOrFallback() and the
+   Application Form's own otsAppRenderLetterCanvas() (generic -- renders
+   any given HTML string to a canvas, not Application-Form-specific
+   despite its name) -- the same machinery every other generated document
+   in this app already uses. __onePagerPdfBusy is its own flag (not
+   __otsAppPdfBusy) -- same deliberate per-feature-not-shared convention
+   as __npaNoticePdfBusy (see its own comment): unrelated features must
+   never block or be blocked by each other just because they share the
+   one #printArea element. ================================================================== */
+const ONE_PAGER_KEY = 'upgb-ots-one-pager';
+let onePagerFieldsMap = loadStoredMap(ONE_PAGER_KEY); // acctNo -> {purpose, property, staffAcct, recoveryAction, reason}
+function saveOnePagerFields(){ persistStoredMap(ONE_PAGER_KEY, onePagerFieldsMap); }
+let __onePagerLetters = [];
+let __onePagerPdfBusy = false;
+function onePagerFieldId(base, idx){ return idx===0 ? base : base+'_'+(idx+1); }
+
+function openOnePagerModal(){
+  const slots = window.__slots, custRow = window.__custRow;
+  if(!slots || !custRow || !slots.length) return;
+  renderOnePagerFieldsArea();
+  const preview = document.getElementById('onePagerPreviewWrap');
+  if(preview) preview.innerHTML = '';
+  document.getElementById('onePagerModalOverlay').classList.add('show');
+}
+window.openOnePagerModal = openOnePagerModal;
+function closeOnePagerModal(){
+  document.getElementById('onePagerModalOverlay').classList.remove('show');
+}
+window.closeOnePagerModal = closeOnePagerModal;
+
+function renderOnePagerFieldsArea(){
+  const slots = window.__slots || [];
+  const el = document.getElementById('onePagerFieldsArea');
+  if(!el) return;
+  let html = slots.map((s, idx)=>{
+    const saved = onePagerFieldsMap[s.acctNo] || {};
+    return '<div class="card ots-app-fields-card" style="margin-top:14px;">'
+      + '<div style="font-weight:800;margin-bottom:12px;">' + (slots.length>1 ? ('Account ' + (idx+1) + ' of ' + slots.length + ' — A/c No. ' + esc(s.acctNo)) : ('A/c No. ' + esc(s.acctNo))) + '</div>'
+      + '<div class="ots-app-fields-grid">'
+      +   '<div class="ots-app-field">'
+      +     '<label class="ots-app-field-label">Purpose of Loan</label>'
+      +     '<input type="text" id="' + onePagerFieldId('opPurpose', idx) + '" class="dash-select ots-app-field-input" style="padding-left:14px !important" placeholder="e.g. पशुपालन हेतु" value="' + esc(saved.purpose||'') + '">'
+      +   '</div>'
+      + '</div>'
+      + '<div class="ots-app-fields-grid" style="margin-top:12px;grid-template-columns:1fr;">'
+      +   '<div class="ots-app-field">'
+      +     '<label class="ots-app-field-label">Property Details with Valuation and Date</label>'
+      +     '<textarea id="' + onePagerFieldId('opProperty', idx) + '" class="dash-select ots-app-field-input op-textarea" style="padding-left:14px !important" placeholder="e.g. Residential plot, 120 sq.yd., Village X — valued ₹8,00,000 as on 01-09-2026 by approved valuer">' + esc(saved.property||'') + '</textarea>'
+      +   '</div>'
+      +   '<div class="ots-app-field">'
+      +     '<label class="ots-app-field-label">Staff Accountability Status</label>'
+      +     '<input type="text" id="' + onePagerFieldId('opStaffAcct', idx) + '" class="dash-select ots-app-field-input" style="padding-left:14px !important" placeholder="e.g. Examined — no staff lapse found" value="' + esc(saved.staffAcct||'') + '">'
+      +   '</div>'
+      +   '<div class="ots-app-field">'
+      +     '<label class="ots-app-field-label">Complete Recovery Action Taken till Date</label>'
+      +     '<textarea id="' + onePagerFieldId('opRecoveryAction', idx) + '" class="dash-select ots-app-field-input op-textarea" style="padding-left:14px !important" placeholder="e.g. Demand notices issued, SARFAESI possession proceedings initiated, ...">' + esc(saved.recoveryAction||'') + '</textarea>'
+      +   '</div>'
+      +   '<div class="ots-app-field">'
+      +     '<label class="ots-app-field-label">Reason for Compromise</label>'
+      +     '<textarea id="' + onePagerFieldId('opReason', idx) + '" class="dash-select ots-app-field-input op-textarea" style="padding-left:14px !important" placeholder="e.g. Borrower under financial distress, no further recoverable security, ...">' + esc(saved.reason||'') + '</textarea>'
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  html += '<div style="margin-top:16px;"><button type="button" class="ots-app-btn-primary" onclick="generateOnePager()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Generate One Pager' + (slots.length>1?'s':'') + '</button></div>';
+  el.innerHTML = html;
+}
+
+function onePagerReadFields(idx, acctNo){
+  const purpose = (document.getElementById(onePagerFieldId('opPurpose', idx)).value||'').trim();
+  const property = (document.getElementById(onePagerFieldId('opProperty', idx)).value||'').trim();
+  const staffAcct = (document.getElementById(onePagerFieldId('opStaffAcct', idx)).value||'').trim();
+  const recoveryAction = (document.getElementById(onePagerFieldId('opRecoveryAction', idx)).value||'').trim();
+  const reason = (document.getElementById(onePagerFieldId('opReason', idx)).value||'').trim();
+  const fields = {purpose, property, staffAcct, recoveryAction, reason};
+  if(purpose||property||staffAcct||recoveryAction||reason) onePagerFieldsMap[acctNo] = fields;
+  else delete onePagerFieldsMap[acctNo];
+  return fields;
+}
+
+function onePagerRow(num, label, valueHtml, opts){
+  opts = opts || {};
+  return '<div class="op-row' + (opts.wrap?' op-wraprow':'') + '">'
+    + '<div class="op-num">' + num + '</div>'
+    + '<div class="op-label">' + esc(label) + '</div>'
+    + '<div class="op-val">' + valueHtml + '</div>'
+    + '</div>';
+}
+// Builds one account's One Pager. Fields 1-6, 8-19 all read off the exact
+// same live figures the Settlement Statement/Loan Table already compute
+// (totalDuesFor()/uriFor() so a live Interest Reversal edit is reflected
+// here too, not a stale snapshot); only 7 and 20-23 come from the typed
+// fields above, since this app's NPA data has no source for them.
+function buildOnePagerHTML(s, custRow, fields){
+  const district = (BRANCH_META[Number(custRow[C.SOL_ID])]||{}).district || '—';
+  const solId = esc(custRow[C.SOL_ID]) || '—';
+  // Same anchor-date logic as uciLabelWithTenure() above (the Settlement
+  // Statement's own UCI@8.5% row label) -- "to" is always today, matching
+  // computeUCI()'s own hardcoded end date, so the label never disagrees
+  // with the number it's describing.
+  const uciAnchor = uciAnchorDate(s.npaDate, s.scheme);
+  const notionalIntLabel = uciAnchor
+    ? ('NOTIONAL INTEREST (Unapplied int. @8.50% from ' + fmtDate(uciAnchor) + ' (Date of NPA) to ' + fmtDate(new Date()) + ' (OTS Date))')
+    : 'NOTIONAL INTEREST (Unapplied int. @8.50%)';
+
+  const os = s.os!=='' ? s.os : 0;
+  const uri = uriFor(s);
+  const uci = s.uci!=='' ? s.uci : 0;
+  const notionalDuesRaw = totalDuesFor(s);
+  const notionalDues = notionalDuesRaw!=='' ? notionalDuesRaw : 0;
+  const provision = s.provision!=='' ? s.provision : 0;
+  const otsAmt = parseOtsAmount(otsAmounts[s.acctNo]);
+  const hasOts = otsAmt!==null;
+  const compromiseAmt = hasOts ? otsAmt : 0;
+  const writeOff = os - compromiseAmt;                    // 17: (10-15)
+  const totalSacrifice = notionalDues - compromiseAmt;     // 18: (13-15)
+  const waiver = totalSacrifice - writeOff;                // 16: the interest/dues portion of the sacrifice (Total Sacrifice less the principal Write-off)
+  const impactPL = compromiseAmt + provision - os;         // 19: (15+14-10)
+
+  const logoSrc = document.querySelector('.nav-logo')?.src || '';
+  const header = '<div class="pv-topbar"></div>'
+    + '<div class="pv-brandrow">'
+    +   (logoSrc?('<img class="pv-logo" src="' + logoSrc + '" alt="">'):'')
+    +   '<div><div class="pv-bank">Uttar Pradesh Gramin Bank</div><div class="pv-bank-sub">Regional Office Hathras</div></div>'
+    + '</div>';
+
+  const body = '<div class="op-title">One Time Settlement &ndash; One Pager</div>'
+    + '<div class="op-row op-row-split">'
+    +   '<div class="op-num">1</div><div class="op-label op-strong">REGION</div><div class="op-val op-strong">' + esc(district) + '</div>'
+    +   '<div class="op-num op-sub">2</div><div class="op-label op-strong op-sub">SOL-ID</div><div class="op-val op-strong op-sub">' + solId + '</div>'
+    + '</div>'
+    + onePagerRow(3, 'ACCOUNT NO', esc(s.acctNo)||'—')
+    + onePagerRow(4, 'ACCOUNT NAME', esc(custRow[C.NAME])||'—')
+    + onePagerRow(5, 'SANCTION DATE', fmtDate(toDate(s.sanctionDate)))
+    + onePagerRow(6, 'SANCTION AMT', fmtINR2(s.sanctionLimit))
+    + onePagerRow(7, 'PURPOSE OF LOAN', esc(fields.purpose)||'—')
+    + onePagerRow(8, 'NPA DATE', fmtDate(toDate(s.npaDate)))
+    + onePagerRow(9, 'NPA CATEGORY', esc(s.assetCode)||'—')
+    + onePagerRow(10, 'NET BOOK DUE (O/S)', fmtINR2(os))
+    + onePagerRow(11, 'INT REVERSED ON NPA DATE (URI/DI)', fmtINR2(uri))
+    + onePagerRow(12, notionalIntLabel, fmtINR2(uci))
+    + onePagerRow(13, 'NOTIONAL DUES ( 10 + 11 + 12 )', fmtINR2(notionalDues))
+    + onePagerRow(14, 'PROVISION HELD', fmtINR2(provision))
+    + onePagerRow(15, 'COMPROMISE AMOUNT', hasOts?fmtINR2(compromiseAmt):'—')
+    + onePagerRow(16, 'WAIVER ( 18 − 17 )', hasOts?fmtINR2(waiver):'—')
+    + onePagerRow(17, 'WRITE-OFF ( 10 − 15 )', hasOts?fmtINR2(writeOff):'—')
+    + onePagerRow(18, 'TOTAL SACRIFICE AMOUNT ( 13 − 15 )', hasOts?fmtINR2(totalSacrifice):'—')
+    + onePagerRow(19, 'IMPACT ON PROFIT/LOSS (+/−) ( 15 + 14 − 10 )', hasOts?fmtINR2(impactPL):'—')
+    + onePagerRow(20, 'PROPERTY DETAILS WITH VALUATION AND DATE', esc(fields.property)||'—', {wrap:true})
+    + onePagerRow(21, 'STAFF ACCOUNTABILITY STATUS', esc(fields.staffAcct)||'—', {wrap:true})
+    + onePagerRow(22, 'COMPLETE RECOVERY ACTION TAKEN TILL DATE', esc(fields.recoveryAction)||'—', {wrap:true})
+    + onePagerRow(23, 'REASON FOR COMPROMISE', esc(fields.reason)||'—', {wrap:true});
+
+  return header + body + '<div class="pv-foot">UPGB OTS Calculator &middot; Designed &amp; Developed by Alok Mittal</div>';
+}
+
+function generateOnePager(){
+  const slots = window.__slots, custRow = window.__custRow;
+  if(!slots || !custRow || !slots.length) return;
+  const letters = slots.map((s, idx)=>{
+    const fields = onePagerReadFields(idx, s.acctNo);
+    return { acctNo: s.acctNo, html: buildOnePagerHTML(s, custRow, fields) };
+  });
+  saveOnePagerFields();
+  __onePagerLetters = letters;
+  const wrap = document.getElementById('onePagerPreviewWrap');
+  if(!wrap) return;
+  const actionsHtml = '<div class="ots-app-letter-actions">'
+    +   '<button type="button" class="ots-app-btn-pill" onclick="onePagerPrint()">🖨 <span>Print' + (letters.length>1?' All':'') + '</span></button>'
+    +   '<button type="button" class="ots-app-btn-pill" onclick="onePagerSavePdf()">⬇ <span>Save as PDF</span></button>'
+    +   '<button type="button" class="ots-app-btn-pill accent" onclick="onePagerSharePdf()">📤 <span>Share on WhatsApp</span></button>'
+    + '</div>';
+  wrap.innerHTML = '<div class="card ots-app-letter-frame" style="margin-top:16px;">'
+    + '<div class="ots-app-letter-frame-head">'
+    +   '<div class="ots-app-letter-frame-title">Generated One Pager' + (letters.length>1?(' (' + letters.length + ')'):'') + '</div>'
+    +   '<div class="ots-app-ready-badge"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Ready</div>'
+    + '</div>'
+    + actionsHtml
+    + letters.map((l,i)=>(letters.length>1?('<div class="ots-app-letter-caption">One Pager — Account ' + (i+1) + ' of ' + letters.length + ' (A/c No. ' + esc(l.acctNo) + ')</div>'):'')
+        + '<div class="ots-app-letter-paper">' + l.html + '</div>').join('')
+    + '</div>';
+  wrap.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+window.generateOnePager = generateOnePager;
+
+function onePagerPrint(){
+  if(!__onePagerLetters.length || __onePagerPdfBusy) return;
+  __onePagerPdfBusy = true;
+  try{
+    document.getElementById('printArea').innerHTML = '<div class="ots-app-print-wrap">'
+      + __onePagerLetters.map(l=>'<div class="ots-app-letter-page">' + l.html + '</div>').join('')
+      + '</div>';
+    printWithPageSize('size:A4;margin:12mm');
+  } finally {
+    __onePagerPdfBusy = false;
+  }
+}
+window.onePagerPrint = onePagerPrint;
+
+function onePagerFileBase(){
+  const custRow = window.__custRow || {};
+  const safeName = String(custRow[C.NAME]||'borrower').replace(/[\\/:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,40);
+  const suffix = __onePagerLetters.length>1 ? '_AllAccounts' : '';
+  return 'OTS_One_Pager_' + safeName + suffix;
+}
+// Reuses otsAppRenderLetterCanvas() (Application Form's helper, but
+// generic -- just html2canvas-rasterizes whatever HTML string it's given
+// via the shared #printArea) and addCanvasPagesToDoc() exactly like
+// otsAppBuildCombinedPdfBlob() above, one shared PDF across every linked
+// account's own page.
+async function onePagerBuildCombinedPdfBlob(){
+  await Promise.all([ensureHtml2Canvas(), ensureJsPDF()]);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4', orientation:'portrait', compress:true });
+  const margin = 24;
+  const usableW = doc.internal.pageSize.getWidth() - margin*2;
+  const usableH = doc.internal.pageSize.getHeight() - margin*2;
+  for(let i=0;i<__onePagerLetters.length;i++){
+    const canvas = await otsAppRenderLetterCanvas(__onePagerLetters[i].html);
+    if(i>0) doc.addPage();
+    addCanvasPagesToDoc(doc, canvas, margin, usableW, usableH);
+  }
+  return doc.output('blob');
+}
+async function onePagerSavePdf(){
+  if(!__onePagerLetters.length || __onePagerPdfBusy) return;
+  __onePagerPdfBusy = true;
+  try{
+    const blob = await onePagerBuildCombinedPdfBlob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = onePagerFileBase() + '.pdf';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 30000);
+  }catch(err){
+    console.error(err);
+    alert('Could not prepare the PDF. Please try again.');
+  } finally {
+    __onePagerPdfBusy = false;
+  }
+}
+window.onePagerSavePdf = onePagerSavePdf;
+async function onePagerSharePdf(){
+  if(!__onePagerLetters.length || __onePagerPdfBusy) return;
+  __onePagerPdfBusy = true;
+  try{
+    const blob = await onePagerBuildCombinedPdfBlob();
+    const custRow = window.__custRow || {};
+    const shareText = (custRow[C.NAME]||'—') + ' — ' + (custRow[C.SOL_DESC]||'—') + ' — OTS One Pager' + (__onePagerLetters.length>1 ? (' (' + __onePagerLetters.length + ' accounts)') : '');
+    await shareFileOrFallback(blob, onePagerFileBase() + '.pdf', 'application/pdf', shareText);
+  }catch(err){
+    console.error(err);
+    alert('Could not prepare the PDF to share. Please try again.');
+  } finally {
+    __onePagerPdfBusy = false;
+  }
+}
+window.onePagerSharePdf = onePagerSharePdf;
+
+/* ==================================================================
    NPA Notice -- branch-wise, PDF, generated-document feature (Alok's
    request, 2026-10-12: a Word mail-merge "15-day NPA recall notice"
    his branches currently produce by hand, brought into both apps'
@@ -3681,6 +3966,9 @@ function openDetail(custId, jumpAcct, fromHistory){
         </button>
         <button class="share-btn" onclick="toggleShareOtsMenu(event)" title="Share on WhatsApp" aria-label="Share this report on WhatsApp">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
+        </button>
+        <button class="share-btn" onclick="openOnePagerModal()" title="OTS One Pager" aria-label="Generate the official OTS One Pager format">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
         </button>
       </div>
     </div>
@@ -11222,6 +11510,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   document.getElementById('quickAcctModalOverlay')?.addEventListener('click',(e)=>{ if(e.target.id==='quickAcctModalOverlay') closeQuickAcctModal(); });
   on('wsCloseX','click',closeOtsWorksheet);
   document.getElementById('wsModalOverlay')?.addEventListener('click',(e)=>{ if(e.target.id==='wsModalOverlay') closeOtsWorksheet(); });
+  document.getElementById('onePagerModalOverlay')?.addEventListener('click',(e)=>{ if(e.target.id==='onePagerModalOverlay') closeOnePagerModal(); });
   on('clearBtn','click',()=>clearSearch());
   on('searchGoBtn','click',()=>runSearch());
   on('uploadDrop','click',()=>document.getElementById('fileInput').click());

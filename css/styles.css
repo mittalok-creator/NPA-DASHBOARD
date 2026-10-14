@@ -1004,6 +1004,14 @@ main{padding:20px 16px 40px}
 .ots-app-field-input-wrap:focus-within .ots-app-field-icon{color:var(--accent)}
 .ots-app-field-input{width:100%;min-width:0;padding-left:30px !important}
 .ots-app-field-hint{font-size:11px;color:var(--sub);margin-top:5px}
+/* Textarea variant of .ots-app-field-input -- that class alone is fine for
+   a single-line input (Application Form's own fields are all one-line),
+   but a bare <textarea class="dash-select ots-app-field-input"> still
+   inherits .dash-select's cursor:pointer (meant for its usual <select>
+   role) and has no resize/line-height of its own, both wrong for the
+   multi-line narrative fields the One Pager needs (Property Details,
+   Recovery Action Taken, Reason for Compromise). */
+.op-textarea{cursor:text !important;min-height:64px;resize:vertical;line-height:1.5;padding-top:9px !important}
 
 .ots-app-letter-frame{animation:otsAppFadeUp .5s var(--ease) both}
 .ots-app-letter-frame-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
@@ -1496,6 +1504,29 @@ footer.app-foot{display:none;text-align:center;padding:26px 18px calc(28px + env
 .pv-agg-row.pv-agg-hero span:first-child{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-weight:800;font-size:12px;color:#111}
 .pv-agg-row.pv-agg-hero span:last-child{font-family:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-weight:800;font-size:16px}
 .pv-foot{margin-top:13px;text-align:center;font-size:9px;color:#8B93A0;letter-spacing:.2px}
+
+/* ---------- OTS One Pager (2026-10-14) ----------
+   The bank's own official "ONE PAGER" compromise-proposal format (from
+   Alok's uploaded OTS_ONE_PAGER_FORMAT.xlsx) -- a plain, formal,
+   black-on-white bordered grid (numbered label/value rows), matching
+   that template's own look (Calibri, thin borders, no color) rather than
+   this app's usual branded document style, since this exact one is meant
+   to go to CO/HO for sign-off looking like the official annexure, not
+   like an in-house report. Shares the existing .pv-topbar/.pv-brandrow/
+   .pv-bank header above it for bank-identity consistency with every
+   other generated document in this app. */
+.op-title{border:1px solid #000;border-bottom:none;text-align:center;font-weight:800;font-size:17px;text-transform:uppercase;letter-spacing:.3px;padding:10px;color:#111;font-family:Calibri,'Segoe UI',Arial,sans-serif;margin-top:14px}
+.op-row{display:flex;border:1px solid #000;border-bottom:none;font-family:Calibri,'Segoe UI',Arial,sans-serif;font-size:12.5px;color:#111;line-height:1.45}
+.op-row:last-child{border-bottom:1px solid #000}
+.op-num{width:30px;flex-shrink:0;border-right:1px solid #000;display:flex;align-items:center;justify-content:center;font-weight:700;padding:6px 2px}
+.op-label{flex:1;border-right:1px solid #000;padding:7px 10px;display:flex;align-items:center}
+.op-val{flex:1.15;padding:7px 10px;display:flex;align-items:center;word-break:break-word}
+.op-row.op-row-split .op-val{flex:0.7}
+.op-row.op-row-split .op-num.op-sub{border-left:1px solid #000}
+.op-row.op-row-split .op-label.op-sub{border-left:1px solid #000}
+.op-label.op-strong{justify-content:center;font-weight:700}
+.op-val.op-strong{justify-content:center;font-weight:700}
+.op-row.op-wraprow .op-val{align-items:flex-start;white-space:pre-wrap}
 
 /* ---------- WhatsApp share card (2026-08-29, light theme) ----------
    A separate, mobile-shaped summary -- bank identity, borrower profile,
