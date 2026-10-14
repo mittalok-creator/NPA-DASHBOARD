@@ -10948,7 +10948,11 @@ window.exportSmaSummary = exportSmaSummary;
 // not their own nav-rail items -- the "Utility" nav-item stays highlighted
 // as their parent while viewing either, so the rail never shows nothing
 // active at all.
-const UTILITY_CHILD_VIEWS = ['onedrive','passsheet','regionsummary','pnpasummary','telephonedirectory','hbrreport','npasolsummary','branchmap','branchsplit','kccoverduesummary','otsapplicationform','npatarget','npanotice','pdfpagemanager','letterautomation','emicalculator'];
+// 'emicalculator' (CalcIndia) deliberately left out -- disabled at
+// Alok's request (2026-10-14), revisit later. tools/emi-calculator.html
+// itself is untouched on disk; only its Utility Hub entry point is
+// removed here and in index.html's tile/view-section markup.
+const UTILITY_CHILD_VIEWS = ['onedrive','passsheet','regionsummary','pnpasummary','telephonedirectory','hbrreport','npasolsummary','branchmap','branchsplit','kccoverduesummary','otsapplicationform','npatarget','npanotice','pdfpagemanager','letterautomation'];
 /* Screen switches used to be an instant cut -- .view{display:none} has no
    transition of its own, so the outgoing screen just vanished the moment a
    nav item was clicked, then the incoming one popped in a beat later (its
@@ -10973,7 +10977,6 @@ const TOOL_IFRAME_BY_VIEW = {
   kccoverduesummary: 'kccOverdueSummaryFrame',
   pdfpagemanager: 'pdfPageManagerFrame',
   letterautomation: 'letterGeneratorFrame',
-  emicalculator: 'emiCalculatorFrame',
 };
 function loadToolIframeIfNeeded(view){
   const frameId = TOOL_IFRAME_BY_VIEW[view];
