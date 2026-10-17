@@ -7402,3 +7402,35 @@ Amount typed in, downloaded the workbook, and confirmed every one of the
 openpyxl read -- in particular that the Waiver/Write-off/Total Sacrifice/
 Impact on P&L numbers exactly match the PDF's own (already hand-verified)
 figures. Zero console/page errors.
+
+## 2026-10-17 — PDF Page Manager: Pages → JPG (plain PDF-to-images, no branch detection)
+
+Alok: "pdf tool main agar mujhe branchwise jpg na kar k pdf ko images main
+convert karna ho to wo nahi ho pa raha" -- Branch Export's JPG output
+always requires a branch list typed in first (leaving it blank just shows
+"enter a branch name" and exports nothing), so there was no direct "just
+turn every page of this PDF into its own JPG" path -- exactly what he
+needed for a plain 55-page scanned PDF with no branches involved at all.
+
+Added a new "🖼️ Pages → JPG" toolbar button/modal, independent of Branch
+Export: pick All pages or only the currently-Selected ones, pick a save
+folder (or a ZIP fallback), Start. Every page goes through the exact same
+HD pipeline Branch Export's JPG output already uses (`getExportCanvas()` --
+3x-scale re-render for a real PDF page, native-resolution autocrop+
+contrast-enhance for a photographed page -- then 0.95-quality JPEG), just
+with the OCR/branch-detection pass skipped entirely, so it's instant even
+on a large PDF. Output is a flat folder, sequentially named and zero-
+padded to the page count (`Page_01.jpg` … `Page_55.jpg`).
+
+`writeOutputFile()` (previously hardcoded to Branch Export's own
+`beDirHandle`) now takes the folder handle as a parameter, so this feature
+reuses it with its own independently-chosen folder rather than duplicating
+the write-to-folder-or-ZIP logic a second time; Branch Export's two call
+sites were updated to pass `beDirHandle` explicitly, behavior unchanged.
+
+Verified against the same real 25-page scanned letters PDF Branch Export
+was fixed against (standing in for Alok's actual 55-page file -- the
+mechanism has no page-count-dependent logic): all 25 pages exported
+correctly-named, correctly-ordered, full HD resolution (1698×2376);
+separately verified the Selected-only scope exports exactly the 2 chosen
+pages. Zero console/page errors in either run.
