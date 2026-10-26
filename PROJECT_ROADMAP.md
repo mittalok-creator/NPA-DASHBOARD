@@ -7434,3 +7434,29 @@ mechanism has no page-count-dependent logic): all 25 pages exported
 correctly-named, correctly-ordered, full HD resolution (1698×2376);
 separately verified the Selected-only scope exports exactly the 2 chosen
 pages. Zero console/page errors in either run.
+
+## 2026-10-26 — Fix: "Share on WhatsApp" dead end on Windows desktop Chrome
+
+Alok hit "Could not prepare the PDF to share. Please try again." clicking
+Share on WhatsApp on a generated Negative P&L Impact permission letter
+(Application Form), on a Windows desktop PC. Root cause, in
+`shareFileOrFallback()`: `navigator.canShare({files:[file]})` only checks
+API-level capability, not whether anything on the device will actually
+accept the file -- it answered `true`, but `navigator.share()` itself
+then had no registered target to hand a PDF to and rejected with a real
+(non-`AbortError`) error, which was re-thrown and surfaced only as that
+generic alert -- no PDF produced, no download, nowhere to go.
+
+Fixed in both copies of this function (`js/app.js`, the main app's OTS
+Calculator/Application Form/Settlement Statement share path, and
+`tools/pdf-page-manager.html`'s own ported copy): any `navigator.share()`
+failure OTHER than the user closing the share sheet (`AbortError`) now
+falls through to the existing manual download+`wa.me` fallback -- the
+exact same path already used when `canShare` is false outright -- instead
+of leaving the user with neither a shared file nor a downloaded one.
+
+Verified by mocking `navigator.canShare`/`navigator.share` to reproduce
+the exact failure (`canShare` true, `share()` rejects with a real error,
+not AbortError) against a real account's Application Form: the PDF now
+downloads and a pre-filled WhatsApp Web tab opens, with zero error
+dialogs shown to the user -- matching the intended fallback behavior.

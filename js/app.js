@@ -496,11 +496,19 @@ async function shareFileOrFallback(blob, fileName, mimeType, shareText){
   if(navigator.canShare && navigator.canShare({files:[file]})){
     try{
       await navigator.share({ files:[file], title:'UPGB OTS Calculator', text:shareText });
+      return;
     }catch(err){
       if(err && err.name==='AbortError') return; // user closed the share sheet -- not a failure
-      throw err;
+      // Any other failure falls through to the manual download+wa.me path
+      // below, instead of leaving the user with neither a shared file nor
+      // a downloaded one. Real-world case this fixes (2026-10-26, Windows
+      // desktop Chrome): canShare({files}) answers true (it only checks
+      // API-level capability), but share() itself then has no registered
+      // target to hand a PDF to and rejects -- previously that re-thrown
+      // error surfaced only as "Could not prepare the PDF to share" with
+      // no PDF produced at all.
+      console.error('navigator.share failed, falling back to download:', err);
     }
-    return;
   }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
