@@ -7460,3 +7460,42 @@ the exact failure (`canShare` true, `share()` rejects with a real error,
 not AbortError) against a real account's Application Form: the PDF now
 downloads and a pre-filled WhatsApp Web tab opens, with zero error
 dialogs shown to the user -- matching the intended fallback behavior.
+
+## 2026-10-27 — Download tab: add SMA (4th category, alongside NPA/KCC Overdue/PNPA)
+
+Alok: "sma ko bhi excel main download ka bana do proper formated." The
+Download tab's own `DL_TAB_GROUPS` structure had an explicit forward-
+looking comment from when PNPA was added ("a future category e.g. KCC
+Overdue/SMA downloads can be added as a sibling tab later without a
+redesign") -- this is that category, added the same way KCC Overdue/PNPA
+were: a 4th tab, reading from `SMA_DATA`/`SR` (the SMA Dashboard's own
+already-parsed data and column map), same `dlExportWorkbook()` mechanics,
+same styled-header/zebra-striped/auto-filtered sheet convention as every
+other category.
+
+4 cards: **Total SMA List** (every account), and **SMA-0 / SMA-1 / SMA-2**
+(filtered to that stage, matching the on-screen SMA Dashboard's own
+3-stage breakdown and colour-coding exactly -- `SMA_STAGES`). 18 output
+columns covering every field the SMA file actually carries (Sol ID,
+Branch, Account No, Customer ID, Scheme Code, Account Name, Outstanding,
+SMA Customer/Account/Reason/Type, Non-Financial (Y/N), Limit Review Date,
+Limit, ROI, CADU, Sanction Date, Mobile No) -- Account No/Customer ID
+written as real numbers via the existing `setIdCell()` (never scientific
+notation), Outstanding/Limit/ROI/CADU as real numbers with a `0.00`
+format, not text.
+
+Real bug caught in testing, not by reading the code: the very first test
+run threw `dlExportSmaTotal is not defined` on click -- every other
+category's export functions are explicitly re-exposed on `window` in one
+block near the end of the file (the whole script runs inside
+`initApp(DATA){...}`, so a plain top-level `function` here is NOT
+actually a global the HTML's inline `onclick="..."` can reach) -- missed
+on the first pass since nothing else in this change looked at that block.
+Fixed by adding the same `window.dlExportSmaTotal`/`dlExportSma0/1/2`
+lines KCC/PNPA's own exports already have.
+
+Verified against the real, freshly-published SMA file (today's Publish,
+30,536 accounts): Total SMA export's row count matches exactly
+(30,536); SMA-1 export (6,336 rows) spot-checked to confirm every row
+genuinely has SMA (Customer) = "SMA1"; header styling, zebra striping,
+column widths and auto-filter all present; zero console/page errors.
