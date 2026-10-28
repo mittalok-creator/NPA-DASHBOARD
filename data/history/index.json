@@ -1,6 +1,14 @@
 [
   {
     "date": "2026-10-02",
+    "file": "history/2026-10-02-1793160720987.json",
+    "rowCount": 13471,
+    "publishedAt": "2026-10-28T04:12:00.987Z",
+    "publishedBy": "mittalok-creator",
+    "isRollback": false
+  },
+  {
+    "date": "2026-10-02",
     "file": "history/2026-10-02-1793160650465.json",
     "rowCount": 13471,
     "publishedAt": "2026-10-28T04:10:50.465Z",
@@ -468,14 +476,6 @@
     "file": "history/2026-09-09-1789122783143.json",
     "rowCount": 13700,
     "publishedAt": "2026-09-11T10:33:03.143Z",
-    "publishedBy": "mittalok-creator",
-    "isRollback": false
-  },
-  {
-    "date": "2026-09-09",
-    "file": "history/2026-09-09-1789027231751.json",
-    "rowCount": 13700,
-    "publishedAt": "2026-09-10T08:00:31.751Z",
     "publishedBy": "mittalok-creator",
     "isRollback": false
   }
