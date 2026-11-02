@@ -7412,6 +7412,34 @@ const SMA_DL_EXPORTS = [
   {id:'sma2', title:'SMA-2', desc:'Accounts currently flagged SMA-2.', fn:'dlExportSma2', icon:DL_ICON_CLOCK, color:'coral'},
 ];
 
+/* ---------- Download tab: Slippage During Current Month export -- a fifth
+   DL_TAB_GROUPS category (Alok, 2026-11-02: "download main bhi slippage
+   download option aaye aur wahan total slippage show ho ... jaise maine
+   man lo ki 10 file upload ki hain to un sab ka data pura show ho na ki
+   last file ka"). SLIPPAGE_DATA.rows are already in the exact same C.*
+   shape as DATA.npa.rows (parsed through mapHoRowsToNpa(), the same
+   parser the Daily NPA upload itself uses -- see handleSlippageUpload()
+   below), so the export reuses the "Complete NPA List" sheet writer
+   (dlWriteSheet/DL_OUT_HEADERS) as-is -- no new column layout needed. ---------- */
+function ensureSlippageDataForDl(){
+  if(SLIPPAGE_DATA) return Promise.resolve(SLIPPAGE_DATA);
+  return fetchJson('data/slippage.json?t=' + Date.now())
+    .then(d => { SLIPPAGE_DATA = d; return d; })
+    .catch(e => { showToast('Could not load Slippage data.'); throw e; });
+}
+// Overridden by Recovery Dashboard's own copy of this file to branch-lock
+// the source rows, matching dlSmaSourceRows()'s own convention.
+function dlSlippageSourceRows(){ return (SLIPPAGE_DATA && SLIPPAGE_DATA.rows) || []; }
+function dlExportSlippageTotal(){
+  ensureSlippageDataForDl().then(()=>{
+    dlExportWorkbook([{name:'Slippage_Current_Month', rows: dlSlippageSourceRows()}], 'Slippage_Current_Month_' + dateToInputValue(new Date()) + '.xlsx');
+  }).catch(()=>{});
+}
+window.dlExportSlippageTotal = dlExportSlippageTotal;
+const SLIPPAGE_DL_EXPORTS = [
+  {id:'slippagetotal', title:'Total Slippage (Current Month)', desc:'Every account slipped to NPA so far this cycle, across every daily upload combined.', fn:'dlExportSlippageTotal', icon:DL_ICON_CAL_DAY, color:'rose'},
+];
+
 const DL_EXPORTS = [
   {id:'complete', title:'Complete NPA List', desc:'Every account in the current NPA book, one sheet.', fn:'dlExportComplete', icon:DL_ICON_LIST, color:'jade'},
   {id:'assetcode', title:'Asset Code wise NPA List', desc:'Pick all 5 categories in one workbook, or any single category on its own.', fn:'dlExportAssetCodeWise', icon:DL_ICON_LAYERS, color:'gold'},
@@ -7429,10 +7457,11 @@ const DL_TAB_GROUPS = [
   {id:'kccoverdue', label:'KCC Overdue', exports: KCC_DL_EXPORTS},
   {id:'pnpa', label:'PNPA', exports: PNPA_DL_EXPORTS},
   {id:'sma', label:'SMA', exports: SMA_DL_EXPORTS},
+  {id:'slippage', label:'Slippage', exports: SLIPPAGE_DL_EXPORTS},
 ];
 // Icons for the tab row itself (separate from each card's own icon above),
 // keyed by DL_TAB_GROUPS id.
-const DL_TAB_ICONS = { npa: DL_ICON_LIST, kccoverdue: DL_ICON_CLOCK, pnpa: DL_ICON_CAL_DAY, sma: DL_ICON_WALLET };
+const DL_TAB_ICONS = { npa: DL_ICON_LIST, kccoverdue: DL_ICON_CLOCK, pnpa: DL_ICON_CAL_DAY, sma: DL_ICON_WALLET, slippage: DL_ICON_CAL_DAY };
 let dlActiveTab = DL_TAB_GROUPS[0].id;
 const DL_DOWNLOAD_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
 function setDlTab(id){ dlActiveTab = id; renderNpaDownloadView(); }
@@ -7668,7 +7697,7 @@ function openPublishReview(){
     icon: ICON_BANKNOTE, title: 'NPA Book', maybe: true,
     sub: `${summary.rowCount.toLocaleString('en-IN')} accounts · as on ${fmtAsOnDisplay()}`,
   })];
-  let pnpaLabel = null, weeklyPnpaLabel = null, monthlyPnpaLabel = null, kccovLabel = null, smaLabel = null;
+  let pnpaLabel = null, weeklyPnpaLabel = null, monthlyPnpaLabel = null, kccovLabel = null, smaLabel = null, slippageLabel = null;
   if(__pendingPnpaData){
     pnpaLabel = `Daily PNPA (${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingPnpaData.asOnDate||''})`;
     items.push(publishReviewItemRow({ icon: ICON_ALERT_CIRCLE, title: 'Daily PNPA', sub: `${__pendingPnpaData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingPnpaData.asOnDate||'')}` }));
@@ -7688,6 +7717,10 @@ function openPublishReview(){
   if(__pendingSmaData){
     smaLabel = `SMA (${__pendingSmaData.rows.length.toLocaleString('en-IN')} accounts, as on ${__pendingSmaData.asOnDate||''})`;
     items.push(publishReviewItemRow({ icon: ICON_ALERT_TRIANGLE, title: 'SMA', sub: `${__pendingSmaData.rows.length.toLocaleString('en-IN')} accounts · as on ${esc(__pendingSmaData.asOnDate||'')}` }));
+  }
+  if(__pendingSlippageData){
+    slippageLabel = `Slippage During Current Month (${__pendingSlippageData.rows.length.toLocaleString('en-IN')} accounts tracked)`;
+    items.push(publishReviewItemRow({ icon: ICON_ALERT_TRIANGLE, title: 'Slippage During Current Month', sub: `${__pendingSlippageData.rows.length.toLocaleString('en-IN')} account(s) tracked this cycle` }));
   }
   const specialNoteCount = Object.keys(DATA.specialNotes||{}).length;
   if(specialNoteCount){
@@ -7713,7 +7746,7 @@ function openPublishReview(){
       publishedBy: user.login || null,
       isRollback: false,
     },
-    labels: { pnpaLabel, weeklyPnpaLabel, monthlyPnpaLabel, kccovLabel, smaLabel },
+    labels: { pnpaLabel, weeklyPnpaLabel, monthlyPnpaLabel, kccovLabel, smaLabel, slippageLabel },
   };
   document.getElementById('publishConfirmBtn').textContent = 'Confirm & Publish';
   document.getElementById('publishReviewPanel').style.display = 'block';
@@ -7782,6 +7815,9 @@ async function confirmPublish(){
     if(__pendingPublish.type!=='rollback' && __pendingSmaData){
       extraFiles = (extraFiles||[]).concat([{ path:'data/sma.json', content: __pendingSmaData, label: labels.smaLabel }]);
     }
+    if(__pendingPublish.type!=='rollback' && __pendingSlippageData){
+      extraFiles = (extraFiles||[]).concat([{ path:'data/slippage.json', content: __pendingSlippageData, label: labels.slippageLabel }]);
+    }
     if(__pendingPublish.type!=='rollback'){
       const branchHistoryFile = await buildNpaBranchHistoryExtraFile();
       if(branchHistoryFile) extraFiles = (extraFiles||[]).concat([branchHistoryFile]);
@@ -7796,6 +7832,7 @@ async function confirmPublish(){
     __pendingPnpaMonthlyData = null;
     __pendingKccOverdueData = null;
     __pendingSmaData = null;
+    __pendingSlippageData = null;
     __hasUnpublishedRefData = false;
     updateUnpublishedBanner();
     closePublishReview();
@@ -11160,6 +11197,185 @@ async function handleSmaUpload(evt){
 }
 window.handleSmaUpload = handleSmaUpload;
 
+/* ---------- Slippage During Current Month (Alok, 2026-11-02) ----------
+   NPA upload cadence changed to month-end-only ("ab se normal NPA file main
+   ab se keval month end ki upload karunga"): an account that slips to NPA
+   mid-month will NOT be in DATA.npa until the NEXT month's upload. This tab
+   is where those accounts get tracked daily in between, uploaded in the
+   exact same HO "e-AB NPA AC WISE" layout as the Daily NPA file itself (so
+   the existing mapHoRowsToNpa() parser is reused as-is -- no new column
+   map). Each upload MERGES into the running total by Account No. (freshest
+   row wins for an account already tracked, every other account already
+   tracked this cycle carries forward untouched) -- deliberately never a
+   wholesale replace like Daily NPA/SMA/PNPA uploads are, per Alok's own
+   words: "10 file upload ki hain to un sab ka data pura show ho na ki last
+   file ka."
+
+   These accounts are also merged straight into DATA.otsBook (mergeRowsIntoOtsBook()
+   below) so OTS Calculator's search (runSearch()) and the Application Form
+   (otsAppSearch()) can find them immediately -- both of those already read
+   DATA.otsBook, never DATA.npa (see DATA.otsBook's own bootstrap comment
+   near the top of this file), so DATA.npa -- and therefore the main
+   Dashboard's own Outstanding figures -- can never be touched by this
+   feature. When the real next-month NPA file is eventually applied,
+   applyNewDataNow()'s own existing month-end-reset logic naturally
+   supersedes these with the real row for the same account; no special
+   case needed there.
+
+   "Clear Slippage Data" only empties THIS tab's own running list (for the
+   next cycle) -- it deliberately never touches DATA.otsBook, since by the
+   time Alok clicks it (after uploading and applying the real next-month
+   NPA file, per his own described workflow) applyNewDataNow() will already
+   have replaced those rows in DATA.otsBook with the real ones. ---------- */
+let SLIPPAGE_DATA = null;
+let __pendingSlippageData = null;
+function mergeRowsIntoOtsBook(newRows){
+  if(!newRows.length) return;
+  const newAcctSet = new Set(newRows.map(r=>String(r[C.ACCT_NO]||'')));
+  const kept = DATA.otsBook.rows.filter(r=>!newAcctSet.has(String(r[C.ACCT_NO]||'')));
+  DATA.otsBook = { headers: DATA.otsBook.headers, rows: kept.concat(newRows) };
+  rebuildOtsBookMaps();
+}
+async function handleSlippageUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  await ensureXLSX();
+  const labelEl = document.getElementById('slippageUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('slippageUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Slippage file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      let header, dataRows;
+      if(isCsv){
+        const csvRows = parseCSV(String(e.target.result));
+        header = csvRows[0]||[]; dataRows = csvRows.slice(1);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        const firstRaw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+        header = firstRaw[0]||[]; dataRows = firstRaw.slice(1);
+      }
+      const { rows: newRows } = mapHoRowsToNpa(header, dataRows);
+      if(!newRows.length) throw new Error('No account rows found in this file -- check this matches the HO "e-AB NPA AC WISE" export layout (same as the Daily NPA file).');
+
+      const existingRows = (SLIPPAGE_DATA && SLIPPAGE_DATA.rows) || [];
+      const newAcctSet = new Set(newRows.map(r=>String(r[C.ACCT_NO]||'')));
+      const kept = existingRows.filter(r=>!newAcctSet.has(String(r[C.ACCT_NO]||'')));
+      const mergedRows = kept.concat(newRows);
+      SLIPPAGE_DATA = { rows: mergedRows };
+      __pendingSlippageData = SLIPPAGE_DATA;
+      mergeRowsIntoOtsBook(newRows);
+
+      const label = document.getElementById('slippageStatusLabel');
+      if(label) label.textContent = `${mergedRows.length.toLocaleString('en-IN')} account(s) slipped so far this cycle`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ Parsed ${newRows.length.toLocaleString('en-IN')} account(s) from ${esc(file.name)} — ${mergedRows.length.toLocaleString('en-IN')} total account(s) now tracked this cycle. Already searchable in OTS Calculator/Application Form. Goes live for everyone else the next time you hit Publish.</div>`;
+      clearStalePublishStatus();
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.querySelector('.view.active')?.dataset.view==='slippage') renderSlippageBody();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+window.handleSlippageUpload = handleSlippageUpload;
+
+function clearSlippageData(){
+  if(!SLIPPAGE_DATA || !SLIPPAGE_DATA.rows.length) return;
+  SLIPPAGE_DATA = { rows: [] };
+  __pendingSlippageData = SLIPPAGE_DATA;
+  const label = document.getElementById('slippageStatusLabel');
+  if(label) label.textContent = 'not loaded yet';
+  const statusEl = document.getElementById('slippageUploadStatus');
+  if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Slippage list cleared, ready for the new cycle. Not live for anyone else until you hit Publish below.</div>`;
+  clearStalePublishStatus();
+  const publishBtn = document.getElementById('publishBtn');
+  if(publishBtn) publishBtn.disabled = false;
+  renderSlippageBody();
+}
+window.clearSlippageData = clearSlippageData;
+
+function renderSlippageDashboard(){
+  const el = document.getElementById('slippageArea');
+  if(!el) return;
+  if(SLIPPAGE_DATA){ renderSlippageBody(); return; }
+  el.innerHTML = `<div class="empty-state"><div class="data-loading-spinner" aria-hidden="true" style="position:static;border-color:rgba(58,123,255,.25);border-top-color:var(--accent)"></div><p style="margin-top:14px">Loading Slippage data…</p></div>`;
+  fetchJson('data/slippage.json?t=' + Date.now())
+    .then(d => { SLIPPAGE_DATA = d; renderSlippageBody(); })
+    .catch(() => { SLIPPAGE_DATA = { rows: [] }; renderSlippageBody(); });
+}
+
+function renderSlippageBody(){
+  const el = document.getElementById('slippageArea');
+  if(!el) return;
+  const rows = (SLIPPAGE_DATA && SLIPPAGE_DATA.rows) || [];
+  const totalOs = rows.reduce((a,r)=>a + (typeof r[C.OUTBAL]==='number'?r[C.OUTBAL]:0), 0);
+
+  const uploadBox = `<div class="chart-card">
+    <div class="section-label">Upload Today's Slippage File</div>
+    <input type="file" id="slippageFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none" onchange="handleSlippageUpload(event)">
+    <div class="upload-drop small" id="slippageUploadDrop" onclick="document.getElementById('slippageFileInput').click()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+      <div class="main" id="slippageUploadDropLabel">Tap to choose today's Slippage file</div>
+      <div class="sub">Same HO "e-AB NPA AC WISE" layout as the Daily NPA file. Upload once a day, every day this month — <span id="slippageStatusLabel">${rows.length ? rows.length.toLocaleString('en-IN') + ' account(s) tracked so far' : 'not loaded yet'}</span>. Each upload adds to this total; it never replaces it.</div>
+    </div>
+    <div id="slippageUploadStatus"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px">
+      <button type="button" class="btn-ghost" id="slippageClearBtn" onclick="clearSlippageData()"${rows.length?'':' disabled'} aria-label="Clear the Slippage list">Clear Slippage Data (start fresh for next month)</button>
+    </div>
+    <p style="font-size:11px;color:var(--ink-mute);margin:10px 2px 0;line-height:1.5">Only clear this once the NEXT month's NPA file (which will now include these accounts for real) has been uploaded and published — not before.</p>
+  </div>`;
+
+  const heroRow = `<div class="hero-kpi-row">
+    ${heroKpiCard({ id:'slippageTotalAccounts', icon: ICON_ALERT_TRIANGLE, tint:'var(--tool-rose-soft)', color:'var(--tool-rose)', label:'Total Slipped This Cycle', fallback: rows.length.toLocaleString('en-IN'), sub:'account(s), across every upload so far' })}
+    ${heroKpiCard({ id:'slippageTotalOs', icon: ICON_BANKNOTE, tint:'var(--tool-coral-soft)', color:'var(--tool-coral)', label:'Total Outstanding', fallback: fmtCr(totalOs), sub:'combined O/S of all accounts above' })}
+  </div>`;
+
+  const branchAgg = computeBranchTotals(rows).filter(b=>b.count>0).sort((a,b)=>b.os-a.os);
+  const branchRowsHtml = branchAgg.map((b,i)=>`<tr>
+    <td><span class="dash-rank">${i+1}</span></td>
+    <td class="tal">${esc(b.branchName)}</td>
+    <td>${b.count.toLocaleString('en-IN')}</td>
+    <td>${fmtCr(b.os)}</td>
+  </tr>`).join('');
+
+  const acctRowsHtml = [...rows].sort((a,b)=>(Number(b[C.OUTBAL])||0)-(Number(a[C.OUTBAL])||0)).map(r=>`<tr class="clickable" onclick="openRecentBorrower('${esc(String(r[C.CUST_ID]))}','${esc(String(r[C.ACCT_NO]))}')">
+    <td class="tal">${esc(r[C.SOL_DESC])}</td>
+    <td>${esc(r[C.ACCT_NO])}</td>
+    <td class="tal">${esc(r[C.NAME])||'—'}</td>
+    <td>${fmtINR2(r[C.OUTBAL])}</td>
+    <td>${esc(r[C.ASSET])||'—'}</td>
+    <td class="tal">${esc(r[C.NPA_DT])||'—'}</td>
+  </tr>`).join('');
+
+  el.innerHTML = uploadBox + heroRow +
+    `<div class="chart-card" style="margin-top:16px">
+      <div class="section-label">Branch-wise Summary<span class="chart-sub">${branchAgg.length.toLocaleString('en-IN')} branch(es) · highest O/S first</span></div>
+      <div class="dash-table-wrap">
+        <table class="dash-table">
+          <thead><tr><th class="tal">Rank</th><th class="tal">Branch</th><th>Accounts</th><th>Total O/S</th></tr></thead>
+          <tbody>${branchRowsHtml || emptyStateRowHtml(4, 'No Slippage data uploaded yet this cycle')}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="chart-card" style="margin-top:16px">
+      <div class="section-label">All Slipped Accounts<span class="chart-sub">${rows.length.toLocaleString('en-IN')} account(s) · tap a row to open that borrower</span></div>
+      <div class="dash-table-wrap acct-list-scroll">
+        <table class="dash-table">
+          <thead><tr><th class="tal">Branch</th><th>Account</th><th class="tal">Name</th><th>O/S</th><th>Category</th><th class="tal">NPA Date</th></tr></thead>
+          <tbody>${acctRowsHtml || emptyStateRowHtml(6, 'No Slippage data uploaded yet this cycle')}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+window.renderSlippageBody = renderSlippageBody;
+window.renderSlippageDashboard = renderSlippageDashboard;
+
 function renderSmaDashboard(){
   const el = document.getElementById('smaArea');
   if(!el) return;
@@ -11459,6 +11675,7 @@ function switchView(view){
     if(view==='sma') renderSmaDashboard();
     if(view==='npadownload') renderNpaDownloadView();
     if(view==='pnpaslip') renderPnpaSlipView();
+    if(view==='slippage') renderSlippageDashboard();
     if(view==='otsapplicationform') renderOtsApplicationView();
     if(view==='npatarget') renderNpaTargetView();
     if(view==='npanotice') renderNpaNoticeView();
