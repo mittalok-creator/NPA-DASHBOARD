@@ -7572,3 +7572,16 @@ row. Real bug caught in this same pass, not by reading the code: the
 Slippage Download card's export function wasn't re-exposed on `window`
 either time (same class of bug as the SMA round above) -- fixed on both
 apps before shipping.
+
+**Follow-up, same day**: Alok, "ye slippage upload ko upload data main hi
+set karo" -- moved the upload box and "Clear Slippage Data" button out of
+the Slippage tab itself and into Settings → Update Data, as its own
+"Slippage (Current Month)" card (6th entry in the "Daily Files" category),
+matching where every other daily file (PNPA/KCC Overdue/SMA/etc.) is
+uploaded. The Slippage tab is now pure display, with a one-line pointer to
+Update Data. Picked up the existing `id+'Tile'` MutationObserver
+convention (every other Update Data tile already uses it) instead of
+hand-writing a second tile-update call in the upload/clear handlers.
+Verified via Playwright: the tab no longer has any upload UI, the new
+Update Data card opens the panel and uploads/merges/clears exactly as
+before, and the tile mirrors the panel's own status line automatically.

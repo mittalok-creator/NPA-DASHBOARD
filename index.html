@@ -1149,7 +1149,7 @@
     <div id="updateDataHub">
       <div class="utility-grid">
         <div class="utility-category">
-          <div class="utility-category-heading utility-cat-teal"><span>Daily Files</span><i></i><b>5 files</b></div>
+          <div class="utility-category-heading utility-cat-teal"><span>Daily Files</span><i></i><b>6 files</b></div>
           <div class="utility-category-cards">
             <button type="button" class="utility-card tool-teal" onclick="openUpdateDataPanel('pnpaUploadDetails')">
               <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -1180,6 +1180,12 @@
               <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
               <span class="utility-card-title">SMA</span>
               <span class="utility-card-desc">Special Mention Accounts (Hathras) — <span id="smaStatusLabelTile">not loaded yet</span></span>
+            </button>
+            <button type="button" class="utility-card tool-rose" onclick="openUpdateDataPanel('slippageUploadDetails')">
+              <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M3 16v5h5"/><path d="M21 16v5h-5"/><path d="m21 3-7 7"/><path d="M3 21l7-7"/></svg></span>
+              <span class="utility-card-title">Slippage (Current Month)</span>
+              <span class="utility-card-desc">Daily, between month-end NPA uploads — <span id="slippageStatusLabelTile">not loaded yet</span></span>
             </button>
           </div>
         </div>
@@ -1372,6 +1378,22 @@
       <input type="file" id="smaFileInput" accept=".txt" style="display:none">
       <div id="smaUploadStatus"></div>
       <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser. Powers the "SMA Dashboard" tab — SMA-0/SMA-1/SMA-2 buckets (customer-level classification), a Non-Financial flag overlay, branch-wise and reason-wise breakdowns, and Top 20 Accounts / Top 10 High-Risk Customers tables. Uploading replaces the previous figures. Goes live the next time you hit Publish, same commit as the daily NPA data.</p>
+    </div>
+
+    <div class="update-data-panel" id="slippageUploadDetails" hidden>
+      <button type="button" class="update-data-back-btn" onclick="closeUpdateDataPanel()">← Back to Update Data</button>
+      <h4>Slippage During Current Month — <span id="slippageStatusLabel">not loaded yet</span></h4>
+      <div class="upload-drop small" id="slippageUploadDrop">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <div class="main" id="slippageUploadDropLabel">Tap to choose today's Slippage file</div>
+        <div class="sub">.xlsx/.csv — same HO "e-AB NPA AC WISE" layout as the Daily NPA file. Upload once a day, every day this month — each upload adds to the running total, it never replaces it.</div>
+      </div>
+      <input type="file" id="slippageFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
+      <div id="slippageUploadStatus"></div>
+      <div class="modal-btn-row">
+        <button type="button" class="btn-ghost" id="slippageClearBtn" disabled aria-label="Clear the Slippage list">Clear Slippage Data</button>
+      </div>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Read entirely in your browser. Powers the "Slippage (Current Month)" tab and the Download tab's Slippage card, and these accounts become immediately searchable in OTS Calculator and the Application Form — without ever touching the main NPA book, so the Dashboard's Outstanding figures never change. Only clear this once the next month's NPA file (which will now include these accounts for real) has been uploaded and published. Goes live for everyone else the next time you hit Publish, same commit as the daily NPA data.</p>
     </div>
 
     <div class="update-data-panel" id="specialNoteDetails" hidden>
@@ -1761,7 +1783,7 @@
 <script src="js/publish.js?v=20260923a"></script>
 <script src="js/splash.js?v=20261007a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20261102a"></script>
+<script src="js/app.js?v=20261102b"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
