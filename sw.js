@@ -1,4 +1,4 @@
-const CACHE_NAME = 'upgb-ots-shell-v338';
+const CACHE_NAME = 'upgb-ots-shell-v339';
 // These version strings drifted out of sync with index.html's actual
 // ?v= query params (stuck on an old 20260724c while index.html moved
 // through many later bumps) -- every precached URL here was therefore
@@ -70,6 +70,25 @@ const POLLED_ENDPOINTS = [];
 // path alone (ignoring the ever-changing query) so every fetch overwrites
 // one entry instead of piling up a new one per load.
 const DATA_URL_PATTERN = /\/data\/latest\.json$/;
+// The shell ENTRY point (index.html / the bare "/") is the one file whose
+// own content decides which versioned js/app.js?v=... gets loaded -- so
+// unlike every OTHER shell asset below, it can never safely go through
+// stale-while-revalidate. A Publish that also ships new app code (e.g. a
+// new tab) bumps CACHE_NAME and index.html's own ?v= query params, but
+// doesn't change index.html's own URL at all -- so a device that already
+// has this exact URL cached keeps getting served THAT stale HTML (which
+// still points at the OLD app.js) instantly, while the real fetch only
+// refreshes the cache for next time. That "next time" never reliably
+// arrives for a user who just hits Refresh/reloads a few times, since each
+// of those reloads can keep re-serving the same still-stale cached entry
+// before the background fetch has had a chance to land -- confirmed
+// directly, 2026-11-02: a real device stayed on the pre-"Slippage During
+// Current Month" shell through several refreshes after that feature was
+// published. Network-first here (same shape as data/latest.json above)
+// closes that gap at the root instead of relying on users to know to hard-
+// refresh: a live network fetch always wins when online, and only a
+// genuinely offline device falls back to whatever shell was last cached.
+const SHELL_ENTRY_PATTERN = /\/(index\.html)?$/;
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
@@ -90,7 +109,19 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-  // Stale-while-revalidate for the app shell (HTML/CSS/JS/manifest/vendor
+  if (SHELL_ENTRY_PATTERN.test(url.pathname)) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+          return response;
+        })
+        .catch(() => caches.open(CACHE_NAME).then((cache) => cache.match(event.request)))
+    );
+    return;
+  }
+  // Stale-while-revalidate for every OTHER shell asset (CSS/JS/manifest/vendor
   // libraries): serve the cached copy instantly if one exists -- no live
   // network round-trip standing between the click and first paint -- while
   // a background fetch refreshes the cache for next time. Safe together
