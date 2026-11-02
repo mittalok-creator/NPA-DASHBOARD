@@ -7499,3 +7499,76 @@ Verified against the real, freshly-published SMA file (today's Publish,
 (30,536); SMA-1 export (6,336 rows) spot-checked to confirm every row
 genuinely has SMA (Customer) = "SMA1"; header styling, zebra striping,
 column widths and auto-filter all present; zero console/page errors.
+
+## 2026-11-02 — New tab: "Slippage During Current Month" (NPA-DASHBOARD + Recovery Dashboard)
+
+Alok's workflow changed: the Daily NPA upload is now month-end-only ("ab
+se normal NPA file main ab se keval month end ki upload karunga"), so an
+account that slips to NPA mid-month won't be in `DATA.npa` until the
+*next* month's upload. This new tab is where those accounts get tracked
+daily in between, uploaded in the exact same HO "e-AB NPA AC WISE" layout
+as the Daily NPA file itself -- reuses `mapHoRowsToNpa()` (the same
+parser the Daily NPA upload itself uses) as-is, no new column map needed.
+
+Before writing any code, investigated and discussed with Alok: confirmed
+Daily PNPA's own upload is a straight replace (not cumulative) so this
+had to be a genuinely new, separate dataset rather than a fix to that;
+confirmed the existing `DATA.otsBook` vs `DATA.npa` separation (OTS
+Calculator's own working book, deliberately kept apart from the book that
+drives the main Dashboard's Outstanding) was the exact mechanism needed
+here too; and got the real month-end/clear workflow directly from Alok
+("naye month ki NPA file upload hote hi Slippage data clear kar dunga").
+
+**Behaviour**: each daily upload MERGES into the running total by Account
+No. -- freshest row wins for an account already tracked, every other
+account already tracked this cycle carries forward untouched (never a
+wholesale replace, per Alok's own words: "10 file upload ki hain to un
+sab ka data pura show ho na ki last file ka"). Each upload also merges
+straight into `DATA.otsBook` so OTS Calculator's search and the
+Application Form can find these accounts immediately, without ever
+touching `DATA.npa` -- so the main Dashboard's Outstanding figures can
+never move because of this feature. A "Clear Slippage Data" button empties
+just this tab's own running list once the real next-month NPA file has
+been uploaded and published (deliberately never touches `DATA.otsBook`
+itself -- by then `applyNewDataNow()`'s own existing month-end-reset logic
+has already replaced those rows with the real ones). New "Slippage"
+category added to the Download tab, reusing the existing "Complete NPA
+List" sheet writer as-is (same row shape).
+
+**Recovery Dashboard**: read-only mirror (this portal has no
+upload/Publish flow) -- new branch-locked "Slippage (Current Month)" tab
+and Download card, both filtered straight off `r[C.SOL_ID]` like SMA's
+own lock. Also discovered and fixed a real gap while wiring up Search:
+Quick Search (`renderCmdk()`, Cmd+K) is this portal's actual "find an
+account" entry point -- the old "Search & Settlement" nav item (what
+`runSearch()`/`openDetail()` serve) was deliberately commented out of the
+nav back on 2026-xx-xx and is genuinely dead code now (confirmed via its
+own HTML comment: "nothing in this repo's js/app.js calls
+switchView('search') any more"). `renderCmdk()` was still reading
+`DATA.npa.rows` directly, so a Slippage account would never have shown up
+in Quick Search at all; fixed by reading `(DATA.otsBook || DATA.npa).rows`
+there instead. The read-only NPA Particulars page it opens into
+(`showNpaAccountDetail()`/`lookupLoanSlot()`) now falls back to
+`otsBookByCustId`/`otsBookByHelper` only when a customer has no row in the
+plain NPA book at all, so every already-existing account keeps resolving
+exactly as before. Left the actually-dead `runSearch()`/`openDetail()`
+untouched rather than updating code nothing can reach.
+
+Verified end-to-end via Playwright on both apps (not just read the code):
+uploaded the real Slippage file Alok provided twice in a row on
+NPA-DASHBOARD and confirmed the second (duplicate) upload did NOT double
+the count; confirmed the main Dashboard's Outstanding figure was
+byte-for-byte identical before and after upload; confirmed the uploaded
+accounts were immediately searchable in both OTS Calculator and
+Application Form; confirmed the Download tab's new Slippage card exports
+correctly; confirmed Clear empties the tab. On Recovery Dashboard, mocked
+a slipped-only account (present in `DATA.otsBook`, deliberately absent
+from `DATA.npa`) and confirmed: the Dashboard figure stayed on the
+existing-only account; the new Slippage tab showed only the logged-in
+branch's own slipped account (not another branch's); Quick Search found
+it and opened its Particulars card with the right data; Application Form
+found it; the Download tab's Slippage card exported only that branch's
+row. Real bug caught in this same pass, not by reading the code: the
+Slippage Download card's export function wasn't re-exposed on `window`
+either time (same class of bug as the SMA round above) -- fixed on both
+apps before shipping.
