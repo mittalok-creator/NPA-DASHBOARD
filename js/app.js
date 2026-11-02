@@ -11276,6 +11276,8 @@ async function handleSlippageUpload(evt){
       clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
       if(publishBtn) publishBtn.disabled = false;
+      const clearBtn = document.getElementById('slippageClearBtn');
+      if(clearBtn) clearBtn.disabled = !mergedRows.length;
       if(document.querySelector('.view.active')?.dataset.view==='slippage') renderSlippageBody();
     } catch(err){
       statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
@@ -11291,12 +11293,18 @@ function clearSlippageData(){
   __pendingSlippageData = SLIPPAGE_DATA;
   const label = document.getElementById('slippageStatusLabel');
   if(label) label.textContent = 'not loaded yet';
+  const dropLabel = document.getElementById('slippageUploadDropLabel');
+  if(dropLabel) dropLabel.textContent = "Tap to choose today's Slippage file";
+  const fileInput = document.getElementById('slippageFileInput');
+  if(fileInput) fileInput.value = '';
   const statusEl = document.getElementById('slippageUploadStatus');
   if(statusEl) statusEl.innerHTML = `<div class="upload-status ok">✔ Slippage list cleared, ready for the new cycle. Not live for anyone else until you hit Publish below.</div>`;
   clearStalePublishStatus();
   const publishBtn = document.getElementById('publishBtn');
   if(publishBtn) publishBtn.disabled = false;
-  renderSlippageBody();
+  const clearBtn = document.getElementById('slippageClearBtn');
+  if(clearBtn) clearBtn.disabled = true;
+  if(document.querySelector('.view.active')?.dataset.view==='slippage') renderSlippageBody();
 }
 window.clearSlippageData = clearSlippageData;
 
@@ -11316,20 +11324,7 @@ function renderSlippageBody(){
   const rows = (SLIPPAGE_DATA && SLIPPAGE_DATA.rows) || [];
   const totalOs = rows.reduce((a,r)=>a + (typeof r[C.OUTBAL]==='number'?r[C.OUTBAL]:0), 0);
 
-  const uploadBox = `<div class="chart-card">
-    <div class="section-label">Upload Today's Slippage File</div>
-    <input type="file" id="slippageFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none" onchange="handleSlippageUpload(event)">
-    <div class="upload-drop small" id="slippageUploadDrop" onclick="document.getElementById('slippageFileInput').click()">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-      <div class="main" id="slippageUploadDropLabel">Tap to choose today's Slippage file</div>
-      <div class="sub">Same HO "e-AB NPA AC WISE" layout as the Daily NPA file. Upload once a day, every day this month — <span id="slippageStatusLabel">${rows.length ? rows.length.toLocaleString('en-IN') + ' account(s) tracked so far' : 'not loaded yet'}</span>. Each upload adds to this total; it never replaces it.</div>
-    </div>
-    <div id="slippageUploadStatus"></div>
-    <div style="display:flex;justify-content:flex-end;margin-top:10px">
-      <button type="button" class="btn-ghost" id="slippageClearBtn" onclick="clearSlippageData()"${rows.length?'':' disabled'} aria-label="Clear the Slippage list">Clear Slippage Data (start fresh for next month)</button>
-    </div>
-    <p style="font-size:11px;color:var(--ink-mute);margin:10px 2px 0;line-height:1.5">Only clear this once the NEXT month's NPA file (which will now include these accounts for real) has been uploaded and published — not before.</p>
-  </div>`;
+  const uploadHint = `<p style="font-size:12px;color:var(--ink-mute);margin:0 2px 16px">Uploaded daily from <b>Settings → Update Data → Slippage (Current Month)</b>. Each upload adds to the running total below; it never replaces it.</p>`;
 
   const heroRow = `<div class="hero-kpi-row">
     ${heroKpiCard({ id:'slippageTotalAccounts', icon: ICON_ALERT_TRIANGLE, tint:'var(--tool-rose-soft)', color:'var(--tool-rose)', label:'Total Slipped This Cycle', fallback: rows.length.toLocaleString('en-IN'), sub:'account(s), across every upload so far' })}
@@ -11353,7 +11348,7 @@ function renderSlippageBody(){
     <td class="tal">${esc(r[C.NPA_DT])||'—'}</td>
   </tr>`).join('');
 
-  el.innerHTML = uploadBox + heroRow +
+  el.innerHTML = uploadHint + heroRow +
     `<div class="chart-card" style="margin-top:16px">
       <div class="section-label">Branch-wise Summary<span class="chart-sub">${branchAgg.length.toLocaleString('en-IN')} branch(es) · highest O/S first</span></div>
       <div class="dash-table-wrap">
@@ -11876,7 +11871,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   // touching any of the ~10 existing call sites that already set the
   // panel label's text -- a MutationObserver keeps the tile's copy in
   // sync automatically, however/wherever the source text changes.
-  ['masterStatusLabel','branchAdvStatusLabel','branchTargetStatusLabel','intReversalMasterStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','weeklyPnpaStatusLabel','monthlyPnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel'].forEach(id=>{
+  ['masterStatusLabel','branchAdvStatusLabel','branchTargetStatusLabel','intReversalMasterStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','weeklyPnpaStatusLabel','monthlyPnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel','slippageStatusLabel'].forEach(id=>{
     const src = document.getElementById(id), dst = document.getElementById(id+'Tile');
     if(!src || !dst) return;
     dst.textContent = src.textContent;
@@ -11930,6 +11925,9 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('kccOverdueFileInput','change',(e)=>handleKccOverdueUpload(e));
   on('smaUploadDrop','click',()=>document.getElementById('smaFileInput').click());
   on('smaFileInput','change',(e)=>handleSmaUpload(e));
+  on('slippageUploadDrop','click',()=>document.getElementById('slippageFileInput').click());
+  on('slippageFileInput','change',(e)=>handleSlippageUpload(e));
+  on('slippageClearBtn','click',()=>clearSlippageData());
   on('downloadDailyTemplateBtn','click',()=>downloadDailyTemplate());
   on('downloadMasterTemplateBtn','click',()=>downloadMasterTemplate());
   on('downloadBranchAdvTemplateBtn','click',()=>downloadBranchAdvTemplate());
