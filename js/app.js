@@ -6398,6 +6398,22 @@ function tryParseMasterSheetWide(allRows){
         if(jjby.totalIdx>=0) rec.jjbyTotal = bpNumOrNull(row[jjby.totalIdx]);
         if(apy.totalIdx>=0) rec.apyTotal = bpNumOrNull(row[apy.totalIdx]);
       }
+      // Alok caught this: R O Hathras's own row (Sol ID 9269) reports its
+      // deposit/advance/NPA figures in rupee Crores, not Lakhs like every
+      // real branch row -- confirmed across all 8 months by checking that
+      // its value exactly equals (sum of the other 56 branches) / 100, to
+      // 4+ decimal places, for Total Deposit/Advance/NPA alike (a genuine
+      // inconsistency in the source report itself, not a parsing bug --
+      // whoever compiles this report evidently uses Crores for the
+      // region's roll-up row). Scale those fields up 100x here so this
+      // row is in the same rupee-Lakhs convention as every other branch;
+      // insurance/SSS/account-opening/staff/KYC figures already matched
+      // the region-wide sum without any scaling, so those are untouched.
+      if(sol === '9269'){
+        ['savingDeposit','currentDeposit','casaDeposit','termDeposit','totalDeposit','advance','npa','advSanction','advDisbursed','advSanctionTotal','advDisbursedTotal'].forEach(key=>{
+          if(rec[key] != null) rec[key] = rec[key] * 100;
+        });
+      }
       snapshots[k].bySolId[sol] = rec;
     }
   }
