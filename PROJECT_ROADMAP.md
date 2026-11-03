@@ -7585,3 +7585,104 @@ hand-writing a second tile-update call in the upload/clear handlers.
 Verified via Playwright: the tab no longer has any upload UI, the new
 Update Data card opens the panel and uploads/merges/clears exactly as
 before, and the tile mirrors the panel's own status line automatically.
+
+## 2026-11-03 — Fix: shell (`index.html`) served stale after publishing, on a second device
+
+Alok, after publishing Slippage data: "ye shayad save nahi ho raha
+because ye dusri device par show nahi ho rahe after multiple refresh."
+Verified the data itself was live and correct -- this was a caching bug,
+not a save/publish bug. Root cause: `sw.js` ran stale-while-revalidate
+for every shell asset, which is safe for versioned CSS/JS (`?v=...`,
+a new URL on every bump) but not for `index.html`/bare `/`, whose URL
+never changes -- a device with it already cached kept serving the old
+HTML (pointing at an old `js/app.js`) forever, no matter how many times
+the data itself changed. Fixed by giving the shell entry point the same
+network-first-with-cache-fallback handling `data/latest.json` already
+had, on both apps (NPA-DASHBOARD: `CACHE_NAME` v338→v339; Recovery
+Dashboard: v63→v64). Verified via Playwright: edited the served
+`index.html` mid-session (simulating a new deploy without changing the
+URL) and confirmed a single reload now picks up the fresh content.
+
+## 2026-11-03 — Interest Reversal master list published live; retroactively applied to current book
+
+Alok uploaded `Interest_Reversal.xlsx` (9,821 rows) via the existing
+"Interest Reversal (master list)" Update Data panel and asked for it to
+go live immediately ("isko bhi live kar do 1 time push hai ye to direct
+hi live kar do and save kar do") -- 9,783 valid entries published. When
+he noticed one account (161235110000175) still showed no figure, this
+was expected behaviour explained to him: the master list only applies on
+the *next* Daily NPA upload, not retroactively. He asked for it to apply
+to the current book too ("haan abhi apply kar do current book mein
+bhi"), so `master[acctNo] → row[C.URI]` was applied directly to both
+`DATA.npa.rows` and `DATA.otsBook.rows` (8,540 of 9,783 accounts
+matched) and republished. Verified independently via decrypt before and
+after, and via the live site's own UI.
+
+## 2026-11-03 — Monthly PNPA: diagnosed a stale-shell report, then published the real data live
+
+Alok reported `MONTHLY_PNPA_NOV26_AS_ON_02.11.2026.xlsb` failing with
+"appear to contain no readable rows." The file and the current app code
+were both fine (reproduced success via Node and via a real-browser
+Playwright run) -- almost certainly the same stale-shell bug just fixed
+above, on his specific device. Published the real Monthly PNPA data live
+anyway (7,657 accounts), verified via decrypt and a fresh live-site load.
+
+## 2026-11-03 — New feature: Branch Profile (monthly branch-level business performance)
+
+Alok uploaded a 2-page UPGB "Branch Profile" report (AGRA-SHAHGANJ
+branch) and asked what the dashboard would look like with it built in,
+and what format/upload he'd need -- a Design-canvas mockup was built
+first (https://claude.ai/artifact/ASxBYRs1W96My2gf1eweiT) using the
+PDF's real figures, and a column format proposed. When asked directly
+"kya ye sara data cover kar raha hai pdf ka?", a genuine re-audit found 8
+real gaps in the first proposal (historical snapshot dates, the %RM
+advances line, the 3-window account-opening structure, Retail vs.
+sub-breakdown, the dual FY/monthly disbursement tables, under-specified
+R-C-T columns, oversimplified compliance sub-tables, and undisclosed
+`#VALUE!`/`#DIV/0!` formula-error columns in the source) -- a corrected
+67-column format (plus 23 target columns) was built instead, and the
+historical-backfill question was deliberately deferred ("han wo apan mil
+k samajh lenge and fix kar lenge"). Alok then confirmed, via an explicit
+choice, to build the real feature end-to-end rather than just a template
+("Poora Branch Profile feature app mein banao aur live karo").
+
+**What shipped**: two new monthly uploads under Update Data → Reference
+Data ("Branch Profile" and "Branch Profile Targets"), each matched by
+Sol ID with a pre-filled template (`downloadBranchProfileTemplate()`/
+`downloadBranchProfileTargetsTemplate()`, same carry-forward convention
+as Branch Contacts). Both are "slow-moving reference data," embedded
+directly in `data/latest.json` (not reset by routine daily NPA uploads).
+A new "Branch Profile" nav tab (desktop + mobile) renders a branch
+selector, 5 hero KPI tiles (Total Business, CASA %, CD Ratio, Gross
+NPA %, Profit/Loss) with MoM delta chips, an identity card, a 17-row
+Business Growth table (current / MoM / targets), Fresh Loan Disbursement
+cards, Account Opening & Campaign tiles, Insurance & Social Security
+progress bars, R-C-T Framework stat cards, and a Compliance chip row.
+Monetary figures are in ₹ Crores (matching the mockup) except Cash
+Retention Limit, in ₹ Lakhs -- both units called out explicitly in the
+upload panels' own help text so this doesn't have to be guessed from a
+column label. Mirrors the existing `buildNpaBranchHistoryExtraFile()`
+snapshot pattern into a new `data/branch-profile-history.json` (capped
+24 entries, ~2 years monthly), which is what powers the MoM/YoY growth
+figures. New "Branch Profile" category added to the Download tab.
+
+**Bugs caught before shipping**: `BRANCH_PROFILE_FIELDS`' column-matching
+(`normHeader()`, which strips all non-alphanumeric characters) collapsed
+"Gross NPA" and "Gross NPA %" to the identical key, so the % figure was
+silently reading the absolute-amount column instead -- fixed by renaming
+the absolute-amount column to "Gross NPA Amount" (and wrote a script to
+check the rest of both field lists for the same class of collision --
+none found). Also two reference bugs from the initial draft: a nonexistent
+`ICON_LAYERS`/`ICON_RUPEE` (should have been `ICON_LANDMARK`/
+`ICON_BANKNOTE`, the names actually defined in this file) and a
+nonexistent `fmtDateIso()` (added, mirroring `fmtAsOnDisplay()`'s own
+YYYY-MM-DD → DD-MM-YYYY conversion). `var(--border, ...)` was also wrong
+-- this codebase's real token is `--glass-border`.
+
+Verified via Playwright against a local server with the real published
+`data/latest.json` (PIN 9269): template download, upload (status/tile
+update, Publish button enables), the full tab render with a small test
+file, the Download tab's new export, and the Dashboard's Outstanding
+figure unaffected before and after. No real multi-branch data exists yet
+-- Alok will fill in the generated template for all branches and upload
+it once this ships.

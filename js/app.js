@@ -261,6 +261,28 @@ DATA.lokAdalat = DATA.lokAdalat || {};
    daily NPA file. */
 DATA.interestReversalMaster = DATA.interestReversalMaster || {};
 
+/* Branch Profile -- monthly business-performance snapshot per branch (Total
+   Business, Deposits, Advances, CD Ratio, Gross NPA%, Profit/Loss, account
+   opening, loan disbursement, insurance/social-security, R-C-T framework,
+   KYC/DEAF/CRL/Locker compliance), keyed by Sol ID. Alok's own request,
+   2026-11-03: integrate the Regional Office's "Branch Profile" report
+   (deposits/advances/insurance/etc.) alongside the NPA data this app
+   already tracks -- a genuinely separate data domain from NPA, uploaded
+   monthly, never daily. DATA.branchProfile holds only the LATEST uploaded
+   month (bySolId values are overwritten wholesale on every upload, same
+   "a snapshot is the full current state" convention as Daily NPA/PNPA);
+   month-over-month and year-over-year growth is read back from
+   data/branch-profile-history.json (one snapshot captured per Publish,
+   see buildBranchProfileHistoryExtraFile()) rather than kept here, so
+   DATA.branchProfile itself never grows unbounded.
+   DATA.branchProfileTargets is a separate, slower-moving upload (HO
+   revises targets far less often than the monthly actuals come in) --
+   same "own slow-moving schedule" treatment as branchAdvances/
+   branchContacts/branchTargets above, carried forward untouched by a
+   routine Branch Profile upload until HO issues new targets. */
+DATA.branchProfile = DATA.branchProfile || { asOnDate: null, bySolId: {} };
+DATA.branchProfileTargets = DATA.branchProfileTargets || { bySolId: {} };
+
 /* Full Customer Master address book (Customer ID, normId()-keyed -> Address),
    independent of the NPA book -- kept alongside (not instead of) the merge
    into DATA.npa.rows' own C.ADDR, since a customer can appear in KCC Overdue
@@ -6150,6 +6172,407 @@ async function handleBranchContactsUpload(evt){
   };
   if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
 }
+/* ---------- Branch Profile (2026-11-03) ----------
+   One field list drives the template download, the upload parser AND the
+   screen's own rendering, so the three can never drift out of sync with
+   each other -- add a metric here once and it's wired everywhere. `key` is
+   the DATA.branchProfile.bySolId[solId] property name; `label` is both the
+   template's column header and what the parser looks for (case/space-
+   insensitive, via normHeader()); `type` picks parseFloat vs plain text. */
+const BRANCH_PROFILE_FIELDS = [
+  ['region','Region','text'], ['category','Category','text'], ['cadre','Cadre','text'],
+  ['bmName','BM Name','text'], ['mobile','Mobile No','text'], ['bcCode','BC Code','text'],
+  ['dateOfPosting','Date of Posting','text'], ['totalStaff','Total Staff','num'],
+  ['scale1','Scale-1','num'], ['scale2','Scale-2','num'], ['scale3','Scale-3','num'], ['scale4','Scale-4','num'],
+  ['officeAssistant','Office Assistant','num'], ['officeAttendant','Office Attendant','num'],
+  ['totalBusiness','Total Business','num'], ['totalDeposits','Total Deposits','num'],
+  ['caDeposit','CA Deposit','num'], ['sbDeposits','SB Deposits','num'], ['casaDeposits','CASA Deposits','num'],
+  ['casaPct','CASA %','num'], ['termDeposits','Term Deposits','num'], ['advancesOs','Advances o/s','num'],
+  ['advAgri','Advances Agriculture','num'], ['advRetail','Advances Retail','num'], ['advMsme','Advances MSME','num'],
+  ['advPctRM','Advances %age of RM','num'], ['advOther','Advances Other','num'],
+  ['cdRatio','CD Ratio','num'], ['grossNpa','Gross NPA Amount','num'], ['grossNpaPct','Gross NPA %','num'],
+  ['profitLoss','Profit Loss','num'], ['perEmpBusiness','Per Employee Business','num'],
+  ['savingAcOpened','Saving Ac Opened This Month','num'], ['currentAcOpened','Current Ac Opened This Month','num'],
+  ['campaignScore','Campaign Score','num'], ['campaignRank','Campaign Rank','num'],
+  ['disbTotalAc','Disbursement Total Acs','num'], ['disbTotalAmt','Disbursement Total Amt','num'],
+  ['disbMsmeAc','Disbursement MSME Acs','num'], ['disbMsmeAmt','Disbursement MSME Amt','num'],
+  ['disbRetailAc','Disbursement Retail Acs','num'], ['disbRetailAmt','Disbursement Retail Amt','num'],
+  ['disbHousingAc','Disbursement Housing Acs','num'], ['disbHousingAmt','Disbursement Housing Amt','num'],
+  ['disbCarAc','Disbursement Car Acs','num'], ['disbCarAmt','Disbursement Car Amt','num'],
+  ['disbOthersAc','Disbursement Others Acs','num'], ['disbOthersAmt','Disbursement Others Amt','num'],
+  ['lifeInsAch','Life Insurance Achievement','num'], ['healthInsAch','Health Insurance Achievement','num'], ['generalInsAch','General Insurance Achievement','num'],
+  ['apyAch','APY Achievement','num'], ['pmjjbyAch','PMJJBY Achievement','num'], ['pmsbyAch','PMSBY Achievement','num'],
+  ['rolloverAc','Rollover Acs','num'], ['rolloverAmt','Rollover Amt','num'],
+  ['collectionAc','Collection Acs','num'], ['collectionAmt','Collection Amt','num'],
+  ['turnoverAc','Turnover Acs','num'], ['turnoverAmt','Turnover Amt','num'],
+  ['reKycPending','Re-KYC Pending','num'], ['cKycPending','C-KYC Pending','num'], ['inoperativeAc','Inoperative Acs','num'],
+  ['deafBreach','DEAF Breach Count','num'], ['crl','Cash Retention Limit','num'],
+  ['lockerTotal','Locker Total','num'], ['lockerVacant','Locker Vacant','num'],
+];
+const BRANCH_PROFILE_TARGET_FIELDS = [
+  ['totalBusinessTargetSept','Total Business Target Sept','num'], ['totalBusinessTargetMar','Total Business Target Mar','num'],
+  ['totalDepositsTargetSept','Total Deposits Target Sept','num'], ['totalDepositsTargetMar','Total Deposits Target Mar','num'],
+  ['advancesTargetSept','Advances Target Sept','num'], ['advancesTargetMar','Advances Target Mar','num'],
+  ['cdRatioTarget','CD Ratio Target','num'], ['grossNpaPctTarget','Gross NPA % Target','num'],
+  ['profitLossTargetSept','Profit Loss Target Sept','num'], ['profitLossTargetMar','Profit Loss Target Mar','num'],
+  ['perEmpBusinessTargetSept','Per Employee Business Target Sept','num'], ['perEmpBusinessTargetMar','Per Employee Business Target Mar','num'],
+  ['lifeInsTarget','Life Insurance Target','num'], ['healthInsTarget','Health Insurance Target','num'], ['generalInsTarget','General Insurance Target','num'],
+  ['apyTarget','APY Target','num'], ['pmjjbyTarget','PMJJBY Target','num'], ['pmsbyTarget','PMSBY Target','num'],
+  ['disbTarget','Disbursement Target','num'], ['rolloverTarget','Rollover Target','num'],
+  ['collectionTarget','Collection Target','num'], ['turnoverTarget','Turnover Target','num'], ['crlTarget','CRL Target','num'],
+];
+function buildBranchProfileFieldMap(allRows, hIdx, fieldList){
+  const header = (allRows[hIdx]||[]).map(normHeader);
+  const idx = (name) => header.indexOf(normHeader(name));
+  const iSol = idx('SolId') >= 0 ? idx('SolId') : header.indexOf(normHeader('Sol ID'));
+  if(iSol<0) throw new Error('Could not find a "Sol ID" column -- branches are matched by Sol ID, not name.');
+  const fieldIdx = fieldList.map(([key,label,type])=>[key,type,idx(label)]);
+  const map = {};
+  let count = 0;
+  for(const row of allRows.slice(hIdx+1)){
+    const sol = cellStr(row, iSol);
+    if(!sol) continue;
+    const rec = {};
+    fieldIdx.forEach(([key,type,i])=>{
+      if(i<0) return;
+      const raw = row[i];
+      if(raw===''||raw==null) return;
+      if(type==='num'){ const n = parseFloat(raw); if(!isNaN(n)) rec[key] = n; }
+      else rec[key] = cellStr(row,i);
+    });
+    if(!Object.keys(rec).length) continue;
+    map[sol] = rec;
+    count++;
+  }
+  if(!count) throw new Error('No rows with a Sol ID and at least one field found.');
+  return map;
+}
+async function handleBranchProfileUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  await ensureXLSX();
+  const labelEl = document.getElementById('branchProfileUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('branchProfileUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Branch Profile file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      const headerHints = ['solid','sol'];
+      let allRows, hIdx;
+      if(isCsv){
+        allRows = parseCSV(String(e.target.result));
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      }
+      const bySolId = buildBranchProfileFieldMap(allRows, hIdx, BRANCH_PROFILE_FIELDS);
+      const count = Object.keys(bySolId).length;
+      const guessed = parseAsOnDateFromFilename(file.name);
+      const asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
+      DATA.branchProfile = { asOnDate, bySolId };
+      const label = document.getElementById('branchProfileStatusLabel');
+      if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es) loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch(es) parsed, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.</div>`;
+      __hasUnpublishedRefData = true;
+      clearStalePublishStatus();
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.querySelector('.view.active')?.dataset.view==='branchprofile') renderBranchProfileView();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+window.handleBranchProfileUpload = handleBranchProfileUpload;
+async function handleBranchProfileTargetsUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  await ensureXLSX();
+  const labelEl = document.getElementById('branchProfileTargetsUploadDropLabel');
+  if(labelEl) labelEl.textContent = file.name;
+  const statusEl = document.getElementById('branchProfileTargetsUploadStatus');
+  statusEl.innerHTML = `<div class="upload-status info">Reading Branch Profile Targets file…</div>`;
+  const isCsv = /\.csv$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
+  reader.onload = function(e){
+    try{
+      const headerHints = ['solid','sol'];
+      let allRows, hIdx;
+      if(isCsv){
+        allRows = parseCSV(String(e.target.result));
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      } else {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, {type:'array'});
+        allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+      }
+      const bySolId = buildBranchProfileFieldMap(allRows, hIdx, BRANCH_PROFILE_TARGET_FIELDS);
+      const count = Object.keys(bySolId).length;
+      DATA.branchProfileTargets = { bySolId };
+      const label = document.getElementById('branchProfileTargetsStatusLabel');
+      if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es) loaded (${file.name})`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch target record(s) parsed. Not live for anyone else until you hit Publish below.</div>`;
+      __hasUnpublishedRefData = true;
+      clearStalePublishStatus();
+      const publishBtn = document.getElementById('publishBtn');
+      if(publishBtn) publishBtn.disabled = false;
+      if(document.querySelector('.view.active')?.dataset.view==='branchprofile') renderBranchProfileView();
+    } catch(err){
+      statusEl.innerHTML = `<div class="upload-status err">⚠ Could not read this file: ${esc(err.message||err)}</div>`;
+    }
+  };
+  if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+window.handleBranchProfileTargetsUpload = handleBranchProfileTargetsUpload;
+/* Pre-fills Sol ID/Branch Name for every branch from BRANCH_LIST and
+   carries forward whatever's already in DATA.branchProfile, same
+   re-download-safe convention as downloadBranchContactsTemplate() above --
+   only the still-blank fields need filling in on a re-download. */
+function downloadBranchProfileTemplate(){
+  const headers = ['Sol ID','Branch Name', ...BRANCH_PROFILE_FIELDS.map(f=>f[1])];
+  const rows = BRANCH_LIST.map(([,newId,name])=>{
+    const bp = (DATA.branchProfile.bySolId && DATA.branchProfile.bySolId[String(newId)]) || {};
+    return [newId, name, ...BRANCH_PROFILE_FIELDS.map(([key])=> bp[key]!=null ? bp[key] : '')];
+  });
+  downloadCsvRows('UPGB_Branch_Profile_Template.csv', headers, rows);
+}
+function downloadBranchProfileTargetsTemplate(){
+  const headers = ['Sol ID','Branch Name', ...BRANCH_PROFILE_TARGET_FIELDS.map(f=>f[1])];
+  const rows = BRANCH_LIST.map(([,newId,name])=>{
+    const bp = (DATA.branchProfileTargets.bySolId && DATA.branchProfileTargets.bySolId[String(newId)]) || {};
+    return [newId, name, ...BRANCH_PROFILE_TARGET_FIELDS.map(([key])=> bp[key]!=null ? bp[key] : '')];
+  });
+  downloadCsvRows('UPGB_Branch_Profile_Targets_Template.csv', headers, rows);
+}
+
+/* ---------- Branch Profile screen ---------- */
+let BRANCH_PROFILE_HISTORY = null; // lazy-loaded data/branch-profile-history.json .entries
+let branchProfileSolId = '';
+function ensureBranchProfileHistoryLoaded(onReady){
+  if(BRANCH_PROFILE_HISTORY){ onReady(); return; }
+  fetchJson('data/branch-profile-history.json?t=' + Date.now())
+    .then(d => { BRANCH_PROFILE_HISTORY = (d && Array.isArray(d.entries)) ? d.entries : []; onReady(); })
+    .catch(() => { BRANCH_PROFILE_HISTORY = []; onReady(); });
+}
+// 'YYYY-MM-DD' (dateToInputValue() shape, what DATA.branchProfile.asOnDate
+// and every history entry's own .date are stored as) -- deliberately NOT
+// toDate(), which only parses DD-MM-YYYY/Excel-serial.
+function parseIsoDate(s){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||''));
+  return m ? new Date(+m[1], +m[2]-1, +m[3]) : null;
+}
+// Finds the history entry closest to `monthsAgo` months before the current
+// snapshot's own asOnDate, within a loose tolerance window, so a slightly
+// early/late upload still lines up with "last month"/"same month last
+// year" instead of silently showing no comparison at all.
+function branchProfileCompareEntry(monthsAgo){
+  if(!BRANCH_PROFILE_HISTORY || !BRANCH_PROFILE_HISTORY.length) return null;
+  const cur = parseIsoDate(DATA.branchProfile.asOnDate);
+  if(!cur) return null;
+  const want = new Date(cur.getFullYear(), cur.getMonth()-monthsAgo, cur.getDate()).getTime();
+  let best = null, bestDiff = Infinity;
+  BRANCH_PROFILE_HISTORY.forEach(e=>{
+    if(e.date === DATA.branchProfile.asOnDate) return;
+    const d = parseIsoDate(e.date);
+    if(!d) return;
+    const diff = Math.abs(d.getTime() - want);
+    if(diff < bestDiff){ bestDiff = diff; best = e; }
+  });
+  return (best && bestDiff <= 20*24*60*60*1000) ? best : null; // within ~20 days of the target month
+}
+function pctDelta(cur, prev){
+  if(typeof cur!=='number' || typeof prev!=='number' || prev===0) return null;
+  return (cur-prev)/Math.abs(prev)*100;
+}
+function deltaChipHtml(pct, decimals){
+  if(pct===null) return '<span style="color:var(--ink-mute);font-weight:500">no comparison yet</span>';
+  const good = pct>=0;
+  return `<span style="color:${good?'var(--tool-jade)':'var(--tool-coral)'};font-weight:700">${good?'+':''}${pct.toFixed(decimals==null?2:decimals)}%</span>`;
+}
+function setBranchProfileSolId(solId){ branchProfileSolId = solId; renderBranchProfileBody(); }
+window.setBranchProfileSolId = setBranchProfileSolId;
+function renderBranchProfileView(){
+  const el = document.getElementById('branchProfileArea');
+  if(!el) return;
+  if(!branchProfileSolId){
+    const firstWithData = BRANCH_LIST.find(([,id])=> DATA.branchProfile.bySolId && DATA.branchProfile.bySolId[String(id)]);
+    branchProfileSolId = String((firstWithData || BRANCH_LIST[0])[1]);
+  }
+  ensureBranchProfileHistoryLoaded(renderBranchProfileBody);
+}
+function renderBranchProfileBody(){
+  const el = document.getElementById('branchProfileArea');
+  if(!el) return;
+  const bp = (DATA.branchProfile.bySolId && DATA.branchProfile.bySolId[branchProfileSolId]) || null;
+  const tgt = (DATA.branchProfileTargets.bySolId && DATA.branchProfileTargets.bySolId[branchProfileSolId]) || {};
+  const branchMeta = BRANCH_LIST.find(([,id])=>String(id)===branchProfileSolId);
+  const branchName = branchMeta ? branchMeta[2] : branchProfileSolId;
+  const prevMonth = branchProfileCompareEntry(1);
+  const prevYear = branchProfileCompareEntry(12);
+  const prevMonthRow = (prevMonth && prevMonth.bySolId[branchProfileSolId]) || null;
+
+  const branchOptions = BRANCH_LIST.map(([,id,name])=>{
+    const has = DATA.branchProfile.bySolId && DATA.branchProfile.bySolId[String(id)];
+    return `<option value="${id}"${String(id)===branchProfileSolId?' selected':''}>${esc(name)}${has?'':' (no data)'}</option>`;
+  }).join('');
+  const toolbar = `<div class="dash-toolbar">
+    <span class="dash-toolbar-label">Branch</span>
+    <select id="branchProfileSelect" class="dash-select">${branchOptions}</select>
+    ${DATA.branchProfile.asOnDate ? `<span style="margin-left:auto;font-size:12.5px;color:var(--ink-mute)">Data as on <b>${esc(fmtDateIso(DATA.branchProfile.asOnDate))}</b></span>` : ''}
+  </div>`;
+
+  if(!bp){
+    el.innerHTML = toolbar + `<div class="empty-state"><h2>No Branch Profile data for ${esc(branchName)}</h2><p>Upload the Branch Profile file from Update Data to populate this screen.</p></div>`;
+    const sel = document.getElementById('branchProfileSelect');
+    if(sel) sel.onchange = () => setBranchProfileSolId(sel.value);
+    return;
+  }
+
+  const num = (v) => typeof v==='number' ? v : null;
+  const heroRow = `<div class="hero-kpi-row" style="margin-top:16px">
+    ${heroKpiCard({ id:'bpTotalBusiness', icon: ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', label:'Total Business', fallback: bp.totalBusiness!=null?fmtCr(bp.totalBusiness*10000000):'—', sub: deltaChipHtml(pctDelta(num(bp.totalBusiness), num(prevMonthRow&&prevMonthRow.totalBusiness))) + ' MoM' })}
+    ${heroKpiCard({ id:'bpCasaPct', icon: ICON_LANDMARK, tint:'var(--tool-teal-soft)', color:'var(--tool-teal)', label:'CASA %', fallback: bp.casaPct!=null?bp.casaPct.toFixed(2)+'%':'—', sub: deltaChipHtml(bp.casaPct!=null&&prevMonthRow&&prevMonthRow.casaPct!=null?bp.casaPct-prevMonthRow.casaPct:null,2) + ' pts MoM' })}
+    ${heroKpiCard({ id:'bpCdRatio', icon: ICON_TARGET, tint:'var(--tool-gold-soft)', color:'var(--tool-gold)', label:'CD Ratio', fallback: bp.cdRatio!=null?bp.cdRatio.toFixed(2)+'%':'—', sub: deltaChipHtml(bp.cdRatio!=null&&prevMonthRow&&prevMonthRow.cdRatio!=null?bp.cdRatio-prevMonthRow.cdRatio:null,2) + ' pts MoM' })}
+    ${heroKpiCard({ id:'bpGrossNpaPct', icon: ICON_ALERT_TRIANGLE, tint:'var(--tool-coral-soft)', color:'var(--tool-coral)', label:'Gross NPA %', fallback: bp.grossNpaPct!=null?bp.grossNpaPct.toFixed(2)+'%':'—', sub: deltaChipHtml(bp.grossNpaPct!=null&&prevMonthRow&&prevMonthRow.grossNpaPct!=null?bp.grossNpaPct-prevMonthRow.grossNpaPct:null,2) + ' pts MoM' })}
+    ${heroKpiCard({ id:'bpProfitLoss', icon: ICON_BANKNOTE, tint:'var(--tool-rose-soft)', color:'var(--tool-rose)', label:'Profit / Loss', fallback: bp.profitLoss!=null?fmtCr(bp.profitLoss*10000000):'—', sub: deltaChipHtml(pctDelta(num(bp.profitLoss), num(prevMonthRow&&prevMonthRow.profitLoss))) + ' MoM' })}
+  </div>`;
+
+  const identityCard = `<div class="chart-card" style="margin-top:16px">
+    <div class="section-label">${esc(branchName)}<span class="chart-sub">Sol ID ${esc(branchProfileSolId)}</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:24px;margin-top:10px">
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Branch Manager</div><div style="font-weight:700">${esc(bp.bmName)||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Region · Category</div><div style="font-weight:700">${esc(bp.region)||'—'} · ${esc(bp.category)||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Cadre</div><div style="font-weight:700">${esc(bp.cadre)||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">BC · Mobile</div><div style="font-weight:700">${esc(bp.bcCode)||'—'} · ${esc(bp.mobile)||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Staff</div><div style="font-weight:700">${bp.totalStaff!=null?bp.totalStaff:'—'} total (Scale 1-4: ${[bp.scale1,bp.scale2,bp.scale3,bp.scale4].map(v=>v!=null?v:0).join('/')})</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Date of Posting</div><div style="font-weight:700">${esc(bp.dateOfPosting)||'—'}</div></div>
+    </div>
+  </div>`;
+
+  const growthRows = [
+    ['Total Business','totalBusiness','totalBusinessTargetSept','totalBusinessTargetMar'],
+    ['Total Deposits','totalDeposits','totalDepositsTargetSept','totalDepositsTargetMar'],
+    ['CA Deposit','caDeposit'], ['SB Deposits','sbDeposits'], ['CASA Deposits','casaDeposits'],
+    ['Term Deposits','termDeposits'],
+    ['Advances o/s','advancesOs','advancesTargetSept','advancesTargetMar'],
+    ['— Agriculture','advAgri'], ['— Retail','advRetail'], ['— MSME','advMsme'], ['— %age of RM','advPctRM','',''], ['— Other','advOther'],
+    ['CD Ratio (%)','cdRatio','cdRatioTarget',''],
+    ['Gross NPA','grossNpa'], ['Gross NPA %','grossNpaPct','grossNpaPctTarget',''],
+    ['Profit / Loss','profitLoss','profitLossTargetSept','profitLossTargetMar'],
+    ['Per Employee Business','perEmpBusiness','perEmpBusinessTargetSept','perEmpBusinessTargetMar'],
+  ];
+  const growthRowsHtml = growthRows.map(([label,key,tgtSeptKey,tgtMarKey])=>{
+    const cur = bp[key], prev = prevMonthRow ? prevMonthRow[key] : null;
+    const tSept = tgtSeptKey ? tgt[tgtSeptKey] : null, tMar = tgtMarKey ? tgt[tgtMarKey] : null;
+    const isPct = /%/.test(label);
+    const fmtVal = (v) => v==null ? '—' : (isPct ? v.toFixed(2)+'%' : v.toLocaleString('en-IN',{maximumFractionDigits:2}));
+    return `<tr>
+      <td class="tal">${label.startsWith('—')?`<span style="color:var(--ink-mute);padding-left:14px">${esc(label)}</span>`:`<b>${esc(label)}</b>`}</td>
+      <td>${fmtVal(cur)}</td>
+      <td>${deltaChipHtml(isPct ? (cur!=null&&prev!=null?cur-prev:null) : pctDelta(cur,prev), 2)}</td>
+      <td class="tal" style="color:var(--ink-mute)">${tSept!=null?fmtVal(tSept):'—'}${tMar!=null?' / '+fmtVal(tMar):''}</td>
+    </tr>`;
+  }).join('');
+  const growthCard = `<div class="chart-card" style="margin-top:16px">
+    <div class="section-label">Business Growth<span class="chart-sub">${prevMonth?('vs '+esc(fmtDateIso(prevMonth.date))):'no prior month uploaded yet, so no MoM comparison'}${prevYear?(' · '+esc(fmtDateIso(prevYear.date))+' available for YoY'):''}</span></div>
+    <div class="dash-table-wrap" style="margin-top:8px">
+      <table class="dash-table">
+        <thead><tr><th class="tal">Parameter</th><th>Current</th><th>MoM</th><th class="tal">Target (Sept / Mar)</th></tr></thead>
+        <tbody>${growthRowsHtml}</tbody>
+      </table>
+    </div>
+  </div>`;
+
+  const disbItems = [
+    ['MSME','disbMsmeAc','disbMsmeAmt','var(--tool-jade)'],
+    ['Retail','disbRetailAc','disbRetailAmt','var(--accent)'],
+    ['Housing','disbHousingAc','disbHousingAmt','var(--tool-gold)'],
+    ['Car','disbCarAc','disbCarAmt','var(--tool-rose)'],
+    ['Others','disbOthersAc','disbOthersAmt','var(--tool-violet)'],
+  ];
+  const disbCard = `<div class="chart-card" style="margin-top:16px">
+    <div class="section-label">Fresh Loan Disbursement<span class="chart-sub">this cycle, excl. staff &amp; LABOD${bp.disbTotalAc!=null?(' · '+bp.disbTotalAc.toLocaleString('en-IN')+' A/Cs total, '+fmtCr((bp.disbTotalAmt||0)*10000000)):''}</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-top:10px">
+      ${disbItems.map(([label,acKey,amtKey,color])=>`<div style="border-radius:11px;padding:12px 14px;background:color-mix(in srgb, ${color} 12%, transparent)">
+        <div style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase">${label}</div>
+        <div style="font-weight:800;font-size:17px;margin-top:6px">${bp[amtKey]!=null?fmtCr(bp[amtKey]*10000000):'—'}</div>
+        <div style="font-size:11.5px;color:var(--ink-mute)">${bp[acKey]!=null?bp[acKey].toLocaleString('en-IN')+' A/Cs':'—'}</div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+
+  const progressBar = (pct) => `<div style="height:7px;border-radius:999px;background:rgba(120,120,140,.15);overflow:hidden;margin-top:5px"><div style="width:${Math.max(0,Math.min(100,pct||0))}%;height:100%;background:var(--accent)"></div></div>`;
+  const insItems = [
+    ['Life Insurance','lifeInsAch','lifeInsTarget'], ['Health Insurance','healthInsAch','healthInsTarget'], ['General Insurance','generalInsAch','generalInsTarget'],
+    ['APY','apyAch','apyTarget'], ['PMJJBY','pmjjbyAch','pmjjbyTarget'], ['PMSBY','pmsbyAch','pmsbyTarget'],
+  ];
+  const insCard = `<div class="chart-card" style="margin-top:16px">
+    <div class="section-label">Insurance &amp; Social Security<span class="chart-sub">achievement vs FY target</span></div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px">
+      ${insItems.map(([label,achKey,tgtKey])=>{
+        const ach = bp[achKey], target = tgt[tgtKey];
+        const pct = (ach!=null && target) ? ach/target*100 : null;
+        return `<div><div style="display:flex;justify-content:space-between;font-size:12.5px"><span style="font-weight:600">${label}</span><span style="color:var(--ink-mute)">${ach!=null?ach.toLocaleString('en-IN'):'—'}${target!=null?(' / target '+target.toLocaleString('en-IN')):''}${pct!=null?(' · '+pct.toFixed(1)+'%'):''}</span></div>${progressBar(pct)}</div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  const rctCard = `<div class="chart-card" style="margin-top:16px">
+    <div class="section-label">R-C-T Framework Efficiency</div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:10px">
+      ${[['Rollover','rolloverAc','rolloverAmt'],['Collection','collectionAc','collectionAmt'],['Turnover','turnoverAc','turnoverAmt']].map(([label,acKey,amtKey])=>`
+        <div style="border:1px solid var(--glass-border);border-radius:11px;padding:12px 14px">
+          <div style="font-size:11.5px;color:var(--ink-mute);text-transform:uppercase;font-weight:700">${label}</div>
+          <div style="font-weight:800;font-size:16px;margin-top:5px">${bp[amtKey]!=null?fmtCr(bp[amtKey]*10000000):'—'}</div>
+          <div style="font-size:11.5px;color:var(--ink-mute)">${bp[acKey]!=null?bp[acKey].toLocaleString('en-IN')+' A/Cs':'—'}</div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+
+  const chip = (val, label, color) => `<div style="display:inline-flex;align-items:center;gap:6px;background:color-mix(in srgb, ${color} 14%, transparent);color:${color};border-radius:999px;padding:6px 11px;font-size:12px;font-weight:700;margin:0 8px 8px 0"><span>${val!=null?val.toLocaleString('en-IN'):'—'}</span><span style="font-weight:500;color:var(--ink-mute)">${label}</span></div>`;
+  const complianceCard = `<div class="chart-card" style="margin-top:16px">
+    <div class="section-label">Account Hygiene &amp; Compliance</div>
+    <div style="margin-top:10px">
+      ${chip(bp.reKycPending,'Re-KYC due','var(--tool-coral)')}
+      ${chip(bp.cKycPending,'C-KYC pending','var(--tool-gold)')}
+      ${chip(bp.inoperativeAc,'Inoperative A/Cs','var(--ink-mute)')}
+      ${chip(bp.deafBreach,'DEAF breach >4mo','var(--tool-jade)')}
+      ${chip(bp.lockerTotal,'Lockers'+(bp.lockerVacant!=null?(', '+bp.lockerVacant+' vacant'):''),'var(--ink-mute)')}
+      ${chip(bp.crl,'Cash Retention Limit (₹L)','var(--accent)')}
+    </div>
+  </div>`;
+
+  const accOpenCard = `<div class="chart-card" style="margin-top:16px">
+    <div class="section-label">Account Opening &amp; Campaign</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:10px">
+      <div style="border-radius:11px;padding:12px 14px;background:var(--tool-jade-soft,rgba(30,158,116,.1))"><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Saving A/c opened</div><div style="font-weight:800;font-size:17px;margin-top:4px">${bp.savingAcOpened!=null?bp.savingAcOpened.toLocaleString('en-IN'):'—'}</div></div>
+      <div style="border-radius:11px;padding:12px 14px;background:var(--tool-jade-soft,rgba(30,158,116,.1))"><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Current A/c opened</div><div style="font-weight:800;font-size:17px;margin-top:4px">${bp.currentAcOpened!=null?bp.currentAcOpened.toLocaleString('en-IN'):'—'}</div></div>
+      <div style="border-radius:11px;padding:12px 14px;background:var(--accent-soft)"><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Campaign Score</div><div style="font-weight:800;font-size:17px;margin-top:4px">${bp.campaignScore!=null?bp.campaignScore:'—'} <span style="font-size:12px;color:var(--ink-mute)">/100</span></div></div>
+      <div style="border-radius:11px;padding:12px 14px;background:var(--accent-soft)"><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Campaign Rank</div><div style="font-weight:800;font-size:17px;margin-top:4px">${bp.campaignRank!=null?('#'+bp.campaignRank.toLocaleString('en-IN')):'—'}</div></div>
+    </div>
+  </div>`;
+
+  el.innerHTML = toolbar + heroRow + identityCard + growthCard +
+    `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:0">
+      <div>${disbCard}${accOpenCard}</div>
+      <div>${insCard}${rctCard}${complianceCard}</div>
+    </div>`;
+
+  const sel = document.getElementById('branchProfileSelect');
+  if(sel) sel.onchange = () => setBranchProfileSolId(sel.value);
+}
+window.renderBranchProfileView = renderBranchProfileView;
+window.renderBranchProfileBody = renderBranchProfileBody;
+
 async function handleLokAdalatUpload(evt){
   const file = evt.target.files[0];
   if(!file) return;
@@ -6929,6 +7352,11 @@ function fmtAsOnDisplay(){
 function updateReportDateDisplay(){
   document.querySelectorAll('.report-date-val').forEach(e=>e.textContent = fmtAsOnDisplay());
 }
+function fmtDateIso(iso){
+  const parts = String(iso||'').split('-');
+  if(parts.length===3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  return '—';
+}
 
 function csvField(v){
   const s = String(v==null?'':v);
@@ -7198,6 +7626,7 @@ const DL_ICON_WALLET = '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 
 const DL_ICON_CAL_DAY = '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="15" r="1.6" fill="currentColor" stroke="none"/>';
 const DL_ICON_CAL_RANGE = '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 15h8"/>';
 const DL_ICON_CLOCK = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>';
+const DL_ICON_BUILDING = '<rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/>';
 
 /* ---------- Download tab: KCC Overdue exports -- a second DL_TAB_GROUPS
    category, same download mechanics (dlExportWorkbook) as the NPA category
@@ -7440,6 +7869,51 @@ const SLIPPAGE_DL_EXPORTS = [
   {id:'slippagetotal', title:'Total Slippage (Current Month)', desc:'Every account slipped to NPA so far this cycle, across every daily upload combined.', fn:'dlExportSlippageTotal', icon:DL_ICON_CAL_DAY, color:'rose'},
 ];
 
+/* ---------- Download tab: Branch Profile export -- a sixth DL_TAB_GROUPS
+   category. DATA.branchProfile.bySolId is keyed by Sol ID, one plain object
+   per branch (field keys from BRANCH_PROFILE_FIELDS, not the C.* row shape
+   every other export above uses), so this gets its own generic writer
+   (dlWriteBranchProfileSheet) built straight off BRANCH_PROFILE_FIELDS
+   rather than a fixed column list. ---------- */
+function dlBranchProfileSourceRows(){
+  const bySolId = (DATA.branchProfile && DATA.branchProfile.bySolId) || {};
+  return BRANCH_LIST.map(([,solId,name])=>{
+    const bp = bySolId[String(solId)];
+    if(!bp) return null;
+    return Object.assign({ solId: String(solId), branchName: name }, bp);
+  }).filter(Boolean);
+}
+function dlWriteBranchProfileSheet(ws, rows){
+  const headers = ['Sol ID','Branch Name'].concat(BRANCH_PROFILE_FIELDS.map(([,label])=>label));
+  const hRow = ws.getRow(1);
+  headers.forEach((h,i)=>{ hRow.getCell(i+1).value = h; });
+  dlStyleHeaderRow(hRow, headers.length);
+  rows.forEach((r, ri)=>{
+    const row = ws.getRow(ri+2);
+    row.getCell(1).value = r.solId;
+    row.getCell(2).value = r.branchName;
+    BRANCH_PROFILE_FIELDS.forEach(([key,,type], fi)=>{
+      const cell = row.getCell(fi+3);
+      const val = r[key];
+      if(type==='num'){ cell.value = val==null?null:Number(val); cell.numFmt = '0.00'; }
+      else cell.value = val==null?'':val;
+    });
+    if(ri % 2 === 1){
+      for(let fc=1; fc<=headers.length; fc++){ row.getCell(fc).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F5F3'}}; }
+    }
+  });
+  ws.columns.forEach(col=>{ col.width = 16; });
+  if(rows.length){ ws.autoFilter = { from:{row:1,column:1}, to:{row:rows.length+1,column:headers.length} }; }
+}
+function dlExportBranchProfileTotal(){
+  const rows = dlBranchProfileSourceRows();
+  dlExportWorkbook([{name:'Branch_Profile', rows}], 'Branch_Profile_' + dateToInputValue(new Date()) + '.xlsx', dlWriteBranchProfileSheet);
+}
+window.dlExportBranchProfileTotal = dlExportBranchProfileTotal;
+const BRANCH_PROFILE_DL_EXPORTS = [
+  {id:'branchprofiletotal', title:'Branch Profile (all branches)', desc:'Every branch currently loaded, one row each, every Branch Profile column.', fn:'dlExportBranchProfileTotal', icon:DL_ICON_BUILDING, color:'jade'},
+];
+
 const DL_EXPORTS = [
   {id:'complete', title:'Complete NPA List', desc:'Every account in the current NPA book, one sheet.', fn:'dlExportComplete', icon:DL_ICON_LIST, color:'jade'},
   {id:'assetcode', title:'Asset Code wise NPA List', desc:'Pick all 5 categories in one workbook, or any single category on its own.', fn:'dlExportAssetCodeWise', icon:DL_ICON_LAYERS, color:'gold'},
@@ -7458,10 +7932,11 @@ const DL_TAB_GROUPS = [
   {id:'pnpa', label:'PNPA', exports: PNPA_DL_EXPORTS},
   {id:'sma', label:'SMA', exports: SMA_DL_EXPORTS},
   {id:'slippage', label:'Slippage', exports: SLIPPAGE_DL_EXPORTS},
+  {id:'branchprofile', label:'Branch Profile', exports: BRANCH_PROFILE_DL_EXPORTS},
 ];
 // Icons for the tab row itself (separate from each card's own icon above),
 // keyed by DL_TAB_GROUPS id.
-const DL_TAB_ICONS = { npa: DL_ICON_LIST, kccoverdue: DL_ICON_CLOCK, pnpa: DL_ICON_CAL_DAY, sma: DL_ICON_WALLET, slippage: DL_ICON_CAL_DAY };
+const DL_TAB_ICONS = { npa: DL_ICON_LIST, kccoverdue: DL_ICON_CLOCK, pnpa: DL_ICON_CAL_DAY, sma: DL_ICON_WALLET, slippage: DL_ICON_CAL_DAY, branchprofile: DL_ICON_BUILDING };
 let dlActiveTab = DL_TAB_GROUPS[0].id;
 const DL_DOWNLOAD_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
 function setDlTab(id){ dlActiveTab = id; renderNpaDownloadView(); }
@@ -7738,7 +8213,7 @@ function openPublishReview(){
   `;
   __pendingPublish = {
     type: 'publish',
-    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, otsBook: DATA.otsBook, branchAdvances: DATA.branchAdvances||{}, branchTargets: DATA.branchTargets||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{}, customerAddressMap: DATA.customerAddressMap||{}, noticeTemplates: { npa: (DATA.noticeTemplates&&DATA.noticeTemplates.npa)||NPA_NOTICE_DEFAULT_TEMPLATE } },
+    dataObj: { npa: DATA.npa, oldots: DATA.oldots, asOnDate: DATA.asOnDate||null, otsBook: DATA.otsBook, branchAdvances: DATA.branchAdvances||{}, branchTargets: DATA.branchTargets||{}, branchContacts: DATA.branchContacts||{}, specialNotes: DATA.specialNotes||{}, lokAdalat: DATA.lokAdalat||{}, interestReversalMaster: DATA.interestReversalMaster||{}, customerAddressMap: DATA.customerAddressMap||{}, branchProfile: DATA.branchProfile||{asOnDate:null,bySolId:{}}, branchProfileTargets: DATA.branchProfileTargets||{bySolId:{}}, noticeTemplates: { npa: (DATA.noticeTemplates&&DATA.noticeTemplates.npa)||NPA_NOTICE_DEFAULT_TEMPLATE } },
     meta: {
       asOnDate: summary.asOnDate,
       rowCount: summary.rowCount,
@@ -7789,6 +8264,31 @@ async function buildNpaBranchHistoryExtraFile(){
   doc.entries.sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : 0);
   return { path:'data/npa-branch-history.json', content: doc, label: `NPA Daily History (${fmtAsOnDisplay()})` };
 }
+/* One snapshot captured per Publish, same upsert-by-date shape as
+   buildNpaBranchHistoryExtraFile() above -- this is how the Branch Profile
+   screen's own month-over-month/year-over-year growth figures get read
+   back (see branchProfileHistoryEntry()), without DATA.branchProfile
+   itself needing to keep more than the latest month. Returns null (no
+   file to add) when Branch Profile hasn't been uploaded at all yet, so a
+   Publish that never touched it doesn't create an empty history file. */
+async function buildBranchProfileHistoryExtraFile(){
+  if(!DATA.branchProfile || !DATA.branchProfile.asOnDate || !Object.keys(DATA.branchProfile.bySolId||{}).length) return null;
+  let doc;
+  try{
+    doc = await fetchJson('data/branch-profile-history.json?t=' + Date.now());
+    if(!doc || !Array.isArray(doc.entries)) doc = { entries: [] };
+  } catch(err){
+    if(err && err.message === 'HTTP 404'){ doc = { entries: [] }; }
+    else { return null; }
+  }
+  const entry = { date: DATA.branchProfile.asOnDate, bySolId: DATA.branchProfile.bySolId };
+  const idx = doc.entries.findIndex(e=>e.date===entry.date);
+  if(idx>=0) doc.entries[idx] = entry; else doc.entries.push(entry);
+  doc.entries.sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : 0);
+  const MAX_BRANCH_PROFILE_HISTORY = 24; // ~2 years of monthly snapshots
+  if(doc.entries.length > MAX_BRANCH_PROFILE_HISTORY) doc.entries = doc.entries.slice(doc.entries.length - MAX_BRANCH_PROFILE_HISTORY);
+  return { path:'data/branch-profile-history.json', content: doc, label: null };
+}
 async function confirmPublish(){
   if(!__pendingPublish || !window.UPGBPublish) return;
   const confirmBtn = document.getElementById('publishConfirmBtn');
@@ -7821,6 +8321,8 @@ async function confirmPublish(){
     if(__pendingPublish.type!=='rollback'){
       const branchHistoryFile = await buildNpaBranchHistoryExtraFile();
       if(branchHistoryFile) extraFiles = (extraFiles||[]).concat([branchHistoryFile]);
+      const branchProfileHistoryFile = await buildBranchProfileHistoryExtraFile();
+      if(branchProfileHistoryFile) extraFiles = (extraFiles||[]).concat([branchProfileHistoryFile]);
     }
     const result = __pendingPublish.type === 'rollback'
       ? await window.UPGBPublish.rollbackToVersion(__pendingPublish.versionId, onProgress)
@@ -11671,6 +12173,7 @@ function switchView(view){
     if(view==='npadownload') renderNpaDownloadView();
     if(view==='pnpaslip') renderPnpaSlipView();
     if(view==='slippage') renderSlippageDashboard();
+    if(view==='branchprofile') renderBranchProfileView();
     if(view==='otsapplicationform') renderOtsApplicationView();
     if(view==='npatarget') renderNpaTargetView();
     if(view==='npanotice') renderNpaNoticeView();
@@ -11871,7 +12374,7 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   // touching any of the ~10 existing call sites that already set the
   // panel label's text -- a MutationObserver keeps the tile's copy in
   // sync automatically, however/wherever the source text changes.
-  ['masterStatusLabel','branchAdvStatusLabel','branchTargetStatusLabel','intReversalMasterStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','weeklyPnpaStatusLabel','monthlyPnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel','slippageStatusLabel'].forEach(id=>{
+  ['masterStatusLabel','branchAdvStatusLabel','branchTargetStatusLabel','intReversalMasterStatusLabel','branchContactsStatusLabel','pnpaStatusLabel','weeklyPnpaStatusLabel','monthlyPnpaStatusLabel','kccovStatusLabel','specialNoteCountLabel','lokAdalatStatusLabel','slippageStatusLabel','branchProfileStatusLabel','branchProfileTargetsStatusLabel'].forEach(id=>{
     const src = document.getElementById(id), dst = document.getElementById(id+'Tile');
     if(!src || !dst) return;
     dst.textContent = src.textContent;
@@ -11911,6 +12414,12 @@ document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeSettingsMe
   on('branchContactsUploadDrop','click',()=>document.getElementById('branchContactsFileInput').click());
   on('branchContactsFileInput','change',(e)=>handleBranchContactsUpload(e));
   on('downloadBranchContactsTemplateBtn','click',()=>downloadBranchContactsTemplate());
+  on('branchProfileUploadDrop','click',()=>document.getElementById('branchProfileFileInput').click());
+  on('branchProfileFileInput','change',(e)=>handleBranchProfileUpload(e));
+  on('downloadBranchProfileTemplateBtn','click',()=>downloadBranchProfileTemplate());
+  on('branchProfileTargetsUploadDrop','click',()=>document.getElementById('branchProfileTargetsFileInput').click());
+  on('branchProfileTargetsFileInput','change',(e)=>handleBranchProfileTargetsUpload(e));
+  on('downloadBranchProfileTargetsTemplateBtn','click',()=>downloadBranchProfileTargetsTemplate());
   on('lokAdalatUploadDrop','click',()=>document.getElementById('lokAdalatFileInput').click());
   on('lokAdalatFileInput','change',(e)=>handleLokAdalatUpload(e));
   on('lokAdalatClearBtn','click',()=>clearLokAdalat());
