@@ -6179,35 +6179,34 @@ async function handleBranchContactsUpload(evt){
    the DATA.branchProfile.bySolId[solId] property name; `label` is both the
    template's column header and what the parser looks for (case/space-
    insensitive, via normHeader()); `type` picks parseFloat vs plain text. */
+/* Rebuilt 2026-11-03 to match what Alok's own Regional Office "Branch
+   Profile" MIS report (BRANCH_FORMAT_READY.xlsx, "MASTER" sheet) actually
+   carries, after he asked to see how much of the data was real and build
+   the dashboard to match -- dropped everything the first (PDF-derived)
+   design speculated about with no real source: CASA %, sector-wise
+   advances (Agri/Retail/MSME/RM%), loan-type-wise disbursement, Campaign
+   Score/Rank, R-C-T framework, DEAF/CRL/Lockers. This flat field list is
+   ONLY the simple-template/fallback shape (one row per branch, this
+   month's figures) -- the real monthly upload is the HO report's own
+   wide multi-month "MASTER" sheet, parsed by tryParseMasterSheetWide()
+   below, which is what actually populates DATA.branchProfile.bySolId
+   (and backfills data/branch-profile-history.json in one shot, since
+   that source already carries several real historical months). Monetary
+   fields are in ₹ Lakhs, matching the Branch Advance upload's own
+   convention elsewhere in this app -- NOT ₹ Crores. */
 const BRANCH_PROFILE_FIELDS = [
-  ['region','Region','text'], ['category','Category','text'], ['cadre','Cadre','text'],
-  ['bmName','BM Name','text'], ['mobile','Mobile No','text'], ['bcCode','BC Code','text'],
-  ['dateOfPosting','Date of Posting','text'], ['totalStaff','Total Staff','num'],
-  ['scale1','Scale-1','num'], ['scale2','Scale-2','num'], ['scale3','Scale-3','num'], ['scale4','Scale-4','num'],
-  ['officeAssistant','Office Assistant','num'], ['officeAttendant','Office Attendant','num'],
-  ['totalBusiness','Total Business','num'], ['totalDeposits','Total Deposits','num'],
-  ['caDeposit','CA Deposit','num'], ['sbDeposits','SB Deposits','num'], ['casaDeposits','CASA Deposits','num'],
-  ['casaPct','CASA %','num'], ['termDeposits','Term Deposits','num'], ['advancesOs','Advances o/s','num'],
-  ['advAgri','Advances Agriculture','num'], ['advRetail','Advances Retail','num'], ['advMsme','Advances MSME','num'],
-  ['advPctRM','Advances %age of RM','num'], ['advOther','Advances Other','num'],
-  ['cdRatio','CD Ratio','num'], ['grossNpa','Gross NPA Amount','num'], ['grossNpaPct','Gross NPA %','num'],
-  ['profitLoss','Profit Loss','num'], ['perEmpBusiness','Per Employee Business','num'],
-  ['savingAcOpened','Saving Ac Opened This Month','num'], ['currentAcOpened','Current Ac Opened This Month','num'],
-  ['campaignScore','Campaign Score','num'], ['campaignRank','Campaign Rank','num'],
-  ['disbTotalAc','Disbursement Total Acs','num'], ['disbTotalAmt','Disbursement Total Amt','num'],
-  ['disbMsmeAc','Disbursement MSME Acs','num'], ['disbMsmeAmt','Disbursement MSME Amt','num'],
-  ['disbRetailAc','Disbursement Retail Acs','num'], ['disbRetailAmt','Disbursement Retail Amt','num'],
-  ['disbHousingAc','Disbursement Housing Acs','num'], ['disbHousingAmt','Disbursement Housing Amt','num'],
-  ['disbCarAc','Disbursement Car Acs','num'], ['disbCarAmt','Disbursement Car Amt','num'],
-  ['disbOthersAc','Disbursement Others Acs','num'], ['disbOthersAmt','Disbursement Others Amt','num'],
-  ['lifeInsAch','Life Insurance Achievement','num'], ['healthInsAch','Health Insurance Achievement','num'], ['generalInsAch','General Insurance Achievement','num'],
-  ['apyAch','APY Achievement','num'], ['pmjjbyAch','PMJJBY Achievement','num'], ['pmsbyAch','PMSBY Achievement','num'],
-  ['rolloverAc','Rollover Acs','num'], ['rolloverAmt','Rollover Amt','num'],
-  ['collectionAc','Collection Acs','num'], ['collectionAmt','Collection Amt','num'],
-  ['turnoverAc','Turnover Acs','num'], ['turnoverAmt','Turnover Amt','num'],
-  ['reKycPending','Re-KYC Pending','num'], ['cKycPending','C-KYC Pending','num'], ['inoperativeAc','Inoperative Acs','num'],
-  ['deafBreach','DEAF Breach Count','num'], ['crl','Cash Retention Limit','num'],
-  ['lockerTotal','Locker Total','num'], ['lockerVacant','Locker Vacant','num'],
+  ['area','Area','text'], ['bmName','Branch Manager','text'], ['bmScale','BM Scale','text'], ['bmSince','BM Since','text'],
+  ['totalStaff','Total Staff','num'], ['totalOfficer','Total Officer','num'],
+  ['savingDeposit','Saving Deposit (₹ Lakhs)','num'], ['currentDeposit','Current Deposit (₹ Lakhs)','num'],
+  ['casaDeposit','CASA Deposit (₹ Lakhs)','num'], ['termDeposit','Term Deposit (₹ Lakhs)','num'],
+  ['totalDeposit','Total Deposit (₹ Lakhs)','num'], ['advance','Advance (₹ Lakhs)','num'],
+  ['advSanction','Advance Sanctioned This Month (₹ Lakhs)','num'], ['advDisbursed','Advance Disbursed This Month (₹ Lakhs)','num'],
+  ['npa','NPA (₹ Lakhs)','num'],
+  ['sbAcOpen','SB A/C Opened This Month','num'], ['caAcOpen','CA A/C Opened This Month','num'], ['sbRunRate','SB Run Rate','num'],
+  ['lifeInsurance','Life Insurance This Month (₹)','num'], ['healthInsurance','Health Insurance This Month (₹)','num'], ['generalInsurance','General Insurance This Month (₹)','num'],
+  ['pmsby','PMSBY This Month','num'], ['jjby','JJBY This Month','num'], ['apy','APY This Month','num'],
+  ['rekycPending','Re-KYC Pending','num'], ['rekycAsOn','Re-KYC As On','text'],
+  ['ckycPending','C-KYC Pending','num'], ['ckycAsOn','C-KYC As On','text'],
 ];
 const BRANCH_PROFILE_TARGET_FIELDS = [
   ['totalBusinessTargetSept','Total Business Target Sept','num'], ['totalBusinessTargetMar','Total Business Target Mar','num'],
@@ -6247,6 +6246,164 @@ function buildBranchProfileFieldMap(allRows, hIdx, fieldList){
   if(!count) throw new Error('No rows with a Sol ID and at least one field found.');
   return map;
 }
+/* ---------- Branch Profile: wide HO "MASTER" report parser ----------
+   Alok's Regional Office "Branch Profile" MIS report is one row per
+   branch, but EIGHT months wide per metric (31.03.25 / 31.03.26 / then
+   30.04.26 through 30.09.26 -- i.e. two FY-end reference points plus six
+   consecutive months of the current FY), each block optionally followed
+   by a TOTAL (this-FY-so-far) and/or two growth-vs-FY-end columns. The
+   sheet's own row-0 group labels are unreliable (several are offset by a
+   couple of columns due to how the source workbook merges cells -- Life/
+   Health/General Insurance's own group label visibly sits 2 columns
+   after their real data start), so this does NOT trust column position
+   or the group-label row at all. It instead walks row 1 (the real
+   sub-header) left to right, looking for each metric's own 8-month
+   label sequence right where the previous metric's block ended, and
+   throws a clear, specific error the moment that sequence isn't found --
+   failing loudly on a future format change instead of silently
+   misreading a neighbouring metric into the wrong field. */
+const BP_MONTH_LABELS = ['31.03.25','31.03.26','30.04.26','31.05.26','30.06.26','31.07.26','31.08.26','30.09.26'];
+const BP_MONTH_DATES  = ['2025-03-31','2026-03-31','2026-04-30','2026-05-31','2026-06-30','2026-07-31','2026-08-31','2026-09-30'];
+function normBpHeader(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function bpNumOrNull(v){ const n = parseFloat(v); return (v===''||v==null||isNaN(n)) ? null : n; }
+function excelSerialToDisplay(serial){
+  const n = Number(serial);
+  if(!n || isNaN(n)) return '';
+  try{
+    const d = XLSX.SSF.parse_date_code(n);
+    if(!d || !d.y) return '';
+    const pad = (x)=>String(x).padStart(2,'0');
+    return `${pad(d.d)}-${pad(d.m)}-${d.y}`;
+  } catch(e){ return ''; }
+}
+// Returns { dates, snapshots: [{date, bySolId}, ...8] } on a recognised
+// wide report, or null if this sheet simply isn't that format at all
+// (caller then tries the next sheet, or falls back to the flat parser).
+// Throws (does not return null) once the wide header IS recognised but a
+// later expected block doesn't match -- that's a real format change, not
+// "wrong sheet."
+function tryParseMasterSheetWide(allRows){
+  let hIdx = -1;
+  for(let r=0; r<Math.min(allRows.length, 10); r++){
+    if((allRows[r]||[]).some(c=>normBpHeader(c)==='sol id new')){ hIdx = r; break; }
+  }
+  if(hIdx<0) return null;
+  const rawHeader = allRows[hIdx];
+  const header = rawHeader.map(normBpHeader);
+  const find = (label) => header.indexOf(normBpHeader(label));
+  const iSol = find('sol id new');
+  const iArea = find('area');
+  const iBmName = find('branch manager');
+  const iBmScale = find('scale');
+  const iBmSince = find('bm since');
+  if([iArea,iBmName,iBmScale,iBmSince].some(i=>i<0)){
+    throw new Error('Branch Profile report format has changed -- one of AREA/BRANCH MANAGER/SCALE/BM SINCE columns is missing.');
+  }
+  let cursor = iBmSince + 1;
+  function readMonthBlock(metricNameForError){
+    for(let k=0; k<BP_MONTH_LABELS.length; k++){
+      if(normBpHeader(header[cursor+k]) !== BP_MONTH_LABELS[k]){
+        throw new Error(`Branch Profile report format has changed -- expected "${metricNameForError}" to start with ${BP_MONTH_LABELS[k]} at column ${cursor+k+1}, found "${rawHeader[cursor+k]}".`);
+      }
+    }
+    const start = cursor;
+    cursor += BP_MONTH_LABELS.length;
+    let totalIdx = -1;
+    if(normBpHeader(header[cursor]) === 'total'){ totalIdx = cursor; cursor++; }
+    while(cursor < header.length && BP_MONTH_LABELS.indexOf(header[cursor]) < 0 && header[cursor] !== 'total staff' && !/as on/.test(header[cursor]||'')){
+      cursor++;
+    }
+    return { start, totalIdx };
+  }
+  const saving = readMonthBlock('SAVING DEPOSIT');
+  const current = readMonthBlock('CURRENT DEPOSIT');
+  const casa = readMonthBlock('CASA');
+  const term = readMonthBlock('TERM DEPOSIT');
+  const totalDep = readMonthBlock('TOTAL DEPOSIT');
+  const advance = readMonthBlock('ADVANCE');
+  const advSanction = readMonthBlock('ADVANCE SANCTION');
+  const advDisbursed = readMonthBlock('ADVANCE DISBURSED');
+  const npa = readMonthBlock('NPA');
+  const sbAcOpen = readMonthBlock('SB A/C OPEN');
+  const sbRunRate = readMonthBlock('SB RR');
+  const caAcOpen = readMonthBlock('CA A/C OPEN');
+  const lifeIns = readMonthBlock('LIFE INSURANCE');
+  const healthIns = readMonthBlock('HEALTH INSURANCE');
+  const generalIns = readMonthBlock('GENERAL INSURANCE');
+  const pmsby = readMonthBlock('PMSBY (SBY)');
+  const jjby = readMonthBlock('JJBY');
+  const apy = readMonthBlock('APY');
+  const iTotalStaff = find('total staff');
+  const iTotalOfficer = find('total officer');
+  const asOnCols = [];
+  header.forEach((h,i)=>{ if(/as on/.test(h)) asOnCols.push(i); });
+  const iRekyc = asOnCols[0], iCkyc = asOnCols[1];
+  if(iTotalStaff<0 || iTotalOfficer<0 || iRekyc==null || iCkyc==null){
+    throw new Error('Branch Profile report format has changed -- TOTAL STAFF/TOTAL OFFICER/the two "AS ON" (Re-KYC, C-KYC) columns are missing.');
+  }
+  const extractAsOn = (headerText) => {
+    const m = /as on\s+([\d]{1,2}\.[\d]{1,2}\.[\d]{2,4})/i.exec(headerText||'');
+    if(!m) return '';
+    const p = m[1].split('.');
+    return p.length===3 ? `${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}-${p[2].length===2?'20'+p[2]:p[2]}` : '';
+  };
+  const rekycAsOn = extractAsOn(rawHeader[iRekyc]);
+  const ckycAsOn = extractAsOn(rawHeader[iCkyc]);
+
+  const extractSeries = (row, block) => BP_MONTH_LABELS.map((_,k)=>bpNumOrNull(row[block.start+k]));
+  const snapshots = BP_MONTH_DATES.map(date=>({date, bySolId:{}}));
+  let count = 0;
+  for(const row of allRows.slice(hIdx+1)){
+    const sol = cellStr(row, iSol);
+    if(!sol) continue;
+    const area = cellStr(row, iArea);
+    const bmName = cellStr(row, iBmName);
+    const bmScale = cellStr(row, iBmScale);
+    const bmSince = excelSerialToDisplay(row[iBmSince]);
+    const totalStaff = bpNumOrNull(row[iTotalStaff]);
+    const totalOfficer = bpNumOrNull(row[iTotalOfficer]);
+    const rekycPending = bpNumOrNull(row[iRekyc]);
+    const ckycPending = bpNumOrNull(row[iCkyc]);
+    const savingS = extractSeries(row, saving), currentS = extractSeries(row, current), casaS = extractSeries(row, casa);
+    const termS = extractSeries(row, term), totalDepS = extractSeries(row, totalDep), advanceS = extractSeries(row, advance);
+    const advSanctionS = extractSeries(row, advSanction), advDisbursedS = extractSeries(row, advDisbursed), npaS = extractSeries(row, npa);
+    const sbAcOpenS = extractSeries(row, sbAcOpen), sbRunRateS = extractSeries(row, sbRunRate), caAcOpenS = extractSeries(row, caAcOpen);
+    const lifeInsS = extractSeries(row, lifeIns), healthInsS = extractSeries(row, healthIns), generalInsS = extractSeries(row, generalIns);
+    const pmsbyS = extractSeries(row, pmsby), jjbyS = extractSeries(row, jjby), apyS = extractSeries(row, apy);
+    count++;
+    for(let k=0; k<BP_MONTH_DATES.length; k++){
+      const rec = {
+        area, bmName, bmScale, bmSince, totalStaff, totalOfficer,
+        rekycPending, rekycAsOn, ckycPending, ckycAsOn,
+        savingDeposit: savingS[k], currentDeposit: currentS[k], casaDeposit: casaS[k],
+        termDeposit: termS[k], totalDeposit: totalDepS[k], advance: advanceS[k], npa: npaS[k],
+        advSanction: advSanctionS[k], advDisbursed: advDisbursedS[k],
+        sbAcOpen: sbAcOpenS[k], caAcOpen: caAcOpenS[k], sbRunRate: sbRunRateS[k],
+        lifeInsurance: lifeInsS[k], healthInsurance: healthInsS[k], generalInsurance: generalInsS[k],
+        pmsby: pmsbyS[k], jjby: jjbyS[k], apy: apyS[k],
+      };
+      // The report's own "TOTAL" columns are a point-in-time (this-FY-
+      // so-far) cumulative figure, not a per-date one -- only meaningful
+      // attached to the LATEST snapshot, never backdated onto an earlier
+      // real month (that would misrepresent what was actually true then).
+      if(k === BP_MONTH_DATES.length-1){
+        if(advSanction.totalIdx>=0) rec.advSanctionTotal = bpNumOrNull(row[advSanction.totalIdx]);
+        if(advDisbursed.totalIdx>=0) rec.advDisbursedTotal = bpNumOrNull(row[advDisbursed.totalIdx]);
+        if(sbAcOpen.totalIdx>=0) rec.sbAcOpenTotal = bpNumOrNull(row[sbAcOpen.totalIdx]);
+        if(caAcOpen.totalIdx>=0) rec.caAcOpenTotal = bpNumOrNull(row[caAcOpen.totalIdx]);
+        if(lifeIns.totalIdx>=0) rec.lifeInsuranceTotal = bpNumOrNull(row[lifeIns.totalIdx]);
+        if(healthIns.totalIdx>=0) rec.healthInsuranceTotal = bpNumOrNull(row[healthIns.totalIdx]);
+        if(generalIns.totalIdx>=0) rec.generalInsuranceTotal = bpNumOrNull(row[generalIns.totalIdx]);
+        if(pmsby.totalIdx>=0) rec.pmsbyTotal = bpNumOrNull(row[pmsby.totalIdx]);
+        if(jjby.totalIdx>=0) rec.jjbyTotal = bpNumOrNull(row[jjby.totalIdx]);
+        if(apy.totalIdx>=0) rec.apyTotal = bpNumOrNull(row[apy.totalIdx]);
+      }
+      snapshots[k].bySolId[sol] = rec;
+    }
+  }
+  if(!count) throw new Error('No rows with a Sol ID found under the Branch Profile report header.');
+  return { dates: BP_MONTH_DATES, snapshots };
+}
 async function handleBranchProfileUpload(evt){
   const file = evt.target.files[0];
   if(!file) return;
@@ -6260,25 +6417,51 @@ async function handleBranchProfileUpload(evt){
   reader.onerror = function(){ statusEl.innerHTML = `<div class="upload-status err">⚠ Failed to read the file from disk.</div>`; };
   reader.onload = function(e){
     try{
-      const headerHints = ['solid','sol'];
+      window.__branchProfileHistoryBackfill = null;
+      let wide = null; // {dates, snapshots} from the real HO wide report, or null if this isn't that format
+      let wideErr = null; // set if some sheet's header looked like the wide format but a later check failed -- a real format change, not just "wrong sheet"
       let allRows, hIdx;
       if(isCsv){
-        allRows = parseCSV(String(e.target.result));
-        hIdx = findHeaderRowIndex(allRows, headerHints);
+        try{ wide = tryParseMasterSheetWide(allRows = parseCSV(String(e.target.result))); }
+        catch(err){ wideErr = err; }
       } else {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, {type:'array'});
-        allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
-        hIdx = findHeaderRowIndex(allRows, headerHints);
+        // A workbook can carry more than one sheet containing the literal
+        // text "SOL ID NEW" (Alok's own report ships a "SHEET" single-
+        // branch worksheet alongside the real "MASTER" sheet, and both
+        // happen to use that label) -- so a thrown error from one sheet
+        // must not stop the scan of the rest; only surface it if NO sheet
+        // in the whole workbook parses as the wide format.
+        for(const name of wb.SheetNames){
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, raw:true, defval:''});
+          try{
+            const attempt = tryParseMasterSheetWide(rows);
+            if(attempt){ wide = attempt; wideErr = null; break; }
+          } catch(err){ wideErr = err; }
+        }
+        if(!wide) allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
       }
-      const bySolId = buildBranchProfileFieldMap(allRows, hIdx, BRANCH_PROFILE_FIELDS);
-      const count = Object.keys(bySolId).length;
-      const guessed = parseAsOnDateFromFilename(file.name);
-      const asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
-      DATA.branchProfile = { asOnDate, bySolId };
+      if(!wide && wideErr) throw wideErr;
+      let count, asOnDate;
+      if(wide){
+        window.__branchProfileHistoryBackfill = wide.snapshots;
+        const latest = wide.snapshots[wide.snapshots.length-1];
+        asOnDate = latest.date;
+        count = Object.keys(latest.bySolId).length;
+        DATA.branchProfile = { asOnDate, bySolId: latest.bySolId };
+      } else {
+        const headerHints = ['solid','sol'];
+        hIdx = findHeaderRowIndex(allRows, headerHints);
+        const bySolId = buildBranchProfileFieldMap(allRows, hIdx, BRANCH_PROFILE_FIELDS);
+        count = Object.keys(bySolId).length;
+        const guessed = parseAsOnDateFromFilename(file.name);
+        asOnDate = guessed ? dateToInputValue(guessed) : dateToInputValue(new Date());
+        DATA.branchProfile = { asOnDate, bySolId };
+      }
       const label = document.getElementById('branchProfileStatusLabel');
-      if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es) loaded (${file.name})`;
-      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch(es) parsed, as on ${esc(asOnDate)}. Goes live the next time you hit Publish.</div>`;
+      if(label) label.textContent = `${count.toLocaleString('en-IN')} branch(es) loaded (${file.name})${wide?`, ${wide.snapshots.length} months backfilled`:''}`;
+      statusEl.innerHTML = `<div class="upload-status ok">✔ ${count.toLocaleString('en-IN')} branch(es) parsed, as on ${esc(asOnDate)}${wide?` -- ${wide.snapshots.length} months of history will be backfilled`:''}. Goes live the next time you hit Publish.</div>`;
       __hasUnpublishedRefData = true;
       clearStalePublishStatus();
       const publishBtn = document.getElementById('publishBtn');
@@ -6413,7 +6596,6 @@ function renderBranchProfileBody(){
   const el = document.getElementById('branchProfileArea');
   if(!el) return;
   const bp = (DATA.branchProfile.bySolId && DATA.branchProfile.bySolId[branchProfileSolId]) || null;
-  const tgt = (DATA.branchProfileTargets.bySolId && DATA.branchProfileTargets.bySolId[branchProfileSolId]) || {};
   const branchMeta = BRANCH_LIST.find(([,id])=>String(id)===branchProfileSolId);
   const branchName = branchMeta ? branchMeta[2] : branchProfileSolId;
   const prevMonth = branchProfileCompareEntry(1);
@@ -6437,135 +6619,100 @@ function renderBranchProfileBody(){
     return;
   }
 
-  const num = (v) => typeof v==='number' ? v : null;
+  // Every monetary figure the real report gives is in ₹ Lakhs; fmtCr()
+  // itself expects raw rupees, hence *100000 everywhere below. Total
+  // Business/NPA %/CD Ratio aren't columns in the source at all -- all
+  // three are derived here exactly the way the Regional Office's own
+  // "SHEET" tab (a single-branch worksheet in the same workbook) computes
+  // them: Total Business = Total Deposit + Advance, NPA % = NPA/Advance,
+  // CD Ratio = Advance/Total Deposit.
+  const lakhToRupee = (v) => v==null ? null : v*100000;
+  const totalBusiness = (bp.totalDeposit!=null && bp.advance!=null) ? bp.totalDeposit+bp.advance : null;
+  const npaPct = (bp.npa!=null && bp.advance) ? bp.npa/bp.advance*100 : null;
+  const cdRatio = (bp.advance!=null && bp.totalDeposit) ? bp.advance/bp.totalDeposit*100 : null;
+  const prevTotalBusiness = (prevMonthRow && prevMonthRow.totalDeposit!=null && prevMonthRow.advance!=null) ? prevMonthRow.totalDeposit+prevMonthRow.advance : null;
+  const prevNpaPct = (prevMonthRow && prevMonthRow.npa!=null && prevMonthRow.advance) ? prevMonthRow.npa/prevMonthRow.advance*100 : null;
+  const prevCdRatio = (prevMonthRow && prevMonthRow.advance!=null && prevMonthRow.totalDeposit) ? prevMonthRow.advance/prevMonthRow.totalDeposit*100 : null;
+
   const heroRow = `<div class="hero-kpi-row" style="margin-top:16px">
-    ${heroKpiCard({ id:'bpTotalBusiness', icon: ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', label:'Total Business', fallback: bp.totalBusiness!=null?fmtCr(bp.totalBusiness*10000000):'—', sub: deltaChipHtml(pctDelta(num(bp.totalBusiness), num(prevMonthRow&&prevMonthRow.totalBusiness))) + ' MoM' })}
-    ${heroKpiCard({ id:'bpCasaPct', icon: ICON_LANDMARK, tint:'var(--tool-teal-soft)', color:'var(--tool-teal)', label:'CASA %', fallback: bp.casaPct!=null?bp.casaPct.toFixed(2)+'%':'—', sub: deltaChipHtml(bp.casaPct!=null&&prevMonthRow&&prevMonthRow.casaPct!=null?bp.casaPct-prevMonthRow.casaPct:null,2) + ' pts MoM' })}
-    ${heroKpiCard({ id:'bpCdRatio', icon: ICON_TARGET, tint:'var(--tool-gold-soft)', color:'var(--tool-gold)', label:'CD Ratio', fallback: bp.cdRatio!=null?bp.cdRatio.toFixed(2)+'%':'—', sub: deltaChipHtml(bp.cdRatio!=null&&prevMonthRow&&prevMonthRow.cdRatio!=null?bp.cdRatio-prevMonthRow.cdRatio:null,2) + ' pts MoM' })}
-    ${heroKpiCard({ id:'bpGrossNpaPct', icon: ICON_ALERT_TRIANGLE, tint:'var(--tool-coral-soft)', color:'var(--tool-coral)', label:'Gross NPA %', fallback: bp.grossNpaPct!=null?bp.grossNpaPct.toFixed(2)+'%':'—', sub: deltaChipHtml(bp.grossNpaPct!=null&&prevMonthRow&&prevMonthRow.grossNpaPct!=null?bp.grossNpaPct-prevMonthRow.grossNpaPct:null,2) + ' pts MoM' })}
-    ${heroKpiCard({ id:'bpProfitLoss', icon: ICON_BANKNOTE, tint:'var(--tool-rose-soft)', color:'var(--tool-rose)', label:'Profit / Loss', fallback: bp.profitLoss!=null?fmtCr(bp.profitLoss*10000000):'—', sub: deltaChipHtml(pctDelta(num(bp.profitLoss), num(prevMonthRow&&prevMonthRow.profitLoss))) + ' MoM' })}
+    ${heroKpiCard({ id:'bpTotalBusiness', icon: ICON_BANKNOTE, tint:'var(--accent-soft)', color:'var(--accent)', label:'Total Business', fallback: totalBusiness!=null?fmtCr(lakhToRupee(totalBusiness)):'—', sub: deltaChipHtml(pctDelta(totalBusiness, prevTotalBusiness)) + ' MoM' })}
+    ${heroKpiCard({ id:'bpTotalDeposit', icon: ICON_LANDMARK, tint:'var(--tool-teal-soft)', color:'var(--tool-teal)', label:'Total Deposit', fallback: bp.totalDeposit!=null?fmtCr(lakhToRupee(bp.totalDeposit)):'—', sub: deltaChipHtml(pctDelta(bp.totalDeposit, prevMonthRow&&prevMonthRow.totalDeposit)) + ' MoM' })}
+    ${heroKpiCard({ id:'bpAdvance', icon: ICON_TICKET, tint:'var(--tool-gold-soft)', color:'var(--tool-gold)', label:'Advance', fallback: bp.advance!=null?fmtCr(lakhToRupee(bp.advance)):'—', sub: deltaChipHtml(pctDelta(bp.advance, prevMonthRow&&prevMonthRow.advance)) + ' MoM' })}
+    ${heroKpiCard({ id:'bpNpaPct', icon: ICON_ALERT_TRIANGLE, tint:'var(--tool-coral-soft)', color:'var(--tool-coral)', label:'Gross NPA %', fallback: npaPct!=null?npaPct.toFixed(2)+'%':'—', sub: deltaChipHtml(npaPct!=null&&prevNpaPct!=null?npaPct-prevNpaPct:null,2) + ' pts MoM' })}
+    ${heroKpiCard({ id:'bpCdRatio', icon: ICON_TARGET, tint:'var(--tool-rose-soft)', color:'var(--tool-rose)', label:'CD Ratio', fallback: cdRatio!=null?cdRatio.toFixed(2)+'%':'—', sub: deltaChipHtml(cdRatio!=null&&prevCdRatio!=null?cdRatio-prevCdRatio:null,2) + ' pts MoM' })}
   </div>`;
 
   const identityCard = `<div class="chart-card" style="margin-top:16px">
     <div class="section-label">${esc(branchName)}<span class="chart-sub">Sol ID ${esc(branchProfileSolId)}</span></div>
     <div style="display:flex;flex-wrap:wrap;gap:24px;margin-top:10px">
-      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Branch Manager</div><div style="font-weight:700">${esc(bp.bmName)||'—'}</div></div>
-      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Region · Category</div><div style="font-weight:700">${esc(bp.region)||'—'} · ${esc(bp.category)||'—'}</div></div>
-      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Cadre</div><div style="font-weight:700">${esc(bp.cadre)||'—'}</div></div>
-      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">BC · Mobile</div><div style="font-weight:700">${esc(bp.bcCode)||'—'} · ${esc(bp.mobile)||'—'}</div></div>
-      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Staff</div><div style="font-weight:700">${bp.totalStaff!=null?bp.totalStaff:'—'} total (Scale 1-4: ${[bp.scale1,bp.scale2,bp.scale3,bp.scale4].map(v=>v!=null?v:0).join('/')})</div></div>
-      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Date of Posting</div><div style="font-weight:700">${esc(bp.dateOfPosting)||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Branch Manager</div><div style="font-weight:700">${esc(bp.bmName)||'—'}${bp.bmScale?` <span style="color:var(--ink-mute);font-weight:500">(${esc(bp.bmScale)})</span>`:''}</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Area</div><div style="font-weight:700">${esc(bp.area)||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">BM Since</div><div style="font-weight:700">${esc(bp.bmSince)||'—'}</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Staff</div><div style="font-weight:700">${bp.totalStaff!=null?bp.totalStaff:'—'} total${bp.totalOfficer!=null?(' ('+bp.totalOfficer+' officer)'):''}</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Re-KYC Pending</div><div style="font-weight:700">${bp.rekycPending!=null?bp.rekycPending.toLocaleString('en-IN'):'—'}${bp.rekycAsOn?` <span style="color:var(--ink-mute);font-weight:500;font-size:11px">(as on ${esc(bp.rekycAsOn)})</span>`:''}</div></div>
+      <div><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">C-KYC Pending</div><div style="font-weight:700">${bp.ckycPending!=null?bp.ckycPending.toLocaleString('en-IN'):'—'}${bp.ckycAsOn?` <span style="color:var(--ink-mute);font-weight:500;font-size:11px">(as on ${esc(bp.ckycAsOn)})</span>`:''}</div></div>
     </div>
   </div>`;
 
   const growthRows = [
-    ['Total Business','totalBusiness','totalBusinessTargetSept','totalBusinessTargetMar'],
-    ['Total Deposits','totalDeposits','totalDepositsTargetSept','totalDepositsTargetMar'],
-    ['CA Deposit','caDeposit'], ['SB Deposits','sbDeposits'], ['CASA Deposits','casaDeposits'],
-    ['Term Deposits','termDeposits'],
-    ['Advances o/s','advancesOs','advancesTargetSept','advancesTargetMar'],
-    ['— Agriculture','advAgri'], ['— Retail','advRetail'], ['— MSME','advMsme'], ['— %age of RM','advPctRM','',''], ['— Other','advOther'],
-    ['CD Ratio (%)','cdRatio','cdRatioTarget',''],
-    ['Gross NPA','grossNpa'], ['Gross NPA %','grossNpaPct','grossNpaPctTarget',''],
-    ['Profit / Loss','profitLoss','profitLossTargetSept','profitLossTargetMar'],
-    ['Per Employee Business','perEmpBusiness','perEmpBusinessTargetSept','perEmpBusinessTargetMar'],
+    ['Saving Deposit','savingDeposit'], ['Current Deposit','currentDeposit'], ['CASA Deposit','casaDeposit'],
+    ['Term Deposit','termDeposit'], ['Total Deposit','totalDeposit'], ['Advance','advance'],
+    ['Advance Sanctioned (this month)','advSanction'], ['Advance Disbursed (this month)','advDisbursed'],
+    ['NPA','npa'],
   ];
-  const growthRowsHtml = growthRows.map(([label,key,tgtSeptKey,tgtMarKey])=>{
+  const growthRowsHtml = growthRows.map(([label,key])=>{
     const cur = bp[key], prev = prevMonthRow ? prevMonthRow[key] : null;
-    const tSept = tgtSeptKey ? tgt[tgtSeptKey] : null, tMar = tgtMarKey ? tgt[tgtMarKey] : null;
-    const isPct = /%/.test(label);
-    const fmtVal = (v) => v==null ? '—' : (isPct ? v.toFixed(2)+'%' : v.toLocaleString('en-IN',{maximumFractionDigits:2}));
     return `<tr>
-      <td class="tal">${label.startsWith('—')?`<span style="color:var(--ink-mute);padding-left:14px">${esc(label)}</span>`:`<b>${esc(label)}</b>`}</td>
-      <td>${fmtVal(cur)}</td>
-      <td>${deltaChipHtml(isPct ? (cur!=null&&prev!=null?cur-prev:null) : pctDelta(cur,prev), 2)}</td>
-      <td class="tal" style="color:var(--ink-mute)">${tSept!=null?fmtVal(tSept):'—'}${tMar!=null?' / '+fmtVal(tMar):''}</td>
+      <td class="tal"><b>${esc(label)}</b></td>
+      <td>${cur!=null?fmtCr(lakhToRupee(cur)):'—'}</td>
+      <td>${deltaChipHtml(pctDelta(cur,prev), 2)}</td>
     </tr>`;
-  }).join('');
+  }).join('')
+  + `<tr><td class="tal"><b>NPA %</b></td><td>${npaPct!=null?npaPct.toFixed(2)+'%':'—'}</td><td>${deltaChipHtml(npaPct!=null&&prevNpaPct!=null?npaPct-prevNpaPct:null,2)}</td></tr>`
+  + `<tr><td class="tal"><b>CD Ratio</b></td><td>${cdRatio!=null?cdRatio.toFixed(2)+'%':'—'}</td><td>${deltaChipHtml(cdRatio!=null&&prevCdRatio!=null?cdRatio-prevCdRatio:null,2)}</td></tr>`
+  + `<tr><td class="tal"><b>Total Business</b></td><td>${totalBusiness!=null?fmtCr(lakhToRupee(totalBusiness)):'—'}</td><td>${deltaChipHtml(pctDelta(totalBusiness,prevTotalBusiness),2)}</td></tr>`;
   const growthCard = `<div class="chart-card" style="margin-top:16px">
     <div class="section-label">Business Growth<span class="chart-sub">${prevMonth?('vs '+esc(fmtDateIso(prevMonth.date))):'no prior month uploaded yet, so no MoM comparison'}${prevYear?(' · '+esc(fmtDateIso(prevYear.date))+' available for YoY'):''}</span></div>
     <div class="dash-table-wrap" style="margin-top:8px">
       <table class="dash-table">
-        <thead><tr><th class="tal">Parameter</th><th>Current</th><th>MoM</th><th class="tal">Target (Sept / Mar)</th></tr></thead>
+        <thead><tr><th class="tal">Parameter</th><th>Current</th><th>MoM</th></tr></thead>
         <tbody>${growthRowsHtml}</tbody>
       </table>
     </div>
   </div>`;
 
-  const disbItems = [
-    ['MSME','disbMsmeAc','disbMsmeAmt','var(--tool-jade)'],
-    ['Retail','disbRetailAc','disbRetailAmt','var(--accent)'],
-    ['Housing','disbHousingAc','disbHousingAmt','var(--tool-gold)'],
-    ['Car','disbCarAc','disbCarAmt','var(--tool-rose)'],
-    ['Others','disbOthersAc','disbOthersAmt','var(--tool-violet)'],
-  ];
-  const disbCard = `<div class="chart-card" style="margin-top:16px">
-    <div class="section-label">Fresh Loan Disbursement<span class="chart-sub">this cycle, excl. staff &amp; LABOD${bp.disbTotalAc!=null?(' · '+bp.disbTotalAc.toLocaleString('en-IN')+' A/Cs total, '+fmtCr((bp.disbTotalAmt||0)*10000000)):''}</span></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-top:10px">
-      ${disbItems.map(([label,acKey,amtKey,color])=>`<div style="border-radius:11px;padding:12px 14px;background:color-mix(in srgb, ${color} 12%, transparent)">
-        <div style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase">${label}</div>
-        <div style="font-weight:800;font-size:17px;margin-top:6px">${bp[amtKey]!=null?fmtCr(bp[amtKey]*10000000):'—'}</div>
-        <div style="font-size:11.5px;color:var(--ink-mute)">${bp[acKey]!=null?bp[acKey].toLocaleString('en-IN')+' A/Cs':'—'}</div>
-      </div>`).join('')}
+  const statTile = (label, val, sub, color) => `<div style="border-radius:11px;padding:12px 14px;background:${color}"><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">${esc(label)}</div><div style="font-weight:800;font-size:17px;margin-top:4px">${val}</div>${sub?`<div style="font-size:11px;color:var(--ink-mute);margin-top:2px">${esc(sub)}</div>`:''}</div>`;
+  const activityCard = `<div class="chart-card" style="margin-top:16px">
+    <div class="section-label">Account Opening &amp; Activity<span class="chart-sub">this month, plus FY-so-far where the report gives it</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:10px">
+      ${statTile('SB A/C Opened', bp.sbAcOpen!=null?bp.sbAcOpen.toLocaleString('en-IN'):'—', bp.sbAcOpenTotal!=null?(bp.sbAcOpenTotal.toLocaleString('en-IN')+' FY-so-far'):'', 'var(--tool-jade-soft)')}
+      ${statTile('CA A/C Opened', bp.caAcOpen!=null?bp.caAcOpen.toLocaleString('en-IN'):'—', bp.caAcOpenTotal!=null?(bp.caAcOpenTotal.toLocaleString('en-IN')+' FY-so-far'):'', 'var(--tool-jade-soft)')}
+      ${statTile('SB Run Rate', bp.sbRunRate!=null?bp.sbRunRate.toFixed(2):'—', '', 'var(--accent-soft)')}
+      ${statTile('Advance Sanctioned', bp.advSanction!=null?fmtCr(lakhToRupee(bp.advSanction)):'—', bp.advSanctionTotal!=null?(fmtCr(lakhToRupee(bp.advSanctionTotal))+' FY-so-far'):'', 'var(--tool-gold-soft)')}
+      ${statTile('Advance Disbursed', bp.advDisbursed!=null?fmtCr(lakhToRupee(bp.advDisbursed)):'—', bp.advDisbursedTotal!=null?(fmtCr(lakhToRupee(bp.advDisbursedTotal))+' FY-so-far'):'', 'var(--tool-gold-soft)')}
     </div>
   </div>`;
 
-  const progressBar = (pct) => `<div style="height:7px;border-radius:999px;background:rgba(120,120,140,.15);overflow:hidden;margin-top:5px"><div style="width:${Math.max(0,Math.min(100,pct||0))}%;height:100%;background:var(--accent)"></div></div>`;
   const insItems = [
-    ['Life Insurance','lifeInsAch','lifeInsTarget'], ['Health Insurance','healthInsAch','healthInsTarget'], ['General Insurance','generalInsAch','generalInsTarget'],
-    ['APY','apyAch','apyTarget'], ['PMJJBY','pmjjbyAch','pmjjbyTarget'], ['PMSBY','pmsbyAch','pmsbyTarget'],
+    ['Life Insurance', 'lifeInsurance', 'lifeInsuranceTotal', true],
+    ['Health Insurance', 'healthInsurance', 'healthInsuranceTotal', true],
+    ['General Insurance', 'generalInsurance', 'generalInsuranceTotal', true],
+    ['PMSBY', 'pmsby', 'pmsbyTotal', false],
+    ['JJBY', 'jjby', 'jjbyTotal', false],
+    ['APY', 'apy', 'apyTotal', false],
   ];
   const insCard = `<div class="chart-card" style="margin-top:16px">
-    <div class="section-label">Insurance &amp; Social Security<span class="chart-sub">achievement vs FY target</span></div>
-    <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px">
-      ${insItems.map(([label,achKey,tgtKey])=>{
-        const ach = bp[achKey], target = tgt[tgtKey];
-        const pct = (ach!=null && target) ? ach/target*100 : null;
-        return `<div><div style="display:flex;justify-content:space-between;font-size:12.5px"><span style="font-weight:600">${label}</span><span style="color:var(--ink-mute)">${ach!=null?ach.toLocaleString('en-IN'):'—'}${target!=null?(' / target '+target.toLocaleString('en-IN')):''}${pct!=null?(' · '+pct.toFixed(1)+'%'):''}</span></div>${progressBar(pct)}</div>`;
+    <div class="section-label">Insurance &amp; Social Security<span class="chart-sub">this month, plus FY-so-far where the report gives it</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:10px">
+      ${insItems.map(([label,key,totalKey,isMoney])=>{
+        const v = bp[key], t = bp[totalKey];
+        const fmt = (x) => x==null ? '—' : (isMoney ? fmtCr(x) : x.toLocaleString('en-IN'));
+        return statTile(label, fmt(v), t!=null?(fmt(t)+' FY-so-far'):'', 'var(--tool-violet-soft)');
       }).join('')}
     </div>
   </div>`;
 
-  const rctCard = `<div class="chart-card" style="margin-top:16px">
-    <div class="section-label">R-C-T Framework Efficiency</div>
-    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:10px">
-      ${[['Rollover','rolloverAc','rolloverAmt'],['Collection','collectionAc','collectionAmt'],['Turnover','turnoverAc','turnoverAmt']].map(([label,acKey,amtKey])=>`
-        <div style="border:1px solid var(--glass-border);border-radius:11px;padding:12px 14px">
-          <div style="font-size:11.5px;color:var(--ink-mute);text-transform:uppercase;font-weight:700">${label}</div>
-          <div style="font-weight:800;font-size:16px;margin-top:5px">${bp[amtKey]!=null?fmtCr(bp[amtKey]*10000000):'—'}</div>
-          <div style="font-size:11.5px;color:var(--ink-mute)">${bp[acKey]!=null?bp[acKey].toLocaleString('en-IN')+' A/Cs':'—'}</div>
-        </div>`).join('')}
-    </div>
-  </div>`;
-
-  const chip = (val, label, color) => `<div style="display:inline-flex;align-items:center;gap:6px;background:color-mix(in srgb, ${color} 14%, transparent);color:${color};border-radius:999px;padding:6px 11px;font-size:12px;font-weight:700;margin:0 8px 8px 0"><span>${val!=null?val.toLocaleString('en-IN'):'—'}</span><span style="font-weight:500;color:var(--ink-mute)">${label}</span></div>`;
-  const complianceCard = `<div class="chart-card" style="margin-top:16px">
-    <div class="section-label">Account Hygiene &amp; Compliance</div>
-    <div style="margin-top:10px">
-      ${chip(bp.reKycPending,'Re-KYC due','var(--tool-coral)')}
-      ${chip(bp.cKycPending,'C-KYC pending','var(--tool-gold)')}
-      ${chip(bp.inoperativeAc,'Inoperative A/Cs','var(--ink-mute)')}
-      ${chip(bp.deafBreach,'DEAF breach >4mo','var(--tool-jade)')}
-      ${chip(bp.lockerTotal,'Lockers'+(bp.lockerVacant!=null?(', '+bp.lockerVacant+' vacant'):''),'var(--ink-mute)')}
-      ${chip(bp.crl,'Cash Retention Limit (₹L)','var(--accent)')}
-    </div>
-  </div>`;
-
-  const accOpenCard = `<div class="chart-card" style="margin-top:16px">
-    <div class="section-label">Account Opening &amp; Campaign</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:10px">
-      <div style="border-radius:11px;padding:12px 14px;background:var(--tool-jade-soft,rgba(30,158,116,.1))"><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Saving A/c opened</div><div style="font-weight:800;font-size:17px;margin-top:4px">${bp.savingAcOpened!=null?bp.savingAcOpened.toLocaleString('en-IN'):'—'}</div></div>
-      <div style="border-radius:11px;padding:12px 14px;background:var(--tool-jade-soft,rgba(30,158,116,.1))"><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Current A/c opened</div><div style="font-weight:800;font-size:17px;margin-top:4px">${bp.currentAcOpened!=null?bp.currentAcOpened.toLocaleString('en-IN'):'—'}</div></div>
-      <div style="border-radius:11px;padding:12px 14px;background:var(--accent-soft)"><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Campaign Score</div><div style="font-weight:800;font-size:17px;margin-top:4px">${bp.campaignScore!=null?bp.campaignScore:'—'} <span style="font-size:12px;color:var(--ink-mute)">/100</span></div></div>
-      <div style="border-radius:11px;padding:12px 14px;background:var(--accent-soft)"><div style="font-size:11px;color:var(--ink-mute);text-transform:uppercase">Campaign Rank</div><div style="font-weight:800;font-size:17px;margin-top:4px">${bp.campaignRank!=null?('#'+bp.campaignRank.toLocaleString('en-IN')):'—'}</div></div>
-    </div>
-  </div>`;
-
-  el.innerHTML = toolbar + heroRow + identityCard + growthCard +
-    `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:0">
-      <div>${disbCard}${accOpenCard}</div>
-      <div>${insCard}${rctCard}${complianceCard}</div>
-    </div>`;
+  el.innerHTML = toolbar + heroRow + identityCard + growthCard + activityCard + insCard;
 
   const sel = document.getElementById('branchProfileSelect');
   if(sel) sel.onchange = () => setBranchProfileSolId(sel.value);
@@ -8281,9 +8428,17 @@ async function buildBranchProfileHistoryExtraFile(){
     if(err && err.message === 'HTTP 404'){ doc = { entries: [] }; }
     else { return null; }
   }
-  const entry = { date: DATA.branchProfile.asOnDate, bySolId: DATA.branchProfile.bySolId };
-  const idx = doc.entries.findIndex(e=>e.date===entry.date);
-  if(idx>=0) doc.entries[idx] = entry; else doc.entries.push(entry);
+  // A wide-format HO report (tryParseMasterSheetWide()) carries several
+  // real historical months in one upload -- backfill all of them here,
+  // not just today's snapshot, so one upload fixes the "no MoM/YoY yet"
+  // gap in a single step instead of needing 8 separate monthly uploads.
+  const backfill = window.__branchProfileHistoryBackfill;
+  const newEntries = (backfill && backfill.length) ? backfill
+    : [{ date: DATA.branchProfile.asOnDate, bySolId: DATA.branchProfile.bySolId }];
+  newEntries.forEach(entry=>{
+    const idx = doc.entries.findIndex(e=>e.date===entry.date);
+    if(idx>=0) doc.entries[idx] = entry; else doc.entries.push(entry);
+  });
   doc.entries.sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : 0);
   const MAX_BRANCH_PROFILE_HISTORY = 24; // ~2 years of monthly snapshots
   if(doc.entries.length > MAX_BRANCH_PROFILE_HISTORY) doc.entries = doc.entries.slice(doc.entries.length - MAX_BRANCH_PROFILE_HISTORY);
