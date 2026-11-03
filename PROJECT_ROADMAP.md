@@ -7686,3 +7686,74 @@ file, the Download tab's new export, and the Dashboard's Outstanding
 figure unaffected before and after. No real multi-branch data exists yet
 -- Alok will fill in the generated template for all branches and upload
 it once this ships.
+
+## 2026-11-03 (same day, follow-up) — Branch Profile rebuilt around the real HO report; real data published live
+
+Alok uploaded the Regional Office's actual monthly "Branch Profile" MIS
+report (`BRANCH_FORMAT_READY.xlsx`) and asked to see how much of it was
+real, then build the dashboard to match, push it live ("ismain dekho
+kitna data mil pa raha hai branch ka uske acording dashboard banao yahi
+push kar dena"). Every field the first (PDF-derived) design above had
+guessed at with no real source -- CASA %, sector-wise advances,
+loan-type disbursement, Campaign Score/Rank, R-C-T framework, DEAF/CRL/
+Lockers, insurance/SSS targets -- was dropped; `BRANCH_PROFILE_FIELDS`
+and the whole render were rebuilt around what the report actually
+carries (Saving/Current/CASA/Term/Total Deposit, Advance, Advance
+Sanctioned/Disbursed, NPA, SB/CA A/C Opened, SB Run Rate, Life/Health/
+General Insurance, PMSBY/JJBY/APY, Total Staff/Officer, Re-KYC/C-KYC
+Pending). Gross NPA % and CD Ratio aren't columns in the source at all
+-- both are derived exactly the way the report's own single-branch
+"SHEET" tab computes them (NPA/Advance, Advance/Total Deposit), cross-
+checked against that tab's own figures for Jarera branch and matched
+exactly (15.97% / 247.53%).
+
+Added a dedicated parser (`tryParseMasterSheetWide()`) for the report's
+"MASTER" sheet -- a 2-row header, 8-months-per-metric matrix whose own
+row-0 group labels are visibly offset by a couple of columns for three
+of the metrics (a source-workbook merged-cell quirk, confirmed by
+reading `ws['!merges']` directly rather than trusting the label row).
+Rather than hardcode column numbers against that unreliable row, the
+parser walks the real sub-header looking for each metric's own 8-month
+label sequence wherever the previous metric's block actually ended, and
+throws a specific "format has changed" error the instant a block
+doesn't match, instead of silently misreading a neighbouring metric.
+Scans every sheet in the workbook (the file also ships a single-branch
+"SHEET" tab that happens to repeat the literal text "SOL ID NEW" --
+confirmed this doesn't abort the scan of the real "MASTER" sheet).
+Since the report already carries 8 real historical months side by side
+(31.03.25, 31.03.26, then Apr'26 through Sep'26), one upload now
+backfills `data/branch-profile-history.json`'s entire run in a single
+step (`handleBranchProfileUpload` stashes all 8 parsed months,
+`buildBranchProfileHistoryExtraFile` upserts every one of them) --
+resolves the historical-backfill question left open above without
+needing 8 separate monthly uploads. The original flat one-row-per-
+branch template remains as a fallback for when the HO report isn't
+available, in the app's established ₹ Lakhs convention (confirmed via
+cross-branch magnitude checks -- RO Hathras's own deposits, Mathura
+City's deposits -- against the report's raw figures).
+
+One real bug caught by code review before testing: `normHeader()`
+(strips all non-alphanumerics) would have collapsed "Gross NPA" and
+"Gross NPA %" to the same lookup key in the OLD field list -- moot now
+since both are rebuilt as derived values, but the same class of
+collision was checked for across the whole new field list this time
+(wrote a throwaway script to check every pair) -- none found.
+
+Verified via Playwright against the real uploaded file on a local
+server first (57 branches, 8 months backfilled, no console/page
+errors, Download tab export, Dashboard Outstanding unaffected), shipped
+the code via the usual branch → PR (#370) → squash-merge flow, then
+published the real parsed data live using the same Playwright-capture-
+and-commit technique used earlier this session for Interest Reversal/
+Monthly PNPA (drive the live site with the real PIN so its own code
+parses and encrypts the file, intercept the GitHub API calls, capture
+the real encrypted blob bodies, commit them via direct git push to
+`main` since the Admin's own GitHub OAuth token isn't something this
+session has). Independently decrypted and inspected all 4 captured
+blobs before committing (`data/latest.json`'s `branchProfile` block,
+`data/branch-profile-history.json`'s 8 entries, plus the two
+unconditionally-included `data/history/index.json`/
+`data/npa-branch-history.json`), and did a final fresh-load check on
+the live site afterward: Jarera branch now shows real MoM deltas ("vs
+31-08-2026", e.g. CD Ratio +10.33 pts), and the Dashboard's Total
+Outstanding tile (₹126.54 Cr) is unchanged.
