@@ -7757,3 +7757,20 @@ unconditionally-included `data/history/index.json`/
 the live site afterward: Jarera branch now shows real MoM deltas ("vs
 31-08-2026", e.g. CD Ratio +10.33 pts), and the Dashboard's Total
 Outstanding tile (₹126.54 Cr) is unchanged.
+
+**Follow-up, same day**: Alok, "Regional Office ka data shayad galat
+hai" -- checked it and he was right. R O Hathras's own row (Sol ID
+9269) is a region-wide roll-up line sitting among the 56 real branch
+rows, and its Total Deposit/Advance/NPA (and the rest of that monetary
+family) exactly equal (sum of the other 56 branches) / 100, to 4+
+decimal places, across all 8 months -- the source report itself reports
+that one row in ₹ Crores while every real branch uses ₹ Lakhs. Not a
+parsing bug (the columns were being read correctly); fixed by scaling
+those fields ×100 for Sol ID 9269 specifically in
+`tryParseMasterSheetWide()`. Insurance/SSS/account-opening/staff/KYC
+figures already matched the regional sum with no scaling needed, so
+those were left alone. Re-published the same source file through the
+fixed parser (all 8 backfilled months corrected at once, not just the
+latest) and verified live: R O Hathras's Total Deposit now reads
+₹1,745.49 Cr with a sane +1.30% MoM, instead of ₹17.45 Cr and a bogus
++10,000%-class delta against the old wrong-scale history.
