@@ -1351,12 +1351,12 @@
       <div class="upload-drop small" id="branchProfileUploadDrop">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
         <div class="main" id="branchProfileUploadDropLabel">Tap to choose the Branch Profile file</div>
-        <div class="sub">.xlsx or .csv — one row per branch, Sol ID plus the full Branch Profile column set</div>
+        <div class="sub">.xlsx — Regional Office's own monthly "Branch Profile" report, exactly as received (the "MASTER" sheet is read automatically)</div>
       </div>
       <input type="file" id="branchProfileFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
-      <button type="button" class="template-download-link" id="downloadBranchProfileTemplateBtn">⬇ Download template (all branches, Sol ID pre-filled)</button>
+      <button type="button" class="template-download-link" id="downloadBranchProfileTemplateBtn">⬇ Download a simple fallback template (all branches, Sol ID pre-filled)</button>
       <div id="branchProfileUploadStatus"></div>
-      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">The downloaded template already has every branch's Sol ID and Branch Name filled in, and carries forward anything already collected. Branches are matched by Sol ID. Business/deposit/advances/profit/disbursement figures go in <b>₹ Crores</b> (e.g. 200.11, not 2,00,11,000) — Cash Retention Limit goes in ₹ Lakhs. Upload once a month — each upload also saves a dated snapshot, which powers the MoM/YoY growth figures shown on the Branch Profile tab. Uploading replaces the previous month's figures. Goes live the next time you hit Publish.</p>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Upload the Regional Office's own report as-is — its "MASTER" sheet is detected and read automatically, Sol ID by Sol ID, and since that report already carries several months side by side, one upload backfills the Branch Profile tab's whole MoM/YoY history in a single step. The fallback template above (a simpler, one-month, hand-fillable sheet) is only for when that report isn't available — deposit/advance/NPA figures there go in <b>₹ Lakhs</b>, matching the Branch Advance upload's own convention elsewhere in this app. Uploading replaces the previous month's figures. Goes live the next time you hit Publish.</p>
     </div>
 
     <div class="update-data-panel" id="branchProfileTargetsUploadDetails" hidden>
@@ -1370,7 +1370,7 @@
       <input type="file" id="branchProfileTargetsFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
       <button type="button" class="template-download-link" id="downloadBranchProfileTargetsTemplateBtn">⬇ Download template (all branches, Sol ID pre-filled)</button>
       <div id="branchProfileTargetsUploadStatus"></div>
-      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Branches are matched by Sol ID. Monetary targets go in the same unit as the matching Branch Profile figure (₹ Crores, except CRL Target in ₹ Lakhs). Powers the "Targets" figures shown alongside each line on the Branch Profile tab. Uploading replaces the previous targets. Goes live the next time you hit Publish.</p>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Branches are matched by Sol ID. Not yet connected to the Branch Profile tab itself (no real targets file exists yet) -- uploading just stores the figures for later, once there's a real target report to wire up. Goes live the next time you hit Publish.</p>
     </div>
 
     <div class="update-data-panel" id="pnpaUploadDetails" hidden>
@@ -1841,7 +1841,7 @@
 <script src="js/publish.js?v=20260923a"></script>
 <script src="js/splash.js?v=20261007a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20261103a"></script>
+<script src="js/app.js?v=20261103b"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
