@@ -142,6 +142,10 @@
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M3 16v5h5"/><path d="M21 16v5h-5"/><path d="m21 3-7 7"/><path d="M3 21l7-7"/></svg>
       <span>Slippage (Current Month)</span>
     </button>
+    <button class="nav-item" data-view="branchprofile" aria-label="Branch Profile">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>
+      <span>Branch Profile</span>
+    </button>
     <div class="nav-lbl">Settlement</div>
     <button class="nav-item" data-view="search" aria-label="Search and settlement">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -359,6 +363,16 @@
         </div>
       </div>
       <div id="slippageArea"></div>
+    </section>
+
+    <section class="view" data-view="branchprofile" id="viewBranchProfile">
+      <div class="view-head">
+        <div>
+          <h1 class="view-title">Branch Profile</h1>
+          <p class="view-sub">Monthly branch-level business performance · uploaded separately from daily NPA data</p>
+        </div>
+      </div>
+      <div id="branchProfileArea"></div>
     </section>
 
     <section class="view" data-view="search" id="viewSearch">
@@ -1029,6 +1043,10 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M3 16v5h5"/><path d="M21 16v5h-5"/><path d="m21 3-7 7"/><path d="M3 21l7-7"/></svg>
       <span>Slippage (Current Month)</span>
     </button>
+    <button class="nav-item" data-view="branchprofile" aria-label="Branch Profile">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>
+      <span>Branch Profile</span>
+    </button>
     <button class="nav-item" data-view="search" aria-label="Search and settlement">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <span>Search</span>
@@ -1190,7 +1208,7 @@
           </div>
         </div>
         <div class="utility-category">
-          <div class="utility-category-heading utility-cat-gold"><span>Reference Data</span><i></i><b>8 files</b></div>
+          <div class="utility-category-heading utility-cat-gold"><span>Reference Data</span><i></i><b>10 files</b></div>
           <div class="utility-category-cards">
             <button type="button" class="utility-card tool-blue" onclick="openUpdateDataPanel('masterUploadDetails')">
               <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -1221,6 +1239,18 @@
               <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
               <span class="utility-card-title">Branch Contacts</span>
               <span class="utility-card-desc">Manager / Recovery Officer — <span id="branchContactsStatusLabelTile">not loaded yet</span></span>
+            </button>
+            <button type="button" class="utility-card tool-jade" onclick="openUpdateDataPanel('branchProfileUploadDetails')">
+              <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg></span>
+              <span class="utility-card-title">Branch Profile</span>
+              <span class="utility-card-desc">Monthly business performance — <span id="branchProfileStatusLabelTile">not loaded yet</span></span>
+            </button>
+            <button type="button" class="utility-card tool-sky" onclick="openUpdateDataPanel('branchProfileTargetsUploadDetails')">
+              <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+              <span class="utility-card-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span>
+              <span class="utility-card-title">Branch Profile Targets</span>
+              <span class="utility-card-desc">Monthly targets, per branch — <span id="branchProfileTargetsStatusLabelTile">not loaded yet</span></span>
             </button>
             <button type="button" class="utility-card tool-indigo" onclick="openUpdateDataPanel('lokAdalatUploadDetails')">
               <span class="utility-card-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
@@ -1313,6 +1343,34 @@
       <button type="button" class="template-download-link" id="downloadBranchContactsTemplateBtn">⬇ Download template (all branches, Sol ID pre-filled)</button>
       <div id="branchContactsUploadStatus"></div>
       <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">The downloaded template already has every branch's Sol ID, Old Sol ID and Branch Name filled in (and carries forward anything already collected) — just fill in the rest and re-upload. Branches are matched by Sol ID. Powers the Branch/Sol ID panel: each row shows the Manager and Recovery Officer's name with a tap-to-call number, and tapping the row opens a full card with everything on file for that branch. Uploading replaces the previous records. Goes live the next time you hit Publish.</p>
+    </div>
+
+    <div class="update-data-panel" id="branchProfileUploadDetails" hidden>
+      <button type="button" class="update-data-back-btn" onclick="closeUpdateDataPanel()">← Back to Update Data</button>
+      <h4>Branch Profile (monthly business performance) — <span id="branchProfileStatusLabel">not loaded yet</span></h4>
+      <div class="upload-drop small" id="branchProfileUploadDrop">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <div class="main" id="branchProfileUploadDropLabel">Tap to choose the Branch Profile file</div>
+        <div class="sub">.xlsx or .csv — one row per branch, Sol ID plus the full Branch Profile column set</div>
+      </div>
+      <input type="file" id="branchProfileFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
+      <button type="button" class="template-download-link" id="downloadBranchProfileTemplateBtn">⬇ Download template (all branches, Sol ID pre-filled)</button>
+      <div id="branchProfileUploadStatus"></div>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">The downloaded template already has every branch's Sol ID and Branch Name filled in, and carries forward anything already collected. Branches are matched by Sol ID. Business/deposit/advances/profit/disbursement figures go in <b>₹ Crores</b> (e.g. 200.11, not 2,00,11,000) — Cash Retention Limit goes in ₹ Lakhs. Upload once a month — each upload also saves a dated snapshot, which powers the MoM/YoY growth figures shown on the Branch Profile tab. Uploading replaces the previous month's figures. Goes live the next time you hit Publish.</p>
+    </div>
+
+    <div class="update-data-panel" id="branchProfileTargetsUploadDetails" hidden>
+      <button type="button" class="update-data-back-btn" onclick="closeUpdateDataPanel()">← Back to Update Data</button>
+      <h4>Branch Profile Targets (monthly, per branch) — <span id="branchProfileTargetsStatusLabel">not loaded yet</span></h4>
+      <div class="upload-drop small" id="branchProfileTargetsUploadDrop">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <div class="main" id="branchProfileTargetsUploadDropLabel">Tap to choose the Branch Profile Targets file</div>
+        <div class="sub">.xlsx or .csv — Sol ID plus the monthly target columns</div>
+      </div>
+      <input type="file" id="branchProfileTargetsFileInput" accept=".xlsx,.xlsb,.xls,.csv" style="display:none">
+      <button type="button" class="template-download-link" id="downloadBranchProfileTargetsTemplateBtn">⬇ Download template (all branches, Sol ID pre-filled)</button>
+      <div id="branchProfileTargetsUploadStatus"></div>
+      <p style="font-size:11px;color:var(--ink-mute);margin:6px 2px 0;line-height:1.5">Branches are matched by Sol ID. Monetary targets go in the same unit as the matching Branch Profile figure (₹ Crores, except CRL Target in ₹ Lakhs). Powers the "Targets" figures shown alongside each line on the Branch Profile tab. Uploading replaces the previous targets. Goes live the next time you hit Publish.</p>
     </div>
 
     <div class="update-data-panel" id="pnpaUploadDetails" hidden>
@@ -1783,7 +1841,7 @@
 <script src="js/publish.js?v=20260923a"></script>
 <script src="js/splash.js?v=20261007a"></script>
 <script id="ots-data" type="application/json">{}</script>
-<script src="js/app.js?v=20261102b"></script>
+<script src="js/app.js?v=20261103a"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
