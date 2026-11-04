@@ -7774,3 +7774,26 @@ fixed parser (all 8 backfilled months corrected at once, not just the
 latest) and verified live: R O Hathras's Total Deposit now reads
 ₹1,745.49 Cr with a sane +1.30% MoM, instead of ₹17.45 Cr and a bogus
 +10,000%-class delta against the old wrong-scale history.
+
+## 2026-11-04 — Slippage tab: KCC vs Non-KCC summary + date-wise breakdown
+
+Alok's request: a top-level summary on the Slippage (Current Month) tab
+showing Total KCC slippage (A/C + amount) and Total Non-KCC (A/C +
+amount), date-wise if possible. He also asked for a third "Technical
+(non-financial)" bucket; asked him via `AskUserQuestion` how to
+identify one (no column in the Daily NPA/Slippage row shape classifies
+this today -- the HO file's own "Reasons" column is read by
+`mapHoRowsToNpa()` but never kept). His answer: "technical hata do baad
+main dekhenge abhi ya to kcc otherwise n-kcc" -- dropped for this round,
+revisit once a real source for it exists.
+
+Added two hero tiles (KCC Slippage, Non-KCC Slippage) using the same
+scheme-code convention already used for this split everywhere else in
+the app (CC004 = KCC, everything else = Non-KCC). Added a Date-wise
+Summary table grouped by each account's own NPA date (`C.NPA_DT`,
+already present on every Slippage row) rather than the date it was
+uploaded -- the date Alok actually cares about -- sorted chronologically,
+each row showing KCC/Non-KCC/Total accounts and amounts. Verified via
+Playwright against the real local data: KCC (14 A/C, ₹29.12L) + Non-KCC
+(16 A/C, ₹18.79L) = 30 total, matching the existing Total tile exactly;
+no console errors.
