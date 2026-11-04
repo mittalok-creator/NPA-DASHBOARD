@@ -11999,10 +11999,57 @@ function renderSlippageBody(){
 
   const uploadHint = `<p style="font-size:12px;color:var(--ink-mute);margin:0 2px 16px">Uploaded daily from <b>Settings → Update Data → Slippage (Current Month)</b>. Each upload adds to the running total below; it never replaces it.</p>`;
 
+  // Alok's request, 2026-11-04: a KCC vs Non-KCC split, same scheme-code
+  // convention already used for this split everywhere else in the app
+  // (CC004 = KCC, every other scheme = Non-KCC -- see pnpaSlipSchemeKey()/
+  // the Dashboard's own KCC-vs-Non-KCC split). "Technical (non-financial)"
+  // was dropped from this round at Alok's own call ("technical hata do
+  // baad main dekhenge") -- there's no column in the Daily NPA/Slippage
+  // upload today that could classify it (the HO file's own "Reasons"
+  // column is read but never kept by mapHoRowsToNpa()), so revisit this
+  // only once a real source for it is identified.
+  const isKccRow = (r) => r[C.SCHEME] === 'CC004';
+  const kccRows = rows.filter(isKccRow);
+  const nonKccRows = rows.filter(r=>!isKccRow(r));
+  const kccOs = kccRows.reduce((a,r)=>a+(Number(r[C.OUTBAL])||0),0);
+  const nonKccOs = nonKccRows.reduce((a,r)=>a+(Number(r[C.OUTBAL])||0),0);
+
   const heroRow = `<div class="hero-kpi-row">
     ${heroKpiCard({ id:'slippageTotalAccounts', icon: ICON_ALERT_TRIANGLE, tint:'var(--tool-rose-soft)', color:'var(--tool-rose)', label:'Total Slipped This Cycle', fallback: rows.length.toLocaleString('en-IN'), sub:'account(s), across every upload so far' })}
     ${heroKpiCard({ id:'slippageTotalOs', icon: ICON_BANKNOTE, tint:'var(--tool-coral-soft)', color:'var(--tool-coral)', label:'Total Outstanding', fallback: fmtCr(totalOs), sub:'combined O/S of all accounts above' })}
+    ${heroKpiCard({ id:'slippageKccOs', icon: ICON_TARGET, tint:'var(--tool-jade-soft)', color:'var(--tool-jade)', label:'KCC Slippage', fallback: fmtCr(kccOs), sub: kccRows.length.toLocaleString('en-IN')+' account(s)' })}
+    ${heroKpiCard({ id:'slippageNonKccOs', icon: ICON_LANDMARK, tint:'var(--tool-sky-soft)', color:'var(--tool-sky)', label:'Non-KCC Slippage', fallback: fmtCr(nonKccOs), sub: nonKccRows.length.toLocaleString('en-IN')+' account(s)' })}
   </div>`;
+
+  // Date-wise breakdown, keyed by each account's own NPA date (C.NPA_DT,
+  // already a DD-MM-YYYY string via mapHoRowsToNpa()/earlierRaw()) rather
+  // than the date it happened to be uploaded on -- this is the date Alok
+  // actually cares about ("kab NPA hua"), and it's already on every row,
+  // so no new tracking is needed to show it.
+  const dateGroups = {};
+  rows.forEach(r=>{
+    const key = r[C.NPA_DT] || '(date not available)';
+    if(!dateGroups[key]) dateGroups[key] = {kccCnt:0, kccOs:0, nonKccCnt:0, nonKccOs:0};
+    const g = dateGroups[key];
+    const os = Number(r[C.OUTBAL])||0;
+    if(isKccRow(r)){ g.kccCnt++; g.kccOs+=os; } else { g.nonKccCnt++; g.nonKccOs+=os; }
+  });
+  const dateKeys = Object.keys(dateGroups).filter(k=>k!=='(date not available)')
+    .sort((a,b)=>(toDate(a)?toDate(a).getTime():0) - (toDate(b)?toDate(b).getTime():0));
+  if(dateGroups['(date not available)']) dateKeys.push('(date not available)');
+  const dateRowsHtml = dateKeys.map(k=>{
+    const g = dateGroups[k];
+    const totalCnt = g.kccCnt+g.nonKccCnt, totalOsK = g.kccOs+g.nonKccOs;
+    return `<tr>
+      <td class="tal">${esc(k)}</td>
+      <td>${g.kccCnt.toLocaleString('en-IN')}</td>
+      <td>${fmtCr(g.kccOs)}</td>
+      <td>${g.nonKccCnt.toLocaleString('en-IN')}</td>
+      <td>${fmtCr(g.nonKccOs)}</td>
+      <td><b>${totalCnt.toLocaleString('en-IN')}</b></td>
+      <td><b>${fmtCr(totalOsK)}</b></td>
+    </tr>`;
+  }).join('');
 
   const branchAgg = computeBranchTotals(rows).filter(b=>b.count>0).sort((a,b)=>b.os-a.os);
   const branchRowsHtml = branchAgg.map((b,i)=>`<tr>
@@ -12023,6 +12070,15 @@ function renderSlippageBody(){
 
   el.innerHTML = uploadHint + heroRow +
     `<div class="chart-card" style="margin-top:16px">
+      <div class="section-label">Date-wise Summary<span class="chart-sub">by NPA date · KCC vs Non-KCC</span></div>
+      <div class="dash-table-wrap">
+        <table class="dash-table">
+          <thead><tr><th class="tal">NPA Date</th><th>KCC A/C</th><th>KCC Amt</th><th>Non-KCC A/C</th><th>Non-KCC Amt</th><th>Total A/C</th><th>Total Amt</th></tr></thead>
+          <tbody>${dateRowsHtml || emptyStateRowHtml(7, 'No Slippage data uploaded yet this cycle')}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="chart-card" style="margin-top:16px">
       <div class="section-label">Branch-wise Summary<span class="chart-sub">${branchAgg.length.toLocaleString('en-IN')} branch(es) · highest O/S first</span></div>
       <div class="dash-table-wrap">
         <table class="dash-table">
